@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('admin.user_list') }}" class="text-decoration-none">
+        <i class="bi bi-arrow-left"></i> 返回用户列表
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">{{ title }}</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    {% if form.username is defined and not user %}
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.username.label.text }}</label>
+                        {{ form.username(class="form-control") }}
+                        {% for error in form.username.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.email.label.text }}</label>
+                        {{ form.email(class="form-control") }}
+                        {% for error in form.email.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.display_name.label.text }}</label>
+                        {{ form.display_name(class="form-control") }}
+                        {% for error in form.display_name.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.password.label.text }}</label>
+                        {{ form.password(class="form-control") }}
+                        {% for error in form.password.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.role_id.label.text }}</label>
+                        {{ form.role_id(class="form-select") }}
+                    </div>
+                    {% if form.is_active is defined %}
+                    <div class="mb-3 form-check">
+                        {{ form.is_active(class="form-check-input") }}
+                        <label class="form-check-label">{{ form.is_active.label.text }}</label>
+                    </div>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg"></i> {{ form.submit.label.text }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
