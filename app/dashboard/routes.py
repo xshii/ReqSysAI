@@ -68,13 +68,16 @@ def _week_range(offset=0):
 
 def _gather_stats(monday, sunday, group=None):
     """Gather todo & requirement stats for the given week."""
+    from app.models.project import Project
+    from collections import defaultdict
+
     user_query = User.query.filter_by(is_active=True)
     if group:
         user_query = user_query.filter_by(group=group)
     users = user_query.order_by(User.group, User.name).all()
     user_ids = [u.id for u in users]
 
-    # Per-user todo stats for the week (two aggregate queries instead of 2N)
+    # Per-user todo stats
     created_rows = db.session.query(
         Todo.user_id, func.count(Todo.id)
     ).filter(
@@ -106,11 +109,60 @@ def _gather_stats(monday, sunday, group=None):
     req_total = Requirement.query.count()
     req_done = Requirement.query.filter(Requirement.status.in_(['done', 'closed'])).count()
 
+    # ---- Per-user per-project investment (person-days) ----
+    # Logic: for each user per day, count distinct projects from their todos.
+    # Each project gets 1/n of a person-day.
+    week_todos = Todo.query.filter(
+        Todo.user_id.in_(user_ids),
+        Todo.created_date >= monday, Todo.created_date <= sunday,
+    ).options(joinedload(Todo.requirements)).all()
+
+    # user_id -> date -> set of project_ids
+    user_date_projects = defaultdict(lambda: defaultdict(set))
+    for t in week_todos:
+        for r in t.requirements:
+            if r.project_id:
+                user_date_projects[t.user_id][t.created_date].add(r.project_id)
+
+    # Aggregate: (user_id, project_id) -> person-days
+    user_project_days = defaultdict(float)
+    for uid, date_projects in user_date_projects.items():
+        for dt, pids in date_projects.items():
+            share = 1.0 / len(pids) if pids else 0
+            for pid in pids:
+                user_project_days[(uid, pid)] += share
+
+    # Build project investment table
+    project_ids = set(pid for (_, pid) in user_project_days)
+    projects = {p.id: p for p in Project.query.filter(Project.id.in_(project_ids)).all()} if project_ids else {}
+    user_map = {u.id: u for u in users}
+
+    # Structure: list of {project, users: [{user, days}], total_days}
+    project_investment = []
+    for pid in sorted(project_ids):
+        p = projects.get(pid)
+        if not p:
+            continue
+        user_days = []
+        total = 0.0
+        for u in users:
+            d = user_project_days.get((u.id, pid), 0)
+            if d > 0:
+                user_days.append({'user': u, 'days': round(d, 1)})
+                total += d
+        project_investment.append({
+            'project': p,
+            'user_days': user_days,
+            'total_days': round(total, 1),
+            'people_count': len(user_days),
+        })
+
     return {
         'user_stats': user_stats,
         'req_total': req_total,
         'req_done': req_done,
         'req_rate': round(req_done / req_total * 100) if req_total else 0,
+        'project_investment': project_investment,
     }
 
 
@@ -167,7 +219,24 @@ def stats_export():
         u = s['user']
         ws.append([u.name, u.employee_id or '', s['created'], s['done'], f'{s["rate"]}%'])
 
-    # Auto column width
+    # Project investment sheets
+    for pi in data.get('project_investment', []):
+        ws2 = wb.create_sheet(title=pi['project'].name[:30])
+        ws2.append([f'项目: {pi["project"].name}'])
+        ws2['A1'].font = Font(bold=True, size=12)
+        ws2.append([f'合计: {pi["people_count"]}人 · {pi["total_days"]}人天'])
+        ws2.append([])
+        ws2.append(['姓名', '工号', '投入(人天)', '占比'])
+        for cell in ws2[ws2.max_row]:
+            cell.font = Font(bold=True)
+        for ud in pi['user_days']:
+            pct = round(ud['days'] / pi['total_days'] * 100) if pi['total_days'] else 0
+            ws2.append([ud['user'].name, ud['user'].employee_id or '', ud['days'], f'{pct}%'])
+        for col in ws2.columns:
+            max_len = max((len(str(c.value or '')) for c in col), default=10)
+            ws2.column_dimensions[col[0].column_letter].width = max(max_len + 2, 10)
+
+    # Auto column width for main sheet
     for col in ws.columns:
         max_len = max((len(str(c.value or '')) for c in col), default=10)
         ws.column_dimensions[col[0].column_letter].width = max(max_len + 2, 10)

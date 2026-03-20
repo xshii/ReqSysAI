@@ -113,4 +113,42 @@
         </table>
     </div>
 </div>
+
+<!-- Project investment -->
+{% if data.project_investment %}
+<h6 class="mt-4 mb-3">项目投入汇总（人天）</h6>
+{% for pi in data.project_investment %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between">
+        <strong>{{ pi.project.name }}</strong>
+        <span class="text-muted small">{{ pi.people_count }} 人 · {{ pi.total_days }} 人天</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead class="table-light">
+                <tr><th>姓名</th><th>工号</th><th>投入（人天）</th><th>占比</th></tr>
+            </thead>
+            <tbody>
+                {% for ud in pi.user_days %}
+                <tr>
+                    <td>{{ ud.user.name }}</td>
+                    <td>{{ ud.user.employee_id or '-' }}</td>
+                    <td>{{ ud.days }}</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            {% set pct = (ud.days / pi.total_days * 100) | round | int if pi.total_days else 0 %}
+                            <div class="progress flex-grow-1" style="height:6px;max-width:100px;">
+                                <div class="progress-bar" style="width:{{ pct }}%"></div>
+                            </div>
+                            <span class="small">{{ pct }}%</span>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
 {% endblock %}
