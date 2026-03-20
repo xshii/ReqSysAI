@@ -22,7 +22,8 @@ class WeeklyReport(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     project = db.relationship('Project', backref='weekly_reports')
-    creator = db.relationship('User', backref='created_reports')
+    creator = db.relationship('User', foreign_keys=[created_by], backref='created_reports')
+    freezer = db.relationship('User', foreign_keys=[frozen_by])
 
     __table_args__ = (
         db.UniqueConstraint('project_id', 'week_start', name='uq_project_week'),

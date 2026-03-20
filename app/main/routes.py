@@ -53,8 +53,10 @@ def index():
     month_start = today.replace(day=1)
     top_rants = Rant.query.filter(Rant.likes > 0).order_by(Rant.likes.desc()).limit(3).all()
     top_ids = {r.id for r in top_rants}
-    month_rants = Rant.query.filter(Rant.created_at >= str(month_start), ~Rant.id.in_(top_ids) if top_ids else True)\
-        .order_by(Rant.created_at.desc()).limit(20).all()
+    month_q = Rant.query.filter(Rant.created_at >= str(month_start))
+    if top_ids:
+        month_q = month_q.filter(~Rant.id.in_(top_ids))
+    month_rants = month_q.order_by(Rant.created_at.desc()).limit(20).all()
     rants = top_rants + month_rants
 
     return render_template('main/index.html',
