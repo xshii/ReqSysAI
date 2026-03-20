@@ -178,6 +178,22 @@
                         <label class="form-label">任务标题</label>
                         <input type="text" name="title" class="form-control" placeholder="输入任务标题" required>
                     </div>
+                    <div class="mb-3 position-relative">
+                        <label class="form-label">执行人</label>
+                        <input type="hidden" name="assignee_id" id="assigneeId" value="{{ current_user.id }}">
+                        <input type="text" class="form-control form-control-sm" id="assigneeInput"
+                               value="{{ current_user.name }}（我）" autocomplete="off" placeholder="输入姓名搜索">
+                        <div class="list-group position-absolute shadow-sm d-none" id="assigneeList" style="z-index:1050;max-height:160px;overflow-y:auto;width:100%;">
+                            <a href="#" class="list-group-item list-group-item-action py-1 small assignee-opt"
+                               data-id="{{ current_user.id }}" data-name="{{ current_user.name }}（我）"
+                               data-pinyin="{{ current_user.pinyin or '' }}">{{ current_user.name }}（我）</a>
+                            {% for au in all_users %}
+                            <a href="#" class="list-group-item list-group-item-action py-1 small assignee-opt"
+                               data-id="{{ au.id }}" data-name="{{ au.name }}{% if au.group %} ({{ au.group }}){% endif %}"
+                               data-pinyin="{{ au.pinyin or '' }}">{{ au.name }}{% if au.group %} ({{ au.group }}){% endif %}</a>
+                            {% endfor %}
+                        </div>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">预期闭环</label>
                         <select name="due_date" class="form-select form-select-sm">
@@ -338,6 +354,39 @@ function filterReqs(input) {
         opt.style.display = text.includes(q) ? '' : 'none';
     });
 }
+
+/* Assignee search */
+var assigneeInput = document.getElementById('assigneeInput');
+var assigneeList = document.getElementById('assigneeList');
+var assigneeId = document.getElementById('assigneeId');
+assigneeInput.addEventListener('focus', function() { assigneeList.classList.remove('d-none'); filterAssignee(); });
+assigneeInput.addEventListener('input', filterAssignee);
+function filterAssignee() {
+    var q = assigneeInput.value.toLowerCase();
+    var opts = assigneeList.querySelectorAll('.assignee-opt');
+    opts.forEach(function(o) {
+        var name = o.dataset.name.toLowerCase();
+        var py = (o.dataset.pinyin || '').toLowerCase();
+        o.style.display = (name.includes(q) || py.includes(q)) ? '' : 'none';
+    });
+    assigneeList.classList.remove('d-none');
+}
+var assigneeSelectedName = assigneeInput.value;
+assigneeList.querySelectorAll('.assignee-opt').forEach(function(o) {
+    o.addEventListener('click', function(e) {
+        e.preventDefault();
+        assigneeId.value = o.dataset.id;
+        assigneeInput.value = o.dataset.name;
+        assigneeSelectedName = o.dataset.name;
+        assigneeList.classList.add('d-none');
+    });
+});
+document.addEventListener('click', function(e) {
+    if (!assigneeInput.contains(e.target) && !assigneeList.contains(e.target)) {
+        assigneeList.classList.add('d-none');
+        assigneeInput.value = assigneeSelectedName;  // revert to last valid selection
+    }
+});
 
 /* AI spinner */
 document.getElementById('ai-form').addEventListener('submit', function() {

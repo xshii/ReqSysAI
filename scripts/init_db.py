@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app import create_app
 from app.extensions import db
 from app.models.user import Role, User
+from app.utils.pinyin import to_pinyin
 
 
 def seed():
@@ -29,9 +30,11 @@ def seed():
         eid = admin_cfg.get('employee_id', 'a00000001')
         if not User.query.filter_by(employee_id=eid).first():
             admin_role = Role.query.filter_by(name='Admin').first()
+            admin_name = admin_cfg.get('name', '管理员')
             admin = User(
                 employee_id=eid,
-                name=admin_cfg.get('name', '管理员'),
+                name=admin_name,
+                pinyin=to_pinyin(admin_name),
                 ip_address=admin_cfg.get('ip', '127.0.0.1'),
                 roles=[admin_role],
             )

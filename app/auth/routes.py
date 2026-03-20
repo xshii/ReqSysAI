@@ -8,6 +8,7 @@ from app.auth import auth_bp
 from app.auth.forms import LoginForm, RegisterForm, ProfileForm
 from app.extensions import db, login_manager
 from app.models.user import User, Role
+from app.utils.pinyin import to_pinyin
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +93,7 @@ def register():
         user = User(
             employee_id=eid,
             name=form.name.data,
+            pinyin=to_pinyin(form.name.data),
             ip_address=client_ip,
             group=form.group.data or None,
             roles=selected_roles,
@@ -121,6 +123,7 @@ def profile():
 
     if form.validate_on_submit():
         current_user.name = form.name.data
+        current_user.pinyin = to_pinyin(form.name.data)
         # Keep Admin if user already has it, add selected roles
         admin_roles = [r for r in current_user.roles if r.name == 'Admin']
         selected_roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()

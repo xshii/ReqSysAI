@@ -29,6 +29,7 @@ class User(UserMixin, db.Model):
     employee_id = db.Column(db.String(30), unique=True, nullable=False, index=True)
     name = db.Column(db.String(80), nullable=False)
     ip_address = db.Column(db.String(45), unique=True, nullable=False, index=True)
+    pinyin = db.Column(db.String(100), nullable=True)
     group = db.Column(db.String(50), nullable=True)
     is_active = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime)

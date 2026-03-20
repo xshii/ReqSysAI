@@ -63,8 +63,13 @@ def add():
             return redirect(url_for('todo.team'))
         reqs = Requirement.query.filter(Requirement.id.in_(req_ids)).all()
         due = request.form.get('due_date')
+        assignee_id = request.form.get('assignee_id', type=int) or current_user.id
+        # Validate assignee exists and is active
+        assignee = db.session.get(User, assignee_id)
+        if not assignee or not assignee.is_active:
+            assignee_id = current_user.id
         todo = Todo(
-            user_id=current_user.id,
+            user_id=assignee_id,
             title=form.title.data,
             requirements=reqs,
             due_date=due or date.today(),

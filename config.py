@@ -7,10 +7,20 @@ _cfg_path = Path(__file__).parent / 'config.yml'
 _yml = yaml.safe_load(_cfg_path.read_text(encoding='utf-8')) if _cfg_path.exists() else {}
 
 
+_basedir = Path(__file__).parent
+
+
+def _resolve_db_url():
+    url = os.getenv('DATABASE_URL', _yml.get('app', {}).get('database_url', 'sqlite:///data.db'))
+    if url.startswith('sqlite:///') and not url.startswith('sqlite:////'):
+        url = f'sqlite:///{_basedir / url[len("sqlite:///"):]}'
+    return url
+
+
 class Config:
     # App
     SECRET_KEY = os.getenv('SECRET_KEY', _yml.get('app', {}).get('secret_key', 'dev-only-key'))
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', _yml.get('app', {}).get('database_url', 'sqlite:///data.db'))
+    SQLALCHEMY_DATABASE_URI = _resolve_db_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     PERMANENT_SESSION_LIFETIME = _yml.get('app', {}).get('session_timeout', 600)
     SESSION_COOKIE_HTTPONLY = True
