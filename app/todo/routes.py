@@ -375,7 +375,7 @@ def team():
             db.and_(Todo.status == 'done', Todo.done_date >= week_ago),
         )
     ).options(
-        joinedload(Todo.requirement), joinedload(Todo.parent),
+        joinedload(Todo.requirements), joinedload(Todo.parent),
         joinedload(Todo.children), joinedload(Todo.items),
     ).order_by(Todo.sort_order).all() if user_ids else []
 
