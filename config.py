@@ -6,6 +6,16 @@ import yaml
 _cfg_path = Path(__file__).parent / 'config.yml'
 _yml = yaml.safe_load(_cfg_path.read_text(encoding='utf-8')) if _cfg_path.exists() else {}
 
+# config.local.yml overrides config.yml (gitignored, for deployment customization)
+_local_path = Path(__file__).parent / 'config.local.yml'
+if _local_path.exists():
+    _local = yaml.safe_load(_local_path.read_text(encoding='utf-8')) or {}
+    for section, values in _local.items():
+        if isinstance(values, dict) and isinstance(_yml.get(section), dict):
+            _yml[section].update(values)
+        else:
+            _yml[section] = values
+
 
 _basedir = Path(__file__).parent
 

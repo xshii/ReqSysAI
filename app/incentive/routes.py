@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import render_template, redirect, url_for, flash, request, jsonify, current_app
 from flask_login import login_required, current_user
 
@@ -82,7 +84,6 @@ def review(inc_id):
     comment = request.form.get('review_comment', '').strip()[:150]
     amount = request.form.get('amount', type=float)
 
-    from datetime import datetime
     if action == 'approve':
         inc.status = 'approved'
         inc.amount = amount
@@ -135,7 +136,6 @@ def admin_submit():
         return redirect(url_for('incentive.index'))
 
     import os, uuid
-    from datetime import datetime
 
     title = request.form.get('title', '').strip()
     description = request.form.get('description', '').strip()

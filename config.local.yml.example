@@ -1,0 +1,16 @@
+# 部署环境自定义配置 (复制为 config.local.yml)
+# 此文件覆盖 config.yml 中的同名配置项
+# config.local.yml 不会被代码更新覆盖 (已加入 .gitignore)
+
+app:
+  secret_key: your-production-secret-key-here
+  # database_url: sqlite:///instance/reqsys.db
+
+admin:
+  employee_id: your-admin-id
+  name: 管理员
+  ip: 127.0.0.1
+
+ollama:
+  base_url: http://127.0.0.1:11434
+  model: reqsys

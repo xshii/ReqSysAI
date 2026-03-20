@@ -44,11 +44,15 @@ for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (
 )
 set LOCAL_IP=%LOCAL_IP: =%
 
+REM Read port from config
+for /f "tokens=2 delims=: " %%p in ('findstr /c:"port:" config.yml') do set PORT=%%p
+if "%PORT%"=="" set PORT=5001
+
 echo.
 echo [OK] 平台启动中...
-echo [OK] 本机访问: http://127.0.0.1:5001
-echo [OK] 局域网访问: http://%LOCAL_IP%:5001
+echo [OK] 本机访问: http://127.0.0.1:%PORT%
+echo [OK] 局域网访问: http://%LOCAL_IP%:%PORT%
 echo [OK] 按 Ctrl+C 停止
 echo.
 
-flask run --host 0.0.0.0 --port 5001
+flask run --host 0.0.0.0 --port %PORT%

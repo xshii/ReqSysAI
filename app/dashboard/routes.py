@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from io import BytesIO
 
 from flask import render_template, request, send_file, flash, redirect, url_for
@@ -520,7 +520,6 @@ def weekly_report_save():
     plan = [p.strip() for p in request.form.get('plan', '').strip().splitlines() if p.strip()]
     saved.risks_json = json_lib.dumps(risks, ensure_ascii=False)
     saved.plan_json = json_lib.dumps(plan, ensure_ascii=False)
-    from datetime import datetime
     saved.updated_at = datetime.utcnow()
     db.session.commit()
     flash('周报已保存', 'success')
@@ -535,7 +534,6 @@ def weekly_report_freeze():
     """Freeze/unfreeze weekly report. Only project PM (owner) can freeze."""
     from app.models.report import WeeklyReport
     from app.models.project import Project
-    from datetime import datetime
 
     cur_project_id = request.form.get('project_id', type=int)
     week_start = request.form.get('week_start')

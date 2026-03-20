@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import current_user
 
@@ -215,7 +217,6 @@ def risk_resolve(risk_id):
         return redirect(url_for('project.risk_list', project_id=risk.project_id))
     risk.status = 'resolved'
     risk.resolution = resolution
-    from datetime import datetime
     risk.resolved_at = datetime.utcnow()
     db.session.commit()
     flash('风险已解决', 'success')
