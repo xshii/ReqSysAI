@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}阻碍汇总 - 研发协作平台{% endblock %}
+
+{% block content %}
+<h4 class="mb-4">阻碍汇总</h4>
+
+{% if groups %}
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link {% if not cur_group %}active{% endif %}" href="?group=">全部</a>
+    </li>
+    {% for g in groups %}
+    <li class="nav-item">
+        <a class="nav-link {% if cur_group == g %}active{% endif %}" href="?group={{ g }}">{{ g }}</a>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+{% if records %}
+<div class="table-responsive">
+    <table class="table">
+        <thead class="table-light">
+            <tr>
+                <th>日期</th>
+                <th>姓名</th>
+                <th>小组</th>
+                <th>阻碍内容</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in records %}
+            <tr>
+                <td class="small">{{ r.date.strftime('%m-%d') }}</td>
+                <td>{{ r.user.name }}</td>
+                <td class="small">{{ r.user.group or '-' }}</td>
+                <td class="text-danger">{{ r.blocker }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">暂无阻碍记录</div>
+{% endif %}
+{% endblock %}

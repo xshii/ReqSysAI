@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}需求进度 - 研发协作平台{% endblock %}
+
+{% block content %}
+<h4 class="mb-4">需求进度看板</h4>
+
+<!-- Filters -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-auto">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">全部状态</option>
+                    {% for k, v in statuses.items() %}
+                    <option value="{{ k }}" {% if cur_status == k %}selected{% endif %}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <select name="project_id" class="form-select form-select-sm">
+                    <option value="">全部项目</option>
+                    {% for p in projects %}
+                    <option value="{{ p.id }}" {% if cur_project == p.id %}selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-outline-primary">筛选</button>
+                <a href="{{ url_for('dashboard.requirement_progress') }}" class="btn btn-sm btn-outline-secondary">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if requirements %}
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>编号</th>
+                <th>标题</th>
+                <th>项目</th>
+                <th>状态</th>
+                <th>负责人</th>
+                <th>Todo 进度</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in requirements %}
+            {% set counts = todo_counts.get(r.id, (0, 0)) %}
+            <tr>
+                <td class="text-muted small">{{ r.number }}</td>
+                <td><a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}">{{ r.title }}</a></td>
+                <td class="small">{{ r.project.name }}</td>
+                <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span></td>
+                <td>{{ r.assignee.name if r.assignee else '-' }}</td>
+                <td>
+                    {% if counts[0] > 0 %}
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="progress flex-grow-1" style="height:8px;">
+                            <div class="progress-bar bg-success" style="width:{{ (counts[1] / counts[0] * 100) | round }}%"></div>
+                        </div>
+                        <span class="small text-muted">{{ counts[1] }}/{{ counts[0] }}</span>
+                    </div>
+                    {% else %}
+                    <span class="text-muted small">-</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">暂无需求</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a href="{{ url_for('project.project_list') }}" class="text-decoration-none small"><i class="bi bi-arrow-left"></i> 项目列表</a>
+        <h4 class="mt-2 mb-0">{{ project.name }}
+            <span class="badge bg-{{ 'success' if project.status == 'active' else 'secondary' }} ms-2" style="font-size:0.6em;">{{ project.status_label }}</span>
+        </h4>
+        {% if project.description %}<p class="text-muted mt-1">{{ project.description }}</p>{% endif %}
+    </div>
+    {% if current_user.has_role('pm', 'admin') %}
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('project.project_edit', project_id=project.id) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil"></i> 编辑</a>
+        <form method="POST" action="{{ url_for('project.project_status', project_id=project.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if project.status == 'active' %}
+            <button type="submit" name="status" value="completed" class="btn btn-outline-success btn-sm">标记完成</button>
+            <button type="submit" name="status" value="archived" class="btn btn-outline-secondary btn-sm">归档</button>
+            {% elif project.status == 'completed' %}
+            <button type="submit" name="status" value="active" class="btn btn-outline-primary btn-sm">重新激活</button>
+            <button type="submit" name="status" value="archived" class="btn btn-outline-secondary btn-sm">归档</button>
+            {% else %}
+            <button type="submit" name="status" value="active" class="btn btn-outline-primary btn-sm">重新激活</button>
+            {% endif %}
+        </form>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Progress -->
+<div class="card mb-4">
+    <div class="card-body py-3">
+        <div class="d-flex justify-content-between mb-1">
+            <span class="small text-muted">总体进度</span>
+            <span class="small fw-bold">{{ project.progress }}%</span>
+        </div>
+        <div class="progress" style="height: 10px;">
+            <div class="progress-bar bg-success" style="width: {{ project.progress }}%"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Milestones -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5>里程碑</h5>
+    {% if current_user.has_role('pm', 'admin') %}
+    <a href="{{ url_for('project.milestone_create', project_id=project.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg"></i> 新建</a>
+    {% endif %}
+</div>
+
+{% if project.milestones %}
+<div class="list-group mb-4">
+    {% for ms in project.milestones %}
+    <div class="list-group-item d-flex justify-content-between align-items-center">
+        <div>
+            <span class="{% if ms.status == 'completed' %}text-decoration-line-through text-muted{% endif %}">{{ ms.name }}</span>
+            {% if ms.due_date %}
+            <span class="badge bg-light text-dark ms-2">截止: {{ ms.due_date.strftime('%Y-%m-%d') }}</span>
+            {% endif %}
+        </div>
+        {% if current_user.has_role('pm', 'admin') %}
+        <div class="d-flex gap-1">
+            <a href="{{ url_for('project.milestone_edit', ms_id=ms.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+            <form method="POST" action="{{ url_for('project.milestone_toggle', ms_id=ms.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-{{ 'success' if ms.status == 'active' else 'secondary' }}">{{ '完成' if ms.status == 'active' else '重开' }}</button>
+            </form>
+            <form method="POST" action="{{ url_for('project.milestone_delete', ms_id=ms.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('确定删除此里程碑?')"><i class="bi bi-trash"></i></button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-muted mb-4">暂无里程碑</p>
+{% endif %}
+
+<!-- Requirements -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5>需求列表</h5>
+    {% if current_user.has_role('pm', 'admin') %}
+    <a href="{{ url_for('requirement.requirement_create') }}?project_id={{ project.id }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg"></i> 新建需求</a>
+    {% endif %}
+</div>
+
+{% set reqs = project.requirements.all() %}
+{% if reqs %}
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-light">
+            <tr><th>编号</th><th>标题</th><th>优先级</th><th>状态</th><th>负责人</th></tr>
+        </thead>
+        <tbody>
+            {% for r in reqs %}
+            <tr>
+                <td class="text-muted small">{{ r.number }}</td>
+                <td><a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}">{{ r.title }}</a></td>
+                <td><span class="badge bg-{{ r.priority_color }}">{{ r.priority_label }}</span></td>
+                <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span></td>
+                <td>{{ r.assignee.name if r.assignee else '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="text-muted">暂无需求</p>
+{% endif %}
+{% endblock %}

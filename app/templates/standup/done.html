@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}站会已提交 - 研发协作平台{% endblock %}
+
+{% block content %}
+<h4 class="mb-4">每日站会 <span class="text-muted small">{{ record.date.strftime('%Y-%m-%d') }}</span></h4>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="alert alert-success"><i class="bi bi-check-circle"></i> 今日站会已提交</div>
+        <div class="card">
+            <div class="card-body">
+                <p><strong>昨日完成：</strong>{{ record.yesterday_done }}</p>
+                <p><strong>今日计划：</strong>{{ record.today_plan }}</p>
+                <p>
+                    <strong>阻碍：</strong>
+                    {% if record.has_blocker %}
+                    <span class="text-danger">{{ record.blocker }}</span>
+                    {% else %}
+                    <span class="text-muted">无</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        <a href="{{ url_for('standup.history') }}" class="btn btn-outline-primary btn-sm mt-3">
+            <i class="bi bi-clock-history"></i> 查看历史记录
+        </a>
+    </div>
+</div>
+{% endblock %}

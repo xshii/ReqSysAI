@@ -1,30 +1,32 @@
 import os
+from pathlib import Path
+
+import yaml
+
+_cfg_path = Path(__file__).parent / 'config.yml'
+_yml = yaml.safe_load(_cfg_path.read_text(encoding='utf-8')) if _cfg_path.exists() else {}
 
 
 class Config:
-    SECRET_KEY = os.getenv('SECRET_KEY', 'change-me-in-production')
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        'DATABASE_URL', 'postgresql://reqsys:reqsys@localhost:5432/reqsysai'
-    )
+    # App
+    SECRET_KEY = os.getenv('SECRET_KEY', _yml.get('app', {}).get('secret_key', 'dev-only-key'))
+    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', _yml.get('app', {}).get('database_url', 'sqlite:///data.db'))
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    PERMANENT_SESSION_LIFETIME = 8 * 3600  # 8 hours
+    PERMANENT_SESSION_LIFETIME = _yml.get('app', {}).get('session_timeout', 600)
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
 
-    # LDAP (optional - disabled if LDAP_HOST is empty)
-    LDAP_HOST = os.getenv('LDAP_HOST', '')
-    LDAP_PORT = int(os.getenv('LDAP_PORT', 389))
-    LDAP_BASE_DN = os.getenv('LDAP_BASE_DN', 'dc=company,dc=com')
-    LDAP_USER_DN = os.getenv('LDAP_USER_DN', 'ou=users')
-    LDAP_USER_SEARCH_SCOPE = 'SUBTREE'
-    LDAP_USER_LOGIN_ATTR = 'uid'
+    # Auth
+    SSO_URL = _yml.get('auth', {}).get('sso_url', '')
+    DEFAULT_ROLE = _yml.get('auth', {}).get('default_role', 'DE')
 
     # Ollama
-    OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
-    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'qwen2.5')
+    OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', _yml.get('ollama', {}).get('base_url', 'http://192.168.10.50:11434'))
+    OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', _yml.get('ollama', {}).get('model', 'qwen2.5'))
 
-    # Mail
-    MAIL_SERVER = os.getenv('MAIL_SERVER', '')
-    MAIL_PORT = int(os.getenv('MAIL_PORT', 25))
-    MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER', 'noreply@company.com')
+    # Roles & admin from YAML
+    ROLES = _yml.get('roles', [])
+    ADMIN_CONFIG = _yml.get('admin', {})
 
 
 class DevelopmentConfig(Config):

@@ -1,0 +1,27 @@
+app:
+  secret_key: dev-only-key          # 生产环境务必修改
+  database_url: sqlite:///instance/reqsys.db   # 集中放在 instance/ 目录，不随代码覆盖
+  session_timeout: 600              # 秒
+
+auth:
+  sso_url: ""                       # 留空则跳过 SSO 跳转验证
+  default_role: DE
+
+roles:
+  - { name: SE, desc: 软件工程师 }
+  - { name: DE, desc: 开发工程师 }
+  - { name: QA, desc: 测试工程师 }
+  - { name: FO, desc: 功能负责人 }
+  - { name: PM, desc: 项目经理 }
+  - { name: PL, desc: 项目负责人 }
+  - { name: XM, desc: Scrum Master }
+  - { name: Admin, desc: 系统管理员 }
+
+admin:
+  employee_id: a00000001
+  name: 管理员
+  ip: 127.0.0.1
+
+ollama:
+  base_url: http://192.168.10.50:11434
+  model: qwen2.5

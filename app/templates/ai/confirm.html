@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}确认 AI 解析结果 - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('ai.parse_page') }}" class="text-decoration-none">
+        <i class="bi bi-arrow-left"></i> 重新解析
+    </a>
+</div>
+
+<h4 class="mb-4">确认 AI 解析结果</h4>
+<p class="text-muted">以下为 AI 自动提取的需求信息，请核对修改后保存。</p>
+
+<div class="row">
+    <div class="col-md-8">
+        <!-- Accept: edit and save -->
+        <div class="card mb-3">
+            <div class="card-header bg-success text-white"><h6 class="mb-0"><i class="bi bi-check-circle"></i> 接受并保存</h6></div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.title.label.text }}</label>
+                        {{ form.title(class="form-control") }}
+                        {% for e in form.title.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.description.label.text }}</label>
+                        {{ form.description(class="form-control", rows=5) }}
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.project_id.label.text }}</label>
+                            {{ form.project_id(class="form-select") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.priority.label.text }}</label>
+                            {{ form.priority(class="form-select") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.estimate_days.label.text }}</label>
+                            {{ form.estimate_days(class="form-control") }}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.subtasks.label.text }}</label>
+                        {{ form.subtasks(class="form-control", rows=4, placeholder="每行一个子任务") }}
+                        <div class="form-text">AI 建议的子任务拆分，可自由增删</div>
+                    </div>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-lg"></i> 确认保存为需求
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Reject: feedback to AI -->
+        {% if has_original %}
+        <div class="card mb-3">
+            <div class="card-header bg-warning text-dark"><h6 class="mb-0"><i class="bi bi-arrow-repeat"></i> 拒绝并让 AI 重新解析</h6></div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('ai.refine') }}" id="refine-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label class="form-label">你的修改建议</label>
+                        <textarea name="feedback" class="form-control" rows="3" placeholder="例如：标题不对，这个需求重点是数据导出；优先级应该是中；子任务缺少测试环节..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-warning" id="btn-refine">
+                        <i class="bi bi-robot"></i> 发送建议，让 AI 重新解析
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Discard -->
+        <form method="POST" action="{{ url_for('ai.discard') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-secondary" onclick="return confirm('确定丢弃本次解析结果？')">
+                <i class="bi bi-trash"></i> 丢弃
+            </button>
+        </form>
+    </div>
+
+    <!-- AI raw output preview -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">AI 原始输出</h6></div>
+            <div class="card-body">
+                <pre class="small mb-0" style="white-space: pre-wrap;">{{ parsed | tojson(indent=2) }}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('refine-form').addEventListener('submit', function() {
+    var btn = document.getElementById('btn-refine');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> AI 重新解析中...';
+});
+</script>
+{% endblock %}

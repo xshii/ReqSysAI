@@ -20,10 +20,12 @@
             <div class="d-flex align-items-center">
                 <div class="dropdown">
                     <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="bi bi-person-circle"></i> {{ current_user.display_name }}
-                        <span class="badge bg-light text-primary ms-1">{{ current_user.role.display_name }}</span>
+                        <i class="bi bi-person-circle"></i> {{ current_user.name }}
+                        <span class="badge bg-light text-primary ms-1">{{ current_user.role_names }}</span>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="{{ url_for('auth.profile') }}"><i class="bi bi-gear"></i> 个人设置</a></li>
+                        <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="bi bi-box-arrow-right"></i> 退出登录</a></li>
                     </ul>
                 </div>
@@ -42,46 +44,42 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#">
-                            <i class="bi bi-list-task"></i> 今日 Todo
+                        <a class="nav-link {% if request.endpoint and 'todo.' in request.endpoint %}active{% endif %}" href="{{ url_for('todo.team') }}">
+                            <i class="bi bi-list-task"></i> 团队 Todo
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#">
-                            <i class="bi bi-chat-dots"></i> 每日站会
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#">
+                        <a class="nav-link {% if request.endpoint and 'requirement.' in request.endpoint %}active{% endif %}" href="{{ url_for('requirement.requirement_list') }}">
                             <i class="bi bi-clipboard-check"></i> 需求列表
                         </a>
                     </li>
-                    {% if current_user.has_role('pm', 'admin') %}
                     <li class="nav-header">管理</li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#">
-                            <i class="bi bi-speedometer2"></i> 管理看板
+                        <a class="nav-link {% if request.endpoint and 'ai.' in request.endpoint %}active{% endif %}" href="{{ url_for('ai.parse_page') }}">
+                            <i class="bi bi-robot"></i> AI 解析需求
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#">
+                        <a class="nav-link {% if request.endpoint and 'project.' in request.endpoint %}active{% endif %}" href="{{ url_for('project.project_list') }}">
+                            <i class="bi bi-folder"></i> 项目管理
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'dashboard.requirement_progress' %}active{% endif %}" href="{{ url_for('dashboard.requirement_progress') }}">
                             <i class="bi bi-clipboard-data"></i> 需求进度
                         </a>
                     </li>
-                    {% endif %}
-                    {% if current_user.has_role('pm', 'executive', 'admin') %}
                     <li class="nav-header">报表</li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#">
+                        <a class="nav-link {% if request.endpoint == 'dashboard.stats' %}active{% endif %}" href="{{ url_for('dashboard.stats') }}">
                             <i class="bi bi-graph-up"></i> 统计报表
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="#">
+                        <a class="nav-link {% if request.endpoint == 'dashboard.weekly_report' %}active{% endif %}" href="{{ url_for('dashboard.weekly_report') }}">
                             <i class="bi bi-file-earmark-text"></i> AI 周报
                         </a>
                     </li>
-                    {% endif %}
                     {% if current_user.is_admin %}
                     <li class="nav-header">系统</li>
                     <li class="nav-item">

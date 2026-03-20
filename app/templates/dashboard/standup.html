@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}站会看板 - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4>今日站会 <span class="text-muted small">{{ today.strftime('%Y-%m-%d') }}</span></h4>
+    <span class="badge bg-{{ 'success' if filled == total else 'warning text-dark' }} fs-6">
+        {{ filled }}/{{ total }} 已填写
+    </span>
+</div>
+
+{% if groups %}
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link {% if not cur_group %}active{% endif %}" href="?group=">全部</a>
+    </li>
+    {% for g in groups %}
+    <li class="nav-item">
+        <a class="nav-link {% if cur_group == g %}active{% endif %}" href="?group={{ g }}">{{ g }}</a>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+<div class="row">
+    {% for u in users %}
+    {% set record = record_map.get(u.id) %}
+    <div class="col-md-6 col-lg-4 mb-3">
+        <div class="card h-100 {{ 'border-danger' if record and record.has_blocker else '' }}">
+            <div class="card-header d-flex justify-content-between">
+                <div>
+                    <strong>{{ u.name }}</strong>
+                    {% if u.group %}<span class="badge bg-light text-dark ms-1">{{ u.group }}</span>{% endif %}
+                </div>
+                {% if record %}
+                <span class="badge bg-success">已填</span>
+                {% else %}
+                <span class="badge bg-danger">未填</span>
+                {% endif %}
+            </div>
+            {% if record %}
+            <div class="card-body small">
+                <p><strong>昨日完成：</strong>{{ record.yesterday_done }}</p>
+                <p><strong>今日计划：</strong>{{ record.today_plan }}</p>
+                {% if record.has_blocker %}
+                <p class="text-danger"><strong>阻碍：</strong>{{ record.blocker }}</p>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="card-body text-center text-muted small py-4">尚未填写</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

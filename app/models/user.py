@@ -2,7 +2,13 @@ from datetime import datetime
 
 from flask_login import UserMixin
 
-from app.extensions import db, bcrypt
+from app.extensions import db
+
+# Many-to-many association table
+user_roles = db.Table('user_roles',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('role_id', db.Integer, db.ForeignKey('roles.id'), primary_key=True),
+)
 
 
 class Role(db.Model):
@@ -10,10 +16,7 @@ class Role(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
-    display_name = db.Column(db.String(50), nullable=False)
     description = db.Column(db.String(200))
-
-    users = db.relationship('User', back_populates='role', lazy='dynamic')
 
     def __repr__(self):
         return f'<Role {self.name}>'
@@ -23,34 +26,27 @@ class User(UserMixin, db.Model):
     __tablename__ = 'users'
 
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=True)
-    display_name = db.Column(db.String(80), nullable=False)
-    role_id = db.Column(db.Integer, db.ForeignKey('roles.id'), nullable=False)
-    auth_type = db.Column(db.String(20), default='local')  # 'local' or 'ldap'
-    ldap_dn = db.Column(db.String(255), nullable=True)
+    employee_id = db.Column(db.String(30), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(80), nullable=False)
+    ip_address = db.Column(db.String(45), unique=True, nullable=False, index=True)
+    group = db.Column(db.String(50), nullable=True)
     is_active = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    role = db.relationship('Role', back_populates='users')
-
-    def set_password(self, password):
-        self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
-
-    def check_password(self, password):
-        if not self.password_hash:
-            return False
-        return bcrypt.check_password_hash(self.password_hash, password)
+    roles = db.relationship('Role', secondary=user_roles, backref='users', lazy='joined')
 
     @property
     def is_admin(self):
-        return self.role and self.role.name == 'admin'
+        return any(r.name == 'Admin' for r in self.roles)
 
     def has_role(self, *role_names):
-        return self.role and self.role.name in role_names
+        return any(r.name in role_names for r in self.roles)
+
+    @property
+    def role_names(self):
+        """Comma-separated role names for display."""
+        return ', '.join(r.name for r in self.roles)
 
     def __repr__(self):
-        return f'<User {self.username}>'
+        return f'<User {self.name}>'

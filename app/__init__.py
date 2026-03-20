@@ -11,17 +11,11 @@ def create_app(config_name=None):
     app.config.from_object(config[config_name])
 
     # Initialize extensions
-    from app.extensions import db, migrate, login_manager, bcrypt, csrf
+    from app.extensions import db, migrate, login_manager, csrf
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
-    bcrypt.init_app(app)
     csrf.init_app(app)
-
-    # Conditionally init LDAP
-    if app.config.get('LDAP_HOST'):
-        from app.extensions import ldap_manager
-        ldap_manager.init_app(app)
 
     # Import models so they are registered with SQLAlchemy
     from app import models  # noqa: F401
@@ -30,9 +24,19 @@ def create_app(config_name=None):
     from app.auth import auth_bp
     from app.main import main_bp
     from app.admin import admin_bp
+    from app.project import project_bp
+    from app.requirement import requirement_bp
+    from app.ai import ai_bp
+    from app.todo import todo_bp
+    from app.dashboard import dashboard_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(admin_bp, url_prefix='/admin')
+    app.register_blueprint(project_bp, url_prefix='/projects')
+    app.register_blueprint(requirement_bp, url_prefix='/requirements')
+    app.register_blueprint(ai_bp, url_prefix='/ai')
+    app.register_blueprint(todo_bp, url_prefix='/todos')
+    app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
 
     # Register error handlers
     _register_error_handlers(app)

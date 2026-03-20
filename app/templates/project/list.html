@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}项目列表 - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4>项目列表</h4>
+    <div>
+        <div class="btn-group btn-group-sm me-2">
+            <a href="?status=active" class="btn btn-outline-primary {% if cur_status == 'active' %}active{% endif %}">进行中</a>
+            <a href="?status=completed" class="btn btn-outline-primary {% if cur_status == 'completed' %}active{% endif %}">已完成</a>
+            <a href="?status=archived" class="btn btn-outline-primary {% if cur_status == 'archived' %}active{% endif %}">已归档</a>
+            <a href="?status=all" class="btn btn-outline-primary {% if cur_status == 'all' %}active{% endif %}">全部</a>
+        </div>
+        <a href="{{ url_for('project.project_create') }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg"></i> 新建项目
+        </a>
+    </div>
+</div>
+
+{% if projects %}
+<div class="row">
+    {% for p in projects %}
+    <div class="col-md-6 col-lg-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <h5><a href="{{ url_for('project.project_detail', project_id=p.id) }}" class="text-decoration-none">{{ p.name }}</a></h5>
+                    <span class="badge bg-{{ 'success' if p.status == 'active' else ('secondary' if p.status == 'completed' else 'light text-dark border') }} h-100">{{ p.status_label }}</span>
+                </div>
+                <p class="text-muted small mb-2">{{ p.description or '暂无描述' }}</p>
+                <div class="progress mb-2" style="height: 6px;">
+                    <div class="progress-bar bg-success" style="width: {{ p.progress }}%"></div>
+                </div>
+                <div class="d-flex justify-content-between text-muted small">
+                    <span>完成 {{ p.progress }}%</span>
+                    <span>{{ p.requirements.count() }} 个需求</span>
+                </div>
+            </div>
+            <div class="card-footer small text-muted">
+                {{ p.creator.name }} | {{ p.created_at.strftime('%Y-%m-%d') }}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-folder" style="font-size: 2rem;"></i>
+    <p class="mt-2">暂无项目</p>
+    <a href="{{ url_for('project.project_create') }}" class="btn btn-primary">创建第一个项目</a>
+</div>
+{% endif %}
+{% endblock %}

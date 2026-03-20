@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+{% block title %}团队 Todo - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4>团队 Todo <span class="text-muted small">{{ today.strftime('%Y-%m-%d') }}</span></h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newModal">
+            <i class="bi bi-plus-lg"></i> 新建
+        </button>
+        <form method="POST" action="{{ url_for('todo.ai_recommend') }}" class="d-inline" id="ai-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-primary btn-sm" id="btn-ai">
+                <i class="bi bi-robot"></i> AI 推荐
+            </button>
+        </form>
+    </div>
+</div>
+
+{% if groups %}
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item"><a class="nav-link {% if not cur_group %}active{% endif %}" href="?group=">全部</a></li>
+    {% for g in groups %}
+    <li class="nav-item"><a class="nav-link {% if cur_group == g %}active{% endif %}" href="?group={{ g }}">{{ g }}</a></li>
+    {% endfor %}
+    <li class="nav-item ms-auto">
+        <a class="nav-link text-primary" href="{{ url_for('todo.manage_groups') }}"><i class="bi bi-gear"></i> 管理团队</a>
+    </li>
+</ul>
+{% endif %}
+
+{# Split todos into active (left) vs all-done-today (right) per user #}
+{% set ns = namespace(left=[], right=[]) %}
+{% for u in users %}
+    {% set todos = user_todos.get(u.id, []) %}
+    {% if todos %}
+        {% set active = todos | selectattr('status', 'equalto', 'todo') | list %}
+        {% if active | length == 0 %}
+            {% for t in todos %}
+                {% set _ = ns.right.append(t) %}
+            {% endfor %}
+        {% else %}
+            {% for t in todos %}
+                {% set _ = ns.left.append(t) %}
+            {% endfor %}
+        {% endif %}
+    {% endif %}
+{% endfor %}
+
+<div class="row">
+    <!-- 进行中 -->
+    <div class="col-md-7">
+        <h6 class="text-muted mb-3"><i class="bi bi-circle"></i> 进行中 <span class="badge bg-secondary">{{ ns.left | length }}</span></h6>
+        {% for t in ns.left %}
+        {% set oc = t.overdue_color %}
+        {% set mine = t.user_id == current_user.id %}
+        {% set done_count, total_count = t.items_progress %}
+        <div class="card mb-3 todo-card {{ 'border-danger' if oc == 'danger' else ('border-warning' if oc == 'warning' else '') }}"
+             {% if mine %}draggable="true" style="cursor:grab;"{% endif %}
+             data-id="{{ t.id }}" data-status="{{ t.status }}">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="mb-1">{{ t.title }}</h6>
+                        <div class="text-muted small">
+                            {{ t.user.name }} <span class="text-muted">{{ t.user.employee_id }}</span>
+                            {% if t.user.group %}<span class="badge bg-light text-dark">{{ t.user.group }}</span>{% endif %}
+                            <span class="ms-2">创建 {{ t.created_date.strftime('%m-%d') if t.created_date else '' }}</span>
+                            {% if t.due_date %}
+                            <span class="ms-1 {{ 'text-danger fw-bold' if t.is_overdue_by_due_date else '' }}">截止 {{ t.due_date.strftime('%m-%d') }}</span>
+                            {% endif %}
+                            {% if total_count > 0 %}
+                            <span class="badge bg-{{ 'success' if done_count == total_count else 'secondary' }} ms-1">{{ done_count }}/{{ total_count }}</span>
+                            {% endif %}
+                        </div>
+                        {% if oc == 'danger' %}
+                        <span class="badge bg-danger small mt-1">超期{{ t.workdays_overdue }}天</span>
+                        {% elif oc == 'warning' %}
+                        <span class="badge bg-warning text-dark small mt-1">结转{{ t.workdays_overdue }}天</span>
+                        {% endif %}
+                        {% for req in t.requirements %}
+                        <span class="badge bg-light text-dark small">{{ req.number }}</span>
+                        {% endfor %}
+                        {% if t.parent %}
+                        <span class="badge bg-info text-dark small">协助 {{ t.parent.user.name }}</span>
+                        {% endif %}
+                        {% if t.children %}
+                        <span class="badge bg-info text-dark small">已求助 {{ t.children | map(attribute='user') | map(attribute='name') | join(', ') }}</span>
+                        {% endif %}
+                    </div>
+                    {% if mine %}
+                    <div class="d-flex gap-2 flex-shrink-0 ms-3">
+                        <button class="btn btn-sm btn-outline-success btn-confirm" data-id="{{ t.id }}" title="确认完成"><i class="bi bi-check-lg"></i></button>
+                        <button class="btn btn-sm btn-outline-primary btn-help" data-id="{{ t.id }}" data-title="{{ t.title }}" title="求助"><i class="bi bi-person-plus"></i></button>
+                        <button class="btn btn-sm btn-outline-danger btn-delete" data-id="{{ t.id }}" title="删除"><i class="bi bi-trash"></i></button>
+                    </div>
+                    {% endif %}
+                </div>
+                <!-- Sub-items -->
+                {% if t.items %}
+                <div class="mt-2 border-top pt-2">
+                    {% for item in t.items %}
+                    <div class="form-check">
+                        <input class="form-check-input item-cb" type="checkbox" data-item-id="{{ item.id }}"
+                               {% if item.is_done %}checked{% endif %} {% if not mine %}disabled{% endif %}>
+                        <label class="form-check-label {% if item.is_done %}text-decoration-line-through text-muted{% endif %}">{{ item.title }}</label>
+                        {% if mine %}
+                        <button class="btn btn-sm p-0 ms-1 text-muted item-delete" data-item-id="{{ item.id }}" title="删除子项"><i class="bi bi-x"></i></button>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if mine %}
+                <div class="mt-2">
+                    <input type="text" class="form-control form-control-sm add-item-input" data-todo-id="{{ t.id }}" placeholder="+ 添加子项，回车确认">
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4">全部完成！</div>
+        {% endfor %}
+    </div>
+
+    <!-- 已完成 -->
+    <div class="col-md-5">
+        <h6 class="text-muted mb-3"><i class="bi bi-check-circle"></i> 今日已完成 <span class="badge bg-success">{{ ns.right | length }}</span></h6>
+        {% for t in ns.right %}
+        {% set mine = t.user_id == current_user.id %}
+        {% set done_count, total_count = t.items_progress %}
+        <div class="card mb-2 border-success bg-success bg-opacity-10 todo-card" data-id="{{ t.id }}" data-status="{{ t.status }}">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="text-decoration-line-through text-muted">{{ t.title }}</div>
+                        <div class="text-muted small">
+                            {{ t.user.name }} <span class="text-muted">{{ t.user.employee_id }}</span>
+                            {% if t.done_date %}<span class="ms-1">{{ t.done_date.strftime('%m-%d') }} 完成</span>{% endif %}
+                            {% if total_count > 0 %}
+                            <span class="badge bg-success small ms-1">{{ done_count }}/{{ total_count }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% if mine %}
+                    <button class="btn btn-sm btn-outline-warning btn-reopen" data-id="{{ t.id }}" title="重新打开"><i class="bi bi-arrow-counterclockwise"></i></button>
+                    {% endif %}
+                </div>
+                {% if t.items %}
+                <div class="mt-1 border-top pt-1">
+                    {% for item in t.items %}
+                    <div class="form-check small">
+                        <input class="form-check-input item-cb" type="checkbox" data-item-id="{{ item.id }}"
+                               {% if item.is_done %}checked{% endif %} {% if not mine %}disabled{% endif %}>
+                        <label class="form-check-label text-decoration-line-through text-muted">{{ item.title }}</label>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4">暂无</div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- 新建弹窗 -->
+<div class="modal fade" id="newModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('todo.add') }}">
+                {{ form.hidden_tag() }}
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">新建任务</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">任务标题</label>
+                        <input type="text" name="title" class="form-control" placeholder="输入任务标题" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">预期闭环</label>
+                        <select name="due_date" class="form-select form-select-sm">
+                            <option value="{{ today.strftime('%Y-%m-%d') }}" selected>今天 ({{ today.strftime('%m-%d') }})</option>
+                            <option value="{{ tomorrow.strftime('%Y-%m-%d') }}">明天 ({{ tomorrow.strftime('%m-%d') }})</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">关联需求 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm mb-1 req-search" placeholder="搜索需求..." oninput="filterReqs(this)">
+                        <div class="border rounded p-2 req-list-box" style="max-height:160px;overflow-y:auto;">
+                            {% for r in reqs %}
+                            <div class="form-check req-option">
+                                <input class="form-check-input" type="checkbox" name="req_ids" value="{{ r.id }}" id="req_{{ r.id }}"
+                                       {% if r.id in default_req_ids %}checked{% endif %}>
+                                <label class="form-check-label small" for="req_{{ r.id }}">{{ r.number }} {{ r.title }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label">子项</label>
+                        <div id="newItems">
+                            <div class="input-group input-group-sm mb-1">
+                                <input type="text" name="item_title" class="form-control" placeholder="子项内容">
+                                <button type="button" class="btn btn-outline-secondary btn-add-new-item">+</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-1">
+                    <button type="submit" class="btn btn-sm btn-primary">创建</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 求助弹窗 -->
+<div class="modal fade" id="helpModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title">求助</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">协助人</label>
+                    <select id="helpUserId" class="form-select form-select-sm">
+                        <option value="">选择协助人</option>
+                        {% for au in all_users %}
+                        <option value="{{ au.id }}">{{ au.name }}{% if au.group %} ({{ au.group }}){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">任务描述</label>
+                    <input type="text" id="helpTitle" class="form-control form-control-sm">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">预期闭环</label>
+                    <input type="date" id="helpDueDate" class="form-control form-control-sm">
+                </div>
+            </div>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-sm btn-primary" id="helpConfirm">发起求助</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var csrfToken = '{{ csrf_token() }}';
+function api(url, data) {
+    return fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify(data || {})
+    });
+}
+
+/* Sub-item toggle */
+document.querySelectorAll('.item-cb:not(:disabled)').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+        api('/todos/items/' + cb.dataset.itemId + '/toggle').then(function(r) { if (r.ok) location.reload(); });
+    });
+});
+
+/* Sub-item delete */
+document.querySelectorAll('.item-delete').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        api('/todos/items/' + btn.dataset.itemId + '/delete').then(function(r) { if (r.ok) location.reload(); });
+    });
+});
+
+/* Add sub-item */
+document.querySelectorAll('.add-item-input').forEach(function(inp) {
+    inp.addEventListener('keydown', function(e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        var title = inp.value.trim();
+        if (!title) return;
+        api('/todos/' + inp.dataset.todoId + '/items/add', {title: title}).then(function(r) { if (r.ok) location.reload(); });
+    });
+});
+
+/* Confirm / Reopen / Delete */
+document.querySelectorAll('.btn-confirm').forEach(function(b) {
+    b.addEventListener('click', function(e) { e.stopPropagation(); api('/todos/' + b.dataset.id + '/confirm').then(function(r) { if (r.ok) location.reload(); }); });
+});
+document.querySelectorAll('.btn-reopen').forEach(function(b) {
+    b.addEventListener('click', function(e) { e.stopPropagation(); api('/todos/' + b.dataset.id + '/reopen').then(function(r) { if (r.ok) location.reload(); }); });
+});
+document.querySelectorAll('.btn-delete').forEach(function(b) {
+    b.addEventListener('click', function(e) { e.stopPropagation(); if (!confirm('确定删除？')) return; api('/todos/' + b.dataset.id + '/edit', {title: ''}).then(function(r) { if (r.ok) location.reload(); }); });
+});
+
+/* Help */
+var helpTodoId = null;
+var helpModal = new bootstrap.Modal(document.getElementById('helpModal'));
+document.querySelectorAll('.btn-help').forEach(function(b) {
+    b.addEventListener('click', function(e) { e.stopPropagation(); helpTodoId = b.dataset.id; document.getElementById('helpTitle').value = '协助: ' + b.dataset.title; helpModal.show(); });
+});
+document.getElementById('helpConfirm').addEventListener('click', function() {
+    var hid = document.getElementById('helpUserId').value;
+    if (!hid || !helpTodoId) return;
+    api('/todos/' + helpTodoId + '/help', {helper_id: parseInt(hid), title: document.getElementById('helpTitle').value.trim(), due_date: document.getElementById('helpDueDate').value || null}).then(function(r) { return r.json(); }).then(function(d) {
+        helpModal.hide();
+        if (d.ok) { alert('已向 ' + d.helper_name + ' 发起求助'); location.reload(); } else alert(d.msg || '失败');
+    });
+});
+
+/* Drag reorder */
+var dragId = null;
+document.querySelectorAll('.todo-card[draggable]').forEach(function(card) {
+    card.addEventListener('dragstart', function(e) { dragId = card.dataset.id; e.dataTransfer.effectAllowed = 'move'; card.classList.add('opacity-50'); });
+    card.addEventListener('dragend', function() { card.classList.remove('opacity-50'); });
+});
+
+/* New modal: add sub-item rows */
+document.querySelector('.btn-add-new-item').addEventListener('click', function() {
+    var div = document.getElementById('newItems');
+    var row = document.createElement('div');
+    row.className = 'input-group input-group-sm mb-1';
+    row.innerHTML = '<input type="text" name="item_title" class="form-control" placeholder="子项内容"><button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>';
+    div.appendChild(row);
+});
+
+/* Requirement search filter */
+function filterReqs(input) {
+    var q = input.value.toLowerCase();
+    var box = input.nextElementSibling;
+    box.querySelectorAll('.req-option').forEach(function(opt) {
+        var text = opt.querySelector('label').textContent.toLowerCase();
+        opt.style.display = text.includes(q) ? '' : 'none';
+    });
+}
+
+/* AI spinner */
+document.getElementById('ai-form').addEventListener('submit', function() {
+    var btn = document.getElementById('btn-ai');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> AI 推荐中...';
+});
+</script>
+{% endblock %}

@@ -1,21 +1,31 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SelectField, BooleanField, SubmitField
-from wtforms.validators import DataRequired, Email, Optional, Length
+from wtforms import StringField, SelectMultipleField, BooleanField, SubmitField
+from wtforms.validators import DataRequired, Length, Optional, Regexp
+
+EMPLOYEE_ID_RE = r'^[a-z]\d?00\d{6}$'
+EMPLOYEE_ID_MSG = '工号格式：1位小写字母 + 8~9位数字，倒数第7、8位为0，如 a00123456'
 
 
 class UserCreateForm(FlaskForm):
-    username = StringField('用户名', validators=[DataRequired(), Length(min=2, max=80)])
-    email = StringField('邮箱', validators=[DataRequired(), Email()])
-    display_name = StringField('姓名', validators=[DataRequired(), Length(max=80)])
-    password = PasswordField('密码', validators=[DataRequired(), Length(min=6)])
-    role_id = SelectField('角色', coerce=int, validators=[DataRequired()])
+    employee_id = StringField('工号', validators=[
+        DataRequired(message='请输入工号'),
+        Regexp(EMPLOYEE_ID_RE, message=EMPLOYEE_ID_MSG),
+    ])
+    name = StringField('姓名', validators=[DataRequired(), Length(min=2, max=80)])
+    ip_address = StringField('IP 地址', validators=[DataRequired(), Length(max=45)])
+    group = StringField('小组', validators=[Optional(), Length(max=50)])
+    role_ids = SelectMultipleField('角色', coerce=int, validators=[DataRequired()])
     submit = SubmitField('创建用户')
 
 
 class UserEditForm(FlaskForm):
-    email = StringField('邮箱', validators=[DataRequired(), Email()])
-    display_name = StringField('姓名', validators=[DataRequired(), Length(max=80)])
-    password = PasswordField('新密码（留空则不修改）', validators=[Optional(), Length(min=6)])
-    role_id = SelectField('角色', coerce=int, validators=[DataRequired()])
+    employee_id = StringField('工号', validators=[
+        DataRequired(message='请输入工号'),
+        Regexp(EMPLOYEE_ID_RE, message=EMPLOYEE_ID_MSG),
+    ])
+    name = StringField('姓名', validators=[DataRequired(), Length(min=2, max=80)])
+    ip_address = StringField('IP 地址', validators=[DataRequired(), Length(max=45)])
+    group = StringField('小组', validators=[Optional(), Length(max=50)])
+    role_ids = SelectMultipleField('角色', coerce=int, validators=[DataRequired()])
     is_active = BooleanField('启用')
     submit = SubmitField('保存')

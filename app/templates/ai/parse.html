@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}AI 需求解析 - 研发协作平台{% endblock %}
+
+{% block content %}
+<h4 class="mb-4">AI 需求解析</h4>
+
+<div class="row">
+    <!-- Paste text -->
+    <div class="col-md-6 mb-3">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-chat-text"></i> 粘贴聊天记录/文本</h6></div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('ai.parse_text') }}">
+                    {{ text_form.hidden_tag() }}
+                    {{ text_form.content(class="form-control", rows=10, placeholder="粘贴 IM 聊天记录、会议纪要或需求描述...") }}
+                    {% for e in text_form.content.errors %}
+                    <div class="invalid-feedback d-block">{{ e }}</div>
+                    {% endfor %}
+                    <button type="submit" class="btn btn-primary mt-3 w-100" id="btn-parse-text">
+                        <i class="bi bi-robot"></i> AI 解析
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload docx -->
+    <div class="col-md-6 mb-3">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0"><i class="bi bi-file-earmark-word"></i> 上传 Word 文档</h6></div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('ai.parse_docx') }}" enctype="multipart/form-data">
+                    {{ docx_form.hidden_tag() }}
+                    <div class="mb-3">
+                        <label class="form-label">选择 .docx 文件</label>
+                        {{ docx_form.file(class="form-control") }}
+                        {% for e in docx_form.file.errors %}
+                        <div class="invalid-feedback d-block">{{ e }}</div>
+                        {% endfor %}
+                    </div>
+                    <p class="text-muted small">支持 .docx 格式，系统会提取文本后送入 AI 分析</p>
+                    <button type="submit" class="btn btn-primary w-100" id="btn-parse-docx">
+                        <i class="bi bi-upload"></i> 上传并解析
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="text-muted small mt-2">
+    <i class="bi bi-info-circle"></i> AI 解析结果仅为初稿，请在下一步人工确认修改后保存。
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('form').forEach(function(form) {
+    form.addEventListener('submit', function() {
+        var btn = form.querySelector('button[type=submit]');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> AI 解析中，请稍候...';
+    });
+});
+</script>
+{% endblock %}

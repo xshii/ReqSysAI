@@ -1,0 +1,204 @@
+from flask import render_template, redirect, url_for, flash, request
+from flask_login import login_required, current_user
+from sqlalchemy.orm import joinedload
+
+from app.requirement import requirement_bp
+from app.requirement.forms import RequirementForm, TaskForm, CommentForm
+
+from app.extensions import db
+from app.models.project import Project, Milestone
+from app.models.requirement import Requirement, RequirementTask, Comment, Activity
+from app.models.user import User
+
+PER_PAGE = 20
+
+
+def _log_activity(req, action, detail=None):
+    db.session.add(Activity(
+        requirement_id=req.id, user_id=current_user.id,
+        action=action, detail=detail,
+    ))
+
+
+@requirement_bp.route('/')
+@login_required
+def requirement_list():
+    query = Requirement.query.options(
+        joinedload(Requirement.project),
+        joinedload(Requirement.assignee),
+    )
+
+    # Filters
+    status = request.args.get('status')
+    priority = request.args.get('priority')
+    project_id = request.args.get('project_id', type=int)
+    assignee_id = request.args.get('assignee_id', type=int)
+    search = request.args.get('q', '').strip()
+    sort = request.args.get('sort', 'newest')
+
+    if status:
+        query = query.filter_by(status=status)
+    if priority:
+        query = query.filter_by(priority=priority)
+    if project_id:
+        query = query.filter_by(project_id=project_id)
+    if assignee_id:
+        query = query.filter_by(assignee_id=assignee_id)
+    if search:
+        query = query.filter(
+            db.or_(Requirement.title.contains(search), Requirement.description.contains(search))
+        )
+
+    # Sort
+    order = {
+        'newest': Requirement.created_at.desc(),
+        'oldest': Requirement.created_at.asc(),
+        'priority': db.case({'high': 0, 'medium': 1, 'low': 2}, value=Requirement.priority),
+    }.get(sort, Requirement.created_at.desc())
+    query = query.order_by(order)
+
+    page = request.args.get('page', 1, type=int)
+    pagination = query.paginate(page=page, per_page=PER_PAGE, error_out=False)
+
+    return render_template('requirement/list.html',
+        pagination=pagination, requirements=pagination.items,
+        projects=Project.query.all(),
+        users=User.query.filter_by(is_active=True).all(),
+        statuses=Requirement.STATUS_LABELS, priorities=Requirement.PRIORITY_LABELS,
+        cur_status=status, cur_priority=priority, cur_project=project_id,
+        cur_assignee=assignee_id, cur_search=search, cur_sort=sort,
+    )
+
+
+@requirement_bp.route('/new', methods=['GET', 'POST'])
+@login_required
+def requirement_create():
+    form = _build_requirement_form()
+    if form.validate_on_submit():
+        req = Requirement(
+            number=Requirement.generate_number(),
+            title=form.title.data,
+            description=form.description.data,
+            project_id=form.project_id.data,
+            milestone_id=form.milestone_id.data or None,
+            priority=form.priority.data,
+            assignee_id=form.assignee_id.data or None,
+            estimate_days=form.estimate_days.data,
+            source='manual',
+            created_by=current_user.id,
+        )
+        db.session.add(req)
+        db.session.flush()
+        _log_activity(req, 'created', f'创建了需求「{req.title}」')
+        db.session.commit()
+        flash(f'需求 {req.number} 创建成功', 'success')
+        return redirect(url_for('requirement.requirement_detail', req_id=req.id))
+    return render_template('requirement/form.html', form=form, title='新建需求')
+
+
+@requirement_bp.route('/<int:req_id>')
+@login_required
+def requirement_detail(req_id):
+    req = db.get_or_404(Requirement, req_id)
+    comment_form = CommentForm()
+    task_form = TaskForm()
+    return render_template('requirement/detail.html', req=req,
+                           comment_form=comment_form, task_form=task_form)
+
+
+@requirement_bp.route('/<int:req_id>/edit', methods=['GET', 'POST'])
+@login_required
+def requirement_edit(req_id):
+    req = db.get_or_404(Requirement, req_id)
+    form = _build_requirement_form(obj=req)
+    if form.validate_on_submit():
+        req.title = form.title.data
+        req.description = form.description.data
+        req.project_id = form.project_id.data
+        req.milestone_id = form.milestone_id.data or None
+        req.priority = form.priority.data
+        req.assignee_id = form.assignee_id.data or None
+        req.estimate_days = form.estimate_days.data
+        _log_activity(req, 'edited', '编辑了需求')
+        db.session.commit()
+        flash('需求更新成功', 'success')
+        return redirect(url_for('requirement.requirement_detail', req_id=req.id))
+    return render_template('requirement/form.html', form=form, title=f'编辑需求 - {req.number}')
+
+
+@requirement_bp.route('/<int:req_id>/status', methods=['POST'])
+@login_required
+def requirement_status(req_id):
+    req = db.get_or_404(Requirement, req_id)
+    new_status = request.form.get('status')
+    if new_status not in req.allowed_next_statuses:
+        flash('不允许的状态流转', 'danger')
+    else:
+        old_label = req.status_label
+        req.status = new_status
+        _log_activity(req, 'status_changed', f'{old_label} → {req.status_label}')
+        db.session.commit()
+        flash(f'状态已更新为「{req.status_label}」', 'success')
+    return redirect(url_for('requirement.requirement_detail', req_id=req.id))
+
+
+# --- Comments ---
+
+@requirement_bp.route('/<int:req_id>/comments', methods=['POST'])
+@login_required
+def add_comment(req_id):
+    req = db.get_or_404(Requirement, req_id)
+    form = CommentForm()
+    if form.validate_on_submit():
+        comment = Comment(requirement_id=req.id, user_id=current_user.id, content=form.content.data)
+        db.session.add(comment)
+        _log_activity(req, 'commented', form.content.data[:100])
+        db.session.commit()
+    return redirect(url_for('requirement.requirement_detail', req_id=req.id))
+
+
+# --- Sub-tasks ---
+
+@requirement_bp.route('/<int:req_id>/tasks', methods=['POST'])
+@login_required
+def add_task(req_id):
+    req = db.get_or_404(Requirement, req_id)
+    form = TaskForm()
+    if form.validate_on_submit():
+        task = RequirementTask(requirement_id=req.id, title=form.title.data)
+        db.session.add(task)
+        _log_activity(req, 'task_added', f'添加子任务「{form.title.data}」')
+        db.session.commit()
+    return redirect(url_for('requirement.requirement_detail', req_id=req.id))
+
+
+@requirement_bp.route('/tasks/<int:task_id>/toggle', methods=['POST'])
+@login_required
+def toggle_task(task_id):
+    task = db.get_or_404(RequirementTask, task_id)
+    next_status = {'pending': 'in_progress', 'in_progress': 'done', 'done': 'pending'}
+    task.status = next_status.get(task.status, 'pending')
+    db.session.commit()
+    return redirect(url_for('requirement.requirement_detail', req_id=task.requirement_id))
+
+
+@requirement_bp.route('/tasks/<int:task_id>/delete', methods=['POST'])
+@login_required
+def delete_task(task_id):
+    task = db.get_or_404(RequirementTask, task_id)
+    req_id = task.requirement_id
+    db.session.delete(task)
+    db.session.commit()
+    return redirect(url_for('requirement.requirement_detail', req_id=req_id))
+
+
+def _build_requirement_form(obj=None):
+    form = RequirementForm(obj=obj)
+    form.project_id.choices = [(p.id, p.name) for p in Project.query.filter_by(status='active').all()]
+    form.milestone_id.choices = [(0, '-- 无 --')] + [
+        (m.id, f'{m.project.name} / {m.name}') for m in Milestone.query.filter_by(status='active').all()
+    ]
+    form.assignee_id.choices = [(0, '-- 未分配 --')] + [
+        (u.id, u.name) for u in User.query.filter_by(is_active=True).all()
+    ]
+    return form

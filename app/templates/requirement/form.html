@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('requirement.requirement_list') }}" class="text-decoration-none">
+        <i class="bi bi-arrow-left"></i> 返回需求列表
+    </a>
+</div>
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">{{ title }}</h5></div>
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.title.label.text }}</label>
+                        {{ form.title(class="form-control") }}
+                        {% for e in form.title.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.description.label.text }}</label>
+                        {{ form.description(class="form-control", rows=5) }}
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.project_id.label.text }}</label>
+                            {{ form.project_id(class="form-select") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.milestone_id.label.text }}</label>
+                            {{ form.milestone_id(class="form-select") }}
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.priority.label.text }}</label>
+                            {{ form.priority(class="form-select") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.assignee_id.label.text }}</label>
+                            {{ form.assignee_id(class="form-select") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.estimate_days.label.text }}</label>
+                            {{ form.estimate_days(class="form-control") }}
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {{ form.submit.label.text }}</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

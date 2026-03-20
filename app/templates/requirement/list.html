@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}需求列表 - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4>需求列表</h4>
+    {% if current_user.has_role('pm', 'admin') %}
+    <a href="{{ url_for('requirement.requirement_create') }}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> 新建需求
+    </a>
+    {% endif %}
+</div>
+
+<!-- Search + Filters -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-md-3 col-sm-6">
+                <input type="text" name="q" class="form-control form-control-sm" placeholder="搜索标题/描述..." value="{{ cur_search or '' }}">
+            </div>
+            <div class="col-auto">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">全部状态</option>
+                    {% for k, v in statuses.items() %}
+                    <option value="{{ k }}" {% if cur_status == k %}selected{% endif %}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <select name="priority" class="form-select form-select-sm">
+                    <option value="">全部优先级</option>
+                    {% for k, v in priorities.items() %}
+                    <option value="{{ k }}" {% if cur_priority == k %}selected{% endif %}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <select name="project_id" class="form-select form-select-sm">
+                    <option value="">全部项目</option>
+                    {% for p in projects %}
+                    <option value="{{ p.id }}" {% if cur_project == p.id %}selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <select name="sort" class="form-select form-select-sm">
+                    <option value="newest" {% if cur_sort == 'newest' %}selected{% endif %}>最新创建</option>
+                    <option value="oldest" {% if cur_sort == 'oldest' %}selected{% endif %}>最早创建</option>
+                    <option value="priority" {% if cur_sort == 'priority' %}selected{% endif %}>按优先级</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-outline-primary">筛选</button>
+                <a href="{{ url_for('requirement.requirement_list') }}" class="btn btn-sm btn-outline-secondary">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if requirements %}
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>编号</th>
+                <th>标题</th>
+                <th>项目</th>
+                <th>优先级</th>
+                <th>状态</th>
+                <th>负责人</th>
+                <th>预估</th>
+                <th>日期</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in requirements %}
+            <tr>
+                <td class="text-muted small">{{ r.number }}</td>
+                <td><a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}">{{ r.title }}</a></td>
+                <td><span class="text-muted small">{{ r.project.name }}</span></td>
+                <td><span class="badge bg-{{ r.priority_color }}">{{ r.priority_label }}</span></td>
+                <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span></td>
+                <td>{{ r.assignee.name if r.assignee else '-' }}</td>
+                <td class="small">{{ r.estimate_days or '-' }}天</td>
+                <td class="text-muted small">{{ r.created_at.strftime('%m-%d') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if pagination.pages > 1 %}
+<nav>
+    <ul class="pagination pagination-sm justify-content-center">
+        {% if pagination.has_prev %}
+        <li class="page-item"><a class="page-link" href="?page={{ pagination.prev_num }}&q={{ cur_search or '' }}&status={{ cur_status or '' }}&priority={{ cur_priority or '' }}&project_id={{ cur_project or '' }}&sort={{ cur_sort or 'newest' }}">上一页</a></li>
+        {% endif %}
+        {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if p %}
+            <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                <a class="page-link" href="?page={{ p }}&q={{ cur_search or '' }}&status={{ cur_status or '' }}&priority={{ cur_priority or '' }}&project_id={{ cur_project or '' }}&sort={{ cur_sort or 'newest' }}">{{ p }}</a>
+            </li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+        {% if pagination.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ pagination.next_num }}&q={{ cur_search or '' }}&status={{ cur_status or '' }}&priority={{ cur_priority or '' }}&project_id={{ cur_project or '' }}&sort={{ cur_sort or 'newest' }}">下一页</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+    <p class="mt-2">暂无需求</p>
+    {% if current_user.has_role('pm', 'admin') %}
+    <a href="{{ url_for('requirement.requirement_create') }}" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> 创建第一个需求
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,39 +1,100 @@
 {% extends "base.html" %}
-
 {% block title %}首页 - 研发协作平台{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4>欢迎, {{ current_user.display_name }}</h4>
-    <span class="text-muted">{{ current_user.role.display_name }}</span>
+<h4 class="mb-4">欢迎, {{ current_user.name }}</h4>
+
+<!-- Stats cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card border-primary">
+            <div class="card-body text-center">
+                <div class="display-6 text-primary">{{ total_reqs }}</div>
+                <div class="text-muted small">全部需求</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card border-success">
+            <div class="card-body text-center">
+                <div class="display-6 text-success">{{ done_reqs }}</div>
+                <div class="text-muted small">已完成</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card border-info">
+            <div class="card-body text-center">
+                <div class="display-6 text-info">{{ my_total }}</div>
+                <div class="text-muted small">我的需求</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card border-warning">
+            <div class="card-body text-center">
+                <div class="display-6 text-warning">{{ my_total - my_done }}</div>
+                <div class="text-muted small">我的待办</div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="row">
-    <div class="col-md-4 mb-3">
-        <div class="card border-primary">
-            <div class="card-body text-center">
-                <i class="bi bi-list-task text-primary" style="font-size: 2rem;"></i>
-                <h5 class="mt-2">今日 Todo</h5>
-                <p class="text-muted">管理今日工作任务</p>
+    <!-- My requirements -->
+    <div class="col-md-8 mb-3">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <h6 class="mb-0">分配给我的需求</h6>
+                <a href="{{ url_for('requirement.requirement_list') }}" class="small">查看全部</a>
             </div>
+            {% if my_reqs %}
+            <div class="list-group list-group-flush">
+                {% for r in my_reqs %}
+                <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="list-group-item list-group-item-action">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <span class="text-muted small me-2">{{ r.number }}</span>
+                            {{ r.title }}
+                        </div>
+                        <div>
+                            <span class="badge bg-{{ r.priority_color }} me-1">{{ r.priority_label }}</span>
+                            <span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="card-body text-center text-muted py-4">暂无分配给你的需求</div>
+            {% endif %}
         </div>
     </div>
+
+    <!-- Active projects -->
     <div class="col-md-4 mb-3">
-        <div class="card border-success">
-            <div class="card-body text-center">
-                <i class="bi bi-chat-dots text-success" style="font-size: 2rem;"></i>
-                <h5 class="mt-2">每日站会</h5>
-                <p class="text-muted">填写站会记录</p>
+        <div class="card">
+            <div class="card-header d-flex justify-content-between">
+                <h6 class="mb-0">进行中的项目</h6>
+                {% if current_user.has_role('pm', 'admin') %}
+                <a href="{{ url_for('project.project_list') }}" class="small">管理</a>
+                {% endif %}
             </div>
-        </div>
-    </div>
-    <div class="col-md-4 mb-3">
-        <div class="card border-info">
-            <div class="card-body text-center">
-                <i class="bi bi-clipboard-check text-info" style="font-size: 2rem;"></i>
-                <h5 class="mt-2">需求列表</h5>
-                <p class="text-muted">查看分配的需求</p>
+            {% if active_projects %}
+            <div class="list-group list-group-flush">
+                {% for p in active_projects %}
+                <a href="{{ url_for('project.project_detail', project_id=p.id) }}" class="list-group-item list-group-item-action">
+                    <div class="fw-bold small">{{ p.name }}</div>
+                    <div class="progress mt-1" style="height: 6px;">
+                        <div class="progress-bar bg-success" style="width: {{ p.progress }}%"></div>
+                    </div>
+                    <div class="text-muted small mt-1">完成 {{ p.progress }}%</div>
+                </a>
+                {% endfor %}
             </div>
+            {% else %}
+            <div class="card-body text-center text-muted py-4">暂无进行中的项目</div>
+            {% endif %}
         </div>
     </div>
 </div>

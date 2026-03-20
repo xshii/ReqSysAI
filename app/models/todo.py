@@ -1,6 +1,12 @@
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from app.extensions import db
+
+
+todo_requirements = db.Table('todo_requirements',
+    db.Column('todo_id', db.Integer, db.ForeignKey('todos.id'), primary_key=True),
+    db.Column('requirement_id', db.Integer, db.ForeignKey('requirements.id'), primary_key=True),
+)
 
 
 class Todo(db.Model):
@@ -8,17 +14,87 @@ class Todo(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    date = db.Column(db.Date, nullable=False)
     title = db.Column(db.String(300), nullable=False)
-    status = db.Column(db.String(20), default='todo')  # todo / in_progress / done
-    requirement_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=True)
+    status = db.Column(db.String(20), default='todo')  # todo / done
+    parent_id = db.Column(db.Integer, db.ForeignKey('todos.id'), nullable=True)
     sort_order = db.Column(db.Integer, default=0)
     estimated_hours = db.Column(db.Float, nullable=True)
+    due_date = db.Column(db.Date, nullable=True)
+    created_date = db.Column(db.Date, default=date.today)
+    done_date = db.Column(db.Date, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = db.relationship('User', backref='todos')
-    requirement = db.relationship('Requirement', backref='todos')
+    requirements = db.relationship('Requirement', secondary=todo_requirements, backref='todos', lazy='joined')
+    parent = db.relationship('Todo', remote_side=[id], backref='children')
+    items = db.relationship('TodoItem', backref='todo', cascade='all, delete-orphan',
+                            order_by='TodoItem.sort_order')
+
+    STATUS_LABELS = {'todo': '待办', 'done': '完成'}
+
+    @property
+    def status_label(self):
+        return self.STATUS_LABELS.get(self.status, self.status)
+
+    @property
+    def items_progress(self):
+        """Return (done_count, total_count)."""
+        if not self.items:
+            return 0, 0
+        done = sum(1 for i in self.items if i.is_done)
+        return done, len(self.items)
+
+    @property
+    def all_items_done(self):
+        """True if has items and all are checked."""
+        if not self.items:
+            return False
+        return all(i.is_done for i in self.items)
+
+    @property
+    def workdays_overdue(self):
+        if self.status == 'done' or not self.created_date:
+            return 0
+        today = date.today()
+        if self.created_date >= today:
+            return 0
+        total_days = (today - self.created_date).days
+        full_weeks, remaining = divmod(total_days, 7)
+        count = full_weeks * 5
+        start_weekday = self.created_date.weekday()
+        for i in range(1, remaining + 1):
+            if (start_weekday + i) % 7 < 5:
+                count += 1
+        return count
+
+    @property
+    def overdue_color(self):
+        days = self.workdays_overdue
+        if days >= 3:
+            return 'danger'
+        if days >= 1:
+            return 'warning'
+        return ''
+
+    @property
+    def is_overdue_by_due_date(self):
+        """True if due_date is set and past."""
+        return self.due_date and self.due_date < date.today() and self.status != 'done'
 
     def __repr__(self):
         return f'<Todo {self.title}>'
+
+
+class TodoItem(db.Model):
+    __tablename__ = 'todo_items'
+
+    id = db.Column(db.Integer, primary_key=True)
+    todo_id = db.Column(db.Integer, db.ForeignKey('todos.id'), nullable=False)
+    title = db.Column(db.String(300), nullable=False)
+    is_done = db.Column(db.Boolean, default=False)
+    sort_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<TodoItem {self.title}>'

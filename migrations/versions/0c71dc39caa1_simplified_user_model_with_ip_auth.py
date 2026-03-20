@@ -1,8 +1,8 @@
-"""initial schema
+"""simplified user model with ip auth
 
-Revision ID: f0dd6f0e5149
+Revision ID: 0c71dc39caa1
 Revises: 
-Create Date: 2026-03-18 12:00:43.795320
+Create Date: 2026-03-18 16:20:11.887014
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'f0dd6f0e5149'
+revision = '0c71dc39caa1'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -28,23 +28,17 @@ def upgrade():
     )
     op.create_table('users',
     sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('username', sa.String(length=80), nullable=False),
-    sa.Column('email', sa.String(length=120), nullable=False),
-    sa.Column('password_hash', sa.String(length=128), nullable=True),
-    sa.Column('display_name', sa.String(length=80), nullable=False),
+    sa.Column('name', sa.String(length=80), nullable=False),
+    sa.Column('ip_address', sa.String(length=45), nullable=False),
     sa.Column('role_id', sa.Integer(), nullable=False),
-    sa.Column('auth_type', sa.String(length=20), nullable=True),
-    sa.Column('ldap_dn', sa.String(length=255), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=True),
     sa.Column('last_login', sa.DateTime(), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
-    sa.Column('updated_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['role_id'], ['roles.id'], ),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('email')
+    sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('users', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_users_username'), ['username'], unique=True)
+        batch_op.create_index(batch_op.f('ix_users_ip_address'), ['ip_address'], unique=True)
 
     op.create_table('ai_parse_logs',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -149,7 +143,7 @@ def downgrade():
     op.drop_table('projects')
     op.drop_table('ai_parse_logs')
     with op.batch_alter_table('users', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_users_username'))
+        batch_op.drop_index(batch_op.f('ix_users_ip_address'))
 
     op.drop_table('users')
     op.drop_table('roles')

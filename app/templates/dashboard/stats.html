@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}统计报表 - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4>统计报表</h4>
+    <a href="{{ url_for('dashboard.stats_export', week=offset, group=cur_group) }}" class="btn btn-sm btn-outline-success">
+        <i class="bi bi-download"></i> 导出 Excel
+    </a>
+</div>
+
+<!-- Week selector -->
+<div class="d-flex align-items-center gap-2 mb-4">
+    <a href="?week={{ offset - 1 }}&group={{ cur_group }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
+    <span class="fw-bold">{{ monday.strftime('%Y-%m-%d') }} ~ {{ sunday.strftime('%Y-%m-%d') }}</span>
+    {% if offset < 0 %}
+    <a href="?week={{ offset + 1 }}&group={{ cur_group }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
+    {% endif %}
+    {% if offset != 0 %}
+    <a href="?week=0&group={{ cur_group }}" class="btn btn-sm btn-outline-primary">本周</a>
+    {% endif %}
+</div>
+
+<!-- Group tabs -->
+{% if groups %}
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link {% if not cur_group %}active{% endif %}" href="?week={{ offset }}&group=">全部</a>
+    </li>
+    {% for g in groups %}
+    <li class="nav-item">
+        <a class="nav-link {% if cur_group == g %}active{% endif %}" href="?week={{ offset }}&group={{ g }}">{{ g }}</a>
+    </li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+<!-- Summary cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="text-muted small">需求完成率</div>
+                <div class="fs-3 fw-bold text-primary">{{ data.req_rate }}%</div>
+                <div class="text-muted small">{{ data.req_done }} / {{ data.req_total }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="text-muted small">本周新建任务</div>
+                <div class="fs-3 fw-bold">{{ data.user_stats | sum(attribute='created') }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="text-muted small">本周完成任务</div>
+                <div class="fs-3 fw-bold text-success">{{ data.user_stats | sum(attribute='done') }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <div class="text-muted small">团队完成率</div>
+                {% set total_c = data.user_stats | sum(attribute='created') %}
+                {% set total_d = data.user_stats | sum(attribute='done') %}
+                <div class="fs-3 fw-bold text-info">{{ (total_d / total_c * 100) | round | int if total_c else 0 }}%</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Per-user table -->
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>姓名</th>
+                    <th>工号</th>
+                    <th>小组</th>
+                    <th>新建</th>
+                    <th>完成</th>
+                    <th>完成率</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in data.user_stats %}
+                <tr>
+                    <td>{{ s.user.name }}</td>
+                    <td>{{ s.user.employee_id or '-' }}</td>
+                    <td>{{ s.user.group or '-' }}</td>
+                    <td>{{ s.created }}</td>
+                    <td>{{ s.done }}</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="progress flex-grow-1" style="height:6px;">
+                                <div class="progress-bar bg-{{ 'success' if s.rate >= 80 else ('warning' if s.rate >= 50 else 'danger') }}"
+                                     style="width:{{ s.rate }}%"></div>
+                            </div>
+                            <span class="small">{{ s.rate }}%</span>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-center text-muted py-3">暂无数据</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -18,39 +18,39 @@
             <div class="card-body">
                 <form method="POST">
                     {{ form.hidden_tag() }}
-                    {% if form.username is defined and not user %}
                     <div class="mb-3">
-                        <label class="form-label">{{ form.username.label.text }}</label>
-                        {{ form.username(class="form-control") }}
-                        {% for error in form.username.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
+                        <label class="form-label">{{ form.employee_id.label.text }}</label>
+                        {{ form.employee_id(class="form-control", placeholder="例如: a00123456") }}
                     </div>
-                    {% endif %}
                     <div class="mb-3">
-                        <label class="form-label">{{ form.email.label.text }}</label>
-                        {{ form.email(class="form-control") }}
-                        {% for error in form.email.errors %}
+                        <label class="form-label">{{ form.name.label.text }}</label>
+                        {{ form.name(class="form-control") }}
+                        {% for error in form.name.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
                         {% endfor %}
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">{{ form.display_name.label.text }}</label>
-                        {{ form.display_name(class="form-control") }}
-                        {% for error in form.display_name.errors %}
+                        <label class="form-label">{{ form.ip_address.label.text }}</label>
+                        {{ form.ip_address(class="form-control", placeholder="例如: 192.168.1.100") }}
+                        {% for error in form.ip_address.errors %}
                         <div class="invalid-feedback d-block">{{ error }}</div>
                         {% endfor %}
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">{{ form.password.label.text }}</label>
-                        {{ form.password(class="form-control") }}
-                        {% for error in form.password.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
+                        <label class="form-label">{{ form.group.label.text }}</label>
+                        {{ form.group(class="form-control", placeholder="例如: 前端组") }}
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">{{ form.role_id.label.text }}</label>
-                        {{ form.role_id(class="form-select") }}
+                        <label class="form-label">{{ form.role_ids.label.text }}</label>
+                        <div>
+                            {% for value, label in form.role_ids.choices %}
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" name="role_ids" value="{{ value }}" id="role_{{ value }}"
+                                       {% if value in (form.role_ids.data or []) %}checked{% endif %}>
+                                <label class="form-check-label" for="role_{{ value }}">{{ label }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
                     </div>
                     {% if form.is_active is defined %}
                     <div class="mb-3 form-check">

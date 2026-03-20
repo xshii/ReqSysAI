@@ -1,4 +1,4 @@
-"""Idempotent seed: creates roles and default admin user if they don't exist."""
+"""Idempotent seed: creates roles and default admin from config.yml."""
 import sys
 import os
 
@@ -12,30 +12,32 @@ from app.models.user import Role, User
 def seed():
     app = create_app()
     with app.app_context():
-        roles_data = [
-            ('employee', '员工', '普通研发人员'),
-            ('pm', '项目经理', '项目管理和需求审批'),
-            ('executive', '高层领导', '查看汇总报表'),
-            ('admin', '系统管理员', '系统配置和用户管理'),
-        ]
-        for name, display, desc in roles_data:
-            if not Role.query.filter_by(name=name).first():
-                db.session.add(Role(name=name, display_name=display, description=desc))
+        db.create_all()
+
+        # Sync roles from config.yml
+        for r in app.config.get('ROLES', []):
+            name = r['name']
+            existing = Role.query.filter_by(name=name).first()
+            if existing:
+                existing.description = r.get('desc', '')
+            else:
+                db.session.add(Role(name=name, description=r.get('desc', '')))
         db.session.commit()
 
-        if not User.query.filter_by(username='admin').first():
-            admin_role = Role.query.filter_by(name='admin').first()
+        # Default admin
+        admin_cfg = app.config.get('ADMIN_CONFIG', {})
+        eid = admin_cfg.get('employee_id', 'a00000001')
+        if not User.query.filter_by(employee_id=eid).first():
+            admin_role = Role.query.filter_by(name='Admin').first()
             admin = User(
-                username='admin',
-                email='admin@company.com',
-                display_name='系统管理员',
-                role=admin_role,
-                auth_type='local',
+                employee_id=eid,
+                name=admin_cfg.get('name', '管理员'),
+                ip_address=admin_cfg.get('ip', '127.0.0.1'),
+                roles=[admin_role],
             )
-            admin.set_password('admin123')
             db.session.add(admin)
             db.session.commit()
-            print('Default admin user created (admin / admin123)')
+            print(f'Default admin created (employee_id={eid})')
         else:
             print('Admin user already exists, skipping.')
 

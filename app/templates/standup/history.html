@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}站会历史 - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('standup.index') }}" class="text-decoration-none"><i class="bi bi-arrow-left"></i> 返回今日站会</a>
+</div>
+<h4 class="mb-4">站会历史记录</h4>
+
+{% if records %}
+{% for r in records %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between">
+        <strong>{{ r.date.strftime('%Y-%m-%d') }}</strong>
+        {% if r.has_blocker %}<span class="badge bg-danger">有阻碍</span>{% endif %}
+    </div>
+    <div class="card-body">
+        <p><strong>昨日完成：</strong>{{ r.yesterday_done }}</p>
+        <p><strong>今日计划：</strong>{{ r.today_plan }}</p>
+        {% if r.has_blocker %}<p><strong>阻碍：</strong><span class="text-danger">{{ r.blocker }}</span></p>{% endif %}
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="text-center text-muted py-5">暂无站会记录</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}每日站会 - 研发协作平台{% endblock %}
+
+{% block content %}
+<h4 class="mb-4">每日站会 <span class="text-muted small">{{ today.strftime('%Y-%m-%d') }}</span></h4>
+
+<div class="row">
+    <div class="col-md-8">
+        <form method="POST" action="{{ url_for('standup.submit') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <!-- Yesterday done (auto-filled from todos) -->
+            <div class="card mb-3">
+                <div class="card-header"><strong>昨日完成</strong></div>
+                <div class="card-body">
+                    {% if yesterday_todos %}
+                    <ul class="list-unstyled mb-2">
+                        {% for t in yesterday_todos %}
+                        <li class="small text-muted"><i class="bi bi-check text-success"></i> {{ t.title }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                    <textarea name="yesterday_done" class="form-control" rows="3" placeholder="昨日完成的工作...">{% for t in yesterday_todos %}{{ t.title }}{% if not loop.last %}; {% endif %}{% endfor %}</textarea>
+                </div>
+            </div>
+
+            <!-- Today plan (auto-filled from todos) -->
+            <div class="card mb-3">
+                <div class="card-header"><strong>今日计划</strong></div>
+                <div class="card-body">
+                    {% if today_todos %}
+                    <ul class="list-unstyled mb-2">
+                        {% for t in today_todos %}
+                        <li class="small text-muted"><i class="bi bi-circle"></i> {{ t.title }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                    <textarea name="today_plan" class="form-control" rows="3" placeholder="今日计划的工作...">{% for t in today_todos %}{{ t.title }}{% if not loop.last %}; {% endif %}{% endfor %}</textarea>
+                </div>
+            </div>
+
+            <!-- Blocker -->
+            <div class="card mb-3">
+                <div class="card-header"><strong>阻碍</strong></div>
+                <div class="card-body">
+                    <textarea name="blocker" class="form-control" rows="2" placeholder="没有则填 无">无</textarea>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-success"><i class="bi bi-send"></i> 提交站会</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

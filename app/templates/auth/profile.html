@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}个人设置 - 研发协作平台{% endblock %}
+
+{% block content %}
+<h4 class="mb-4">个人设置</h4>
+
+<div class="row">
+    <div class="col-md-6 col-lg-4">
+        <div class="card">
+            <div class="card-body">
+                <div class="mb-3 text-muted small">
+                    工号：<strong>{{ current_user.employee_id }}</strong>
+                    &nbsp; IP：<code>{{ current_user.ip_address }}</code>
+                </div>
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.name.label.text }}</label>
+                        {{ form.name(class="form-control") }}
+                        {% for error in form.name.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">角色</label>
+                        <div class="dropdown">
+                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+                                <span class="role-label">请选择</span>
+                            </button>
+                            <div class="dropdown-menu w-100 px-2">
+                                {% for value, label in form.role_ids.choices %}
+                                <div class="form-check">
+                                    <input class="form-check-input role-cb" type="checkbox" name="role_ids" value="{{ value }}" id="role_{{ value }}"
+                                           {% if value in form.role_ids.data %}checked{% endif %}>
+                                    <label class="form-check-label" for="role_{{ value }}">{{ label }}</label>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.group.label.text }}</label>
+                        {{ form.group(class="form-select") }}
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg"></i> 保存
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function updateRoleLabel() {
+    var checked = document.querySelectorAll('.role-cb:checked');
+    var label = document.querySelector('.role-label');
+    if (checked.length === 0) label.textContent = '请选择';
+    else label.textContent = Array.from(checked).map(function(c) { return c.nextElementSibling.textContent; }).join(', ');
+}
+document.querySelectorAll('.role-cb').forEach(function(cb) { cb.addEventListener('change', updateRoleLabel); });
+updateRoleLabel();
+</script>
+{% endblock %}
