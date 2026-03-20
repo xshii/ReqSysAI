@@ -48,6 +48,31 @@ def index():
         Incentive.reviewed_at >= str(last_month_start),
     ).order_by(Incentive.reviewed_at.desc()).all()
 
+    # AI usage ranking: top5 by call count & estimated tokens
+    from app.models.ai_log import AIParseLog
+    ai_stats = db.session.query(
+        AIParseLog.created_by,
+        db.func.count(AIParseLog.id).label('call_count'),
+        db.func.sum(db.func.length(AIParseLog.raw_input)).label('input_chars'),
+        db.func.sum(db.func.length(AIParseLog.ai_output)).label('output_chars'),
+    ).group_by(AIParseLog.created_by)\
+     .order_by(db.func.count(AIParseLog.id).desc())\
+     .limit(5).all()
+
+    from app.models.user import User
+    ai_ranking = []
+    for row in ai_stats:
+        user = db.session.get(User, row.created_by)
+        input_chars = row.input_chars or 0
+        output_chars = row.output_chars or 0
+        # Rough token estimate: 1 Chinese char ≈ 1.5 tokens, mixed avg ≈ 0.6 tokens/char
+        est_tokens = int((input_chars + output_chars) * 0.6)
+        ai_ranking.append({
+            'name': user.name if user else '未知',
+            'calls': row.call_count,
+            'tokens': est_tokens,
+        })
+
     # Graffiti board: top3 all-time + current month
     from app.models.rant import Rant
     month_start = today.replace(day=1)
@@ -63,6 +88,7 @@ def index():
         my_todos=my_todos, todo_total=todo_total, todo_done=todo_done,
         my_reqs=my_reqs, my_risks=my_risks, today=today,
         approved_incentives=approved_incentives, rants=rants,
+        ai_ranking=ai_ranking,
     )
 
 

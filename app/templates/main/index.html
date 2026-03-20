@@ -48,9 +48,8 @@
         </div>
 
         <!-- My Risks -->
-        {% if my_risks %}
         <div class="card mb-3">
-            <div class="card-header py-2"><i class="bi bi-exclamation-triangle text-danger"></i> 我的风险 <span class="badge bg-danger">{{ my_risks | length }}</span></div>
+            <div class="card-header py-2"><i class="bi bi-exclamation-triangle text-danger"></i> 我的风险 <span class="badge bg-{{ 'danger' if my_risks else 'secondary' }}">{{ my_risks | length }}</span></div>
             <div class="card-body py-2">
             {% for r in my_risks %}
                 <div class="d-flex justify-content-between align-items-center small mb-1">
@@ -61,10 +60,11 @@
                         <span class="text-muted">{{ r.due_date.strftime('%m-%d') if r.due_date else '' }}</span>
                     </span>
                 </div>
+            {% else %}
+                <p class="text-muted small mb-0">暂无待处理的风险</p>
             {% endfor %}
             </div>
         </div>
-        {% endif %}
     </div>
 
     <!-- Right: Incentive showcase -->
@@ -101,6 +101,30 @@
         {% endfor %}
         {% else %}
         <div class="text-center text-muted py-4 small">上月暂无激励记录</div>
+        {% endif %}
+
+        <!-- AI Usage Ranking -->
+        {% if ai_ranking %}
+        <div class="card mb-3 border-0 shadow-sm">
+            <div class="card-header py-2 bg-white"><i class="bi bi-robot"></i> AI 服务使用排行</div>
+            <div class="card-body py-2 px-3">
+                <table class="table table-sm table-borderless mb-0 small">
+                    <thead class="text-muted">
+                        <tr><th style="width:30px">#</th><th>用户</th><th class="text-end">调用次数</th><th class="text-end">Token (估)</th></tr>
+                    </thead>
+                    <tbody>
+                    {% for u in ai_ranking %}
+                        <tr>
+                            <td>{% if loop.index == 1 %}<i class="bi bi-trophy-fill text-warning"></i>{% elif loop.index == 2 %}<i class="bi bi-trophy-fill text-secondary"></i>{% elif loop.index == 3 %}<i class="bi bi-trophy-fill" style="color:#cd7f32"></i>{% else %}{{ loop.index }}{% endif %}</td>
+                            <td>{{ u.name }}</td>
+                            <td class="text-end">{{ u.calls }}</td>
+                            <td class="text-end">{{ '{:,}'.format(u.tokens) }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
         {% endif %}
 
         <!-- Graffiti board -->

@@ -274,19 +274,9 @@ def weekly_report():
                 lines.append(f'- [{r.number}] {r.title}（{r.status_label}）')
 
         # AI prompt: only generate analysis (summary, risks, plan)
-        prompt = (
-            f'根据以下{project_name}本周工作数据，生成分析内容。\n'
-            '严格返回 JSON，不要返回其他内容：\n'
-            '{"summary":"一句话总结本周整体进展",'
-            '"risks":["风险或问题1","风险或问题2"],'
-            '"plan":["下周计划1","下周计划2"]}\n'
-            '规则：\n'
-            '- summary 不超过50字\n'
-            '- risks 基于超期需求、资源不足等实际数据分析，没有风险写"暂无"\n'
-            '- plan 基于未完成需求和截止日期推导，具体到需求编号\n'
-            '- 不要编造数据\n\n'
-            + '\n'.join(lines)
-        )
+        from app.services.prompts import get_prompt
+        tpl = get_prompt('weekly_report')
+        prompt = tpl.format(project_name=project_name) + '\n\n' + '\n'.join(lines)
 
         import json as json_lib
         result, _ = call_ollama(prompt)
@@ -815,16 +805,8 @@ def my_weekly():
             for r in my_reqs:
                 lines.append(f'- [{r.number}] {r.title}（{r.status_label}）')
 
-        prompt = (
-            '根据以下个人本周工作数据，生成一份简洁的中文个人周报。\n'
-            '要求：\n'
-            '1. 本周完成的工作（按需求分组）\n'
-            '2. 进行中的工作\n'
-            '3. 下周计划\n'
-            '4. 遇到的问题/需要的支持\n'
-            '用 Markdown 格式，简洁专业。\n\n'
-            + '\n'.join(lines)
-        )
+        from app.services.prompts import get_prompt
+        prompt = get_prompt('personal_weekly') + '\n\n' + '\n'.join(lines)
         _, raw = call_ollama(prompt)
         report = raw or '生成失败，请重试'
         report = md_lib.markdown(report, extensions=['tables'])

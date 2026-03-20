@@ -13,10 +13,19 @@
 </div>
 
 {% if is_reviewer %}
-<ul class="nav nav-tabs mb-3">
-    <li class="nav-item"><a class="nav-link {% if tab == 'review' %}active{% endif %}" href="?tab=review">待评审</a></li>
-    <li class="nav-item"><a class="nav-link {% if tab == 'mine' %}active{% endif %}" href="?tab=mine">我的推荐</a></li>
-</ul>
+<div class="d-flex gap-2 mb-3 align-items-center">
+    <select class="form-select form-select-sm" style="width:auto;" onchange="applyFilter();" id="scopeFilter">
+        <option value="all" {% if scope == 'all' %}selected{% endif %}>全部</option>
+        <option value="mine" {% if scope == 'mine' %}selected{% endif %}>我的推荐</option>
+    </select>
+    <select class="form-select form-select-sm" style="width:auto;" onchange="applyFilter();" id="statusFilter">
+        <option value="" {% if not status_filter %}selected{% endif %}>全部状态</option>
+        <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>待评审</option>
+        <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>已通过</option>
+        <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>已拒绝</option>
+    </select>
+    <span class="text-muted small">{{ items | length }} 条</span>
+</div>
 {% endif %}
 
 {% if items %}
@@ -51,7 +60,7 @@
                 {% else %}
                 <span class="badge bg-secondary">已评审</span>
                 {% endif %}
-                {% if is_reviewer and inc.status == 'pending' and tab == 'review' %}
+                {% if is_reviewer and inc.status == 'pending' %}
                 <button class="btn btn-sm btn-outline-primary mt-1" data-bs-toggle="modal" data-bs-target="#reviewModal"
                         onclick="setReview({{ inc.id }}, '{{ inc.title }}')">评审</button>
                 {% endif %}
@@ -61,9 +70,7 @@
 </div>
 {% endfor %}
 {% else %}
-<div class="text-center text-muted py-5">
-    {% if tab == 'review' %}暂无待评审的激励{% else %}暂无推荐记录{% endif %}
-</div>
+<div class="text-center text-muted py-5">暂无记录</div>
 {% endif %}
 
 <!-- Submit Modal -->
@@ -105,7 +112,12 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">事迹描述 <span class="text-danger">*</span></label>
-                        <textarea name="description" class="form-control" rows="4" required placeholder="详细描述事迹和贡献"></textarea>
+                        <textarea name="description" id="descInput" class="form-control" rows="4" required placeholder="详细描述事迹和贡献"></textarea>
+                        <div class="d-flex gap-2 mt-1">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="aiDescribe('polish')"><i class="bi bi-robot"></i> AI润色</button>
+                            <button type="button" class="btn btn-sm btn-outline-success" onclick="aiDescribe('generate')"><i class="bi bi-magic"></i> AI根据人员生成</button>
+                            <span class="small text-muted align-self-center" id="descHint"></span>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">上传照片</label>
@@ -200,7 +212,25 @@
 
 {% block extra_js %}
 <script>
+function applyFilter() {
+    var url = new URL(window.location);
+    var scope = document.getElementById('scopeFilter');
+    var status = document.getElementById('statusFilter');
+    if (scope) url.searchParams.set('scope', scope.value);
+    if (status && status.value) url.searchParams.set('status', status.value);
+    else url.searchParams.delete('status');
+    window.location = url;
+}
+
 var csrfToken = '{{ csrf_token() }}';
+var aiStatusUrl = '{{ url_for("ai.api_status") }}';
+
+function checkAI() {
+    return fetch(aiStatusUrl).then(function(r) { return r.json(); }).then(function(d) {
+        if (!d.ok) throw new Error(d.msg || 'AI 服务不可用');
+        return true;
+    });
+}
 
 function filterNominees(input) {
     var q = input.value.toLowerCase();
@@ -227,19 +257,63 @@ if (commentEl) {
     });
 }
 
+function aiDescribe(mode) {
+    var hint = document.getElementById('descHint');
+    var desc = document.getElementById('descInput').value.trim();
+    var category = document.querySelector('#submitModal select[name="category"]').value;
+
+    var nomineeIds = [];
+    if (mode === 'generate') {
+        document.querySelectorAll('.nominee-opt input:checked').forEach(function(el) {
+            nomineeIds.push(parseInt(el.value));
+        });
+        if (!nomineeIds.length) { hint.textContent = '请先勾选推荐人物'; return; }
+    } else if (!desc) {
+        hint.textContent = '请先输入描述内容'; return;
+    }
+
+    hint.textContent = '检测 AI 服务...';
+    checkAI().then(function() {
+        hint.textContent = 'AI 生成中...';
+        return fetch('{{ url_for("incentive.ai_describe") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+            body: JSON.stringify({
+                nominee_ids: nomineeIds,
+                description: desc,
+                category: category
+            })
+        });
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) {
+            document.getElementById('descInput').value = d.text;
+            hint.textContent = '';
+        } else {
+            hint.textContent = d.msg || 'AI 服务不可用';
+        }
+    }).catch(function(e) { hint.textContent = e.message || 'AI 请求失败'; });
+}
+
 function aiPolish() {
     var text = document.getElementById('reviewComment').value.trim();
     if (!text) return;
-    fetch('{{ url_for("incentive.ai_polish") }}', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-        body: JSON.stringify({text: text})
+    var countEl = document.getElementById('charCount');
+    countEl.textContent = '检测 AI 服务...';
+    checkAI().then(function() {
+        countEl.textContent = 'AI 润色中...';
+        return fetch('{{ url_for("incentive.ai_polish") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+            body: JSON.stringify({text: text})
+        });
     }).then(function(r) { return r.json(); }).then(function(d) {
         if (d.ok) {
             document.getElementById('reviewComment').value = d.text;
-            document.getElementById('charCount').textContent = d.text.length + '/150';
+            countEl.textContent = d.text.length + '/150';
+        } else {
+            countEl.textContent = d.msg || 'AI 服务不可用';
         }
-    });
+    }).catch(function(e) { countEl.textContent = e.message || 'AI 请求失败'; });
 }
 </script>
 {% endblock %}

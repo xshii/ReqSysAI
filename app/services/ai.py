@@ -1,25 +1,66 @@
 import json
 import logging
+import socket
+import subprocess
+import time
 
 import requests
 from flask import current_app
 
 logger = logging.getLogger(__name__)
 
-REQUIREMENT_SYSTEM_PROMPT = (
-    '你是一个需求分析助手。用户会给你聊天记录、会议纪要或需求文档，'
-    '你需要从中提取软件需求信息。\n'
-    '请严格按以下 JSON 格式返回，不要返回任何其他内容：\n'
-    '{"title":"需求标题(20字以内)","description":"需求详细描述",'
-    '"priority":"high或medium或low","estimate_days":预估总工期(人天,数字),'
-    '"subtasks":[{"title":"子需求标题","estimate_days":预估人天}]}\n'
-    '规则：\n'
-    '1. 提取最主要的一个需求作为父需求\n'
-    '2. priority根据紧急程度判断\n'
-    '3. subtasks拆分为可独立交付的子需求（不是开发任务），每个子需求预估人天\n'
-    '4. estimate_days为所有子需求人天之和\n'
-    '5. 如果内容简单无需拆分，subtasks可以为空数组'
-)
+
+def _is_port_open(port, host='127.0.0.1', timeout=2):
+    """Check if a local port is listening."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _ensure_ssh_tunnel():
+    """Check SSH tunnel and establish if needed. Returns (ok, error_msg)."""
+    ssh_host = current_app.config.get('OLLAMA_SSH_HOST', '')
+    local_port = current_app.config.get('OLLAMA_SSH_LOCAL_PORT', 11434)
+
+    if not ssh_host:
+        # No SSH configured, just check if Ollama is reachable
+        if _is_port_open(local_port):
+            return True, None
+        return False, f'Ollama 服务不可达 (127.0.0.1:{local_port})，请检查服务是否启动'
+
+    # SSH mode: check if tunnel is already up
+    if _is_port_open(local_port):
+        return True, None
+
+    # Try to establish SSH tunnel in background
+    logger.info('SSH tunnel not found, establishing via %s ...', ssh_host)
+    try:
+        subprocess.Popen(
+            ['ssh', '-f', '-N', '-L', f'{local_port}:127.0.0.1:{local_port}', ssh_host],
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+        )
+        # Wait briefly for tunnel to establish
+        for _ in range(5):
+            time.sleep(1)
+            if _is_port_open(local_port):
+                logger.info('SSH tunnel established via %s', ssh_host)
+                return True, None
+        return False, f'SSH 隧道建立超时，请手动执行: ssh -f -N -L {local_port}:127.0.0.1:{local_port} {ssh_host}'
+    except FileNotFoundError:
+        return False, 'ssh 命令不可用，请检查系统 PATH'
+    except Exception as e:
+        return False, f'SSH 隧道建立失败: {e}'
+
+def _get_requirement_prompt():
+    from app.services.prompts import get_prompt
+    return get_prompt('requirement_parse')
+
+
+def check_ollama_status():
+    """Check Ollama connectivity. Returns (ok, error_msg)."""
+    return _ensure_ssh_tunnel()
 
 
 def call_ollama(prompt, system_prompt=None, messages=None):
@@ -29,6 +70,12 @@ def call_ollama(prompt, system_prompt=None, messages=None):
       - prompt + optional system_prompt (simple call)
       - messages (multi-turn conversation)
     """
+    # Check SSH tunnel / connectivity first
+    ok, err_msg = _ensure_ssh_tunnel()
+    if not ok:
+        logger.error('Ollama unreachable: %s', err_msg)
+        return None, err_msg
+
     base_url = current_app.config['OLLAMA_BASE_URL']
     model = current_app.config['OLLAMA_MODEL']
 
@@ -55,13 +102,13 @@ def call_ollama(prompt, system_prompt=None, messages=None):
 
 def parse_requirement(text):
     """Parse requirement from text."""
-    return call_ollama(text, system_prompt=REQUIREMENT_SYSTEM_PROMPT)
+    return call_ollama(text, system_prompt=_get_requirement_prompt())
 
 
 def refine_requirement(original_text, previous_result, feedback):
     """Re-parse with PM's feedback as multi-turn conversation."""
     return call_ollama(None, messages=[
-        {'role': 'system', 'content': REQUIREMENT_SYSTEM_PROMPT},
+        {'role': 'system', 'content': _get_requirement_prompt()},
         {'role': 'user', 'content': original_text},
         {'role': 'assistant', 'content': json.dumps(previous_result, ensure_ascii=False)},
         {'role': 'user', 'content': f'以上解析结果不太对，请根据我的意见重新解析：{feedback}'},

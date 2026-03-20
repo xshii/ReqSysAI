@@ -13,24 +13,22 @@ from app.models.user import User
 @incentive_bp.route('/')
 @login_required
 def index():
-    """List: normal users see own submissions; PL/XM see all for review."""
+    """List incentives with status filter."""
     is_reviewer = current_user.has_role('PL', 'XM') or current_user.is_admin
-    if is_reviewer:
-        tab = request.args.get('tab', 'review')
-        if tab == 'mine':
-            items = Incentive.query.filter_by(submitted_by=current_user.id)\
-                .order_by(Incentive.created_at.desc()).all()
-        else:
-            items = Incentive.query.filter_by(status='pending')\
-                .order_by(Incentive.created_at.desc()).all()
-    else:
-        tab = 'mine'
-        items = Incentive.query.filter_by(submitted_by=current_user.id)\
-            .order_by(Incentive.created_at.desc()).all()
+    status_filter = request.args.get('status', '')
+    scope = request.args.get('scope', 'all' if is_reviewer else 'mine')
+
+    q = Incentive.query
+    if scope == 'mine':
+        q = q.filter_by(submitted_by=current_user.id)
+    if status_filter:
+        q = q.filter_by(status=status_filter)
+    items = q.order_by(Incentive.created_at.desc()).all()
 
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
     return render_template('incentive/index.html',
-        items=items, users=users, is_reviewer=is_reviewer, tab=tab)
+        items=items, users=users, is_reviewer=is_reviewer,
+        status_filter=status_filter, scope=scope)
 
 
 @incentive_bp.route('/submit', methods=['POST'])
@@ -106,10 +104,81 @@ def ai_polish():
     text = (data.get('text') or '').strip() if data else ''
     if not text:
         return jsonify(ok=False, msg='请输入评语')
-    _, raw = call_ollama(
-        f'请润色以下激励评语，保持原意，语言精炼正式，不超过150字：\n{text}'
-    )
+    from app.services.prompts import get_prompt
+    _, raw = call_ollama(get_prompt('incentive_polish_comment') + f'\n{text}')
     return jsonify(ok=True, text=raw.strip()[:150] if raw else text)
+
+
+@incentive_bp.route('/ai-describe', methods=['POST'])
+@login_required
+def ai_describe():
+    """AI generate or polish description based on nominees' recent work."""
+    from app.services.ai import call_ollama
+    from app.models.todo import Todo
+    from app.models.requirement import Requirement
+    from datetime import date, timedelta
+
+    data = request.get_json() or {}
+    nominee_ids = data.get('nominee_ids', [])
+    existing_desc = (data.get('description') or '').strip()
+    category = data.get('category', '')
+
+    # If just polishing existing text
+    if existing_desc and not nominee_ids:
+        from app.services.prompts import get_prompt
+        _, raw = call_ollama(get_prompt('incentive_polish_desc') + f'\n{existing_desc}')
+        if raw:
+            return jsonify(ok=True, text=raw.strip()[:500])
+        return jsonify(ok=False, msg='AI 服务不可用')
+
+    if not nominee_ids:
+        return jsonify(ok=False, msg='请先选择推荐人物')
+
+    # Gather nominees' recent work (last 30 days)
+    nominees = User.query.filter(User.id.in_(nominee_ids)).all()
+    if not nominees:
+        return jsonify(ok=False, msg='未找到选中人员')
+
+    since = date.today() - timedelta(days=30)
+    parts = []
+    for u in nominees:
+        lines = [f'【{u.name}】']
+        # Recent done todos
+        todos = Todo.query.filter(
+            Todo.user_id == u.id, Todo.status == 'done',
+            Todo.done_date >= since,
+        ).order_by(Todo.done_date.desc()).limit(10).all()
+        if todos:
+            lines.append('近期完成的任务：' + '、'.join(t.title for t in todos))
+
+        # Active/done requirements
+        reqs = Requirement.query.filter(
+            Requirement.assignee_id == u.id,
+            Requirement.updated_at >= str(since),
+        ).limit(5).all()
+        if reqs:
+            lines.append('参与的需求：' + '、'.join(
+                f'{r.title}({r.status_label})' for r in reqs
+            ))
+        parts.append('\n'.join(lines))
+
+    category_map = {
+        'professional': '专业能力', 'proactive': '积极主动',
+        'beyond': '超越期望', 'clean': '代码Clean',
+    }
+    cat_label = category_map.get(category, '优秀表现')
+
+    from app.services.prompts import get_prompt
+    context = '\n\n'.join(parts)
+    tpl = get_prompt('incentive_generate')
+    prompt = tpl.replace('{{context}}', context).replace('{{category}}', cat_label)
+    if existing_desc:
+        prompt += f'\n\n参考已有描述进行润色：{existing_desc}'
+
+    _, raw = call_ollama(prompt)
+    if raw:
+        return jsonify(ok=True, text=raw.strip()[:500])
+    return jsonify(ok=False, msg='AI 服务不可用')
 
 
 @incentive_bp.route('/rant', methods=['GET', 'POST'])

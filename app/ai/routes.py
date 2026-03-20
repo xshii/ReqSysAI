@@ -8,7 +8,15 @@ from app.extensions import db
 from app.models.project import Project
 from app.models.requirement import Requirement, RequirementTask, Activity
 from app.models.ai_log import AIParseLog
-from app.services.ai import parse_requirement, refine_requirement, extract_text_from_docx
+from app.services.ai import parse_requirement, refine_requirement, extract_text_from_docx, check_ollama_status
+
+@ai_bp.route('/api/status')
+@login_required
+def api_status():
+    """Quick AI service connectivity check."""
+    ok, msg = check_ollama_status()
+    return jsonify(ok=ok, msg=msg)
+
 
 # Session keys in one place
 _SK_PARSED = 'ai_parsed'
@@ -56,7 +64,8 @@ def api_parse():
         return jsonify(ok=False, msg='请输入内容')
     result, raw_output = parse_requirement(text)
     if not result:
-        return jsonify(ok=False, msg='AI 解析失败，请重试')
+        msg = raw_output if raw_output else 'AI 解析失败，请重试'
+        return jsonify(ok=False, msg=msg)
     return jsonify(ok=True, result=result)
 
 
@@ -72,7 +81,8 @@ def api_parse_docx():
         return jsonify(ok=False, msg='文档内容为空')
     result, raw_output = parse_requirement(raw_text)
     if not result:
-        return jsonify(ok=False, msg='AI 解析失败，请重试')
+        msg = raw_output if raw_output else 'AI 解析失败，请重试'
+        return jsonify(ok=False, msg=msg)
     return jsonify(ok=True, result=result)
 
 

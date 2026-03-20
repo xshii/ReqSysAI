@@ -34,5 +34,7 @@ admin:
   ip: 127.0.0.1
 
 ollama:
-  base_url: http://100.95.165.89:11434
+  base_url: http://127.0.0.1:11434
   model: reqsys
+  ssh_host: ""                      # SSH 配置名称（如 ollama-server），留空则不检查 SSH 隧道
+  ssh_local_port: 11434             # 本地转发端口

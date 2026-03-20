@@ -19,7 +19,7 @@ DONE_KEEP_DAYS = None  # Loaded from config at runtime
 @todo_bp.route('/groups')
 @login_required
 def manage_groups():
-    return redirect(url_for('admin.group_list'))
+    return redirect(url_for('admin.user_list'))
 
 
 # ---- Todo CRUD ----
@@ -274,17 +274,8 @@ def ai_recommend():
         flash('没有未完成的需求，无法推荐', 'info')
         return redirect(url_for('todo.team'))
 
-    prompt = (
-        '根据以下信息，推荐今天应该新增的任务。\n'
-        '要求：\n'
-        '1. 根据需求优先级和截止日期排序，紧急的优先\n'
-        '2. 参考近一周完成情况，推进未完成的需求\n'
-        '3. 不要重复已有任务\n'
-        '4. 每个任务拆分为可执行的子项\n'
-        '5. 返回 JSON 数组，格式如下，只返回 JSON：\n'
-        '[{"title":"任务标题","req_number":"REQ-001","items":["子项1","子项2"]}]\n\n'
-        + '\n'.join(lines)
-    )
+    from app.services.prompts import get_prompt
+    prompt = get_prompt('todo_recommend') + '\n\n' + '\n'.join(lines)
 
     result, _ = call_ollama(prompt)
     if not result:

@@ -43,6 +43,8 @@ class Config:
     # Ollama
     OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', _yml.get('ollama', {}).get('base_url', 'http://127.0.0.1:11434'))
     OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', _yml.get('ollama', {}).get('model', 'qwen2.5'))
+    OLLAMA_SSH_HOST = _yml.get('ollama', {}).get('ssh_host', '')
+    OLLAMA_SSH_LOCAL_PORT = _yml.get('ollama', {}).get('ssh_local_port', 11434)
 
     # App tuning
     TODO_KEEP_DAYS = _yml.get('app', {}).get('todo_keep_days', 7)

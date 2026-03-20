@@ -5,6 +5,65 @@
 {% block content %}
 {% include "admin/_tabs.html" %}
 
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <span></span>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('admin.group_export_csv') }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-download"></i> 导出 CSV
+        </a>
+        <button class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#csvModal">
+            <i class="bi bi-upload"></i> 导入 CSV
+        </button>
+    </div>
+</div>
+
+<!-- CSV Import Modal -->
+<div class="modal fade" id="csvModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title"><i class="bi bi-upload"></i> 批量导入团队成员</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('admin.user_import_csv') }}" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">选择 CSV 文件</label>
+                        <input type="file" name="csv_file" class="form-control" accept=".csv" required>
+                    </div>
+                    <div class="alert alert-light border small mb-0">
+                        <strong>CSV 格式要求：</strong>
+                        <table class="table table-sm table-bordered mt-2 mb-2" style="font-size:0.85em;">
+                            <thead class="table-light">
+                                <tr><th>姓名 <span class="text-danger">*</span></th><th>工号 <span class="text-danger">*</span></th><th>小组 <span class="text-danger">*</span></th><th>角色</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>张三</td><td>a00123456</td><td>研发一组</td><td>DE</td></tr>
+                                <tr><td>李四</td><td>b00234567</td><td>研发二组</td><td>SE;QA</td></tr>
+                            </tbody>
+                        </table>
+                        <ul class="mb-0 ps-3">
+                            <li><span class="text-danger">*</span> 为必填列，角色可选</li>
+                            <li>多个角色用分号 <code>;</code> 分隔</li>
+                            <li>可用角色：{% for r in visible_roles %}{{ r.name }}{% if not loop.last %}、{% endif %}{% endfor %}</li>
+                            <li>小组不存在时<strong>自动创建</strong></li>
+                            <li>已存在的工号会更新姓名、小组、角色</li>
+                            <li>新工号创建用户，IP 待首次登录绑定</li>
+                            <li>支持 UTF-8 和 GBK 编码（Excel 默认 GBK）</li>
+                        </ul>
+                        <div class="mt-2"><i class="bi bi-lightbulb text-warning"></i> 提示：先<a href="{{ url_for('admin.group_export_csv') }}">导出当前数据</a>作为模板编辑</div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-upload"></i> 开始导入</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <div class="col-md-8">
         {% for name, count in groups %}

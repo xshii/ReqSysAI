@@ -111,6 +111,13 @@
 <script>
 var csrfToken = '{{ csrf_token() }}';
 
+function checkAI() {
+    return fetch('{{ url_for("ai.api_status") }}').then(function(r) { return r.json(); }).then(function(d) {
+        if (!d.ok) throw new Error(d.msg || 'AI 服务不可用');
+        return true;
+    });
+}
+
 var userOptsTpl = '<option value="">负责人</option>{% for u in users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}';
 function addSubReq(title, days) {
     var div = document.getElementById('subReqs');
@@ -169,14 +176,16 @@ document.getElementById('btnAiParse').addEventListener('click', function() {
     var text = document.getElementById('aiInput').value.trim();
     if (!text) return;
     showAiState('loading');
-    fetch('{{ url_for("ai.api_parse") }}', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-        body: JSON.stringify({text: text})
+    checkAI().then(function() {
+        return fetch('{{ url_for("ai.api_parse") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+            body: JSON.stringify({text: text})
+        });
     }).then(function(r) { return r.json(); }).then(function(d) {
         if (d.ok) { aiData = d.result; showAiResult(); }
         else showAiState('error', d.msg || '解析失败');
-    }).catch(function() { showAiState('error', '网络错误'); });
+    }).catch(function(e) { showAiState('error', e.message || '网络错误'); });
 });
 
 document.getElementById('aiDocx').addEventListener('change', function() {
@@ -185,14 +194,16 @@ document.getElementById('aiDocx').addEventListener('change', function() {
     showAiState('loading');
     var fd = new FormData();
     fd.append('file', file);
-    fetch('{{ url_for("ai.api_parse_docx") }}', {
-        method: 'POST',
-        headers: {'X-CSRFToken': csrfToken},
-        body: fd
+    checkAI().then(function() {
+        return fetch('{{ url_for("ai.api_parse_docx") }}', {
+            method: 'POST',
+            headers: {'X-CSRFToken': csrfToken},
+            body: fd
+        });
     }).then(function(r) { return r.json(); }).then(function(d) {
         if (d.ok) { aiData = d.result; showAiResult(); }
         else showAiState('error', d.msg || '解析失败');
-    }).catch(function() { showAiState('error', '网络错误'); });
+    }).catch(function(e) { showAiState('error', e.message || '网络错误'); });
     this.value = '';
 });
 

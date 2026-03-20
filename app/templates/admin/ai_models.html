@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}后台管理 - AI 模型 - 研发协作平台{% endblock %}
+
+{% block content %}
+{% include "admin/_tabs.html" %}
+
+{% if err %}
+<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> AI 服务不可用：{{ err }}</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-md-7">
+        <div class="card mb-3">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-cpu"></i> 已有模型</span>
+                <span class="badge bg-secondary">{{ models | length }}</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 small">
+                    <thead class="table-light">
+                        <tr>
+                            <th>模型名称</th>
+                            <th>参数量</th>
+                            <th>大小</th>
+                            <th>更新时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for m in models %}
+                        <tr class="{{ 'table-primary' if m.name == current_model else '' }}">
+                            <td>
+                                {{ m.name }}
+                                {% if m.name == current_model %}<span class="badge bg-primary">当前使用</span>{% endif %}
+                            </td>
+                            <td>{{ m.params }}</td>
+                            <td>{{ m.size }}</td>
+                            <td>{{ m.modified }}</td>
+                            <td>
+                                {% if m.name != current_model %}
+                                <form method="POST" action="{{ url_for('admin.ai_model_set_active') }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="model_name" value="{{ m.name }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary py-0" title="设为当前模型">
+                                        <i class="bi bi-check-lg"></i> 启用
+                                    </button>
+                                </form>
+                                <form method="POST" action="{{ url_for('admin.ai_model_delete') }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="model_name" value="{{ m.name }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0"
+                                            onclick="return confirm('确定删除模型 {{ m.name }}？')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="text-center text-muted py-3">
+                            {% if err %}无法连接 Ollama 服务{% else %}暂无模型{% endif %}
+                        </td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header py-2"><i class="bi bi-plus-circle"></i> 基于现有模型创建</div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin.ai_model_create') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label class="form-label small">基础模型 <span class="text-danger">*</span></label>
+                        <select name="base_model" class="form-select form-select-sm" required>
+                            <option value="">选择基础模型...</option>
+                            {% for m in models %}
+                            <option value="{{ m.name }}">{{ m.name }} ({{ m.params }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">新模型名称 <span class="text-danger">*</span></label>
+                        <input type="text" name="new_name" class="form-control form-control-sm" required
+                               placeholder="例如：reqsys-v2" pattern="[a-zA-Z0-9._-]+" title="仅支持英文、数字、点、横杠、下划线">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small d-flex justify-content-between">
+                            <span>系统提示词 (System Prompt)</span>
+                            <button type="button" class="btn btn-sm btn-link py-0 px-1" onclick="fillDefault()">填入默认</button>
+                        </label>
+                        <textarea name="system_prompt" id="sysPrompt" class="form-control form-control-sm" rows="8"
+                                  placeholder="定义模型的角色和行为规范...">{{ default_prompt }}</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm w-100" {% if err %}disabled{% endif %}>
+                        <i class="bi bi-cpu"></i> 创建模型
+                    </button>
+                    {% if err %}<div class="text-danger small mt-1">AI 服务不可用，无法创建</div>{% endif %}
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header py-2"><i class="bi bi-info-circle"></i> 说明</div>
+            <div class="card-body small">
+                <ul class="mb-0 ps-3">
+                    <li>基于已有模型 + 自定义系统提示词创建新模型</li>
+                    <li>等同于 <code>ollama create</code> 命令</li>
+                    <li>创建后可点击"启用"切换为当前使用的模型</li>
+                    <li>模型配置会写入 <code>config.local.yml</code></li>
+                    <li>Modelfile 保存在 <code>scripts/</code> 目录</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- AI Prompt Management -->
+<div class="card mt-4">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-chat-left-text"></i> 各功能 AI 提示词</span>
+        <span class="text-muted small">修改后所有用户立即生效，保存在 prompts.yml</span>
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('admin.ai_model_save_prompts') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="accordion" id="promptAccordion">
+                {% for key, text in prompts.items() %}
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed py-2 small" type="button"
+                                data-bs-toggle="collapse" data-bs-target="#pc_{{ key }}">
+                            <strong>{{ prompt_labels.get(key, key) }}</strong>
+                            {% if text != prompt_defaults.get(key, '') %}
+                            <span class="badge bg-warning text-dark ms-2">已自定义</span>
+                            {% endif %}
+                        </button>
+                    </h2>
+                    <div id="pc_{{ key }}" class="accordion-collapse collapse" data-bs-parent="#promptAccordion">
+                        <div class="accordion-body py-2">
+                            <textarea name="prompt_{{ key }}" class="form-control form-control-sm" rows="6"
+                                      style="font-size:0.85em;" id="pt_{{ key }}">{{ text }}</textarea>
+                            <div class="d-flex justify-content-between mt-1">
+                                <button type="button" class="btn btn-sm btn-link py-0 px-0"
+                                        onclick="resetPrompt('{{ key }}')">恢复默认</button>
+                                <span class="text-muted small">
+                                    {% if key == 'weekly_report' %}变量：<code>{project_name}</code>
+                                    {% elif key == 'incentive_generate' %}变量：<code>{{ '{{' }}context{{ '}}' }}</code> <code>{{ '{{' }}category{{ '}}' }}</code>
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm mt-3">
+                <i class="bi bi-check-lg"></i> 保存全部提示词
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var defaultPrompt = {{ default_prompt | tojson }};
+var promptDefaults = {{ prompt_defaults | tojson }};
+
+function fillDefault() {
+    document.getElementById('sysPrompt').value = defaultPrompt;
+}
+
+function resetPrompt(key) {
+    var el = document.getElementById('pt_' + key);
+    if (el && promptDefaults[key]) {
+        el.value = promptDefaults[key];
+    }
+}
+</script>
+{% endblock %}
