@@ -87,3 +87,16 @@ def like_rant(rant_id):
         rant.likes = (rant.likes or 0) + 1
         db.session.commit()
     return redirect(url_for('main.index'))
+
+
+@main_bp.route('/rant/<int:rant_id>/delete', methods=['POST'])
+@login_required
+def delete_rant(rant_id):
+    if not current_user.is_admin:
+        return redirect(url_for('main.index'))
+    from app.models.rant import Rant
+    rant = db.session.get(Rant, rant_id)
+    if rant:
+        db.session.delete(rant)
+        db.session.commit()
+    return redirect(url_for('main.index'))
