@@ -188,21 +188,39 @@ def weekly_report():
 
     if request.method == 'POST':
         from app.services.ai import call_ollama
+        from app.models.todo import todo_requirements
 
-        # Gather data for the week
+        # 1. Completed todos this week
         todos_done = Todo.query.filter(
             Todo.done_date >= monday, Todo.done_date <= sunday,
-        ).options(joinedload(Todo.user)).all()
+        ).options(joinedload(Todo.user), joinedload(Todo.requirements)).all()
 
-        todos_new = Todo.query.filter(
-            Todo.created_date >= monday, Todo.created_date <= sunday,
-            Todo.status == 'todo',
-        ).options(joinedload(Todo.user)).all()
+        # 2. Still active todos
+        todos_active = Todo.query.filter(
+            Todo.created_date <= sunday, Todo.status == 'todo',
+        ).options(joinedload(Todo.user), joinedload(Todo.requirements)).all()
 
+        # 3. Requirement changes
         req_changes = Requirement.query.filter(
             Requirement.updated_at >= str(monday),
             Requirement.updated_at <= str(sunday + timedelta(days=1)),
         ).all()
+
+        # 4. Per-requirement investment: count distinct people and todo-days
+        req_investment = {}  # req_number -> {people: set, days: int}
+        for t in todos_done:
+            for r in t.requirements:
+                inv = req_investment.setdefault(r.number, {'title': r.title, 'people': set(), 'days': 0})
+                inv['people'].add(t.user.name)
+                inv['days'] += 1
+        for t in todos_active:
+            for r in t.requirements:
+                inv = req_investment.setdefault(r.number, {'title': r.title, 'people': set(), 'days': 0})
+                inv['people'].add(t.user.name)
+                # Count active days within this week
+                start = max(t.created_date, monday)
+                end = min(date.today(), sunday)
+                inv['days'] += max((end - start).days, 1)
 
         # Build context
         lines = [f'本周（{monday} ~ {sunday}）研发团队工作数据：\n']
@@ -210,22 +228,35 @@ def weekly_report():
         if todos_done:
             lines.append('已完成的任务：')
             for t in todos_done:
-                lines.append(f'- {t.user.name}: {t.title}')
+                reqs_str = ', '.join(r.number for r in t.requirements)
+                lines.append(f'- {t.user.name}: {t.title}（{reqs_str}）')
 
-        if todos_new:
-            lines.append('\n未完成的任务：')
-            for t in todos_new:
-                lines.append(f'- {t.user.name}: {t.title}')
+        if todos_active:
+            lines.append('\n进行中的任务：')
+            for t in todos_active:
+                reqs_str = ', '.join(r.number for r in t.requirements)
+                lines.append(f'- {t.user.name}: {t.title}（{reqs_str}）')
+
+        if req_investment:
+            lines.append('\n需求投入汇总（人×天）：')
+            for num, inv in sorted(req_investment.items()):
+                people_list = ', '.join(sorted(inv['people']))
+                lines.append(f'- [{num}] {inv["title"]}: {len(inv["people"])}人 × {inv["days"]}天（{people_list}）')
 
         if req_changes:
-            lines.append('\n需求变更：')
+            lines.append('\n需求状态变更：')
             for r in req_changes:
                 lines.append(f'- [{r.number}] {r.title}（{r.status_label}）')
 
         prompt = (
-            '根据以下研发团队本周工作数据，生成一份简洁的中文周报。'
-            '包含：本周完成、进行中、下周计划、风险/阻碍。'
-            '用 Markdown 格式，不要编造数据。\n\n'
+            '根据以下研发团队本周工作数据，生成一份简洁的中文周报。\n'
+            '要求包含：\n'
+            '1. 本周完成的工作\n'
+            '2. 进行中的工作\n'
+            '3. 各需求投入汇总（多少人投入多少天）\n'
+            '4. 下周计划\n'
+            '5. 风险/阻碍\n'
+            '用 Markdown 格式，不要编造数据，投入数据必须如实反映。\n\n'
             + '\n'.join(lines)
         )
 

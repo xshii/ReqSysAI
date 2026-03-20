@@ -2,7 +2,63 @@
 {% block title %}首页 - 研发协作平台{% endblock %}
 
 {% block content %}
-<h4 class="mb-4">欢迎, {{ current_user.name }}</h4>
+<h4 class="mb-4">欢迎, {{ current_user.name }} <span class="text-muted small">{{ today.strftime('%Y-%m-%d') }}</span></h4>
+
+<!-- Today's Todo summary -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-list-check"></i> 今日 Todo</h6>
+        <div>
+            <span class="badge bg-{{ 'success' if todo_done == todo_total and todo_total > 0 else 'secondary' }}">{{ todo_done }}/{{ todo_total }}</span>
+            <a href="{{ url_for('todo.team') }}" class="btn btn-sm btn-outline-primary ms-2">打开看板</a>
+        </div>
+    </div>
+    {% if my_todos %}
+    <div class="list-group list-group-flush">
+        {% for t in my_todos %}
+        {% set done_count, total_count = t.items_progress %}
+        <div class="list-group-item py-2 {% if t.status == 'done' %}bg-success bg-opacity-10{% endif %}">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="{% if t.status == 'done' %}text-decoration-line-through text-muted{% endif %}">{{ t.title }}</span>
+                    {% if total_count > 0 %}
+                    <span class="badge bg-{{ 'success' if done_count == total_count else 'secondary' }} small ms-1">{{ done_count }}/{{ total_count }}</span>
+                    {% endif %}
+                    {% for req in t.requirements %}
+                    <span class="badge bg-light text-dark small">{{ req.number }}</span>
+                    {% endfor %}
+                </div>
+                <div>
+                    {% if t.due_date and t.is_overdue_by_due_date %}
+                    <span class="badge bg-danger small">超期</span>
+                    {% elif t.overdue_color == 'danger' %}
+                    <span class="badge bg-danger small">超期{{ t.workdays_overdue }}天</span>
+                    {% elif t.overdue_color == 'warning' %}
+                    <span class="badge bg-warning text-dark small">结转</span>
+                    {% endif %}
+                    {% if t.status == 'done' %}
+                    <span class="badge bg-success small">已完成</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% if t.items %}
+            <div class="mt-1">
+                {% for item in t.items %}
+                <span class="small {% if item.is_done %}text-decoration-line-through text-muted{% endif %} me-2">
+                    {% if item.is_done %}☑{% else %}☐{% endif %} {{ item.title }}
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card-body text-center text-muted py-3">
+        今天还没有任务，<a href="{{ url_for('todo.team') }}">去创建</a>
+    </div>
+    {% endif %}
+</div>
 
 <!-- Stats cards -->
 <div class="row mb-4">
