@@ -76,9 +76,7 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between">
                 <h6 class="mb-0">进行中的项目</h6>
-                {% if current_user.has_role('pm', 'admin') %}
                 <a href="{{ url_for('project.project_list') }}" class="small">管理</a>
-                {% endif %}
             </div>
             {% if active_projects %}
             <div class="list-group list-group-flush">

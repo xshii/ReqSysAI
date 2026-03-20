@@ -18,11 +18,9 @@
                         <span class="text-muted">{{ req.number }}</span>
                         <h4 class="mt-1">{{ req.title }}</h4>
                     </div>
-                    {% if current_user.has_role('pm', 'admin') %}
                     <a href="{{ url_for('requirement.requirement_edit', req_id=req.id) }}" class="btn btn-sm btn-outline-primary">
                         <i class="bi bi-pencil"></i> 编辑
                     </a>
-                    {% endif %}
                 </div>
                 <div class="mt-3">{{ req.description or '暂无描述' }}</div>
             </div>
@@ -45,20 +43,17 @@
                                 {{ t.status_label }}
                             </button>
                         </form>
-                        {% if current_user.has_role('pm', 'admin') %}
                         <form method="POST" action="{{ url_for('requirement.delete_task', task_id=t.id) }}" class="d-inline">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('确定删除?')">
                                 <i class="bi bi-x"></i>
                             </button>
                         </form>
-                        {% endif %}
                     </div>
                 </li>
                 {% endfor %}
             </ul>
             {% endif %}
-            {% if current_user.has_role('pm', 'admin') %}
             <div class="card-footer">
                 <form method="POST" action="{{ url_for('requirement.add_task', req_id=req.id) }}" class="d-flex gap-2">
                     {{ task_form.hidden_tag() }}
@@ -66,7 +61,6 @@
                     <button type="submit" class="btn btn-sm btn-primary">添加</button>
                 </form>
             </div>
-            {% endif %}
         </div>
 
         <!-- Comments -->
@@ -133,7 +127,7 @@
         </div>
 
         <!-- Status transition -->
-        {% if current_user.has_role('pm', 'admin') and req.allowed_next_statuses %}
+        {% if req.allowed_next_statuses %}
         <div class="card mt-3">
             <div class="card-header"><h6 class="mb-0">状态流转</h6></div>
             <div class="card-body">

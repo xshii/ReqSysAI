@@ -17,7 +17,6 @@
     </div>
 </div>
 
-{% if groups %}
 <ul class="nav nav-tabs mb-4">
     <li class="nav-item"><a class="nav-link {% if not cur_group %}active{% endif %}" href="?group=">全部</a></li>
     {% for g in groups %}
@@ -27,7 +26,6 @@
         <a class="nav-link text-primary" href="{{ url_for('todo.manage_groups') }}"><i class="bi bi-gear"></i> 管理团队</a>
     </li>
 </ul>
-{% endif %}
 
 {# Split todos into active (left) vs all-done-today (right) per user #}
 {% set ns = namespace(left=[], right=[]) %}
