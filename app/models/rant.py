@@ -8,8 +8,9 @@ class Rant(db.Model):
     __tablename__ = 'rants'
 
     id = db.Column(db.Integer, primary_key=True)
-    alias = db.Column(db.String(30), nullable=True)  # 代号（可选）
+    alias = db.Column(db.String(30), nullable=True)
     content = db.Column(db.String(500), nullable=False)
+    likes = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     # Intentionally NO user_id, NO ip_address
 

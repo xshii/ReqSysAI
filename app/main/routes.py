@@ -48,9 +48,14 @@ def index():
         Incentive.reviewed_at >= str(last_month_start),
     ).order_by(Incentive.reviewed_at.desc()).all()
 
-    # Rant wall (graffiti board)
+    # Graffiti board: top3 all-time + current month
     from app.models.rant import Rant
-    rants = Rant.query.order_by(Rant.created_at.desc()).limit(20).all()
+    month_start = today.replace(day=1)
+    top_rants = Rant.query.filter(Rant.likes > 0).order_by(Rant.likes.desc()).limit(3).all()
+    top_ids = {r.id for r in top_rants}
+    month_rants = Rant.query.filter(Rant.created_at >= str(month_start), ~Rant.id.in_(top_ids) if top_ids else True)\
+        .order_by(Rant.created_at.desc()).limit(20).all()
+    rants = top_rants + month_rants
 
     return render_template('main/index.html',
         my_todos=my_todos, todo_total=todo_total, todo_done=todo_done,
@@ -67,5 +72,16 @@ def post_rant():
     alias = request.form.get('alias', '').strip()[:30] or None
     if content:
         db.session.add(Rant(content=content, alias=alias))
+        db.session.commit()
+    return redirect(url_for('main.index'))
+
+
+@main_bp.route('/rant/<int:rant_id>/like', methods=['POST'])
+@login_required
+def like_rant(rant_id):
+    from app.models.rant import Rant
+    rant = db.session.get(Rant, rant_id)
+    if rant:
+        rant.likes = (rant.likes or 0) + 1
         db.session.commit()
     return redirect(url_for('main.index'))
