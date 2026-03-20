@@ -70,10 +70,11 @@ class Todo(db.Model):
 
     @property
     def overdue_color(self):
+        from flask import current_app
         days = self.workdays_overdue
-        if days >= 3:
+        if days >= current_app.config.get('OVERDUE_DANGER_DAYS', 3):
             return 'danger'
-        if days >= 1:
+        if days >= current_app.config.get('OVERDUE_WARN_DAYS', 1):
             return 'warning'
         return ''
 

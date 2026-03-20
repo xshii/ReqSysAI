@@ -93,6 +93,25 @@
     {% endif %}
 </div>
 
+<!-- Sub-project progress (parent projects only) -->
+{% if report_data.sub_projects %}
+<div class="report-section">
+    <h6>子项目进展</h6>
+    <table class="report-table">
+        <thead><tr><th>子项目</th><th>Owner</th><th>一句话进展</th></tr></thead>
+        <tbody>
+        {% for sp in report_data.sub_projects %}
+        <tr>
+            <td>{{ sp.project.name }}</td>
+            <td>{{ sp.owner.name if sp.owner else '-' }}</td>
+            <td>{{ sp.summary }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 <!-- Row 5: Next Week Plan -->
 <div class="report-section">
     <h6>下周计划</h6>
@@ -239,6 +258,22 @@
 
 </div><!-- /report-content -->
 
+{% if saved_report and saved_report.is_frozen %}
+<!-- Frozen notice -->
+<div class="alert alert-info mt-3 d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-lock-fill"></i> 周报已冻结（{{ saved_report.frozen_at.strftime('%m-%d %H:%M') if saved_report.frozen_at else '' }}）</span>
+    {% if cur_project and (cur_project.owner_id == current_user.id or current_user.is_admin) %}
+    <form method="POST" action="{{ url_for('dashboard.weekly_report_freeze') }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="project_id" value="{{ cur_project_id }}">
+        <input type="hidden" name="week_start" value="{{ monday.strftime('%Y-%m-%d') }}">
+        <input type="hidden" name="action" value="unfreeze">
+        <input type="hidden" name="offset" value="{{ offset }}">
+        <button type="submit" class="btn btn-sm btn-outline-warning">解冻</button>
+    </form>
+    {% endif %}
+</div>
+{% else %}
 <!-- Editable fields -->
 <div class="card mt-3">
     <div class="card-header py-2 d-flex justify-content-between align-items-center">
@@ -265,17 +300,28 @@
                 <textarea name="plan" class="form-control form-control-sm" rows="3">{% for p in ai.plan %}{{ p }}
 {% endfor %}</textarea>
             </div>
-            <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> 保存周报</button>
+            <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> 保存</button>
         </form>
     </div>
 </div>
 
-<div class="mt-3">
+<div class="mt-3 d-flex gap-2">
     <form method="POST" action="?week={{ offset }}&project_id={{ cur_project_id }}" class="d-inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-outline-primary" id="btn-gen"><i class="bi bi-arrow-clockwise"></i> 重新生成</button>
     </form>
+    {% if saved_report and cur_project and (cur_project.owner_id == current_user.id or current_user.is_admin) %}
+    <form method="POST" action="{{ url_for('dashboard.weekly_report_freeze') }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="project_id" value="{{ cur_project_id }}">
+        <input type="hidden" name="week_start" value="{{ monday.strftime('%Y-%m-%d') }}">
+        <input type="hidden" name="action" value="freeze">
+        <input type="hidden" name="offset" value="{{ offset }}">
+        <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('冻结后将无法编辑，确认？')"><i class="bi bi-lock"></i> 冻结周报</button>
+    </form>
+    {% endif %}
 </div>
+{% endif %}
 
 {% else %}
 <div class="card">

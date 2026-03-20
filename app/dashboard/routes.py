@@ -1,203 +1,65 @@
-from collections import namedtuple
 from datetime import date, timedelta
 from io import BytesIO
 
-from flask import render_template, request, send_file
+from flask import render_template, request, send_file, flash, redirect, url_for
 from flask_login import login_required, current_user
-from sqlalchemy import func
 from sqlalchemy.orm import joinedload
-
-TodoProgress = namedtuple('TodoProgress', 'total done')
-UserStat = namedtuple('UserStat', 'user created done rate')
-UserDays = namedtuple('UserDays', 'user days')
-ProjectInv = namedtuple('ProjectInv', 'project user_days total_days people_count')
 
 from app.dashboard import dashboard_bp
 from app.extensions import db
 from app.models.user import User
 from app.models.requirement import Requirement
 from app.models.todo import Todo
+from app.services.statistics import (
+    week_range, gather_week_stats, gather_project_data,
+    get_reviewer, get_todo_progress, TodoProgress,
+)
 
 
 @dashboard_bp.route('/requirements')
 @login_required
 def requirement_progress():
+    from app.models.project import Project
+
     cur_status = request.args.get('status', '')
     cur_project = request.args.get('project_id', type=int)
 
     query = Requirement.query.options(
-        joinedload(Requirement.project),
-        joinedload(Requirement.assignee),
+        joinedload(Requirement.project), joinedload(Requirement.assignee),
     )
     if cur_status:
         query = query.filter_by(status=cur_status)
     if cur_project:
         query = query.filter_by(project_id=cur_project)
-
     requirements = query.order_by(Requirement.updated_at.desc()).all()
 
-    # Count active todos per requirement (many-to-many)
-    from app.models.todo import todo_requirements
-    req_ids = [r.id for r in requirements]
-    todo_counts = {}
-    if req_ids:
-        rows = db.session.query(
-            todo_requirements.c.requirement_id,
-            func.count(Todo.id),
-            func.sum(db.case((Todo.status == 'done', 1), else_=0)),
-        ).join(Todo, Todo.id == todo_requirements.c.todo_id)\
-         .filter(todo_requirements.c.requirement_id.in_(req_ids))\
-         .group_by(todo_requirements.c.requirement_id).all()
-        for req_id, total, done in rows:
-            todo_counts[req_id] = TodoProgress(total=total, done=int(done or 0))
-
-    from app.models.project import Project
-    projects = Project.query.filter_by(status='active').all()
+    todo_counts = get_todo_progress([r.id for r in requirements])
 
     return render_template('dashboard/requirements.html',
         requirements=requirements, todo_counts=todo_counts,
-        projects=projects, statuses=Requirement.STATUS_LABELS,
+        projects=Project.query.filter_by(status='active').all(),
+        statuses=Requirement.STATUS_LABELS,
         cur_status=cur_status, cur_project=cur_project,
     )
 
 
 
-# ---- Phase 7: Stats / AI Weekly Report / Excel Export ----
-
-def _week_range(offset=0):
-    """Return (monday, sunday) for current week + offset."""
-    today = date.today()
-    monday = today - timedelta(days=today.weekday()) + timedelta(weeks=offset)
-    sunday = monday + timedelta(days=6)
-    return monday, sunday
-
-
-def _gather_stats(monday, sunday, group=None, project_id=None):
-    """Gather todo & requirement stats for the given week."""
-    from app.models.project import Project
-    from app.models.todo import todo_requirements
-    from collections import defaultdict
-
-    user_query = User.query.filter_by(is_active=True)
-    if group:
-        user_query = user_query.filter_by(group=group)
-    users = user_query.order_by(User.group, User.name).all()
-    user_ids = [u.id for u in users]
-
-    # If project_id specified, only count todos linked to that project
-    def _todo_filter(q):
-        if project_id:
-            q = q.join(todo_requirements, Todo.id == todo_requirements.c.todo_id)\
-                 .join(Requirement, Requirement.id == todo_requirements.c.requirement_id)\
-                 .filter(Requirement.project_id == project_id)
-        return q
-
-    # Per-user todo stats
-    created_q = db.session.query(
-        Todo.user_id, func.count(db.distinct(Todo.id))
-    ).filter(
-        Todo.user_id.in_(user_ids),
-        Todo.created_date >= monday, Todo.created_date <= sunday,
-    )
-    created_map = dict(_todo_filter(created_q).group_by(Todo.user_id).all())
-
-    done_q = db.session.query(
-        Todo.user_id, func.count(db.distinct(Todo.id))
-    ).filter(
-        Todo.user_id.in_(user_ids),
-        Todo.done_date >= monday, Todo.done_date <= sunday,
-    )
-    done_map = dict(_todo_filter(done_q).group_by(Todo.user_id).all())
-
-    user_stats = []
-    for u in users:
-        created = created_map.get(u.id, 0)
-        done = done_map.get(u.id, 0)
-        if project_id and created == 0 and done == 0:
-            continue  # Skip users with no activity on this project
-        user_stats.append(UserStat(
-            user=u, created=created, done=done,
-            rate=round(done / created * 100) if created else 0,
-        ))
-
-    # Requirement stats
-    req_query = Requirement.query
-    if project_id:
-        req_query = req_query.filter_by(project_id=project_id)
-    req_total = req_query.count()
-    req_done = req_query.filter(Requirement.status.in_(['done', 'closed'])).count()
-
-    # ---- Per-user per-project investment (person-days) ----
-    # Logic: for each user per day, count distinct projects from their todos.
-    # Each project gets 1/n of a person-day.
-    week_todos = Todo.query.filter(
-        Todo.user_id.in_(user_ids),
-        Todo.created_date >= monday, Todo.created_date <= sunday,
-    ).options(joinedload(Todo.requirements)).all()
-
-    # user_id -> date -> set of project_ids
-    user_date_projects = defaultdict(lambda: defaultdict(set))
-    for t in week_todos:
-        for r in t.requirements:
-            if r.project_id:
-                user_date_projects[t.user_id][t.created_date].add(r.project_id)
-
-    # Aggregate: (user_id, project_id) -> person-days
-    user_project_days = defaultdict(float)
-    for uid, date_projects in user_date_projects.items():
-        for dt, pids in date_projects.items():
-            share = 1.0 / len(pids) if pids else 0
-            for pid in pids:
-                user_project_days[(uid, pid)] += share
-
-    # Build project investment table
-    project_ids = set(pid for (_, pid) in user_project_days)
-    projects = {p.id: p for p in Project.query.filter(Project.id.in_(project_ids)).all()} if project_ids else {}
-    user_map = {u.id: u for u in users}
-
-    # Structure: list of {project, users: [{user, days}], total_days}
-    project_investment = []
-    for pid in sorted(project_ids):
-        p = projects.get(pid)
-        if not p:
-            continue
-        udays = []
-        total = 0.0
-        for u in users:
-            d = user_project_days.get((u.id, pid), 0)
-            if d > 0:
-                udays.append(UserDays(user=u, days=round(d, 1)))
-                total += d
-        project_investment.append(ProjectInv(
-            project=p, user_days=udays,
-            total_days=round(total, 1), people_count=len(udays),
-        ))
-
-    WeekStats = namedtuple('WeekStats', 'user_stats req_total req_done req_rate project_investment')
-    return WeekStats(
-        user_stats=user_stats,
-        req_total=req_total,
-        req_done=req_done,
-        req_rate=round(req_done / req_total * 100) if req_total else 0,
-        project_investment=project_investment,
-    )
-
+# ---- Stats / Weekly Report / Excel Export ----
 
 @dashboard_bp.route('/stats')
 @login_required
 def stats():
     from app.models.project import Project
+    from app.models.user import Group
 
     offset = request.args.get('week', 0, type=int)
     cur_group = request.args.get('group', '')
     cur_project_id = request.args.get('project_id', type=int)
-    monday, sunday = _week_range(offset)
+    monday, sunday = week_range(offset)
 
-    from app.models.user import Group
     groups = [g.name for g in Group.query.order_by(Group.name).all()]
-
     cur_project = db.session.get(Project, cur_project_id) if cur_project_id else None
-    data = _gather_stats(monday, sunday, group=cur_group or None, project_id=cur_project_id)
+    data = gather_week_stats(monday, sunday, group=cur_group or None, project_id=cur_project_id)
 
     return render_template('dashboard/stats.html',
         data=data, monday=monday, sunday=sunday,
@@ -216,8 +78,8 @@ def stats_export():
     offset = request.args.get('week', 0, type=int)
     cur_group = request.args.get('group', '')
     cur_project_id = request.args.get('project_id', type=int)
-    monday, sunday = _week_range(offset)
-    data = _gather_stats(monday, sunday, group=cur_group or None, project_id=cur_project_id)
+    monday, sunday = week_range(offset)
+    data = gather_week_stats(monday, sunday, group=cur_group or None, project_id=cur_project_id)
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -277,13 +139,18 @@ def weekly_report():
 
     offset = request.args.get('week', 0, type=int)
     cur_project_id = request.args.get('project_id', type=int)
-    monday, sunday = _week_range(offset)
+    monday, sunday = week_range(offset)
     cur_project = db.session.get(Project, cur_project_id) if cur_project_id else None
 
     if request.method == 'POST':
         from app.services.ai import call_ollama
         from app.models.todo import todo_requirements
         from app.models.risk import Risk
+        from app.models.report import WeeklyReport as WR_check
+        frozen = WR_check.query.filter_by(project_id=cur_project_id, week_start=monday, is_frozen=True).first()
+        if frozen:
+            flash('周报已冻结，无法重新生成', 'warning')
+            return redirect(url_for('dashboard.weekly_report', week=offset, project_id=cur_project_id))
 
         # 1. Completed todos this week
         done_q = Todo.query.filter(
@@ -643,6 +510,11 @@ def weekly_report_save():
         flash('请先生成周报', 'warning')
         return redirect(request.referrer or url_for('dashboard.weekly_report'))
 
+    if saved.is_frozen:
+        flash('周报已冻结，无法编辑', 'warning')
+        offset = request.form.get('offset', 0, type=int)
+        return redirect(url_for('dashboard.weekly_report', week=offset, project_id=cur_project_id))
+
     saved.summary = request.form.get('summary', '').strip()
     risks = [r.strip() for r in request.form.get('risks', '').strip().splitlines() if r.strip()]
     plan = [p.strip() for p in request.form.get('plan', '').strip().splitlines() if p.strip()]
@@ -653,6 +525,45 @@ def weekly_report_save():
     db.session.commit()
     flash('周报已保存', 'success')
 
+    offset = request.form.get('offset', 0, type=int)
+    return redirect(url_for('dashboard.weekly_report', week=offset, project_id=cur_project_id))
+
+
+@dashboard_bp.route('/weekly-report/freeze', methods=['POST'])
+@login_required
+def weekly_report_freeze():
+    """Freeze/unfreeze weekly report. Only project PM (owner) can freeze."""
+    from app.models.report import WeeklyReport
+    from app.models.project import Project
+    from datetime import datetime
+
+    cur_project_id = request.form.get('project_id', type=int)
+    week_start = request.form.get('week_start')
+    action = request.form.get('action', 'freeze')
+
+    saved = WeeklyReport.query.filter_by(project_id=cur_project_id, week_start=week_start).first()
+    if not saved:
+        flash('周报不存在', 'danger')
+        return redirect(request.referrer or url_for('dashboard.weekly_report'))
+
+    project = db.session.get(Project, cur_project_id)
+    is_pm = project and project.owner_id == current_user.id
+    if not is_pm and not current_user.is_admin:
+        flash('只有项目 PM 或管理员可以冻结/解冻周报', 'danger')
+        return redirect(request.referrer or url_for('dashboard.weekly_report'))
+
+    if action == 'freeze':
+        saved.is_frozen = True
+        saved.frozen_by = current_user.id
+        saved.frozen_at = datetime.utcnow()
+        flash('周报已冻结', 'success')
+    else:
+        saved.is_frozen = False
+        saved.frozen_by = None
+        saved.frozen_at = None
+        flash('周报已解冻', 'success')
+
+    db.session.commit()
     offset = request.form.get('offset', 0, type=int)
     return redirect(url_for('dashboard.weekly_report', week=offset, project_id=cur_project_id))
 
@@ -668,7 +579,7 @@ def weekly_report_export():
 
     offset = request.args.get('week', 0, type=int)
     cur_project_id = request.args.get('project_id', type=int)
-    monday, sunday = _week_range(offset)
+    monday, sunday = week_range(offset)
     cur_project = db.session.get(Project, cur_project_id) if cur_project_id else None
     project_name = cur_project.name if cur_project else '研发团队'
 
@@ -865,7 +776,7 @@ def weekly_report_export():
 @login_required
 def my_weekly():
     offset = request.args.get('week', 0, type=int)
-    monday, sunday = _week_range(offset)
+    monday, sunday = week_range(offset)
 
     my_done = Todo.query.filter_by(user_id=current_user.id)\
         .filter(Todo.done_date >= monday, Todo.done_date <= sunday)\
@@ -947,7 +858,7 @@ def resource_map():
         start = today.replace(day=1)
         end = today
     else:
-        start, end = _week_range(week_offset)
+        start, end = week_range(week_offset)
     label = f'{start.strftime("%Y-%m-%d")} ~ {end.strftime("%Y-%m-%d")}'
 
     users = User.query.filter_by(is_active=True).order_by(User.group, User.name).all()

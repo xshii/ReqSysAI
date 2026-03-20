@@ -38,6 +38,9 @@ def create_app(config_name=None):
     app.register_blueprint(todo_bp, url_prefix='/todos')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
 
+    from app.incentive import incentive_bp
+    app.register_blueprint(incentive_bp, url_prefix='/incentive')
+
     # Register error handlers
     _register_error_handlers(app)
 

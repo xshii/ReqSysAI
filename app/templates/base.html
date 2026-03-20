@@ -101,6 +101,11 @@
                     </li>
                     {% endif %}
                     {% endfor %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and 'incentive.' in request.endpoint %}active{% endif %}" href="{{ url_for('incentive.index') }}">
+                            <i class="bi bi-star"></i> 激励专区
+                        </a>
+                    </li>
                     <li class="nav-header">报表</li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'dashboard.my_weekly' %}active{% endif %}" href="{{ url_for('dashboard.my_weekly') }}">

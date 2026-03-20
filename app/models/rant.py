@@ -1,0 +1,17 @@
+from datetime import datetime
+
+from app.extensions import db
+
+
+class Rant(db.Model):
+    """Anonymous rant wall. No IP, no user tracking."""
+    __tablename__ = 'rants'
+
+    id = db.Column(db.Integer, primary_key=True)
+    alias = db.Column(db.String(30), nullable=True)  # 代号（可选）
+    content = db.Column(db.String(500), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Intentionally NO user_id, NO ip_address
+
+    def __repr__(self):
+        return f'<Rant {self.id}>'

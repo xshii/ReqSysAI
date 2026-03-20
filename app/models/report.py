@@ -13,7 +13,10 @@ class WeeklyReport(db.Model):
     summary = db.Column(db.Text, nullable=True)  # AI 一句话进展
     risks_json = db.Column(db.Text, nullable=True)  # JSON array of risk strings
     plan_json = db.Column(db.Text, nullable=True)  # JSON array of plan strings
-    content_html = db.Column(db.Text, nullable=True)  # 手动编辑后的 HTML 内容
+    content_html = db.Column(db.Text, nullable=True)
+    is_frozen = db.Column(db.Boolean, default=False)  # 冻结后不可编辑/重新生成
+    frozen_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    frozen_at = db.Column(db.DateTime, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

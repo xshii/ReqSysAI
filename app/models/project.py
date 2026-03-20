@@ -10,11 +10,15 @@ class Project(db.Model):
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
     status = db.Column(db.String(20), default='active')  # active / completed / archived
+    parent_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    creator = db.relationship('User', backref='created_projects')
+    parent = db.relationship('Project', remote_side=[id], backref='children')
+    owner = db.relationship('User', foreign_keys=[owner_id], backref='owned_projects')
+    creator = db.relationship('User', foreign_keys=[created_by], backref='created_projects')
     milestones = db.relationship('Milestone', back_populates='project', cascade='all, delete-orphan')
     requirements = db.relationship('Requirement', back_populates='project', lazy='dynamic')
 

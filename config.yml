@@ -2,6 +2,11 @@ app:
   secret_key: dev-only-key          # 生产环境务必修改
   database_url: sqlite:///instance/reqsys.db   # 集中放在 instance/ 目录，不随代码覆盖
   session_timeout: 600              # 秒
+  todo_keep_days: 7                 # 已完成 todo 保留天数
+  overdue_warn_days: 1              # 结转N天标黄
+  overdue_danger_days: 3            # 超期N天标红
+  ai_input_max: 5000                # AI 解析输入最大字符
+  ai_timeout: 120                   # AI 请求超时（秒）
 
 auth:
   sso_url: ""                       # 留空则跳过 SSO 跳转验证

@@ -4,4 +4,6 @@ from app.models.requirement import Requirement, RequirementTask, Comment, Activi
 from app.models.todo import Todo, TodoItem  # noqa: F401
 from app.models.risk import Risk  # noqa: F401
 from app.models.report import WeeklyReport  # noqa: F401
+from app.models.incentive import Incentive  # noqa: F401
+from app.models.rant import Rant  # noqa: F401
 from app.models.ai_log import AIParseLog  # noqa: F401

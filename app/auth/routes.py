@@ -129,6 +129,22 @@ def profile():
         selected_roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
         current_user.roles = kept_roles + selected_roles
         current_user.group = form.group.data or None
+        # Handle avatar upload
+        import os, uuid
+        avatar = request.files.get('avatar')
+        if avatar and avatar.filename:
+            ext = os.path.splitext(avatar.filename)[1].lower()
+            if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp'):
+                fname = f'{current_user.id}_{uuid.uuid4().hex[:8]}{ext}'
+                save_dir = os.path.join(current_app.root_path, 'static', 'uploads', 'avatar')
+                os.makedirs(save_dir, exist_ok=True)
+                # Delete old avatar
+                if current_user.avatar:
+                    old_path = os.path.join(current_app.root_path, 'static', current_user.avatar)
+                    if os.path.exists(old_path):
+                        os.remove(old_path)
+                avatar.save(os.path.join(save_dir, fname))
+                current_user.avatar = f'uploads/avatar/{fname}'
         db.session.commit()
         flash('个人信息已更新', 'success')
         return redirect(url_for('auth.profile'))

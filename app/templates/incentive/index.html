@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block title %}激励专区 - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>激励专区</h4>
+    <div class="d-flex gap-2">
+        {% if current_user.is_admin %}
+        <button class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#adminModal"><i class="bi bi-plus-circle"></i> 管理员录入</button>
+        {% endif %}
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#submitModal"><i class="bi bi-star"></i> 推荐激励</button>
+    </div>
+</div>
+
+{% if is_reviewer %}
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item"><a class="nav-link {% if tab == 'review' %}active{% endif %}" href="?tab=review">待评审</a></li>
+    <li class="nav-item"><a class="nav-link {% if tab == 'mine' %}active{% endif %}" href="?tab=mine">我的推荐</a></li>
+</ul>
+{% endif %}
+
+{% if items %}
+{% for inc in items %}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+            <div class="d-flex gap-3">
+                {% if inc.photo %}
+                <img src="{{ url_for('static', filename=inc.photo) }}" class="rounded" style="width:80px;height:80px;object-fit:cover;" alt="">
+                {% endif %}
+                <div>
+                <h6 class="mb-1"><span class="badge bg-{{ inc.category_color }} me-1">{{ inc.category_label }}</span>{{ inc.title }}{% if inc.team_name %} <span class="badge bg-light text-dark border">{{ inc.team_name }}</span>{% endif %}</h6>
+                <div class="text-muted small mb-1">
+                    推荐人物：{% for u in inc.nominees %}<span class="badge bg-light text-dark border me-1">{{ u.name }}</span>{% endfor %}
+                </div>
+                <p class="mb-1 small">{{ inc.description }}</p>
+                {% if inc.review_comment and is_reviewer %}
+                <div class="small mt-1 ps-2 border-start border-3 border-primary">
+                    <strong>评语：</strong>{{ inc.review_comment }}
+                </div>
+                {% endif %}
+                <div class="text-muted small mt-1">
+                    提交人：{{ inc.submitter.name }} · {{ inc.created_at.strftime('%m-%d %H:%M') }}
+                    {% if inc.amount and is_reviewer %} · 金额：¥{{ inc.amount }}{% endif %}
+                </div>
+                </div>
+            </div>
+            <div class="text-end">
+                {% if is_reviewer or inc.status == 'pending' %}
+                <span class="badge bg-{{ inc.status_color }}">{{ inc.status_label }}</span>
+                {% else %}
+                <span class="badge bg-secondary">已评审</span>
+                {% endif %}
+                {% if is_reviewer and inc.status == 'pending' and tab == 'review' %}
+                <button class="btn btn-sm btn-outline-primary mt-1" data-bs-toggle="modal" data-bs-target="#reviewModal"
+                        onclick="setReview({{ inc.id }}, '{{ inc.title }}')">评审</button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="text-center text-muted py-5">
+    {% if tab == 'review' %}暂无待评审的激励{% else %}暂无推荐记录{% endif %}
+</div>
+{% endif %}
+
+<!-- Submit Modal -->
+<div class="modal fade" id="submitModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('incentive.submit') }}" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header py-2"><h6 class="modal-title">推荐激励</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">激励类别 <span class="text-danger">*</span></label>
+                        <select name="category" class="form-select form-select-sm">
+                            <option value="professional">专业</option>
+                            <option value="proactive">积极</option>
+                            <option value="beyond">超越期望</option>
+                            <option value="clean">代码Clean</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">事迹标题 <span class="text-danger">*</span></label>
+                        <input type="text" name="title" class="form-control" required placeholder="简要描述突出事迹">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">团队名（团队事迹填写）</label>
+                        <input type="text" name="team_name" class="form-control form-control-sm" placeholder="如：XX攻坚小组">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">推荐人物 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm mb-1" placeholder="搜索姓名..." oninput="filterNominees(this)">
+                        <div class="border rounded p-2" style="max-height:140px;overflow-y:auto;" id="nomineeList">
+                            {% for u in users %}
+                            <div class="form-check nominee-opt">
+                                <input class="form-check-input" type="checkbox" name="nominee_ids" value="{{ u.id }}" id="nom_{{ u.id }}">
+                                <label class="form-check-label small" for="nom_{{ u.id }}">{{ u.name }}{% if u.group %} ({{ u.group }}){% endif %}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">事迹描述 <span class="text-danger">*</span></label>
+                        <textarea name="description" class="form-control" rows="4" required placeholder="详细描述事迹和贡献"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">上传照片</label>
+                        <input type="file" name="photo" class="form-control form-control-sm" accept="image/*">
+                    </div>
+                </div>
+                <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">提交推荐</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Review Modal -->
+{% if is_reviewer %}
+<div class="modal fade" id="reviewModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="reviewForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header py-2"><h6 class="modal-title" id="reviewTitle">评审激励</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">评语（150字以内）</label>
+                        <textarea name="review_comment" id="reviewComment" class="form-control" rows="3" maxlength="150" placeholder="填写评语"></textarea>
+                        <div class="d-flex justify-content-between mt-1">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="aiPolish()"><i class="bi bi-robot"></i> AI润色</button>
+                            <span class="small text-muted" id="charCount">0/150</span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">激励金额（元）</label>
+                        <input type="number" name="amount" class="form-control form-control-sm" step="50" min="0" placeholder="可选">
+                    </div>
+                </div>
+                <div class="modal-footer py-1">
+                    <button type="submit" name="action" value="reject" class="btn btn-sm btn-outline-danger">拒绝</button>
+                    <button type="submit" name="action" value="approve" class="btn btn-sm btn-success">通过</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Admin Submit Modal -->
+{% if current_user.is_admin %}
+<div class="modal fade" id="adminModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('incentive.admin_submit') }}" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header py-2"><h6 class="modal-title">管理员录入激励</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-6 mb-2">
+                            <label class="form-label small">类别</label>
+                            <select name="category" class="form-select form-select-sm">
+                                <option value="professional">专业</option>
+                                <option value="proactive">积极</option>
+                                <option value="beyond">超越期望</option>
+                                <option value="clean">代码Clean</option>
+                            </select>
+                        </div>
+                        <div class="col-6 mb-2">
+                            <label class="form-label small">激励月份</label>
+                            <input type="month" name="month" class="form-control form-control-sm" required>
+                        </div>
+                    </div>
+                    <div class="mb-2"><input type="text" name="title" class="form-control form-control-sm" placeholder="事迹标题" required></div>
+                    <div class="mb-2"><input type="text" name="team_name" class="form-control form-control-sm" placeholder="团队名（可选）"></div>
+                    <div class="mb-2">
+                        <input type="text" class="form-control form-control-sm" placeholder="搜索人物..." oninput="filterNominees2(this)">
+                        <div class="border rounded p-2 mt-1" style="max-height:100px;overflow-y:auto;" id="nomineeList2">
+                            {% for u in users %}
+                            <div class="form-check nominee-opt2"><input class="form-check-input" type="checkbox" name="nominee_ids" value="{{ u.id }}" id="an_{{ u.id }}"><label class="form-check-label small" for="an_{{ u.id }}">{{ u.name }}</label></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-2"><input type="number" name="amount" class="form-control form-control-sm" placeholder="金额（元）" step="50"></div>
+                        <div class="col-6 mb-2"><input type="file" name="photo" class="form-control form-control-sm" accept="image/*"></div>
+                    </div>
+                    <div class="mb-2"><textarea name="review_comment" class="form-control form-control-sm" rows="2" maxlength="150" placeholder="评语（150字）"></textarea></div>
+                </div>
+                <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-success">录入</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var csrfToken = '{{ csrf_token() }}';
+
+function filterNominees(input) {
+    var q = input.value.toLowerCase();
+    document.querySelectorAll('.nominee-opt').forEach(function(o) {
+        o.style.display = o.querySelector('label').textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+}
+function filterNominees2(input) {
+    var q = input.value.toLowerCase();
+    document.querySelectorAll('.nominee-opt2').forEach(function(o) {
+        o.style.display = o.querySelector('label').textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+}
+
+function setReview(id, title) {
+    document.getElementById('reviewForm').action = '/incentive/' + id + '/review';
+    document.getElementById('reviewTitle').textContent = '评审：' + title;
+}
+
+var commentEl = document.getElementById('reviewComment');
+if (commentEl) {
+    commentEl.addEventListener('input', function() {
+        document.getElementById('charCount').textContent = commentEl.value.length + '/150';
+    });
+}
+
+function aiPolish() {
+    var text = document.getElementById('reviewComment').value.trim();
+    if (!text) return;
+    fetch('{{ url_for("incentive.ai_polish") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({text: text})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) {
+            document.getElementById('reviewComment').value = d.text;
+            document.getElementById('charCount').textContent = d.text.length + '/150';
+        }
+    });
+}
+</script>
+{% endblock %}

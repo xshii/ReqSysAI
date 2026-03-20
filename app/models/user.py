@@ -42,6 +42,7 @@ class User(UserMixin, db.Model):
     name = db.Column(db.String(80), nullable=False)
     ip_address = db.Column(db.String(45), unique=True, nullable=False, index=True)
     pinyin = db.Column(db.String(100), nullable=True)
+    avatar = db.Column(db.String(300), nullable=True)  # 个人照片路径
     group = db.Column(db.String(50), nullable=True)
     is_active = db.Column(db.Boolean, default=True)
     last_login = db.Column(db.DateTime)

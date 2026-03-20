@@ -1,4 +1,4 @@
-from flask import render_template, redirect, url_for, flash, request, session, jsonify
+from flask import render_template, redirect, url_for, flash, request, session, jsonify, current_app
 from flask_login import current_user
 
 from app.ai import ai_bp
@@ -18,7 +18,7 @@ _SK_ORIGINAL = 'ai_original_text'
 
 def _save_parse_result(input_type, raw_input, result, raw_output):
     """Common logic after AI parse: log, save to session, redirect."""
-    log = AIParseLog(input_type=input_type, raw_input=raw_input[:5000],
+    log = AIParseLog(input_type=input_type, raw_input=raw_input[:current_app.config.get('AI_INPUT_MAX', 5000)],
                      ai_output=raw_output, created_by=current_user.id)
     db.session.add(log)
     db.session.commit()
@@ -29,7 +29,7 @@ def _save_parse_result(input_type, raw_input, result, raw_output):
 
     session[_SK_PARSED] = result
     session[_SK_LOG_ID] = log.id
-    session[_SK_ORIGINAL] = raw_input[:5000]
+    session[_SK_ORIGINAL] = raw_input[:current_app.config.get('AI_INPUT_MAX', 5000)]
     return redirect(url_for('ai.confirm'))
 
 

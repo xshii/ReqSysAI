@@ -110,6 +110,21 @@ def gather_project_data(monday, sunday, project_id=None):
 
     project_name = cur_project.name if cur_project else '研发团队'
 
+    # Sub-project progress (for parent projects)
+    sub_projects = []
+    if cur_project and cur_project.children:
+        from app.models.report import WeeklyReport
+        for child in cur_project.children:
+            # Get saved summary for this child project this week
+            child_report = WeeklyReport.query.filter_by(
+                project_id=child.id, week_start=monday
+            ).first()
+            sub_projects.append({
+                'project': child,
+                'owner': child.owner,
+                'summary': child_report.summary if child_report else '未生成周报',
+            })
+
     return {
         'project_name': project_name,
         'today': date.today(),
@@ -127,6 +142,7 @@ def gather_project_data(monday, sunday, project_id=None):
         'open_risks': open_risks,
         'people_map': people_map,
         'people_map_reqs': people_map_reqs,
+        'sub_projects': sub_projects,
     }
 
 

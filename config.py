@@ -11,7 +11,7 @@ _basedir = Path(__file__).parent
 
 
 def _resolve_db_url():
-    url = os.getenv('DATABASE_URL', _yml.get('app', {}).get('database_url', 'sqlite:///data.db'))
+    url = os.getenv('DATABASE_URL', _yml.get('app', {}).get('database_url', 'sqlite:///instance/reqsys.db'))
     if url.startswith('sqlite:///') and not url.startswith('sqlite:////'):
         url = f'sqlite:///{_basedir / url[len("sqlite:///"):]}'
     return url
@@ -31,8 +31,15 @@ class Config:
     DEFAULT_ROLE = _yml.get('auth', {}).get('default_role', 'DE')
 
     # Ollama
-    OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', _yml.get('ollama', {}).get('base_url', 'http://192.168.10.50:11434'))
+    OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', _yml.get('ollama', {}).get('base_url', 'http://127.0.0.1:11434'))
     OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', _yml.get('ollama', {}).get('model', 'qwen2.5'))
+
+    # App tuning
+    TODO_KEEP_DAYS = _yml.get('app', {}).get('todo_keep_days', 7)
+    OVERDUE_WARN_DAYS = _yml.get('app', {}).get('overdue_warn_days', 1)
+    OVERDUE_DANGER_DAYS = _yml.get('app', {}).get('overdue_danger_days', 3)
+    AI_INPUT_MAX = _yml.get('app', {}).get('ai_input_max', 5000)
+    AI_TIMEOUT = _yml.get('app', {}).get('ai_timeout', 120)
 
     # Roles & admin from YAML
     ROLES = _yml.get('roles', [])

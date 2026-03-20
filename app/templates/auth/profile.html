@@ -12,8 +12,16 @@
                     工号：<strong>{{ current_user.employee_id }}</strong>
                     &nbsp; IP：<code>{{ current_user.ip_address }}</code>
                 </div>
-                <form method="POST">
+                <form method="POST" enctype="multipart/form-data">
                     {{ form.hidden_tag() }}
+                    <div class="mb-3 text-center">
+                        {% if current_user.avatar %}
+                        <img src="{{ url_for('static', filename=current_user.avatar) }}" class="rounded-circle mb-2" style="width:80px;height:80px;object-fit:cover;">
+                        {% else %}
+                        <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-2" style="width:80px;height:80px;font-size:2rem;">{{ current_user.name[0] }}</div>
+                        {% endif %}
+                        <div><input type="file" name="avatar" class="form-control form-control-sm" accept="image/*" style="max-width:250px;margin:0 auto;"></div>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">{{ form.name.label.text }}</label>
                         {{ form.name(class="form-control") }}

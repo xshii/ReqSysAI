@@ -10,7 +10,8 @@ from app.extensions import db
 from app.models.todo import Todo, TodoItem
 from app.models.user import User
 
-DONE_KEEP_DAYS = 7
+from flask import current_app
+DONE_KEEP_DAYS = None  # Loaded from config at runtime
 
 
 # ---- Group management ----
@@ -332,7 +333,8 @@ def team():
     from app.models.requirement import Requirement
 
     today = date.today()
-    week_ago = today - timedelta(days=DONE_KEEP_DAYS)
+    keep_days = current_app.config.get('TODO_KEEP_DAYS', 7)
+    week_ago = today - timedelta(days=keep_days)
     from app.models.user import Group
     groups = [g.name for g in Group.query.order_by(Group.name).all()]
 

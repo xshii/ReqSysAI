@@ -42,7 +42,7 @@ def call_ollama(prompt, system_prompt=None, messages=None):
         resp = requests.post(
             f'{base_url}/api/chat',
             json={'model': model, 'messages': messages, 'stream': False},
-            timeout=120,
+            timeout=current_app.config.get('AI_TIMEOUT', 120),
             proxies={'http': '', 'https': ''},
         )
         resp.raise_for_status()
