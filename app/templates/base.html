@@ -48,43 +48,80 @@
                             <i class="bi bi-list-task"></i> 团队 Todo
                         </a>
                     </li>
+                    {% for g in sidebar_groups %}
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint and 'requirement.' in request.endpoint %}active{% endif %}" href="{{ url_for('requirement.requirement_list') }}">
-                            <i class="bi bi-clipboard-check"></i> 需求列表
+                        <a class="nav-link py-1 ps-4 small {% if sidebar_cur_group == g %}fw-bold text-primary{% else %}text-muted{% endif %}" href="{{ url_for('todo.team', group=g) }}">
+                            {{ g }}
                         </a>
                     </li>
+                    {% endfor %}
                     <li class="nav-header">管理</li>
+                    {% set _cur_pid = request.args.get('project_id', '')|int %}
+                    {% set _in_pm = request.endpoint and ('project.' in request.endpoint or 'requirement.' in request.endpoint or request.endpoint == 'dashboard.requirement_progress' or 'ai.' in request.endpoint or (request.endpoint in ('dashboard.stats', 'dashboard.weekly_report') and _cur_pid)) %}
+                    {% set _in_pm = _in_pm or (request.endpoint and 'project.risk' in request.endpoint) %}
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint and 'ai.' in request.endpoint %}active{% endif %}" href="{{ url_for('ai.parse_page') }}">
-                            <i class="bi bi-robot"></i> AI 解析需求
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint and 'project.' in request.endpoint %}active{% endif %}" href="{{ url_for('project.project_list') }}">
+                        <a class="nav-link {% if _in_pm %}active{% endif %}" href="{{ url_for('project.project_list') }}">
                             <i class="bi bi-folder"></i> 项目管理
                         </a>
                     </li>
+                    {% for p in sidebar_projects %}
+                    {% set _this_project = request.view_args.get('project_id') == p.id if request.view_args else false %}
+                    {% set _this_p = _cur_pid == p.id %}
+                    {% set _p_active = _this_project or _this_p %}
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'dashboard.requirement_progress' %}active{% endif %}" href="{{ url_for('dashboard.requirement_progress') }}">
-                            <i class="bi bi-clipboard-data"></i> 需求进度
+                        <a class="nav-link py-1 ps-4 small {% if _p_active %}fw-bold text-primary{% else %}text-muted{% endif %}"
+                           href="{{ url_for('project.project_detail', project_id=p.id) }}">
+                            {{ p.name }}
                         </a>
                     </li>
+                    {% if _p_active %}
+                    <li class="nav-item">
+                        <a class="nav-link py-0 ps-5 small {% if request.endpoint and 'requirement.' in request.endpoint and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
+                           href="{{ url_for('requirement.requirement_list') }}?project_id={{ p.id }}">
+                            需求管理
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.risk_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
+                           href="{{ url_for('project.risk_list', project_id=p.id) }}">
+                            风险管理 {% if p.risks | selectattr('status', 'equalto', 'open') | list | length %}<span class="badge bg-danger rounded-pill" style="font-size:.6rem;">{{ p.risks | selectattr('status', 'equalto', 'open') | list | length }}</span>{% endif %}
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'dashboard.stats' and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
+                           href="{{ url_for('dashboard.stats') }}?project_id={{ p.id }}">
+                            统计报表
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'dashboard.weekly_report' and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
+                           href="{{ url_for('dashboard.weekly_report') }}?project_id={{ p.id }}">
+                            AI 周报
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
                     <li class="nav-header">报表</li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'dashboard.stats' %}active{% endif %}" href="{{ url_for('dashboard.stats') }}">
-                            <i class="bi bi-graph-up"></i> 统计报表
+                        <a class="nav-link {% if request.endpoint == 'dashboard.my_weekly' %}active{% endif %}" href="{{ url_for('dashboard.my_weekly') }}">
+                            <i class="bi bi-person-lines-fill"></i> 个人周报
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'dashboard.weekly_report' %}active{% endif %}" href="{{ url_for('dashboard.weekly_report') }}">
-                            <i class="bi bi-file-earmark-text"></i> AI 周报
+                        <a class="nav-link {% if request.endpoint == 'dashboard.resource_map' %}active{% endif %}" href="{{ url_for('dashboard.resource_map') }}">
+                            <i class="bi bi-people-fill"></i> 人力投入
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'dashboard.stats' and not _cur_pid %}active{% endif %}" href="{{ url_for('dashboard.stats') }}">
+                            <i class="bi bi-graph-up"></i> 统计报表
                         </a>
                     </li>
                     {% if current_user.is_admin %}
                     <li class="nav-header">系统</li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint and 'admin.user' in request.endpoint %}active{% endif %}" href="{{ url_for('admin.user_list') }}">
-                            <i class="bi bi-people"></i> 用户管理
+                        <a class="nav-link {% if request.endpoint and 'admin.' in request.endpoint %}active{% endif %}" href="{{ url_for('admin.user_list') }}">
+                            <i class="bi bi-gear"></i> 后台管理
                         </a>
                     </li>
                     {% endif %}

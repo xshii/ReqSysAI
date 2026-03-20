@@ -1,0 +1,14 @@
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link {% if request.endpoint and 'user' in request.endpoint %}active{% endif %}"
+           href="{{ url_for('admin.user_list') }}">用户管理</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.endpoint == 'admin.group_list' %}active{% endif %}"
+           href="{{ url_for('admin.group_list') }}">团队管理</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.endpoint and 'milestone_template' in request.endpoint %}active{% endif %}"
+           href="{{ url_for('admin.milestone_template_list') }}">里程碑模板</a>
+    </li>
+</ul>

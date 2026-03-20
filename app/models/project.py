@@ -53,3 +53,31 @@ class Milestone(db.Model):
 
     def __repr__(self):
         return f'<Milestone {self.name}>'
+
+
+class MilestoneTemplate(db.Model):
+    __tablename__ = 'milestone_templates'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    description = db.Column(db.String(300), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    items = db.relationship('MilestoneTemplateItem', backref='template',
+                            cascade='all, delete-orphan', order_by='MilestoneTemplateItem.sort_order')
+
+    def __repr__(self):
+        return f'<MilestoneTemplate {self.name}>'
+
+
+class MilestoneTemplateItem(db.Model):
+    __tablename__ = 'milestone_template_items'
+
+    id = db.Column(db.Integer, primary_key=True)
+    template_id = db.Column(db.Integer, db.ForeignKey('milestone_templates.id'), nullable=False)
+    name = db.Column(db.String(200), nullable=False)
+    offset_days = db.Column(db.Integer, default=0)  # 相对项目开始的天数偏移
+    sort_order = db.Column(db.Integer, default=0)
+
+    def __repr__(self):
+        return f'<MilestoneTemplateItem {self.name}>'

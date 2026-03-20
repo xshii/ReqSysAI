@@ -8,7 +8,7 @@
     </a>
 </div>
 <div class="row">
-    <div class="col-md-6">
+    <div class="col-md-7">
         <div class="card">
             <div class="card-header"><h5 class="mb-0">{{ title }}</h5></div>
             <div class="card-body">
@@ -21,12 +21,94 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">{{ form.description.label.text }}</label>
-                        {{ form.description(class="form-control", rows=4) }}
+                        {{ form.description(class="form-control", rows=3) }}
                     </div>
+
+                    {% if templates is defined and templates %}
+                    <div class="mb-3">
+                        <label class="form-label">里程碑模板</label>
+                        <div class="d-flex gap-2">
+                            <select id="tplSelect" class="form-select form-select-sm">
+                                <option value="">不使用模板</option>
+                                {% for t in templates %}
+                                <option value="{{ t.id }}">{{ t.name }}{% if t.description %} — {{ t.description }}{% endif %}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" onclick="loadTemplate()">导入</button>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label mb-0">里程碑</label>
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="addMs()"><i class="bi bi-plus"></i> 添加</button>
+                        </div>
+                        <div id="msItems"></div>
+                        <div class="form-text">填写里程碑名称和截止日期</div>
+                    </div>
+
                     <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {{ form.submit.label.text }}</button>
                 </form>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function addMs(name, dateVal) {
+    var div = document.getElementById('msItems');
+    var row = document.createElement('div');
+    row.className = 'input-group input-group-sm mb-1 ms-drag-row';
+    row.draggable = true;
+    row.innerHTML = '<span class="input-group-text" style="cursor:grab;"><i class="bi bi-grip-vertical"></i></span>'
+        + '<input type="text" name="ms_name" class="form-control" placeholder="里程碑名称" value="' + (name || '').replace(/"/g, '&quot;') + '">'
+        + '<input type="date" name="ms_date" class="form-control" style="max-width:160px;" value="' + (dateVal || '') + '">'
+        + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>';
+    initMsDrag(row);
+    div.appendChild(row);
+}
+
+var msDragItem = null;
+function initMsDrag(row) {
+    row.addEventListener('dragstart', function(e) {
+        msDragItem = row;
+        row.classList.add('opacity-50');
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', function() {
+        row.classList.remove('opacity-50');
+        msDragItem = null;
+    });
+    row.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        if (!msDragItem || msDragItem === row) return;
+        var rect = row.getBoundingClientRect();
+        var mid = rect.top + rect.height / 2;
+        if (e.clientY < mid) row.parentNode.insertBefore(msDragItem, row);
+        else row.parentNode.insertBefore(msDragItem, row.nextSibling);
+    });
+}
+
+function loadTemplate() {
+    var tplId = document.getElementById('tplSelect').value;
+    if (!tplId) return;
+    fetch('/projects/api/template/' + tplId).then(function(r) { return r.json(); }).then(function(d) {
+        if (!d.ok) return;
+        var div = document.getElementById('msItems');
+        div.innerHTML = '';
+        var today = new Date();
+        d.items.forEach(function(item) {
+            var dt = new Date(today);
+            dt.setDate(dt.getDate() + item.offset_days);
+            // Skip weekends
+            while (dt.getDay() === 0 || dt.getDay() === 6) dt.setDate(dt.getDate() + 1);
+            var dateStr = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+            addMs(item.name, dateStr);
+        });
+    });
+}
+</script>
 {% endblock %}

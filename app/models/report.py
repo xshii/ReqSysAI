@@ -1,0 +1,29 @@
+from datetime import datetime
+
+from app.extensions import db
+
+
+class WeeklyReport(db.Model):
+    __tablename__ = 'weekly_reports'
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    week_start = db.Column(db.Date, nullable=False)  # Monday
+    week_end = db.Column(db.Date, nullable=False)  # Sunday
+    summary = db.Column(db.Text, nullable=True)  # AI 一句话进展
+    risks_json = db.Column(db.Text, nullable=True)  # JSON array of risk strings
+    plan_json = db.Column(db.Text, nullable=True)  # JSON array of plan strings
+    content_html = db.Column(db.Text, nullable=True)  # 手动编辑后的 HTML 内容
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    project = db.relationship('Project', backref='weekly_reports')
+    creator = db.relationship('User', backref='created_reports')
+
+    __table_args__ = (
+        db.UniqueConstraint('project_id', 'week_start', name='uq_project_week'),
+    )
+
+    def __repr__(self):
+        return f'<WeeklyReport {self.project_id} {self.week_start}>'

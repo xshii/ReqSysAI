@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}后台管理 - 里程碑模板 - 研发协作平台{% endblock %}
+
+{% block content %}
+{% include "admin/_tabs.html" %}
+
+<div class="row">
+    <div class="col-md-7">
+        {% for tpl in templates %}
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center py-2">
+                <div>
+                    <strong>{{ tpl.name }}</strong>
+                    {% if tpl.description %}<span class="text-muted small ms-2">{{ tpl.description }}</span>{% endif %}
+                </div>
+                <form method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="template_id" value="{{ tpl.id }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('确定删除模板？')"><i class="bi bi-trash"></i></button>
+                </form>
+            </div>
+            <div class="card-body py-2">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>#</th><th>里程碑名称</th><th>偏移天数</th></tr></thead>
+                    <tbody>
+                    {% for item in tpl.items %}
+                    <tr>
+                        <td class="text-muted">{{ loop.index }}</td>
+                        <td>{{ item.name }}</td>
+                        <td class="small text-muted">+{{ item.offset_days }}天</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4">暂无模板</div>
+        {% endfor %}
+    </div>
+
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header py-2">新建模板</div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="create">
+                    <div class="mb-2">
+                        <input type="text" name="name" class="form-control form-control-sm" placeholder="模板名称（如：标准研发流程）" required>
+                    </div>
+                    <div class="mb-2">
+                        <input type="text" name="description" class="form-control form-control-sm" placeholder="描述（可选）">
+                    </div>
+                    <label class="form-label small">里程碑项</label>
+                    <div id="tplItems"></div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm mb-2" onclick="addTplItem()"><i class="bi bi-plus"></i> 添加里程碑</button>
+                    <div class="form-text mb-2">偏移天数：从项目开始日算起的天数，用于自动计算截止日期</div>
+                    <button type="submit" class="btn btn-sm btn-primary">创建模板</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function addTplItem(name, offset) {
+    var div = document.getElementById('tplItems');
+    var row = document.createElement('div');
+    row.className = 'input-group input-group-sm mb-1 tpl-drag-row';
+    row.draggable = true;
+    row.innerHTML = '<span class="input-group-text" style="cursor:grab;"><i class="bi bi-grip-vertical"></i></span>'
+        + '<input type="text" name="item_name" class="form-control" placeholder="里程碑名称" value="' + (name || '') + '">'
+        + '<input type="number" name="item_offset" class="form-control" style="max-width:80px;" placeholder="天数" value="' + (offset || 0) + '" min="0">'
+        + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>';
+    initTplDrag(row);
+    div.appendChild(row);
+}
+
+var tplDragItem = null;
+function initTplDrag(row) {
+    row.addEventListener('dragstart', function(e) {
+        tplDragItem = row;
+        row.classList.add('opacity-50');
+        e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', function() {
+        row.classList.remove('opacity-50');
+        tplDragItem = null;
+    });
+    row.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        if (!tplDragItem || tplDragItem === row) return;
+        var rect = row.getBoundingClientRect();
+        if (e.clientY < rect.top + rect.height / 2) row.parentNode.insertBefore(tplDragItem, row);
+        else row.parentNode.insertBefore(tplDragItem, row.nextSibling);
+    });
+}
+
+// Init drag for the first default row
+document.querySelectorAll('.tpl-drag-row').forEach(initTplDrag);
+</script>
+{% endblock %}

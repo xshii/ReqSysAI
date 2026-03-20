@@ -1,4 +1,4 @@
-from flask import render_template, redirect, url_for, flash, request, session
+from flask import render_template, redirect, url_for, flash, request, session, jsonify
 from flask_login import current_user
 
 from app.ai import ai_bp
@@ -44,6 +44,36 @@ def parse_page():
     text_form = ParseTextForm(prefix='text')
     docx_form = ParseDocxForm(prefix='docx')
     return render_template('ai/parse.html', text_form=text_form, docx_form=docx_form)
+
+
+@ai_bp.route('/api/parse', methods=['POST'])
+@login_required
+def api_parse():
+    """JSON API: parse text and return structured result."""
+    data = request.get_json()
+    text = (data.get('text') or '').strip() if data else ''
+    if not text:
+        return jsonify(ok=False, msg='请输入内容')
+    result, raw_output = parse_requirement(text)
+    if not result:
+        return jsonify(ok=False, msg='AI 解析失败，请重试')
+    return jsonify(ok=True, result=result)
+
+
+@ai_bp.route('/api/parse-docx', methods=['POST'])
+@login_required
+def api_parse_docx():
+    """JSON API: parse uploaded docx and return structured result."""
+    file = request.files.get('file')
+    if not file:
+        return jsonify(ok=False, msg='请选择文件')
+    raw_text = extract_text_from_docx(file)
+    if not raw_text.strip():
+        return jsonify(ok=False, msg='文档内容为空')
+    result, raw_output = parse_requirement(raw_text)
+    if not result:
+        return jsonify(ok=False, msg='AI 解析失败，请重试')
+    return jsonify(ok=True, result=result)
 
 
 @ai_bp.route('/parse-text', methods=['POST'])

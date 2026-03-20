@@ -68,18 +68,18 @@ def register():
     client_ip = _get_client_ip()
     form = RegisterForm()
 
-    # Exclude Admin
+    # Exclude Admin and hidden roles (PL, XM, HR)
     default_role_name = current_app.config.get('DEFAULT_ROLE', 'DE')
-    roles = Role.query.filter(Role.name != 'Admin').order_by(Role.id).all()
+    hidden = set(current_app.config.get('HIDDEN_ROLES', []) + ['Admin'])
+    roles = Role.query.filter(Role.name.notin_(hidden)).order_by(Role.id).all()
     default_role = next((r for r in roles if r.name == default_role_name), roles[0] if roles else None)
     form.role_ids.choices = [(r.id, r.name) for r in roles]
     if not form.is_submitted() and default_role:
         form.role_ids.data = [default_role.id]
 
-    groups = db.session.query(User.group).filter(
-        User.group.isnot(None), User.group != ''
-    ).distinct().order_by(User.group).all()
-    form.group.choices = [('', '-- 暂不加入 --')] + [(g[0], g[0]) for g in groups]
+    from app.models.user import Group
+    all_groups = Group.query.order_by(Group.name).all()
+    form.group.choices = [('', '-- 暂不加入 --')] + [(g.name, g.name) for g in all_groups]
 
     if form.validate_on_submit():
         eid = form.employee_id.data.strip().lower()
@@ -111,23 +111,23 @@ def register():
 def profile():
     form = ProfileForm(obj=current_user)
 
-    roles = Role.query.filter(Role.name != 'Admin').order_by(Role.id).all()
+    hidden = set(current_app.config.get('HIDDEN_ROLES', []) + ['Admin'])
+    roles = Role.query.filter(Role.name.notin_(hidden)).order_by(Role.id).all()
     form.role_ids.choices = [(r.id, r.name) for r in roles]
     if not form.is_submitted():
-        form.role_ids.data = [r.id for r in current_user.roles if r.name != 'Admin']
+        form.role_ids.data = [r.id for r in current_user.roles if r.name not in hidden]
 
-    groups = db.session.query(User.group).filter(
-        User.group.isnot(None), User.group != ''
-    ).distinct().order_by(User.group).all()
-    form.group.choices = [('', '-- 无 --')] + [(g[0], g[0]) for g in groups]
+    from app.models.user import Group
+    all_groups = Group.query.order_by(Group.name).all()
+    form.group.choices = [('', '-- 无 --')] + [(g.name, g.name) for g in all_groups]
 
     if form.validate_on_submit():
         current_user.name = form.name.data
         current_user.pinyin = to_pinyin(form.name.data)
-        # Keep Admin if user already has it, add selected roles
-        admin_roles = [r for r in current_user.roles if r.name == 'Admin']
+        # Keep Admin and hidden roles, add user-selected roles
+        kept_roles = [r for r in current_user.roles if r.name in hidden]
         selected_roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
-        current_user.roles = admin_roles + selected_roles
+        current_user.roles = kept_roles + selected_roles
         current_user.group = form.group.data or None
         db.session.commit()
         flash('个人信息已更新', 'success')

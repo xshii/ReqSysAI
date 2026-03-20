@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}风险管理 · {{ project.name }} - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>风险管理 · {{ project.name }}</h4>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg"></i> 登记风险</button>
+</div>
+
+<!-- Filters -->
+<div class="d-flex gap-2 mb-3">
+    <a href="?status=&severity=" class="btn btn-sm {% if not cur_status and not cur_severity %}btn-primary{% else %}btn-outline-secondary{% endif %}">全部</a>
+    <a href="?status=open" class="btn btn-sm {% if cur_status == 'open' %}btn-danger{% else %}btn-outline-danger{% endif %}">未解决</a>
+    <a href="?status=resolved" class="btn btn-sm {% if cur_status == 'resolved' %}btn-success{% else %}btn-outline-success{% endif %}">已解决</a>
+    <span class="border-start ms-1 ps-2"></span>
+    <a href="?severity=high" class="btn btn-sm {% if cur_severity == 'high' %}btn-danger{% else %}btn-outline-danger{% endif %}">高</a>
+    <a href="?severity=medium" class="btn btn-sm {% if cur_severity == 'medium' %}btn-warning{% else %}btn-outline-warning{% endif %}">中</a>
+    <a href="?severity=low" class="btn btn-sm {% if cur_severity == 'low' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">低</a>
+</div>
+
+{% if risks %}
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>风险</th>
+                <th>严重程度</th>
+                <th>状态</th>
+                <th>责任人</th>
+                <th>跟踪人</th>
+                <th>关联需求</th>
+                <th>预计闭环</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for r in risks %}
+        <tr class="{{ 'table-danger bg-opacity-10' if r.is_overdue else '' }}">
+            <td>
+                <div>{{ r.title }}</div>
+                {% if r.description %}<div class="text-muted small">{{ r.description[:80] }}{% if r.description|length > 80 %}...{% endif %}</div>{% endif %}
+                {% if r.resolution %}<div class="text-success small"><i class="bi bi-check-circle"></i> {{ r.resolution }}</div>{% endif %}
+            </td>
+            <td><span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span></td>
+            <td>
+                <span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
+                {% if r.is_overdue %}<span class="badge bg-danger">超期</span>{% endif %}
+            </td>
+            <td>{{ r.owner or '-' }}</td>
+            <td>{{ r.tracker.name if r.tracker else '-' }}</td>
+            <td>{% if r.requirement %}<span class="small">{{ r.requirement.number }}</span>{% else %}-{% endif %}</td>
+            <td class="small {{ 'text-danger fw-bold' if r.is_overdue else '' }}">{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
+            <td>
+                {% if r.status == 'open' %}
+                <button class="btn btn-sm btn-outline-success py-0" data-bs-toggle="modal" data-bs-target="#resolveModal" onclick="setResolveId({{ r.id }})">解决</button>
+                {% elif r.status == 'resolved' %}
+                <form method="POST" action="{{ url_for('project.risk_close', risk_id=r.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary py-0">关闭</button>
+                </form>
+                {% else %}
+                <form method="POST" action="{{ url_for('project.risk_reopen', risk_id=r.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-warning py-0">重开</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">暂无风险记录</div>
+{% endif %}
+
+<!-- 登记风险弹窗 -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('project.risk_add', project_id=project.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">登记风险</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">风险标题 <span class="text-danger">*</span></label>
+                        <input type="text" name="title" class="form-control" required placeholder="简要描述风险">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">详细描述</label>
+                        <textarea name="description" class="form-control form-control-sm" rows="2" placeholder="影响范围、原因分析等"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">严重程度</label>
+                            <select name="severity" class="form-select form-select-sm">
+                                <option value="high">高</option>
+                                <option value="medium" selected>中</option>
+                                <option value="low">低</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">预计闭环 <span class="text-danger">*</span></label>
+                            <input type="date" name="due_date" class="form-control form-control-sm" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">责任人（可填外部人员）</label>
+                            <input type="text" name="owner" class="form-control form-control-sm" placeholder="姓名">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">跟踪人</label>
+                            <select name="tracker_id" class="form-select form-select-sm" id="trackerId">
+                                <option value="">选择跟踪人</option>
+                                {% for u in users %}
+                                <option value="{{ u.id }}">{{ u.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3 position-relative">
+                        <label class="form-label">关联子需求</label>
+                        <input type="hidden" name="requirement_id" id="reqIdHidden" value="">
+                        <input type="text" class="form-control form-control-sm" id="reqSearchInput" autocomplete="off" placeholder="输入编号或标题搜索，Tab 选中">
+                        <div class="list-group position-absolute shadow-sm d-none" id="reqSearchList" style="z-index:1060;max-height:180px;overflow-y:auto;width:100%;">
+                            {% for r in reqs %}
+                            <a href="#" class="list-group-item list-group-item-action py-1 small req-search-opt"
+                               data-id="{{ r.id }}" data-assignee="{{ r.assignee_id or '' }}"
+                               data-text="{{ r.number }} {{ r.title[:30] }}{% if r.assignee %} ({{ r.assignee.name }}){% endif %}">
+                                {{ r.number }} {{ r.title[:30] }}{% if r.assignee %} <span class="text-muted">({{ r.assignee.name }})</span>{% endif %}
+                            </a>
+                            {% endfor %}
+                        </div>
+                        <div class="form-text">选择子需求后自动设置跟踪人为需求负责人</div>
+                    </div>
+                </div>
+                <div class="modal-footer py-1">
+                    <button type="submit" class="btn btn-sm btn-primary">登记</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 解决风险弹窗 -->
+<div class="modal fade" id="resolveModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="resolveForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">解决风险</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <label class="form-label">解决方案 <span class="text-danger">*</span></label>
+                    <textarea name="resolution" class="form-control" rows="3" required placeholder="描述如何解决的"></textarea>
+                </div>
+                <div class="modal-footer py-1">
+                    <button type="submit" class="btn btn-sm btn-success">确认解决</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function setResolveId(id) {
+    document.getElementById('resolveForm').action = '/projects/risks/' + id + '/resolve';
+}
+
+/* Requirement search with Tab completion */
+var reqInput = document.getElementById('reqSearchInput');
+var reqList = document.getElementById('reqSearchList');
+var reqHidden = document.getElementById('reqIdHidden');
+var reqOpts = reqList.querySelectorAll('.req-search-opt');
+var reqHighlight = -1;
+
+reqInput.addEventListener('input', function() {
+    var q = reqInput.value.toLowerCase();
+    reqHighlight = -1;
+    var visible = [];
+    reqOpts.forEach(function(o) {
+        var match = o.dataset.text.toLowerCase().includes(q);
+        o.style.display = match ? '' : 'none';
+        o.classList.remove('active');
+        if (match) visible.push(o);
+    });
+    reqList.classList.toggle('d-none', visible.length === 0 && q.length === 0);
+    if (visible.length > 0) reqList.classList.remove('d-none');
+});
+
+reqInput.addEventListener('focus', function() {
+    if (reqInput.value === '') {
+        reqOpts.forEach(function(o) { o.style.display = ''; });
+    }
+    reqList.classList.remove('d-none');
+});
+
+reqInput.addEventListener('keydown', function(e) {
+    var visible = Array.from(reqOpts).filter(function(o) { return o.style.display !== 'none'; });
+    if (e.key === 'Tab' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (visible.length === 0) return;
+        e.preventDefault();
+        if (e.key === 'ArrowUp') reqHighlight = Math.max(0, reqHighlight - 1);
+        else reqHighlight = Math.min(visible.length - 1, reqHighlight + 1);
+        visible.forEach(function(o, i) { o.classList.toggle('active', i === reqHighlight); });
+        if (e.key === 'Tab' && reqHighlight >= 0) selectReqOpt(visible[reqHighlight]);
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (reqHighlight >= 0 && visible[reqHighlight]) selectReqOpt(visible[reqHighlight]);
+    }
+});
+
+function selectReqOpt(o) {
+    reqHidden.value = o.dataset.id;
+    reqInput.value = o.dataset.text;
+    reqList.classList.add('d-none');
+    reqHighlight = -1;
+    if (o.dataset.assignee) document.getElementById('trackerId').value = o.dataset.assignee;
+}
+
+reqOpts.forEach(function(o) {
+    o.addEventListener('click', function(e) { e.preventDefault(); selectReqOpt(o); });
+});
+
+document.addEventListener('click', function(e) {
+    if (!reqInput.contains(e.target) && !reqList.contains(e.target)) reqList.classList.add('d-none');
+});
+
+/* Clear requirement */
+reqInput.addEventListener('input', function() {
+    if (reqInput.value.trim() === '') { reqHidden.value = ''; }
+});
+</script>
+{% endblock %}

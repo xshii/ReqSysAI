@@ -3,21 +3,21 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h4>统计报表</h4>
-    <a href="{{ url_for('dashboard.stats_export', week=offset, group=cur_group) }}" class="btn btn-sm btn-outline-success">
+    <h4>统计报表{% if cur_project %} · {{ cur_project.name }}{% endif %}</h4>
+    <a href="{{ url_for('dashboard.stats_export', week=offset, group=cur_group, project_id=cur_project_id) }}" class="btn btn-sm btn-outline-success">
         <i class="bi bi-download"></i> 导出 Excel
     </a>
 </div>
 
 <!-- Week selector -->
 <div class="d-flex align-items-center gap-2 mb-4">
-    <a href="?week={{ offset - 1 }}&group={{ cur_group }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
+    <a href="?week={{ offset - 1 }}&group={{ cur_group }}&project_id={{ cur_project_id }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
     <span class="fw-bold">{{ monday.strftime('%Y-%m-%d') }} ~ {{ sunday.strftime('%Y-%m-%d') }}</span>
     {% if offset < 0 %}
-    <a href="?week={{ offset + 1 }}&group={{ cur_group }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
+    <a href="?week={{ offset + 1 }}&group={{ cur_group }}&project_id={{ cur_project_id }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
     {% endif %}
     {% if offset != 0 %}
-    <a href="?week=0&group={{ cur_group }}" class="btn btn-sm btn-outline-primary">本周</a>
+    <a href="?week=0&group={{ cur_group }}&project_id={{ cur_project_id }}" class="btn btn-sm btn-outline-primary">本周</a>
     {% endif %}
 </div>
 

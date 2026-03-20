@@ -1,48 +1,289 @@
 {% extends "base.html" %}
-{% block title %}AI 周报 - 研发协作平台{% endblock %}
+{% block title %}项目周报{% if cur_project %} · {{ cur_project.name }}{% endif %} - 研发协作平台{% endblock %}
+
+{% block extra_css %}
+<style>
+.report-section { margin-bottom: 1.5rem; }
+.report-section h6 { background: #f0f4ff; padding: 6px 12px; border-left: 3px solid #4a6cf7; margin-bottom: 0.5rem; }
+.report-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.report-table th { background: #f8f9fa; font-weight: 600; }
+.report-table th, .report-table td { border: 1px solid #dee2e6; padding: 5px 10px; }
+.report-header { background: #4a6cf7; color: white; text-align: center; padding: 10px; font-size: 1.1rem; font-weight: bold; border-radius: 6px 6px 0 0; }
+.report-meta { background: #f0f4ff; text-align: center; padding: 6px; font-size: 0.85rem; border-bottom: 1px solid #dee2e6; }
+.risk-item { color: #dc3545; }
+</style>
+{% endblock %}
 
 {% block content %}
-<h4 class="mb-4">AI 周报</h4>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>项目周报{% if cur_project %} · {{ cur_project.name }}{% endif %}</h4>
+    {% if report_data %}
+    <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-primary" onclick="copyRichText()"><i class="bi bi-envelope"></i> 复制富文本</button>
+        {% if report_data %}
+        <form method="POST" action="{{ url_for('dashboard.weekly_report_export', week=offset, project_id=cur_project_id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="ai_summary" value="{{ report_data.ai.summary }}">
+            <input type="hidden" name="ai_risks" value="{{ report_data.ai.risks | join('||') }}">
+            <input type="hidden" name="ai_plan" value="{{ report_data.ai.plan | join('||') }}">
+            <button type="submit" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出 Excel</button>
+        </form>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
 
 <!-- Week selector -->
 <div class="d-flex align-items-center gap-2 mb-4">
-    <a href="?week={{ offset - 1 }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
+    <a href="?week={{ offset - 1 }}&project_id={{ cur_project_id }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
     <span class="fw-bold">{{ monday.strftime('%Y-%m-%d') }} ~ {{ sunday.strftime('%Y-%m-%d') }}</span>
     {% if offset < 0 %}
-    <a href="?week={{ offset + 1 }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
+    <a href="?week={{ offset + 1 }}&project_id={{ cur_project_id }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
     {% endif %}
     {% if offset != 0 %}
-    <a href="?week=0" class="btn btn-sm btn-outline-primary">本周</a>
+    <a href="?week=0&project_id={{ cur_project_id }}" class="btn btn-sm btn-outline-primary">本周</a>
     {% endif %}
 </div>
 
-{% if report %}
-<div class="card">
-    <div class="card-header d-flex justify-content-between">
-        <span>AI 生成周报</span>
-        <button class="btn btn-sm btn-outline-secondary" onclick="navigator.clipboard.writeText(document.getElementById('report-content').innerText).then(function(){alert('已复制')})">
-            <i class="bi bi-clipboard"></i> 复制
-        </button>
-    </div>
-    <div class="card-body" id="report-content" style="white-space:pre-wrap;">{{ report }}</div>
+{% if report_data %}
+{% set ai = report_data.ai %}
+<div id="report-content">
+
+<!-- Row 1: Title -->
+<div class="report-header">{{ report_data.project_name }} 周报（{{ monday.strftime('%m-%d') }} ~ {{ sunday.strftime('%m-%d') }}）</div>
+
+<!-- Row 2: Publisher / Reviewer -->
+<div class="report-meta">
+    发布人：{{ current_user.name }}　｜　审核人：{{ report_data.reviewer }}
 </div>
 
-<form method="POST" action="?week={{ offset }}" class="mt-3">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="btn btn-outline-primary" id="btn-gen">
-        <i class="bi bi-arrow-clockwise"></i> 重新生成
-    </button>
-</form>
+<!-- Row 3: Milestones -->
+<div class="report-section mt-3">
+    <h6>里程碑</h6>
+    {% if report_data.milestones %}
+    <div class="mb-2" id="ms-chart"></div>
+    <table class="report-table">
+        <thead><tr><th>里程碑</th><th>状态</th><th>截止日期</th></tr></thead>
+        <tbody>
+        {% for ms in report_data.milestones %}
+        <tr>
+            <td>{{ ms.name }}</td>
+            <td><span class="badge bg-{{ 'success' if ms.status == 'completed' else ('danger' if ms.due_date and ms.due_date < report_data.today else 'primary') }}">
+                {{ '已完成' if ms.status == 'completed' else ('超期' if ms.due_date and ms.due_date < report_data.today else '进行中') }}</span></td>
+            <td>{{ ms.due_date.strftime('%Y-%m-%d') if ms.due_date else '-' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="alert alert-warning py-2 mb-0"><i class="bi bi-exclamation-triangle"></i> 缺失里程碑</div>
+    {% endif %}
+</div>
+
+<!-- Row 4: Summary + High Risk -->
+<div class="report-section">
+    <h6>整体进展</h6>
+    <p class="ps-2 mb-1">{{ ai.summary }}</p>
+    {% set high_risks = report_data.open_risks | selectattr('severity', 'equalto', 'high') | list %}
+    {% if high_risks %}
+    <div class="alert alert-danger py-2 mb-0 small">
+        <strong><i class="bi bi-exclamation-triangle-fill"></i> 高风险通报：</strong>
+        {% for r in high_risks %}{{ r.title }}{% if not loop.last %}；{% endif %}{% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- Row 5: Next Week Plan -->
+<div class="report-section">
+    <h6>下周计划</h6>
+    {% if ai.plan %}
+    <ul class="ps-3 mb-0">
+    {% for p in ai.plan %}<li>{{ p }}</li>{% endfor %}
+    </ul>
+    {% else %}
+    <p class="ps-2 text-muted mb-0">暂无</p>
+    {% endif %}
+</div>
+
+<!-- Row 6: Risks & Issues -->
+<div class="report-section">
+    <h6>风险 & 问题</h6>
+    {% if report_data.open_risks %}
+    <table class="report-table">
+        <thead><tr><th>风险</th><th>严重程度</th><th>责任人</th><th>跟踪人</th><th>预计闭环</th></tr></thead>
+        <tbody>
+        {% for r in report_data.open_risks %}
+        <tr>
+            <td>{{ r.title }}{% if r.is_overdue %} <span class="badge bg-danger">超期</span>{% endif %}</td>
+            <td><span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span></td>
+            <td>{{ r.owner or '-' }}</td>
+            <td>{{ r.tracker.name if r.tracker else '-' }}</td>
+            <td class="{{ 'text-danger fw-bold' if r.is_overdue else '' }}">{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="ps-2 text-muted mb-0">暂无未解决的风险</p>
+    {% endif %}
+    {% if ai.risks %}
+    <div class="mt-2 ps-2 small text-muted">
+        <strong>AI 分析：</strong>{% for r in ai.risks %}{{ r }}{% if not loop.last %}；{% endif %}{% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- Row 7: Requirement Stats + List -->
+{% if report_data.all_reqs %}
+{% set _total = report_data.all_reqs | length %}
+{% set _done = report_data.all_reqs | selectattr('status', 'in', ['done','closed']) | list | length %}
+{% set _dev = report_data.all_reqs | selectattr('status', 'equalto', 'in_dev') | list | length %}
+{% set _test = report_data.all_reqs | selectattr('status', 'equalto', 'in_test') | list | length %}
+{% set _pending = _total - _done - _dev - _test %}
+{% set _overdue = report_data.all_reqs | selectattr('due_date', 'defined') | selectattr('status', 'ne', 'done') | list %}
+{% set _overdue_count = [] %}
+{% for r in _overdue %}{% if r.due_date and r.due_date < report_data.today and r.status not in ('done','closed') %}{% if _overdue_count.append(1) %}{% endif %}{% endif %}{% endfor %}
+{% set _est_total = report_data.all_reqs | map(attribute='estimate_days') | select('number') | sum %}
+<div class="report-section">
+    <h6>需求统计</h6>
+    <div class="d-flex gap-3 flex-wrap ps-2 mb-2">
+        <div class="text-center">
+            <div class="fs-4 fw-bold">{{ _total }}</div>
+            <div class="small text-muted">总需求</div>
+        </div>
+        <div class="text-center">
+            <div class="fs-4 fw-bold text-success">{{ _done }}</div>
+            <div class="small text-muted">已完成</div>
+        </div>
+        <div class="text-center">
+            <div class="fs-4 fw-bold text-primary">{{ _dev }}</div>
+            <div class="small text-muted">开发中</div>
+        </div>
+        <div class="text-center">
+            <div class="fs-4 fw-bold text-warning">{{ _test }}</div>
+            <div class="small text-muted">测试中</div>
+        </div>
+        <div class="text-center">
+            <div class="fs-4 fw-bold text-secondary">{{ _pending }}</div>
+            <div class="small text-muted">待开发</div>
+        </div>
+        <div class="text-center">
+            <div class="fs-4 fw-bold text-danger">{{ _overdue_count | length }}</div>
+            <div class="small text-muted">超期</div>
+        </div>
+        <div class="border-start ps-3 text-center">
+            <div class="fs-4 fw-bold">{{ _est_total | round(1) }}</div>
+            <div class="small text-muted">总人天</div>
+        </div>
+        <div class="text-center">
+            <div class="fs-4 fw-bold text-info">{{ ((_done / _total * 100) | round | int) if _total else 0 }}%</div>
+            <div class="small text-muted">完成率</div>
+        </div>
+    </div>
+    <div class="progress mb-2" style="height:8px;">
+        <div class="progress-bar bg-success" style="width:{{ (_done / _total * 100) if _total else 0 }}%"></div>
+        <div class="progress-bar bg-primary" style="width:{{ (_dev / _total * 100) if _total else 0 }}%"></div>
+        <div class="progress-bar bg-warning" style="width:{{ (_test / _total * 100) if _total else 0 }}%"></div>
+    </div>
+</div>
+
+<div class="report-section">
+    <h6>需求列表</h6>
+    <table class="report-table">
+        <thead><tr><th>编号</th><th>标题</th><th>状态</th><th>负责人</th><th>预估</th><th>预期完成</th><th>本周投入</th></tr></thead>
+        <tbody>
+        {% for r in report_data.all_reqs %}
+        {% set inv = report_data.req_investment.get(r.number) %}
+        <tr>
+            <td>{{ r.number }}</td>
+            <td>{{ r.title }}{% if r.children %} <span class="text-muted small">({{ r.children | selectattr('status', 'in', ['done','closed']) | list | length }}/{{ r.children | length }})</span>{% endif %}</td>
+            <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
+                {% if r.due_date and r.due_date < report_data.today and r.status not in ('done','closed') %}<span class="badge bg-danger">超期</span>{% endif %}</td>
+            <td>{{ r.assignee.name if r.assignee else '-' }}</td>
+            <td>{{ r.estimate_days or '-' }}</td>
+            <td>{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
+            <td>{% if inv %}{{ inv.people | length }}人·{{ inv.days }}天{% else %}-{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Row 8: People Map -->
+{% if report_data.people_map %}
+<div class="report-section">
+    <h6>人力地图</h6>
+    <table class="report-table">
+        <thead>
+            <tr>
+                <th>姓名</th>
+                {% for rnum in report_data.people_map_reqs %}<th class="small">{{ rnum }}</th>{% endfor %}
+                <th>合计</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for name, row in report_data.people_map.items() %}
+        <tr>
+            <td>{{ name }}</td>
+            {% for rnum in report_data.people_map_reqs %}
+            <td class="text-center small">{% if row.get(rnum) %}{{ row[rnum] }}{% else %}-{% endif %}</td>
+            {% endfor %}
+            <td class="fw-bold text-center">{{ row.get('_total', 0) }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+</div><!-- /report-content -->
+
+<!-- Editable fields -->
+<div class="card mt-3">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-pencil"></i> 编辑周报</span>
+        {% if saved_report %}<span class="text-muted small">上次保存：{{ saved_report.updated_at.strftime('%m-%d %H:%M') }}</span>{% endif %}
+    </div>
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('dashboard.weekly_report_save') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="project_id" value="{{ cur_project_id }}">
+            <input type="hidden" name="week_start" value="{{ monday.strftime('%Y-%m-%d') }}">
+            <input type="hidden" name="offset" value="{{ offset }}">
+            <div class="mb-2">
+                <label class="form-label small fw-bold">整体进展</label>
+                <input type="text" name="summary" class="form-control form-control-sm" value="{{ ai.summary }}">
+            </div>
+            <div class="mb-2">
+                <label class="form-label small fw-bold">风险与问题（每行一条）</label>
+                <textarea name="risks" class="form-control form-control-sm" rows="3">{% for r in ai.risks %}{{ r }}
+{% endfor %}</textarea>
+            </div>
+            <div class="mb-2">
+                <label class="form-label small fw-bold">下周计划（每行一条）</label>
+                <textarea name="plan" class="form-control form-control-sm" rows="3">{% for p in ai.plan %}{{ p }}
+{% endfor %}</textarea>
+            </div>
+            <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> 保存周报</button>
+        </form>
+    </div>
+</div>
+
+<div class="mt-3">
+    <form method="POST" action="?week={{ offset }}&project_id={{ cur_project_id }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-primary" id="btn-gen"><i class="bi bi-arrow-clockwise"></i> 重新生成</button>
+    </form>
+</div>
 
 {% else %}
 <div class="card">
     <div class="card-body text-center py-5">
-        <p class="text-muted mb-3">基于本周 Todo 和需求数据，AI 自动生成周报</p>
-        <form method="POST" action="?week={{ offset }}">
+        <p class="text-muted mb-3">基于本周数据自动生成{% if cur_project %} {{ cur_project.name }} {% endif %}项目周报</p>
+        <form method="POST" action="?week={{ offset }}&project_id={{ cur_project_id }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-primary" id="btn-gen">
-                <i class="bi bi-robot"></i> 生成周报
-            </button>
+            <button type="submit" class="btn btn-primary" id="btn-gen"><i class="bi bi-robot"></i> 生成周报</button>
         </form>
     </div>
 </div>
@@ -51,10 +292,75 @@
 
 {% block extra_js %}
 <script>
-document.getElementById('btn-gen').closest('form').addEventListener('submit', function() {
-    var btn = document.getElementById('btn-gen');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> AI 生成中...';
-});
+var genBtn = document.getElementById('btn-gen');
+if (genBtn) {
+    genBtn.closest('form').addEventListener('submit', function() {
+        genBtn.disabled = true;
+        genBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> AI 分析中...';
+    });
+}
+
+function copyRichText() {
+    var el = document.getElementById('report-content');
+    if (!el) return;
+    navigator.clipboard.write([
+        new ClipboardItem({
+            'text/html': new Blob([el.innerHTML], {type: 'text/html'}),
+            'text/plain': new Blob([el.innerText], {type: 'text/plain'})
+        })
+    ]).then(function() { alert('已复制富文本，可直接粘贴到 Outlook'); });
+}
+
+/* Milestone timeline chart */
+(function() {
+    var container = document.getElementById('ms-chart');
+    if (!container) return;
+
+    {% if report_data and report_data.milestones %}
+    var milestones = [
+        {% for ms in report_data.milestones %}
+        {name: '{{ ms.name }}', due: '{{ ms.due_date.strftime("%Y-%m-%d") if ms.due_date else "" }}', status: '{{ ms.status }}'},
+        {% endfor %}
+    ];
+    var today = '{{ report_data.today.strftime("%Y-%m-%d") }}';
+    {% else %}
+    return;
+    {% endif %}
+
+    if (milestones.length === 0) return;
+    var todayTs = new Date(today).getTime();
+    var dates = milestones.filter(function(m) { return m.due; }).map(function(m) { return new Date(m.due).getTime(); });
+    if (dates.length === 0) return;
+    var minTs = Math.min.apply(null, dates.concat([todayTs]));
+    var maxTs = Math.max.apply(null, dates.concat([todayTs]));
+    var pad = (maxTs - minTs) * 0.1 || 86400000 * 7;
+    minTs -= pad; maxTs += pad;
+    var range = maxTs - minTs;
+    var W = container.offsetWidth || 700, H = 120, PL = 20, PR = 20, TY = 60;
+    var svg = '<svg width="' + W + '" height="' + H + '" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif;">';
+    svg += '<line x1="' + PL + '" y1="' + TY + '" x2="' + (W-PR) + '" y2="' + TY + '" stroke="#CBD5E0" stroke-width="2"/>';
+    var todayX = PL + (todayTs - minTs) / range * (W - PL - PR);
+    svg += '<line x1="' + todayX + '" y1="20" x2="' + todayX + '" y2="' + (TY+20) + '" stroke="#E53E3E" stroke-width="2" stroke-dasharray="4,3"/>';
+    svg += '<text x="' + todayX + '" y="15" text-anchor="middle" fill="#E53E3E" font-size="10" font-weight="bold">今天</text>';
+    var alt = false;
+    milestones.forEach(function(ms) {
+        if (!ms.due) return;
+        var ts = new Date(ms.due).getTime();
+        var x = PL + (ts - minTs) / range * (W - PL - PR);
+        var color = ms.status === 'completed' ? '#38A169' : (ts < todayTs ? '#E53E3E' : '#4A6CF7');
+        var fill = ms.status === 'completed' ? color : 'white';
+        svg += '<polygon points="' + x + ',' + (TY-8) + ' ' + (x+8) + ',' + TY + ' ' + x + ',' + (TY+8) + ' ' + (x-8) + ',' + TY + '" fill="' + fill + '" stroke="' + color + '" stroke-width="2"/>';
+        var ly = alt ? TY + 28 : TY - 18;
+        var lineY1 = alt ? TY + 8 : TY - 8;
+        var lineY2 = alt ? TY + 18 : TY - 12;
+        svg += '<line x1="' + x + '" y1="' + lineY1 + '" x2="' + x + '" y2="' + lineY2 + '" stroke="' + color + '" stroke-width="1"/>';
+        svg += '<text x="' + x + '" y="' + ly + '" text-anchor="middle" fill="#2D3748" font-size="10">' + ms.name + '</text>';
+        var dateLy = alt ? ly + 12 : ly - 12;
+        svg += '<text x="' + x + '" y="' + dateLy + '" text-anchor="middle" fill="#718096" font-size="9">' + ms.due.substring(5) + '</text>';
+        alt = !alt;
+    });
+    svg += '</svg>';
+    container.innerHTML = svg;
+})();
 </script>
 {% endblock %}

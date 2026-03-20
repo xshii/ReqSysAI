@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}个人周报 - 研发协作平台{% endblock %}
+
+{% block content %}
+<h4 class="mb-3">个人周报 · {{ current_user.name }}</h4>
+
+<div class="d-flex align-items-center gap-2 mb-4">
+    <a href="?week={{ offset - 1 }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
+    <span class="fw-bold">{{ monday.strftime('%Y-%m-%d') }} ~ {{ sunday.strftime('%Y-%m-%d') }}</span>
+    {% if offset < 0 %}
+    <a href="?week={{ offset + 1 }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
+    {% endif %}
+    {% if offset != 0 %}
+    <a href="?week=0" class="btn btn-sm btn-outline-primary">本周</a>
+    {% endif %}
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <!-- Done -->
+        <div class="card mb-3">
+            <div class="card-header py-2"><i class="bi bi-check-circle text-success"></i> 已完成 <span class="badge bg-success">{{ my_done | length }}</span></div>
+            <div class="card-body py-2">
+            {% for t in my_done %}
+                <div class="mb-1">
+                    <span>{{ t.title }}</span>
+                    {% for r in t.requirements %}<span class="badge bg-light text-dark small">{{ r.number }}</span>{% endfor %}
+                </div>
+            {% else %}<p class="text-muted small mb-0">暂无</p>{% endfor %}
+            </div>
+        </div>
+
+        <!-- Active -->
+        <div class="card mb-3">
+            <div class="card-header py-2"><i class="bi bi-circle text-primary"></i> 进行中 <span class="badge bg-primary">{{ my_active | length }}</span></div>
+            <div class="card-body py-2">
+            {% for t in my_active %}
+                <div class="mb-1">
+                    <span>{{ t.title }}</span>
+                    {% for r in t.requirements %}<span class="badge bg-light text-dark small">{{ r.number }}</span>{% endfor %}
+                </div>
+            {% else %}<p class="text-muted small mb-0">暂无</p>{% endfor %}
+            </div>
+        </div>
+
+        <!-- My requirements -->
+        {% if my_reqs %}
+        <div class="card mb-3">
+            <div class="card-header py-2">参与的需求</div>
+            <div class="card-body py-2">
+            {% for r in my_reqs %}
+                <div class="d-flex justify-content-between small mb-1">
+                    <span>{{ r.number }} {{ r.title }}</span>
+                    <span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
+                </div>
+            {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-6">
+        {% if report %}
+        <div class="card">
+            <div class="card-header py-2 d-flex justify-content-between">
+                <span><i class="bi bi-robot"></i> AI 个人周报</span>
+                <button class="btn btn-sm btn-outline-secondary py-0" onclick="navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([document.getElementById('my-report').innerHTML],{type:'text/html'}),'text/plain':new Blob([document.getElementById('my-report').innerText],{type:'text/plain'})})]).then(function(){alert('已复制')})">
+                    <i class="bi bi-clipboard"></i> 复制
+                </button>
+            </div>
+            <div class="card-body" id="my-report">{{ report | safe }}</div>
+        </div>
+        <form method="POST" action="?week={{ offset }}" class="mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-primary" id="btn-gen"><i class="bi bi-arrow-clockwise"></i> 重新生成</button>
+        </form>
+        {% else %}
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <p class="text-muted">基于本周 Todo 数据生成个人周报</p>
+                <form method="POST" action="?week={{ offset }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-primary" id="btn-gen"><i class="bi bi-robot"></i> 生成个人周报</button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var genBtn = document.getElementById('btn-gen');
+if (genBtn) {
+    genBtn.closest('form').addEventListener('submit', function() {
+        genBtn.disabled = true;
+        genBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 生成中...';
+    });
+}
+</script>
+{% endblock %}

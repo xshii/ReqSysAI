@@ -15,38 +15,10 @@ DONE_KEEP_DAYS = 7
 
 # ---- Group management ----
 
-@todo_bp.route('/groups', methods=['GET', 'POST'])
+@todo_bp.route('/groups')
 @login_required
 def manage_groups():
-    if request.method == 'POST':
-        action = request.form.get('action')
-        if action == 'create':
-            name = request.form.get('group_name', '').strip()
-            if not name:
-                flash('请输入团队名称', 'danger')
-            elif User.query.filter_by(group=name).first():
-                flash(f'团队 {name} 已存在', 'warning')
-            else:
-                current_user.group = name
-                db.session.commit()
-                flash(f'已创建并加入团队 {name}', 'success')
-        elif action == 'join':
-            name = request.form.get('group_name', '').strip()
-            if name:
-                current_user.group = name
-                db.session.commit()
-                flash(f'已加入团队 {name}', 'success')
-        elif action == 'leave':
-            current_user.group = None
-            db.session.commit()
-            flash('已退出团队', 'success')
-        return redirect(url_for('todo.manage_groups'))
-
-    groups = db.session.query(
-        User.group, db.func.count(User.id)
-    ).filter(User.group.isnot(None), User.group != '', User.is_active == True)\
-     .group_by(User.group).order_by(User.group).all()
-    return render_template('todo/groups.html', groups=groups)
+    return redirect(url_for('admin.group_list'))
 
 
 # ---- Todo CRUD ----
@@ -361,11 +333,13 @@ def team():
 
     today = date.today()
     week_ago = today - timedelta(days=DONE_KEEP_DAYS)
-    cur_group = request.args.get('group', current_user.group or '')
+    from app.models.user import Group
+    groups = [g.name for g in Group.query.order_by(Group.name).all()]
 
-    groups = db.session.query(User.group).filter(User.group.isnot(None), User.group != '')\
-        .distinct().order_by(User.group).all()
-    groups = [g[0] for g in groups]
+    cur_group = request.args.get('group', current_user.group or '')
+    # Default to first group if none selected
+    if not cur_group and groups:
+        cur_group = groups[0]
 
     user_query = User.query.filter_by(is_active=True)
     if cur_group:
@@ -400,9 +374,35 @@ def team():
     all_users_list = User.query.filter(User.is_active == True, User.id != current_user.id)\
         .order_by(User.name).all()
 
+    # Due date options: weekday -> today/tomorrow; weekend -> today..monday
+    weekday_names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+    due_options = []
+    dow = today.weekday()  # 0=Mon ... 6=Sun
+    if dow < 5:  # weekday
+        due_options.append((today, f'今天 ({today.strftime("%m-%d")} {weekday_names[dow]})'))
+        tmr = today + timedelta(days=1)
+        due_options.append((tmr, f'明天 ({tmr.strftime("%m-%d")} {weekday_names[tmr.weekday()]})'))
+    else:  # weekend: show today through next Monday
+        d = today
+        while d.weekday() != 0 or d == today:  # until Monday (inclusive)
+            label = '今天' if d == today else weekday_names[d.weekday()]
+            due_options.append((d, f'{label} ({d.strftime("%m-%d")} {weekday_names[d.weekday()]})'))
+            d += timedelta(days=1)
+            if d.weekday() == 1:  # Tuesday, stop
+                break
+
+    # Help due date: next 3 workdays
+    help_due_options = []
+    d = today
+    while len(help_due_options) < 3:
+        if d.weekday() < 5:
+            label = f'{d.strftime("%m-%d")} {weekday_names[d.weekday()]}'
+            help_due_options.append((d, label))
+        d += timedelta(days=1)
+
     return render_template('todo/team.html',
         users=users, user_todos=user_todos, groups=groups,
         cur_group=cur_group, today=today, form=form,
         reqs=reqs, default_req_ids=default_req_ids, all_users=all_users_list,
-        tomorrow=today + timedelta(days=1),
+        due_options=due_options, help_due_options=help_due_options,
     )

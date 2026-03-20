@@ -1,6 +1,10 @@
+from collections import namedtuple
+
 from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
+
+TodoProgress = namedtuple('TodoProgress', 'total done')
 
 from app.requirement import requirement_bp
 from app.requirement.forms import RequirementForm, TaskForm, CommentForm
@@ -60,6 +64,21 @@ def requirement_list():
     page = request.args.get('page', 1, type=int)
     pagination = query.paginate(page=page, per_page=PER_PAGE, error_out=False)
 
+    # Todo progress per requirement
+    from app.models.todo import Todo, todo_requirements
+    req_ids = [r.id for r in pagination.items]
+    todo_counts = {}
+    if req_ids:
+        rows = db.session.query(
+            todo_requirements.c.requirement_id,
+            db.func.count(Todo.id),
+            db.func.sum(db.case((Todo.status == 'done', 1), else_=0)),
+        ).join(Todo, Todo.id == todo_requirements.c.todo_id)\
+         .filter(todo_requirements.c.requirement_id.in_(req_ids))\
+         .group_by(todo_requirements.c.requirement_id).all()
+        for rid, total, done in rows:
+            todo_counts[rid] = TodoProgress(total=total, done=int(done or 0))
+
     return render_template('requirement/list.html',
         pagination=pagination, requirements=pagination.items,
         projects=Project.query.all(),
@@ -67,6 +86,7 @@ def requirement_list():
         statuses=Requirement.STATUS_LABELS, priorities=Requirement.PRIORITY_LABELS,
         cur_status=status, cur_priority=priority, cur_project=project_id,
         cur_assignee=assignee_id, cur_search=search, cur_sort=sort,
+        todo_counts=todo_counts,
     )
 
 
@@ -83,6 +103,7 @@ def requirement_create():
             milestone_id=form.milestone_id.data or None,
             priority=form.priority.data,
             assignee_id=form.assignee_id.data or None,
+            due_date=form.due_date.data,
             estimate_days=form.estimate_days.data,
             source='manual',
             created_by=current_user.id,
@@ -90,10 +111,40 @@ def requirement_create():
         db.session.add(req)
         db.session.flush()
         _log_activity(req, 'created', f'创建了需求「{req.title}」')
+
+        # Create sub-requirements
+        sub_titles = request.form.getlist('sub_title')
+        sub_assignees = request.form.getlist('sub_assignee')
+        sub_days = request.form.getlist('sub_days')
+        for i, st in enumerate(sub_titles):
+            st = st.strip()
+            if st:
+                assignee = int(sub_assignees[i]) if i < len(sub_assignees) and sub_assignees[i] else None
+                days = float(sub_days[i]) if i < len(sub_days) and sub_days[i] else None
+                sub = Requirement(
+                    number=Requirement.generate_number(),
+                    title=st,
+                    project_id=req.project_id,
+                    milestone_id=req.milestone_id,
+                    priority=req.priority,
+                    assignee_id=assignee,
+                    estimate_days=days,
+                    parent_id=req.id,
+                    source='manual',
+                    created_by=current_user.id,
+                )
+                db.session.add(sub)
+
+        # Auto-sum sub-requirement days
+        sub_total = sum(s.estimate_days or 0 for s in db.session.new if isinstance(s, Requirement) and s.parent_id == req.id)
+        if sub_total > 0:
+            req.estimate_days = sub_total
+
         db.session.commit()
         flash(f'需求 {req.number} 创建成功', 'success')
         return redirect(url_for('requirement.requirement_detail', req_id=req.id))
-    return render_template('requirement/form.html', form=form, title='新建需求')
+    users = User.query.filter_by(is_active=True).order_by(User.name).all()
+    return render_template('requirement/form.html', form=form, title='创建需求', users=users)
 
 
 @requirement_bp.route('/<int:req_id>')
@@ -118,12 +169,14 @@ def requirement_edit(req_id):
         req.milestone_id = form.milestone_id.data or None
         req.priority = form.priority.data
         req.assignee_id = form.assignee_id.data or None
+        req.due_date = form.due_date.data
         req.estimate_days = form.estimate_days.data
         _log_activity(req, 'edited', '编辑了需求')
         db.session.commit()
         flash('需求更新成功', 'success')
         return redirect(url_for('requirement.requirement_detail', req_id=req.id))
-    return render_template('requirement/form.html', form=form, title=f'编辑需求 - {req.number}')
+    users = User.query.filter_by(is_active=True).order_by(User.name).all()
+    return render_template('requirement/form.html', form=form, title=f'编辑需求 - {req.number}', users=users)
 
 
 @requirement_bp.route('/<int:req_id>/status', methods=['POST'])

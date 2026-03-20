@@ -41,6 +41,27 @@ def create_app(config_name=None):
     # Register error handlers
     _register_error_handlers(app)
 
+    # Template filters
+    import json as _json
+    app.jinja_env.filters['from_json'] = lambda s: _json.loads(s) if s else []
+
+    # Inject sidebar groups into all templates
+    @app.context_processor
+    def inject_sidebar_groups():
+        from flask_login import current_user
+        from flask import request as req
+        if current_user.is_authenticated:
+            from app.models.user import User, Group
+            from app.models.project import Project
+            groups = [g.name for g in Group.query.order_by(Group.name).all()]
+            cur_group = req.args.get('group', current_user.group or '')
+            if not cur_group and groups:
+                cur_group = groups[0]
+            projects = Project.query.filter_by(status='active').order_by(Project.name).all()
+            return dict(sidebar_groups=groups, sidebar_cur_group=cur_group,
+                        sidebar_projects=projects)
+        return dict(sidebar_groups=[], sidebar_cur_group='', sidebar_projects=[])
+
     return app
 
 

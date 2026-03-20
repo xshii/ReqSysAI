@@ -22,6 +22,18 @@ class Role(db.Model):
         return f'<Role {self.name}>'
 
 
+class Group(db.Model):
+    """Independent group/team table. User.group stores the name string."""
+    __tablename__ = 'groups'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Group {self.name}>'
+
+
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
 
@@ -37,9 +49,15 @@ class User(UserMixin, db.Model):
 
     roles = db.relationship('Role', secondary=user_roles, backref='users', lazy='joined')
 
+    TEAM_MANAGER_ROLES = {'Admin', 'PL', 'XM', 'HR'}
+
     @property
     def is_admin(self):
         return any(r.name == 'Admin' for r in self.roles)
+
+    @property
+    def is_team_manager(self):
+        return any(r.name in self.TEAM_MANAGER_ROLES for r in self.roles)
 
     def has_role(self, *role_names):
         return any(r.name in role_names for r in self.roles)

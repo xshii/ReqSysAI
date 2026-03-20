@@ -8,25 +8,25 @@
     </a>
 </div>
 <div class="row">
-    <div class="col-md-8">
+    <div class="col-md-7">
         <div class="card">
             <div class="card-header"><h5 class="mb-0">{{ title }}</h5></div>
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" id="reqForm">
                     {{ form.hidden_tag() }}
                     <div class="mb-3">
                         <label class="form-label">{{ form.title.label.text }}</label>
-                        {{ form.title(class="form-control") }}
+                        {{ form.title(class="form-control", id="reqTitle") }}
                         {% for e in form.title.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
                     </div>
                     <div class="mb-3">
                         <label class="form-label">{{ form.description.label.text }}</label>
-                        {{ form.description(class="form-control", rows=5) }}
+                        {{ form.description(class="form-control", rows=4, id="reqDesc") }}
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">{{ form.project_id.label.text }}</label>
-                            {{ form.project_id(class="form-select") }}
+                            {{ form.project_id(class="form-select", id="reqProject") }}
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">{{ form.milestone_id.label.text }}</label>
@@ -36,21 +36,203 @@
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label class="form-label">{{ form.priority.label.text }}</label>
-                            {{ form.priority(class="form-select") }}
+                            {{ form.priority(class="form-select", id="reqPriority") }}
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">{{ form.assignee_id.label.text }}</label>
                             {{ form.assignee_id(class="form-select") }}
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">{{ form.estimate_days.label.text }}</label>
-                            {{ form.estimate_days(class="form-control") }}
+                            <label class="form-label">{{ form.due_date.label.text }} <span class="text-danger">*</span></label>
+                            {{ form.due_date(class="form-control", type="date", id="reqDueDate") }}
+                            {% for e in form.due_date.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
                         </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">{{ form.estimate_days.label.text }}</label>
+                            {{ form.estimate_days(class="form-control", id="reqDays") }}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label mb-0">子需求</label>
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="addSubReq()"><i class="bi bi-plus"></i> 添加</button>
+                        </div>
+                        <div id="subReqs"></div>
                     </div>
                     <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {{ form.submit.label.text }}</button>
                 </form>
             </div>
         </div>
     </div>
+
+    <!-- AI 解析面板 -->
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-robot"></i> AI 解析</span>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <textarea id="aiInput" class="form-control form-control-sm" rows="4" placeholder="粘贴聊天记录、会议纪要或需求描述..."></textarea>
+                </div>
+                <div class="d-flex gap-2 mb-3">
+                    <button type="button" class="btn btn-sm btn-outline-primary flex-grow-1" id="btnAiParse">
+                        <i class="bi bi-robot"></i> 解析文本
+                    </button>
+                    <label class="btn btn-sm btn-outline-secondary mb-0">
+                        <i class="bi bi-file-earmark-word"></i> 上传 .docx
+                        <input type="file" id="aiDocx" accept=".docx" class="d-none">
+                    </label>
+                </div>
+                <div id="aiResult" class="d-none">
+                    <div class="alert alert-success py-2 small mb-2">
+                        <strong>解析完成</strong> — 点击"填入表单"自动填写左侧表单
+                    </div>
+                    <div class="border rounded p-2 small mb-2" id="aiPreview"></div>
+                    <button type="button" class="btn btn-sm btn-primary" id="btnAiFill">
+                        <i class="bi bi-arrow-left-circle"></i> 填入表单
+                    </button>
+                </div>
+                <div id="aiLoading" class="d-none text-center py-3">
+                    <span class="spinner-border spinner-border-sm"></span> AI 解析中...
+                </div>
+                <div id="aiError" class="d-none">
+                    <div class="alert alert-danger py-2 small mb-0"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var csrfToken = '{{ csrf_token() }}';
+
+var userOptsTpl = '<option value="">负责人</option>{% for u in users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}';
+function addSubReq(title, days) {
+    var div = document.getElementById('subReqs');
+    var row = document.createElement('div');
+    row.className = 'input-group input-group-sm mb-1';
+    row.innerHTML = '<input type="text" name="sub_title" class="form-control" placeholder="子需求标题" value="' + (title || '').replace(/"/g, '&quot;') + '">'
+        + '<select name="sub_assignee" class="form-select" style="max-width:100px;">' + userOptsTpl + '</select>'
+        + '<input type="number" name="sub_days" class="form-control" style="max-width:70px;" placeholder="人天" step="0.5" min="0" value="' + (days || '') + '" oninput="sumSubDays()">'
+        + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove();sumSubDays()">-</button>';
+    div.appendChild(row);
+}
+
+function sumSubDays() {
+    var inputs = document.querySelectorAll('input[name="sub_days"]');
+    var total = 0, hasAny = false;
+    inputs.forEach(function(inp) {
+        if (inp.value) { total += parseFloat(inp.value) || 0; hasAny = true; }
+    });
+    if (hasAny) {
+        document.getElementById('reqDays').value = total;
+        updateDueDate(total);
+    }
+}
+
+function updateDueDate(days) {
+    if (!days || days <= 0) return;
+    var d = new Date();
+    var remaining = Math.ceil(days);
+    while (remaining > 0) {
+        d.setDate(d.getDate() + 1);
+        var dow = d.getDay();
+        if (dow !== 0 && dow !== 6) remaining--;
+    }
+    var yyyy = d.getFullYear();
+    var mm = String(d.getMonth() + 1).padStart(2, '0');
+    var dd = String(d.getDate()).padStart(2, '0');
+    document.getElementById('reqDueDate').value = yyyy + '-' + mm + '-' + dd;
+}
+
+document.getElementById('reqDays').addEventListener('input', function() {
+    var v = parseFloat(this.value);
+    if (v > 0) updateDueDate(v);
+});
+
+var aiData = null;
+
+function showAiState(state, msg) {
+    document.getElementById('aiResult').classList.toggle('d-none', state !== 'result');
+    document.getElementById('aiLoading').classList.toggle('d-none', state !== 'loading');
+    var errEl = document.getElementById('aiError');
+    errEl.classList.toggle('d-none', state !== 'error');
+    if (state === 'error') errEl.querySelector('.alert').textContent = msg || '解析失败';
+}
+
+document.getElementById('btnAiParse').addEventListener('click', function() {
+    var text = document.getElementById('aiInput').value.trim();
+    if (!text) return;
+    showAiState('loading');
+    fetch('{{ url_for("ai.api_parse") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({text: text})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) { aiData = d.result; showAiResult(); }
+        else showAiState('error', d.msg || '解析失败');
+    }).catch(function() { showAiState('error', '网络错误'); });
+});
+
+document.getElementById('aiDocx').addEventListener('change', function() {
+    var file = this.files[0];
+    if (!file) return;
+    showAiState('loading');
+    var fd = new FormData();
+    fd.append('file', file);
+    fetch('{{ url_for("ai.api_parse_docx") }}', {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrfToken},
+        body: fd
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) { aiData = d.result; showAiResult(); }
+        else showAiState('error', d.msg || '解析失败');
+    }).catch(function() { showAiState('error', '网络错误'); });
+    this.value = '';
+});
+
+function getSubTitle(st) {
+    // Support both string and {title, estimate_days} format
+    if (typeof st === 'string') return st;
+    var t = st.title || '';
+    if (st.estimate_days) t += '（' + st.estimate_days + '人天）';
+    return t;
+}
+
+function showAiResult() {
+    showAiState('result');
+    var html = '<strong>' + (aiData.title || '') + '</strong><br>';
+    html += '<span class="text-muted">' + (aiData.description || '').substring(0, 200) + '</span><br>';
+    html += '优先级: ' + (aiData.priority || '-') + ' · 预估: ' + (aiData.estimate_days || '-') + '天';
+    if (aiData.subtasks && aiData.subtasks.length) {
+        html += '<br>子需求:';
+        aiData.subtasks.forEach(function(st) { html += '<br>  · ' + getSubTitle(st); });
+    }
+    document.getElementById('aiPreview').innerHTML = html;
+}
+
+document.getElementById('btnAiFill').addEventListener('click', function() {
+    if (!aiData) return;
+    if (aiData.title) document.getElementById('reqTitle').value = aiData.title;
+    if (aiData.description) document.getElementById('reqDesc').value = aiData.description;
+    if (aiData.priority) document.getElementById('reqPriority').value = aiData.priority;
+    if (aiData.estimate_days) document.getElementById('reqDays').value = aiData.estimate_days;
+    // Fill sub-requirements
+    if (aiData.subtasks && aiData.subtasks.length) {
+        var div = document.getElementById('subReqs');
+        div.innerHTML = '';
+        aiData.subtasks.forEach(function(st) {
+            var title = typeof st === 'string' ? st : (st.title || '');
+            var days = (typeof st === 'object' && st.estimate_days) ? st.estimate_days : '';
+            addSubReq(title, days);
+        });
+        addSubReq();
+    }
+});
+</script>
 {% endblock %}

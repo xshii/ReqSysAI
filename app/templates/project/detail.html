@@ -74,21 +74,21 @@
 <p class="text-muted mb-4">暂无里程碑</p>
 {% endif %}
 
-<!-- Requirements -->
+<!-- Requirements summary -->
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h5>需求列表</h5>
-    <a href="{{ url_for('requirement.requirement_create') }}?project_id={{ project.id }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg"></i> 新建需求</a>
+    <h5>需求概况</h5>
+    <a href="{{ url_for('requirement.requirement_list') }}?project_id={{ project.id }}" class="btn btn-sm btn-outline-primary">查看全部</a>
 </div>
 
 {% set reqs = project.requirements.all() %}
 {% if reqs %}
 <div class="table-responsive">
-    <table class="table table-hover">
+    <table class="table table-hover table-sm">
         <thead class="table-light">
             <tr><th>编号</th><th>标题</th><th>优先级</th><th>状态</th><th>负责人</th></tr>
         </thead>
         <tbody>
-            {% for r in reqs %}
+            {% for r in reqs[:10] %}
             <tr>
                 <td class="text-muted small">{{ r.number }}</td>
                 <td><a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}">{{ r.title }}</a></td>
@@ -100,6 +100,9 @@
         </tbody>
     </table>
 </div>
+{% if reqs | length > 10 %}
+<div class="text-center"><a href="{{ url_for('requirement.requirement_list') }}?project_id={{ project.id }}" class="small">还有 {{ reqs | length - 10 }} 条需求...</a></div>
+{% endif %}
 {% else %}
 <p class="text-muted">暂无需求</p>
 {% endif %}

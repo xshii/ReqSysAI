@@ -17,15 +17,6 @@
     </div>
 </div>
 
-<ul class="nav nav-tabs mb-4">
-    <li class="nav-item"><a class="nav-link {% if not cur_group %}active{% endif %}" href="?group=">全部</a></li>
-    {% for g in groups %}
-    <li class="nav-item"><a class="nav-link {% if cur_group == g %}active{% endif %}" href="?group={{ g }}">{{ g }}</a></li>
-    {% endfor %}
-    <li class="nav-item ms-auto">
-        <a class="nav-link text-primary" href="{{ url_for('todo.manage_groups') }}"><i class="bi bi-gear"></i> 管理团队</a>
-    </li>
-</ul>
 
 {# Split todos into active (left) vs all-done-today (right) per user #}
 {% set ns = namespace(left=[], right=[]) %}
@@ -197,8 +188,9 @@
                     <div class="mb-3">
                         <label class="form-label">预期闭环</label>
                         <select name="due_date" class="form-select form-select-sm">
-                            <option value="{{ today.strftime('%Y-%m-%d') }}" selected>今天 ({{ today.strftime('%m-%d') }})</option>
-                            <option value="{{ tomorrow.strftime('%Y-%m-%d') }}">明天 ({{ tomorrow.strftime('%m-%d') }})</option>
+                            {% for d, label in due_options %}
+                            <option value="{{ d.strftime('%Y-%m-%d') }}" {% if loop.first %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                     <div class="mb-3">
@@ -255,8 +247,12 @@
                     <input type="text" id="helpTitle" class="form-control form-control-sm">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">预期闭环</label>
-                    <input type="date" id="helpDueDate" class="form-control form-control-sm">
+                    <label class="form-label">预期闭环（3个工作日内）</label>
+                    <select id="helpDueDate" class="form-select form-select-sm">
+                        {% for d, label in help_due_options %}
+                        <option value="{{ d.strftime('%Y-%m-%d') }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
             </div>
             <div class="modal-footer py-1">

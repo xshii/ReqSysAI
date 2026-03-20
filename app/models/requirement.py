@@ -16,11 +16,14 @@ class Requirement(db.Model):
     status = db.Column(db.String(30), default='pending_review')
     assignee_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     estimate_days = db.Column(db.Float, nullable=True)
+    due_date = db.Column(db.Date, nullable=True)
+    parent_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=True)
     source = db.Column(db.String(50), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    parent = db.relationship('Requirement', remote_side=[id], backref='children')
     project = db.relationship('Project', back_populates='requirements')
     milestone = db.relationship('Milestone', backref='requirements')
     assignee = db.relationship('User', foreign_keys=[assignee_id], backref='assigned_requirements')
@@ -31,26 +34,25 @@ class Requirement(db.Model):
     activities = db.relationship('Activity', back_populates='requirement', cascade='all, delete-orphan',
                                  order_by='Activity.created_at.desc()')
 
-    STATUS_LABELS = {
-        'pending_review': '待评估',
-        'pending_dev': '待开发',
-        'in_dev': '开发中',
-        'in_test': '测试中',
-        'done': '已完成',
-        'closed': '已关闭',
+    # Single source of truth: (label, color)
+    _STATUS_META = {
+        'pending_review': ('待评估', 'secondary'),
+        'pending_dev':    ('待开发', 'dark'),
+        'in_dev':         ('开发中', 'primary'),
+        'in_test':        ('测试中', 'warning text-dark'),
+        'done':           ('已完成', 'success'),
+        'closed':         ('已关闭', 'light text-dark border'),
     }
+    STATUS_LABELS = {k: v[0] for k, v in _STATUS_META.items()}
+    STATUS_COLORS = {k: v[1] for k, v in _STATUS_META.items()}
 
-    STATUS_COLORS = {
-        'pending_review': 'secondary',
-        'pending_dev': 'dark',
-        'in_dev': 'primary',
-        'in_test': 'warning text-dark',
-        'done': 'success',
-        'closed': 'light text-dark border',
+    _PRIORITY_META = {
+        'high':   ('高', 'danger'),
+        'medium': ('中', 'warning text-dark'),
+        'low':    ('低', 'secondary'),
     }
-
-    PRIORITY_LABELS = {'high': '高', 'medium': '中', 'low': '低'}
-    PRIORITY_COLORS = {'high': 'danger', 'medium': 'warning text-dark', 'low': 'secondary'}
+    PRIORITY_LABELS = {k: v[0] for k, v in _PRIORITY_META.items()}
+    PRIORITY_COLORS = {k: v[1] for k, v in _PRIORITY_META.items()}
 
     ALLOWED_TRANSITIONS = {
         'pending_review': ['pending_dev', 'closed'],

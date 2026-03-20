@@ -1,0 +1,67 @@
+from datetime import datetime, date
+
+from app.extensions import db
+
+
+class Risk(db.Model):
+    __tablename__ = 'risks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    title = db.Column(db.String(300), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    severity = db.Column(db.String(20), default='medium')  # high / medium / low
+    status = db.Column(db.String(20), default='open')  # open / resolved / closed
+    owner = db.Column(db.String(100), nullable=True)  # 责任人（可能是外部人员，存姓名文本）
+    tracker_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # 跟踪人（内部员工）
+    requirement_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=True)  # 关联子需求
+    due_date = db.Column(db.Date, nullable=False)
+    resolution = db.Column(db.Text, nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+
+    project = db.relationship('Project', backref='risks')
+    tracker = db.relationship('User', foreign_keys=[tracker_id], backref='tracked_risks')
+    creator = db.relationship('User', foreign_keys=[created_by], backref='created_risks')
+    requirement = db.relationship('Requirement', backref='risks')
+
+    _SEVERITY_META = {
+        'high':   ('高', 'danger'),
+        'medium': ('中', 'warning text-dark'),
+        'low':    ('低', 'secondary'),
+    }
+    SEVERITY_LABELS = {k: v[0] for k, v in _SEVERITY_META.items()}
+    SEVERITY_COLORS = {k: v[1] for k, v in _SEVERITY_META.items()}
+
+    _STATUS_META = {
+        'open':     ('未解决', 'danger'),
+        'resolved': ('已解决', 'success'),
+        'closed':   ('已关闭', 'secondary'),
+    }
+    STATUS_LABELS = {k: v[0] for k, v in _STATUS_META.items()}
+    STATUS_COLORS = {k: v[1] for k, v in _STATUS_META.items()}
+
+    @property
+    def severity_label(self):
+        return self.SEVERITY_LABELS.get(self.severity, self.severity)
+
+    @property
+    def severity_color(self):
+        return self.SEVERITY_COLORS.get(self.severity, 'secondary')
+
+    @property
+    def status_label(self):
+        return self.STATUS_LABELS.get(self.status, self.status)
+
+    @property
+    def status_color(self):
+        return self.STATUS_COLORS.get(self.status, 'secondary')
+
+    @property
+    def is_overdue(self):
+        return self.status == 'open' and self.due_date and self.due_date < date.today()
+
+    def __repr__(self):
+        return f'<Risk {self.title}>'

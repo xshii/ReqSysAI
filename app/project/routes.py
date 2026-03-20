@@ -1,4 +1,4 @@
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import current_user
 
 from app.project import project_bp
@@ -6,6 +6,8 @@ from app.project.forms import ProjectForm, MilestoneForm
 from flask_login import login_required
 from app.extensions import db
 from app.models.project import Project, Milestone
+from app.models.risk import Risk
+from app.models.user import User
 
 
 @project_bp.route('/')
@@ -22,7 +24,12 @@ def project_list():
 @project_bp.route('/new', methods=['GET', 'POST'])
 @login_required
 def project_create():
+    from app.models.project import MilestoneTemplate
+    from datetime import timedelta
+
     form = ProjectForm()
+    templates = MilestoneTemplate.query.order_by(MilestoneTemplate.name).all()
+
     if form.validate_on_submit():
         project = Project(
             name=form.name.data,
@@ -30,10 +37,34 @@ def project_create():
             created_by=current_user.id,
         )
         db.session.add(project)
+        db.session.flush()
+
+        # Create milestones from form
+        ms_names = request.form.getlist('ms_name')
+        ms_dates = request.form.getlist('ms_date')
+        for i, name in enumerate(ms_names):
+            name = name.strip()
+            if name:
+                due = ms_dates[i] if i < len(ms_dates) and ms_dates[i] else None
+                project.milestones.append(Milestone(name=name, due_date=due))
+
         db.session.commit()
         flash(f'项目「{project.name}」创建成功', 'success')
         return redirect(url_for('project.project_detail', project_id=project.id))
-    return render_template('project/form.html', form=form, title='新建项目')
+    return render_template('project/form.html', form=form, title='新建项目', templates=templates)
+
+
+@project_bp.route('/api/template/<int:tpl_id>')
+@login_required
+def api_template(tpl_id):
+    from app.models.project import MilestoneTemplate
+    tpl = db.session.get(MilestoneTemplate, tpl_id)
+    if not tpl:
+        return jsonify(ok=False), 404
+    return jsonify(ok=True, items=[
+        {'name': item.name, 'offset_days': item.offset_days}
+        for item in tpl.items
+    ])
 
 
 @project_bp.route('/<int:project_id>')
@@ -121,3 +152,93 @@ def milestone_delete(ms_id):
         db.session.commit()
         flash('里程碑已删除', 'success')
     return redirect(url_for('project.project_detail', project_id=project_id))
+
+
+# ---- Risk management ----
+
+@project_bp.route('/<int:project_id>/risks')
+@login_required
+def risk_list(project_id):
+    project = db.get_or_404(Project, project_id)
+    status = request.args.get('status', '')
+    severity = request.args.get('severity', '')
+
+    query = Risk.query.filter_by(project_id=project_id)
+    if status:
+        query = query.filter_by(status=status)
+    if severity:
+        query = query.filter_by(severity=severity)
+    risks = query.order_by(Risk.status, Risk.due_date).all()
+
+    from app.models.requirement import Requirement
+    reqs = Requirement.query.filter_by(project_id=project_id).order_by(Requirement.number).all()
+    users = User.query.filter_by(is_active=True).order_by(User.name).all()
+
+    return render_template('project/risks.html', project=project, risks=risks,
+                           reqs=reqs, users=users,
+                           cur_status=status, cur_severity=severity)
+
+
+@project_bp.route('/<int:project_id>/risks/add', methods=['POST'])
+@login_required
+def risk_add(project_id):
+    db.get_or_404(Project, project_id)
+    title = request.form.get('title', '').strip()
+    if not title:
+        flash('请输入风险标题', 'danger')
+        return redirect(url_for('project.risk_list', project_id=project_id))
+
+    risk = Risk(
+        project_id=project_id,
+        title=title,
+        description=request.form.get('description', '').strip() or None,
+        severity=request.form.get('severity', 'medium'),
+        owner=request.form.get('owner', '').strip() or None,
+        tracker_id=request.form.get('tracker_id', type=int) or None,
+        requirement_id=request.form.get('requirement_id', type=int) or None,
+        due_date=request.form.get('due_date') or None,
+        created_by=current_user.id,
+    )
+    db.session.add(risk)
+    db.session.commit()
+    flash('风险已登记', 'success')
+    return redirect(url_for('project.risk_list', project_id=project_id))
+
+
+@project_bp.route('/risks/<int:risk_id>/resolve', methods=['POST'])
+@login_required
+def risk_resolve(risk_id):
+    risk = db.get_or_404(Risk, risk_id)
+    resolution = request.form.get('resolution', '').strip()
+    if not resolution:
+        flash('请填写解决方案', 'danger')
+        return redirect(url_for('project.risk_list', project_id=risk.project_id))
+    risk.status = 'resolved'
+    risk.resolution = resolution
+    from datetime import datetime
+    risk.resolved_at = datetime.utcnow()
+    db.session.commit()
+    flash('风险已解决', 'success')
+    return redirect(url_for('project.risk_list', project_id=risk.project_id))
+
+
+@project_bp.route('/risks/<int:risk_id>/close', methods=['POST'])
+@login_required
+def risk_close(risk_id):
+    risk = db.get_or_404(Risk, risk_id)
+    risk.status = 'closed'
+    db.session.commit()
+    flash('风险已关闭', 'success')
+    return redirect(url_for('project.risk_list', project_id=risk.project_id))
+
+
+@project_bp.route('/risks/<int:risk_id>/reopen', methods=['POST'])
+@login_required
+def risk_reopen(risk_id):
+    risk = db.get_or_404(Risk, risk_id)
+    risk.status = 'open'
+    risk.resolved_at = None
+    risk.resolution = None
+    db.session.commit()
+    flash('风险已重新打开', 'success')
+    return redirect(url_for('project.risk_list', project_id=risk.project_id))

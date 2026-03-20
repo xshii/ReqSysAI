@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}人力投入 - 研发协作平台{% endblock %}
+
+{% block content %}
+<h4 class="mb-3">人力投入报表</h4>
+
+<!-- Controls -->
+<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <!-- Period -->
+    <a href="?period=week&week={{ offset }}&mode={{ mode }}" class="btn btn-sm {{ 'btn-primary' if period == 'week' else 'btn-outline-secondary' }}">近一周</a>
+    <a href="?period=month&mode={{ mode }}" class="btn btn-sm {{ 'btn-primary' if period == 'month' else 'btn-outline-secondary' }}">近一月</a>
+    <a href="?period=3month&mode={{ mode }}" class="btn btn-sm {{ 'btn-primary' if period == '3month' else 'btn-outline-secondary' }}">近三月</a>
+
+    <span class="border-start ms-1 ps-2"></span>
+
+    <!-- Week nav (only for week mode) -->
+    {% if period == 'week' %}
+    <a href="?period=week&week={{ offset - 1 }}&mode={{ mode }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
+    {% endif %}
+    <span class="fw-bold">{{ label }}</span>
+    {% if period == 'week' and offset < 0 %}
+    <a href="?period=week&week={{ offset + 1 }}&mode={{ mode }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
+    {% endif %}
+
+    <span class="border-start ms-1 ps-2"></span>
+
+    <!-- Mode toggle -->
+    <a href="?period={{ period }}&week={{ offset }}&mode=by_person" class="btn btn-sm {{ 'btn-dark' if mode == 'by_person' else 'btn-outline-dark' }}"><i class="bi bi-person"></i> 按人员</a>
+    <a href="?period={{ period }}&week={{ offset }}&mode=by_project" class="btn btn-sm {{ 'btn-dark' if mode == 'by_project' else 'btn-outline-dark' }}"><i class="bi bi-folder"></i> 按项目</a>
+</div>
+
+{% if mode == 'by_person' %}
+<!-- ===== Mode 1: by person (rows=person, cols=project) ===== -->
+{% if person_rows %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>姓名</th>
+                    <th>团队</th>
+                    {% for pid in project_ids %}
+                    <th class="text-center small">{{ projects[pid].name if projects.get(pid) else '-' }}</th>
+                    {% endfor %}
+                    <th class="text-center">合计</th>
+                    <th>投入分布</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in person_rows %}
+            <tr>
+                <td>{{ row.user.name }}</td>
+                <td class="small text-muted">{{ row.user.group or '-' }}</td>
+                {% for pid in project_ids %}
+                {% set d = row.proj_days.get(pid, 0) %}
+                <td class="text-center small">
+                    {% if d > 0 %}{{ d }}<span class="text-muted"> ({{ (d / row.total * 100) | round | int }}%)</span>{% else %}-{% endif %}
+                </td>
+                {% endfor %}
+                <td class="text-center fw-bold">{{ row.total }}</td>
+                <td>
+                    <div class="d-flex" style="height:14px;min-width:100px;">
+                    {% set colors = ['#4A6CF7','#38A169','#ED8936','#E53E3E','#9F7AEA','#319795','#D69E2E','#667EEA'] %}
+                    {% for pid in project_ids %}
+                    {% set d = row.proj_days.get(pid, 0) %}
+                    {% if d > 0 %}
+                    <div style="width:{{ (d / row.total * 100) }}%;background:{{ colors[loop.index0 % 8] }};" title="{{ projects[pid].name }}: {{ d }}天"></div>
+                    {% endif %}
+                    {% endfor %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+            <tfoot class="table-light">
+                <tr>
+                    <td colspan="2" class="fw-bold">合计</td>
+                    {% for pid in project_ids %}
+                    <td class="text-center fw-bold small">{{ person_rows | map(attribute='proj_days') | map('get', pid, 0) | sum | round(1) }}</td>
+                    {% endfor %}
+                    <td class="text-center fw-bold">{{ person_rows | sum(attribute='total') | round(1) }}</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">该时间段内暂无数据</div>
+{% endif %}
+
+{% else %}
+<!-- ===== Mode 2: by project (rows=project, cols=person) ===== -->
+{% if project_rows %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>项目</th>
+                    {% for u in active_users %}
+                    <th class="text-center small">{{ u.name }}</th>
+                    {% endfor %}
+                    <th class="text-center">合计</th>
+                    <th>人员分布</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in project_rows %}
+            <tr>
+                <td>{{ row.project.name }}</td>
+                {% for u in active_users %}
+                {% set d = row.user_days.get(u.id, 0) %}
+                <td class="text-center small">
+                    {% if d > 0 %}{{ d }}<span class="text-muted"> ({{ (d / row.total * 100) | round | int }}%)</span>{% else %}-{% endif %}
+                </td>
+                {% endfor %}
+                <td class="text-center fw-bold">{{ row.total }}</td>
+                <td>
+                    <div class="d-flex" style="height:14px;min-width:100px;">
+                    {% set colors = ['#4A6CF7','#38A169','#ED8936','#E53E3E','#9F7AEA','#319795','#D69E2E','#667EEA'] %}
+                    {% for u in active_users %}
+                    {% set d = row.user_days.get(u.id, 0) %}
+                    {% if d > 0 %}
+                    <div style="width:{{ (d / row.total * 100) }}%;background:{{ colors[loop.index0 % 8] }};" title="{{ u.name }}: {{ d }}天"></div>
+                    {% endif %}
+                    {% endfor %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+            <tfoot class="table-light">
+                <tr>
+                    <td class="fw-bold">合计</td>
+                    {% for u in active_users %}
+                    {% set u_total = [] %}
+                    {% for row in project_rows %}{% if u_total.append(row.user_days.get(u.id, 0)) %}{% endif %}{% endfor %}
+                    <td class="text-center fw-bold small">{{ u_total | sum | round(1) }}</td>
+                    {% endfor %}
+                    <td class="text-center fw-bold">{{ project_rows | sum(attribute='total') | round(1) }}</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">该时间段内暂无数据</div>
+{% endif %}
+{% endif %}
+
+<!-- Legend -->
+{% if person_rows or project_rows %}
+<div class="mt-3 d-flex gap-3 flex-wrap small">
+{% set colors = ['#4A6CF7','#38A169','#ED8936','#E53E3E','#9F7AEA','#319795','#D69E2E','#667EEA'] %}
+{% if mode == 'by_person' %}
+    {% for pid in project_ids %}
+    <span><span style="display:inline-block;width:12px;height:12px;background:{{ colors[loop.index0 % 8] }};border-radius:2px;"></span> {{ projects[pid].name }}</span>
+    {% endfor %}
+{% else %}
+    {% for u in active_users %}
+    <span><span style="display:inline-block;width:12px;height:12px;background:{{ colors[loop.index0 % 8] }};border-radius:2px;"></span> {{ u.name }}</span>
+    {% endfor %}
+{% endif %}
+</div>
+{% endif %}
+{% endblock %}

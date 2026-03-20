@@ -36,6 +36,7 @@ class Config:
 
     # Roles & admin from YAML
     ROLES = _yml.get('roles', [])
+    HIDDEN_ROLES = [r['name'] for r in ROLES if r.get('hidden')]
     ADMIN_CONFIG = _yml.get('admin', {})
 
 

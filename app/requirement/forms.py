@@ -1,6 +1,8 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, SelectField, FloatField, SubmitField
+from wtforms import StringField, TextAreaField, SelectField, FloatField, DateField, SubmitField
 from wtforms.validators import DataRequired, Length, Optional
+
+from app.models.requirement import Requirement
 
 
 class RequirementForm(FlaskForm):
@@ -8,10 +10,11 @@ class RequirementForm(FlaskForm):
     description = TextAreaField('需求描述', validators=[Optional()])
     project_id = SelectField('所属项目', coerce=int, validators=[DataRequired()])
     milestone_id = SelectField('里程碑', coerce=int, validators=[Optional()])
-    priority = SelectField('优先级', choices=[
-        ('high', '高'), ('medium', '中'), ('low', '低'),
-    ], default='medium')
+    priority = SelectField('优先级',
+                           choices=list(Requirement.PRIORITY_LABELS.items()),
+                           default='medium')
     assignee_id = SelectField('负责人', coerce=int, validators=[Optional()])
+    due_date = DateField('预期完成时间', validators=[DataRequired(message='请选择预期完成时间')])
     estimate_days = FloatField('预估工期（人天）', validators=[Optional()])
     submit = SubmitField('保存')
 

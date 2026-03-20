@@ -51,7 +51,8 @@
         </div>
         {% endif %}
 
-        <!-- Create new team -->
+        <!-- Create new team (admin only) -->
+        {% if current_user.is_admin %}
         <div class="card">
             <div class="card-header">新建团队</div>
             <div class="card-body">
@@ -63,6 +64,8 @@
                 </form>
             </div>
         </div>
+        {% endif %}
     </div>
+
 </div>
 {% endblock %}
