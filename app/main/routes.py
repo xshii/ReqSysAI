@@ -22,7 +22,7 @@ def index():
             db.and_(Todo.status == 'done', Todo.done_date == today),
         )
     ).options(joinedload(Todo.items), joinedload(Todo.requirements))\
-     .order_by(Todo.sort_order).all()
+     .order_by(db.case((Todo.status == 'todo', 0), else_=1), Todo.sort_order).all()
     todo_total = len(my_todos)
     todo_done = sum(1 for t in my_todos if t.status == 'done')
 

@@ -349,7 +349,11 @@ def team():
     ).options(
         joinedload(Todo.requirements), joinedload(Todo.parent),
         joinedload(Todo.children), joinedload(Todo.items),
-    ).order_by(Todo.sort_order).all() if user_ids else []
+    ).order_by(
+        db.case((Todo.status == 'todo', 0), else_=1),  # 未完成在前
+        Todo.sort_order,
+        Todo.done_date.desc(),  # 已完成按完成时间倒序
+    ).all() if user_ids else []
 
     user_todos = {}
     for t in all_todos:
