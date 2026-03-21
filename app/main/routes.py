@@ -209,30 +209,46 @@ def ai_recommend_todos():
 
     today = date.today()
 
-    # Gather context: active requirements with deadlines
-    my_reqs = Requirement.query.filter_by(assignee_id=current_user.id)\
+    # Gather context: active requirements with progress
+    my_reqs_list = Requirement.query.filter_by(assignee_id=current_user.id)\
         .filter(Requirement.status.notin_(REQ_INACTIVE_STATUSES))\
         .order_by(Requirement.priority, Requirement.due_date).all()
-    if not my_reqs:
+    if not my_reqs_list:
         return jsonify(ok=False, msg='暂无进行中的需求')
 
-    # Recent todos (last 3 days) for continuity
+    # Build req_number → req_id map for adopt
+    req_map = {r.number: r.id for r in my_reqs_list}
+
+    # Recent todos (last 5 days) for continuity
     recent = Todo.query.filter_by(user_id=current_user.id)\
-        .filter(Todo.created_date >= today - timedelta(days=3))\
+        .filter(Todo.created_date >= today - timedelta(days=5))\
         .options(joinedload(Todo.requirements)).all()
 
-    lines = []
-    for r in my_reqs:
-        due = f'，截止 {r.due_date.strftime("%m-%d")}' if r.due_date else ''
+    # Today's existing todos to avoid duplicates
+    today_titles = {t.title.lower() for t in recent if t.created_date == today and t.status == TODO_STATUS_TODO}
+
+    lines = ['当前日期：' + today.strftime('%Y-%m-%d')]
+    lines.append('\n我的需求：')
+    for r in my_reqs_list:
         days_left = (r.due_date - today).days if r.due_date else 999
-        urgency = '【紧急】' if days_left <= 3 else ''
-        lines.append(f'{urgency}{r.number} {r.title}（{r.status_label}{due}，预估{r.estimate_days or "?"}人天）')
+        urgency = '⚠️紧急！' if days_left <= 3 else ('⏰临近' if days_left <= 7 else '')
+        due = f'截止{r.due_date.strftime("%m-%d")}(剩{days_left}天)' if r.due_date else '无截止日'
+        # Count invested todos
+        invested = sum(1 for t in recent if any(req.id == r.id for req in t.requirements))
+        children = f'，子需求{len(r.children)}个' if r.children else ''
+        lines.append(f'  {urgency}{r.number} {r.title}（{r.status_label}，{due}，预估{r.estimate_days or "?"}人天，近5天投入{invested}个todo{children}）')
 
     if recent:
-        lines.append('\n近3天已做的任务：')
+        lines.append('\n近5天工作记录：')
         for t in recent:
             status = '✓' if t.status == TODO_STATUS_DONE else '○'
-            lines.append(f'  {status} {t.title}')
+            req_tag = t.requirements[0].number if t.requirements else '无需求'
+            lines.append(f'  {status} [{req_tag}] {t.title} ({t.created_date.strftime("%m-%d")})')
+
+    if today_titles:
+        lines.append('\n今天已有的任务（不要重复）：')
+        for title in today_titles:
+            lines.append(f'  - {title}')
 
     prompt = get_prompt('todo_recommend') + '\n\n' + '\n'.join(lines)
     result, _ = call_ollama(prompt)
@@ -243,13 +259,15 @@ def ai_recommend_todos():
     if not isinstance(result, list):
         return jsonify(ok=False, msg='AI 返回格式异常')
 
-    # Normalize results
     todos = []
     for item in result:
         if isinstance(item, dict) and item.get('title'):
+            req_num = item.get('req_number', '')
             todos.append({
                 'title': item['title'],
-                'req_number': item.get('req_number', ''),
+                'req_number': req_num,
+                'req_id': req_map.get(req_num, 0),
+                'reason': item.get('reason', ''),
             })
     return jsonify(ok=True, todos=todos)
 
