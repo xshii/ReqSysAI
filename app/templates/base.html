@@ -196,6 +196,16 @@
     </div>
     {% endif %}
 
+    <!-- Image Lightbox -->
+    <div class="modal fade" id="imgLightbox" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content bg-transparent border-0">
+                <div class="text-end mb-1"><button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal"><i class="bi bi-x-lg"></i></button></div>
+                <img id="lightboxImg" src="" class="img-fluid rounded shadow" style="max-height:80vh;object-fit:contain;">
+            </div>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='vendor/js/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     {% if current_user.is_authenticated %}

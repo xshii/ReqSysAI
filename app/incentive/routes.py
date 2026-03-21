@@ -99,6 +99,28 @@ def like(inc_id):
     return redirect(url_for('incentive.index'))
 
 
+@incentive_bp.route('/<int:inc_id>/photo', methods=['POST'])
+@login_required
+def update_photo(inc_id):
+    """Replace incentive photo. Allowed: submitter, reviewer, admin."""
+    inc = db.get_or_404(Incentive, inc_id)
+    if current_user.id not in (inc.submitted_by, inc.reviewed_by) and not current_user.is_admin:
+        flash('无权限', 'danger')
+        return redirect(url_for('incentive.index'))
+    new_photo = save_photo(request.files.get('photo'))
+    if new_photo:
+        # Delete old photo
+        if inc.photo:
+            import os
+            old_path = os.path.join(current_app.root_path, 'static', inc.photo)
+            if os.path.exists(old_path):
+                os.remove(old_path)
+        inc.photo = new_photo
+        db.session.commit()
+        flash('照片已更新', 'success')
+    return redirect(url_for('incentive.index'))
+
+
 @incentive_bp.route('/ai-polish', methods=['POST'])
 @login_required
 def ai_polish():

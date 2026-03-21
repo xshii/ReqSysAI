@@ -258,6 +258,9 @@
                         {% endfor %}
                         {% if inc.nominees | length > 3 %}<div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center" style="width:24px;height:24px;font-size:.55em;">+{{ inc.nominees | length - 3 }}</div>{% endif %}
                     </div>
+                    {% if inc.photo %}
+                    <img src="{{ url_for('static', filename=inc.photo) }}" class="rounded flex-shrink-0 img-lightbox" style="width:48px;height:48px;object-fit:cover;cursor:pointer;" title="点击放大" data-src="{{ url_for('static', filename=inc.photo) }}">
+                    {% endif %}
                     <div class="small" style="min-width:0;">
                         <div>
                             <strong>{% for u in inc.nominees %}{{ u.name }}{% if not loop.last %}、{% endif %}{% endfor %}</strong>

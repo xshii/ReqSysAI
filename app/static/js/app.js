@@ -30,6 +30,16 @@ function showToast(msg, type) {
     setTimeout(function() { _toastEl.style.display = 'none'; }, 3000);
 }
 
+// ---- Image lightbox ----
+document.addEventListener('click', function(e) {
+    var img = e.target.closest('.img-lightbox');
+    if (img) {
+        var src = img.dataset.src || img.src;
+        document.getElementById('lightboxImg').src = src;
+        new bootstrap.Modal(document.getElementById('imgLightbox')).show();
+    }
+});
+
 // ---- User picker component ----
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.user-picker-wrap').forEach(function(wrap) {
