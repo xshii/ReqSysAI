@@ -247,9 +247,13 @@ def get_reviewer(current_user):
     """Determine reviewer based on current user's role and group."""
     from app.models.user import Role
     if current_user.has_role('PL'):
-        reviewer = User.query.filter(User.is_active == True, User.group == current_user.group)\
-            .join(User.roles).filter(Role.name.in_(['XM', 'LM', 'PM'])).first()
-        return reviewer.name if reviewer else '待定'
+        # LM first, then XM, then PM
+        for role_name in ('LM', 'XM', 'PM'):
+            reviewer = User.query.filter(User.is_active == True, User.group == current_user.group)\
+                .join(User.roles).filter(Role.name == role_name).first()
+            if reviewer:
+                return reviewer.name
+        return '待定'
     else:
         pl = User.query.filter(User.is_active == True, User.group == current_user.group)\
             .join(User.roles).filter(Role.name == 'PL').first()
