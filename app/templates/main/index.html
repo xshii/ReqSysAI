@@ -426,9 +426,9 @@ document.getElementById('btnAdoptAll').addEventListener('click', function() {
                 if (listEl) {
                     var row = document.createElement('div');
                     row.className = 'd-flex align-items-center gap-1 mb-1 ps-2';
+                    var displayTitle = t.reason ? t.title + '（' + t.reason + '）' : t.title;
                     row.innerHTML = '<i class="bi bi-circle text-secondary"></i>'
-                        + ' <span class="small">' + t.title + '</span>'
-
+                        + ' <span class="small">' + displayTitle + '</span>'
                         + ' <span class="badge bg-info" style="font-size:.55em;">AI</span>'
                         + ' <button class="btn btn-sm py-0 px-0 text-muted" style="font-size:.7em;" onclick="apiPost(\'/todos/0/edit\',{title:\'\'}).then(function(){this.closest(\'.d-flex\').remove()}.bind(this))"><i class="bi bi-x"></i></button>';
                     listEl.appendChild(row);
