@@ -288,11 +288,11 @@ def batch_adopt():
             req = db.session.get(Requirement, req_id)
             if req:
                 reqs = [req]
-        est = item.get('est_min', 0) or 0
-        todo = Todo(user_id=current_user.id, title=title, due_date=today,
-                    category='work', source='ai', estimated_minutes=est if est > 0 else None,
-                    requirements=reqs)
-        todo.items.append(TodoItem(title=title, sort_order=0))
+        reason = (item.get('reason') or '').strip()
+        full_title = f'{title}（{reason}）' if reason else title
+        todo = Todo(user_id=current_user.id, title=full_title, due_date=today,
+                    category='work', source='ai', requirements=reqs)
+        todo.items.append(TodoItem(title=full_title, sort_order=0))
         db.session.add(todo)
         created += 1
     db.session.commit()
