@@ -1,17 +1,16 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
-from flask import render_template, redirect, url_for, flash, request, jsonify
+from flask import render_template, redirect, url_for, flash, request, jsonify, current_app
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 
 from app.todo import todo_bp
 from app.todo.forms import TodoForm
 from app.extensions import db
-from app.models.todo import Todo, TodoItem
-from app.models.user import User
-
-from flask import current_app
-DONE_KEEP_DAYS = None  # Loaded from config at runtime
+from app.constants import TODO_STATUS_TODO, TODO_STATUS_DONE, REQ_INACTIVE_STATUSES
+from app.models.todo import Todo, TodoItem, TodoComment
+from app.models.requirement import Requirement
+from app.models.user import User, Group
 
 
 # ---- Group management ----
@@ -27,7 +26,6 @@ def manage_groups():
 @todo_bp.route('/add', methods=['POST'])
 @login_required
 def add():
-    from app.models.requirement import Requirement
     form = TodoForm()
     if form.validate_on_submit():
         req_ids = request.form.getlist('req_ids', type=int)
@@ -87,7 +85,7 @@ def confirm(todo_id):
     todo = db.get_or_404(Todo, todo_id)
     if todo.user_id != current_user.id:
         return jsonify(ok=False), 403
-    todo.status = 'done'
+    todo.status = TODO_STATUS_DONE
     todo.done_date = date.today()
     # Record timer if running
     if todo.started_at:
@@ -106,7 +104,7 @@ def reopen(todo_id):
     todo = db.get_or_404(Todo, todo_id)
     if todo.user_id != current_user.id:
         return jsonify(ok=False), 403
-    todo.status = 'todo'
+    todo.status = TODO_STATUS_TODO
     todo.done_date = None
     todo.started_at = None
     db.session.commit()
@@ -122,13 +120,12 @@ def timer(todo_id):
     todo = db.get_or_404(Todo, todo_id)
     if todo.user_id != current_user.id:
         return jsonify(ok=False), 403
-    from datetime import datetime as dt
     if todo.started_at:
         # Stop timer, record elapsed
         todo.actual_minutes = (todo.actual_minutes or 0) + todo.elapsed_minutes
         todo.started_at = None
     else:
-        todo.started_at = dt.utcnow()
+        todo.started_at = datetime.utcnow()
     db.session.commit()
     return jsonify(ok=True, running=todo.timer_running,
                    minutes=todo.actual_minutes or 0)
@@ -152,7 +149,7 @@ def toggle_help(todo_id):
 @login_required
 def get_comments(todo_id):
     """Get comments for a todo."""
-    from app.models.todo import TodoComment
+
     comments = TodoComment.query.filter_by(todo_id=todo_id)\
         .order_by(TodoComment.created_at).all()
     return jsonify(ok=True, comments=[
@@ -166,7 +163,7 @@ def get_comments(todo_id):
 @login_required
 def add_comment(todo_id):
     """Add a comment/progress update to a todo."""
-    from app.models.todo import TodoComment
+
     data = request.get_json() or {}
     content = (data.get('content') or '').strip()
     if not content:
@@ -211,10 +208,10 @@ def toggle_item(item_id):
     # Auto-complete todo if all items done
     todo = item.todo
     if todo.items and all(i.is_done for i in todo.items):
-        todo.status = 'done'
+        todo.status = TODO_STATUS_DONE
         todo.done_date = date.today()
     elif todo.status == 'done':
-        todo.status = 'todo'
+        todo.status = TODO_STATUS_TODO
         todo.done_date = None
     db.session.commit()
     done, total = todo.items_progress
@@ -281,7 +278,7 @@ def drag():
     new_status = data.get('status')
     if new_status and new_status in Todo.STATUS_LABELS:
         todo.status = new_status
-        todo.done_date = date.today() if new_status == 'done' else None
+        todo.done_date = date.today() if new_status == TODO_STATUS_DONE else None
     order = data.get('order')
     if isinstance(order, list):
         my_todos = {t.id: t for t in Todo.query.filter(
@@ -300,25 +297,24 @@ def drag():
 @login_required
 def ai_recommend():
     from app.services.ai import call_ollama
-    from app.models.requirement import Requirement
 
     today = date.today()
     week_ago = today - timedelta(days=7)
 
     # 1. User's active requirements (assigned or unassigned)
     my_reqs = Requirement.query.filter(
-        Requirement.status.notin_(['done', 'closed']),
+        Requirement.status.notin_(REQ_INACTIVE_STATUSES),
         db.or_(Requirement.assignee_id == current_user.id, Requirement.assignee_id.is_(None)),
     ).all()
 
     # 2. Recent week's completed todos
     recent_done = Todo.query.filter_by(user_id=current_user.id)\
-        .filter(Todo.status == 'done', Todo.done_date >= week_ago)\
+        .filter(Todo.status == TODO_STATUS_DONE, Todo.done_date >= week_ago)\
         .options(joinedload(Todo.items)).all()
 
     # 3. Current active todos (avoid duplicates)
     active_todos = Todo.query.filter_by(user_id=current_user.id)\
-        .filter(Todo.status == 'todo').all()
+        .filter(Todo.status == TODO_STATUS_TODO).all()
 
     # Build context
     lines = [f'今天是 {today.strftime("%Y-%m-%d")}，请为我规划今日任务。\n']
@@ -393,12 +389,11 @@ def ai_recommend():
 @todo_bp.route('/team')
 @login_required
 def team():
-    from app.models.requirement import Requirement
 
     today = date.today()
     keep_days = current_app.config.get('TODO_KEEP_DAYS', 7)
     week_ago = today - timedelta(days=keep_days)
-    from app.models.user import Group
+
     groups = [g.name for g in Group.query.order_by(Group.name).all()]
 
     cur_group = request.args.get('group', current_user.group or '')
@@ -415,14 +410,14 @@ def team():
     all_todos = Todo.query.filter(
         Todo.user_id.in_(user_ids),
         db.or_(
-            Todo.status == 'todo',
-            db.and_(Todo.status == 'done', Todo.done_date >= week_ago),
+            Todo.status == TODO_STATUS_TODO,
+            db.and_(Todo.status == TODO_STATUS_DONE, Todo.done_date >= week_ago),
         )
     ).options(
         joinedload(Todo.requirements), joinedload(Todo.parent),
         joinedload(Todo.children), joinedload(Todo.items),
     ).order_by(
-        db.case((Todo.status == 'todo', 0), else_=1),  # 未完成在前
+        db.case((Todo.status == TODO_STATUS_TODO, 0), else_=1),  # 未完成在前
         Todo.sort_order,
         Todo.done_date.desc(),  # 已完成按完成时间倒序
     ).all() if user_ids else []
@@ -432,7 +427,7 @@ def team():
         user_todos.setdefault(t.user_id, []).append(t)
 
     form = TodoForm()
-    reqs = Requirement.query.filter(Requirement.status.notin_(['done', 'closed']))\
+    reqs = Requirement.query.filter(Requirement.status.notin_(REQ_INACTIVE_STATUSES))\
         .order_by(Requirement.number).all()
     # Default: inherit requirements from user's most recent todo
     last_todo = Todo.query.filter_by(user_id=current_user.id)\
@@ -471,7 +466,7 @@ def team():
 
     # Todos marked as needing help (team-wide)
     help_todos = Todo.query.filter(
-        Todo.need_help == True, Todo.status == 'todo',
+        Todo.need_help == True, Todo.status == TODO_STATUS_TODO,
         Todo.user_id.in_(user_ids),
     ).options(joinedload(Todo.requirements)).order_by(Todo.created_at.desc()).all()
 

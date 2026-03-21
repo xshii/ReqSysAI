@@ -74,7 +74,7 @@ def create_app(config_name=None):
             ).count()
             notif_overdue_reqs = Requirement.query.filter(
                 Requirement.assignee_id == current_user.id,
-                Requirement.status.notin_(['done', 'closed']),
+                Requirement.status.notin_(('done', 'closed')),
                 Requirement.due_date < today,
             ).count()
             notif_count = notif_risks + notif_overdue_reqs

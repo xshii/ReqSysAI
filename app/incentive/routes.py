@@ -1,13 +1,17 @@
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 from flask import render_template, redirect, url_for, flash, request, jsonify, current_app
 from flask_login import login_required, current_user
 
 from app.incentive import incentive_bp
 from app.extensions import db
+from app.constants import MAX_COMMENT_LENGTH
 from app.models.incentive import Incentive
+from app.models.todo import Todo
+from app.models.requirement import Requirement
 from app.models.rant import Rant
 from app.models.user import User
+from app.utils.upload import save_photo
 
 
 @incentive_bp.route('/')
@@ -34,8 +38,6 @@ def index():
 @incentive_bp.route('/submit', methods=['POST'])
 @login_required
 def submit():
-    import os, uuid
-
     title = request.form.get('title', '').strip()
     description = request.form.get('description', '').strip()
     team_name = request.form.get('team_name', '').strip() or None
@@ -45,17 +47,7 @@ def submit():
         flash('请填写完整信息', 'danger')
         return redirect(url_for('incentive.index'))
 
-    # Handle photo upload
-    photo_path = None
-    photo = request.files.get('photo')
-    if photo and photo.filename:
-        ext = os.path.splitext(photo.filename)[1].lower()
-        if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp'):
-            fname = f'{uuid.uuid4().hex[:12]}{ext}'
-            save_dir = os.path.join(current_app.root_path, 'static', 'uploads', 'incentive')
-            os.makedirs(save_dir, exist_ok=True)
-            photo.save(os.path.join(save_dir, fname))
-            photo_path = f'uploads/incentive/{fname}'
+    photo_path = save_photo(request.files.get('photo'))
 
     nominees = User.query.filter(User.id.in_(nominee_ids)).all()
     category = request.form.get('category', 'professional')
@@ -79,7 +71,7 @@ def review(inc_id):
 
     inc = db.get_or_404(Incentive, inc_id)
     action = request.form.get('action')
-    comment = request.form.get('review_comment', '').strip()[:150]
+    comment = request.form.get('review_comment', '').strip()[:MAX_COMMENT_LENGTH]
     amount = request.form.get('amount', type=float)
 
     if action == 'approve':
@@ -114,9 +106,6 @@ def ai_polish():
 def ai_describe():
     """AI generate or polish description based on nominees' recent work."""
     from app.services.ai import call_ollama
-    from app.models.todo import Todo
-    from app.models.requirement import Requirement
-    from datetime import date, timedelta
 
     data = request.get_json() or {}
     nominee_ids = data.get('nominee_ids', [])
@@ -204,31 +193,20 @@ def admin_submit():
         flash('无权限', 'danger')
         return redirect(url_for('incentive.index'))
 
-    import os, uuid
-
     title = request.form.get('title', '').strip()
     description = request.form.get('description', '').strip()
     category = request.form.get('category', 'professional')
     team_name = request.form.get('team_name', '').strip() or None
     nominee_ids = request.form.getlist('nominee_ids', type=int)
     amount = request.form.get('amount', type=float)
-    review_comment = request.form.get('review_comment', '').strip()[:150]
+    review_comment = request.form.get('review_comment', '').strip()[:MAX_COMMENT_LENGTH]
     month_str = request.form.get('month', '')  # YYYY-MM
 
     if not title or not nominee_ids:
         flash('请填写完整信息', 'danger')
         return redirect(url_for('incentive.index'))
 
-    photo_path = None
-    photo = request.files.get('photo')
-    if photo and photo.filename:
-        ext = os.path.splitext(photo.filename)[1].lower()
-        if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp'):
-            fname = f'{uuid.uuid4().hex[:12]}{ext}'
-            save_dir = os.path.join(current_app.root_path, 'static', 'uploads', 'incentive')
-            os.makedirs(save_dir, exist_ok=True)
-            photo.save(os.path.join(save_dir, fname))
-            photo_path = f'uploads/incentive/{fname}'
+    photo_path = save_photo(request.files.get('photo'))
 
     reviewed_at = datetime.utcnow()
     if month_str:
