@@ -10,6 +10,7 @@ TODO_STATUS_DONE = 'done'
 TODO_CAT_WORK = 'work'
 TODO_CAT_TEAM = 'team'
 TODO_CAT_PERSONAL = 'personal'
+TODO_CAT_RISK = 'risk'
 TODO_CATEGORIES_FOR_INVESTMENT = (TODO_CAT_WORK,)  # Only work counts for project stats
 
 # ---------------------------------------------------------------------------

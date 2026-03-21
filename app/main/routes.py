@@ -68,11 +68,14 @@ def index():
 
     # Group todos by category for merged display
     req_todos = {}  # req_id → [todos]
+    risk_todos = []
     team_todos = []
     personal_todos = []
     req_map = {r.id: r for r in my_reqs}  # Known requirements
     for t in my_todos:
-        if t.category == 'personal':
+        if t.category == 'risk':
+            risk_todos.append(t)
+        elif t.category == 'personal':
             personal_todos.append(t)
         elif t.category == 'team' or not t.requirements:
             team_todos.append(t)
@@ -154,7 +157,7 @@ def index():
     return render_template('main/index.html',
         my_todos=my_todos, todo_total=todo_total, todo_done=todo_done,
         my_reqs=my_reqs, my_risks=my_risks, today=today,
-        req_todos=req_todos, team_todos=team_todos, personal_todos=personal_todos,
+        req_todos=req_todos, risk_todos=risk_todos, team_todos=team_todos, personal_todos=personal_todos,
         display_reqs=display_reqs,
         approved_incentives=approved_incentives, rants=rants,
         ai_ranking=ai_ranking, alerts=alerts,
@@ -180,7 +183,7 @@ def quick_todo():
     if not title:
         return jsonify(ok=False) if is_ajax else redirect(url_for('main.index'))
 
-    if category not in ('work', 'team', 'personal'):
+    if category not in ('work', 'team', 'personal', 'risk'):
         category = 'work'
     today = date.today()
 
