@@ -40,12 +40,20 @@ class Config:
     SSO_URL = _yml.get('auth', {}).get('sso_url', '')
     DEFAULT_ROLE = _yml.get('auth', {}).get('default_role', 'DE')
 
+    # AI provider
+    AI_PROVIDER = _yml.get('ai', {}).get('provider', 'ollama')  # ollama or openai
+
     # Ollama
     OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', _yml.get('ollama', {}).get('base_url', 'http://127.0.0.1:11434'))
     OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', _yml.get('ollama', {}).get('model', 'qwen2.5'))
     OLLAMA_SSH_ENABLED = _yml.get('ollama', {}).get('ssh_enabled', False)
     OLLAMA_SSH_HOST = _yml.get('ollama', {}).get('ssh_host', '')
     OLLAMA_SSH_LOCAL_PORT = _yml.get('ollama', {}).get('ssh_local_port', 11434)
+
+    # OpenAI compatible API
+    OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', _yml.get('openai', {}).get('base_url', ''))
+    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', _yml.get('openai', {}).get('api_key', ''))
+    OPENAI_MODEL = os.getenv('OPENAI_MODEL', _yml.get('openai', {}).get('model', 'gpt-4o-mini'))
 
     # App tuning
     TODO_KEEP_DAYS = _yml.get('app', {}).get('todo_keep_days', 7)

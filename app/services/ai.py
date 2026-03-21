@@ -60,37 +60,49 @@ def _get_requirement_prompt():
 
 
 def check_ollama_status():
-    """Check Ollama connectivity. Returns (ok, error_msg)."""
+    """Check AI service connectivity. Returns (ok, error_msg)."""
+    provider = current_app.config.get('AI_PROVIDER', 'ollama')
+    if provider == 'openai':
+        base_url = current_app.config.get('OPENAI_BASE_URL', '')
+        api_key = current_app.config.get('OPENAI_API_KEY', '')
+        if not base_url or not api_key:
+            return False, 'OpenAI 未配置 base_url 或 api_key'
+        return True, None
     return _ensure_ssh_tunnel()
 
 
-def call_ollama(prompt, system_prompt=None, messages=None):
-    """Common Ollama /api/chat call. Returns (parsed_json, raw_text) or (None, None).
+def _call_openai(messages, input_text):
+    """Call OpenAI-compatible API. Returns (parsed_json, raw_text)."""
+    base_url = current_app.config['OPENAI_BASE_URL'].rstrip('/')
+    api_key = current_app.config['OPENAI_API_KEY']
+    model = current_app.config['OPENAI_MODEL']
+    try:
+        resp = requests.post(
+            f'{base_url}/chat/completions',
+            headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
+            json={'model': model, 'messages': messages, 'temperature': 0.7},
+            timeout=current_app.config.get('AI_TIMEOUT', 120),
+        )
+        resp.raise_for_status()
+        raw = resp.json()['choices'][0]['message']['content']
+        _log_ai_call(input_text, raw)
+        return _extract_json(raw), raw
+    except requests.RequestException:
+        logger.exception('OpenAI API error')
+        return None, None
+    except (KeyError, IndexError):
+        logger.exception('OpenAI response format error')
+        return None, None
 
-    Use either:
-      - prompt + optional system_prompt (simple call)
-      - messages (multi-turn conversation)
-    """
-    # Check SSH tunnel / connectivity first
+
+def _call_ollama_api(messages, input_text):
+    """Call Ollama /api/chat. Returns (parsed_json, raw_text)."""
     ok, err_msg = _ensure_ssh_tunnel()
     if not ok:
         logger.error('Ollama unreachable: %s', err_msg)
         return None, err_msg
-
     base_url = current_app.config['OLLAMA_BASE_URL']
     model = current_app.config['OLLAMA_MODEL']
-
-    if messages is None:
-        messages = []
-        if system_prompt:
-            messages.append({'role': 'system', 'content': system_prompt})
-        messages.append({'role': 'user', 'content': prompt})
-
-    # Build input text for logging
-    input_text = prompt or ''
-    if not input_text and messages:
-        input_text = ' '.join(m.get('content', '') for m in messages if m.get('role') == 'user')
-
     try:
         resp = requests.post(
             f'{base_url}/api/chat',
@@ -105,6 +117,24 @@ def call_ollama(prompt, system_prompt=None, messages=None):
     except requests.RequestException:
         logger.exception('Ollama API error')
         return None, None
+
+
+def call_ollama(prompt, system_prompt=None, messages=None):
+    """Call AI service (Ollama or OpenAI). Returns (parsed_json, raw_text) or (None, None)."""
+    if messages is None:
+        messages = []
+        if system_prompt:
+            messages.append({'role': 'system', 'content': system_prompt})
+        messages.append({'role': 'user', 'content': prompt})
+
+    input_text = prompt or ''
+    if not input_text and messages:
+        input_text = ' '.join(m.get('content', '') for m in messages if m.get('role') == 'user')
+
+    provider = current_app.config.get('AI_PROVIDER', 'ollama')
+    if provider == 'openai':
+        return _call_openai(messages, input_text)
+    return _call_ollama_api(messages, input_text)
 
 
 def _log_ai_call(raw_input, ai_output):

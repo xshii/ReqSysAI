@@ -430,11 +430,16 @@ def ai_model_list():
 
     prompts = get_all_prompts()
 
+    ai_provider = current_app.config.get('AI_PROVIDER', 'ollama')
     return render_template('admin/ai_models.html',
                            models=models, err=err, current_model=current_model,
                            default_prompt=default_prompt,
                            prompts=prompts, prompt_labels=PROMPT_LABELS,
-                           prompt_defaults=PROMPT_DEFAULTS)
+                           prompt_defaults=PROMPT_DEFAULTS,
+                           ai_provider=ai_provider,
+                           openai_base_url=current_app.config.get('OPENAI_BASE_URL', ''),
+                           openai_api_key=current_app.config.get('OPENAI_API_KEY', ''),
+                           openai_model=current_app.config.get('OPENAI_MODEL', 'gpt-4o-mini'))
 
 
 @admin_bp.route('/ai-models/create', methods=['POST'])
@@ -525,6 +530,46 @@ def ai_model_delete():
         flash(f'删除失败：{err}', 'danger')
     else:
         flash(f'模型 {model_name} 已删除', 'success')
+    return redirect(url_for('admin.ai_model_list'))
+
+
+@admin_bp.route('/ai-models/set-provider', methods=['POST'])
+@admin_required
+def ai_set_provider():
+    """Switch AI provider (ollama/openai)."""
+    provider = request.form.get('provider', 'ollama')
+    local_path = os.path.join(current_app.root_path, '..', 'config.local.yml')
+    local_cfg = {}
+    if os.path.exists(local_path):
+        with open(local_path, encoding='utf-8') as f:
+            local_cfg = yaml.safe_load(f) or {}
+    local_cfg.setdefault('ai', {})['provider'] = provider
+    with open(local_path, 'w', encoding='utf-8') as f:
+        yaml.dump(local_cfg, f, allow_unicode=True, default_flow_style=False)
+    current_app.config['AI_PROVIDER'] = provider
+    flash(f'AI 服务已切换为 {"OpenAI API" if provider == "openai" else "Ollama"}', 'success')
+    return redirect(url_for('admin.ai_model_list'))
+
+
+@admin_bp.route('/ai-models/set-openai', methods=['POST'])
+@admin_required
+def ai_set_openai():
+    """Save OpenAI API configuration."""
+    base_url = request.form.get('base_url', '').strip()
+    api_key = request.form.get('api_key', '').strip()
+    model = request.form.get('model', '').strip()
+    local_path = os.path.join(current_app.root_path, '..', 'config.local.yml')
+    local_cfg = {}
+    if os.path.exists(local_path):
+        with open(local_path, encoding='utf-8') as f:
+            local_cfg = yaml.safe_load(f) or {}
+    local_cfg['openai'] = {'base_url': base_url, 'api_key': api_key, 'model': model}
+    with open(local_path, 'w', encoding='utf-8') as f:
+        yaml.dump(local_cfg, f, allow_unicode=True, default_flow_style=False)
+    current_app.config['OPENAI_BASE_URL'] = base_url
+    current_app.config['OPENAI_API_KEY'] = api_key
+    current_app.config['OPENAI_MODEL'] = model
+    flash('OpenAI API 配置已保存', 'success')
     return redirect(url_for('admin.ai_model_list'))
 
 
