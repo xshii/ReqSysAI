@@ -112,12 +112,16 @@
                     </form>
                     {% endif %}
                     <span class="small">{{ t.title }}</span>
+                    {% if t.need_help %}<span class="badge bg-danger" style="font-size:.55em;">阻塞{% if t.blocked_reason %}：{{ t.blocked_reason }}{% endif %}</span>{% endif %}
                     {% if t.source == 'ai' %}<span class="badge bg-info" style="font-size:.55em;">AI</span>{% endif %}
                     {% if is_help_request %}<span class="badge bg-warning text-dark" style="font-size:.55em;">@{{ t.children[0].user.name }}</span>{% endif %}
                     {% if t.status != 'done' %}
                     <button class="btn btn-sm py-0 px-0 {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer-home" data-id="{{ t.id }}"
                             title="{{ '暂停番茄钟' if t.timer_running else '启动一个番茄钟' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;">
                         <i class="bi bi-{{ 'pause-fill' if t.timer_running else 'play-fill' }}"></i>
+                    </button>
+                    <button class="btn btn-sm py-0 px-0 {% if t.need_help %}text-danger{% else %}text-muted{% endif %} btn-block-home" data-id="{{ t.id }}" title="{{ '解除阻塞' if t.need_help else '标记阻塞' }}" style="font-size:.7em;line-height:1;">
+                        <i class="bi bi-{% if t.need_help %}unlock{% else %}lock{% endif %}"></i>
                     </button>
                     {% endif %}
                     {{ pomodoro_icons(t.actual_minutes, current_user.pomodoro_minutes) }}
@@ -722,6 +726,24 @@ document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
                 }
             }
         });
+    });
+});
+
+// Block toggle (homepage)
+document.querySelectorAll('.btn-block-home').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var isBlocked = btn.querySelector('i').classList.contains('bi-unlock');
+        if (isBlocked) {
+            apiPost('/todos/' + btn.dataset.id + '/block', {}).then(function(d) {
+                if (d && d.ok) location.reload();
+            });
+        } else {
+            var reason = prompt('阻塞原因（可选）：');
+            if (reason === null) return;
+            apiPost('/todos/' + btn.dataset.id + '/block', {reason: reason}).then(function(d) {
+                if (d && d.ok) location.reload();
+            });
+        }
     });
 });
 
