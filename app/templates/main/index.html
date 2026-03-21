@@ -547,21 +547,41 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
         el.addEventListener('dragend', function() {
             el.style.opacity = '';
             dragEl = null;
-            document.querySelectorAll('.todo-drag-item').forEach(function(e) { e.style.borderTop = ''; });
+            document.querySelectorAll('.todo-drag-item').forEach(function(e) {
+                e.style.borderTop = '';
+                e.style.borderBottom = '';
+            });
         });
         el.addEventListener('dragover', function(e) {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
-            if (dragEl && dragEl !== el && el.parentElement === dragEl.parentElement) {
+            if (!dragEl || dragEl === el || el.parentElement !== dragEl.parentElement) return;
+            var rect = el.getBoundingClientRect();
+            var half = rect.top + rect.height / 2;
+            if (e.clientY < half) {
                 el.style.borderTop = '2px solid #0d6efd';
+                el.style.borderBottom = '';
+            } else {
+                el.style.borderBottom = '2px solid #0d6efd';
+                el.style.borderTop = '';
             }
         });
-        el.addEventListener('dragleave', function() { el.style.borderTop = ''; });
+        el.addEventListener('dragleave', function() {
+            el.style.borderTop = '';
+            el.style.borderBottom = '';
+        });
         el.addEventListener('drop', function(e) {
             e.preventDefault();
             el.style.borderTop = '';
+            el.style.borderBottom = '';
             if (!dragEl || dragEl === el || el.parentElement !== dragEl.parentElement) return;
-            el.parentElement.insertBefore(dragEl, el);
+            var rect = el.getBoundingClientRect();
+            var half = rect.top + rect.height / 2;
+            if (e.clientY < half) {
+                el.parentElement.insertBefore(dragEl, el);
+            } else {
+                el.parentElement.insertBefore(dragEl, el.nextSibling);
+            }
             // Save new order
             var ids = [];
             el.parentElement.querySelectorAll('.todo-drag-item').forEach(function(item) {
