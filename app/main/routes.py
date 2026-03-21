@@ -55,7 +55,7 @@ def index():
             Todo.status == TODO_STATUS_TODO,
             db.and_(Todo.status == TODO_STATUS_DONE, Todo.done_date == today),
         )
-    ).options(joinedload(Todo.items), joinedload(Todo.requirements))\
+    ).options(joinedload(Todo.items), joinedload(Todo.requirements), joinedload(Todo.children))\
      .order_by(db.case((Todo.status == TODO_STATUS_TODO, 0), else_=1), Todo.sort_order).all()
     todo_total = len(my_todos)
     todo_done = sum(1 for t in my_todos if t.status == TODO_STATUS_DONE)
@@ -182,20 +182,29 @@ def quick_todo():
         category = 'work'
     today = date.today()
 
-    # Handle #comment → add comment to requirement
+    # Handle #summary → add comment to the most recent todo for this requirement
     if title.startswith('#') and req_id:
-        from app.models.requirement import Comment
+        from app.models.todo import TodoComment, todo_requirements
         comment_text = title[1:].strip()
         if comment_text:
-            db.session.add(Comment(
-                requirement_id=req_id, user_id=current_user.id, content=comment_text,
-            ))
-            db.session.commit()
-            return jsonify(ok=True, title=comment_text, todo_id=0, action='comment') if is_ajax else redirect(url_for('main.index'))
+            # Find latest active todo for this req
+            latest_todo = Todo.query.filter(
+                Todo.user_id == current_user.id,
+            ).join(todo_requirements, Todo.id == todo_requirements.c.todo_id)\
+             .filter(todo_requirements.c.requirement_id == req_id)\
+             .order_by(Todo.created_at.desc()).first()
+            if latest_todo:
+                db.session.add(TodoComment(
+                    todo_id=latest_todo.id, user_id=current_user.id, content=comment_text,
+                ))
+                db.session.commit()
+                return jsonify(ok=True, title=comment_text, todo_id=latest_todo.id, action='comment') if is_ajax else redirect(url_for('main.index'))
+            # No todo found, create as normal todo
+            pass
 
-    # Handle @name → create help todo for that person
+    # Handle @name → create paired help todos
     helper_name = None
-    if '@' in title:
+    if title.startswith('@'):
         import re
         m = re.match(r'@(\S+)\s*(.*)', title)
         if m:
@@ -208,30 +217,45 @@ def quick_todo():
         if req:
             reqs = [req]
 
-    # Find helper user
-    target_user = current_user
     if helper_name:
         helper = User.query.filter(
             db.or_(User.name == helper_name, User.pinyin.ilike(f'{helper_name}%'))
         ).filter_by(is_active=True).first()
-        if helper:
-            target_user = helper
+        if not helper or helper.id == current_user.id:
+            helper = None
 
+        if helper:
+            # My todo (parent, cannot self-complete, tracks helper's progress)
+            my_todo = Todo(
+                user_id=current_user.id, title=title, due_date=today,
+                category=category, requirements=reqs,
+            )
+            my_todo.items.append(TodoItem(title=title, sort_order=0))
+            db.session.add(my_todo)
+            db.session.flush()
+
+            # Helper's todo (child, linked to my todo)
+            helper_todo = Todo(
+                user_id=helper.id, title=title, due_date=today,
+                category=category, parent_id=my_todo.id, requirements=reqs,
+            )
+            helper_todo.items.append(TodoItem(title=title, sort_order=0))
+            db.session.add(helper_todo)
+            db.session.commit()
+
+            result = {'ok': True, 'title': title, 'todo_id': my_todo.id,
+                      'helper': helper.name, 'is_help': True}
+            return jsonify(**result) if is_ajax else redirect(url_for('main.index'))
+
+    # Normal todo
     todo = Todo(
-        user_id=target_user.id,
-        title=title,
-        due_date=today,
-        category=category,
-        requirements=reqs,
+        user_id=current_user.id, title=title, due_date=today,
+        category=category, requirements=reqs,
     )
     todo.items.append(TodoItem(title=title, sort_order=0))
     db.session.add(todo)
     db.session.commit()
-
-    result = {'ok': True, 'title': title, 'todo_id': todo.id}
-    if helper_name and target_user.id != current_user.id:
-        result['helper'] = target_user.name
-    return jsonify(**result) if is_ajax else redirect(url_for('main.index'))
+    return jsonify(ok=True, title=title, todo_id=todo.id) if is_ajax else redirect(url_for('main.index'))
 
 
 @main_bp.route('/api/ai-recommend-todos', methods=['POST'])
@@ -304,6 +328,14 @@ def ai_recommend_todos():
                 'reason': item.get('reason', ''),
             })
     return jsonify(ok=True, todos=todos)
+
+
+@main_bp.route('/api/users')
+@login_required
+def api_users():
+    """Return active users for @autocomplete."""
+    users = User.query.filter_by(is_active=True).order_by(User.name).all()
+    return jsonify([{'id': u.id, 'name': u.name, 'pinyin': u.pinyin or ''} for u in users])
 
 
 @main_bp.route('/api/search')

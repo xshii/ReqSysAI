@@ -103,6 +103,14 @@ def create_app(config_name=None):
             if current_user.is_admin:
                 from app.models.ip_request import IPChangeRequest
                 notif_count += IPChangeRequest.query.filter_by(status='pending').count()
+            # Help todos assigned to me (someone asked me for help)
+            from app.models.todo import Todo
+            notif_help = Todo.query.filter(
+                Todo.user_id == current_user.id,
+                Todo.parent_id.isnot(None),
+                Todo.status == 'todo',
+            ).count()
+            notif_count += notif_help
 
             return dict(sidebar_groups=groups, sidebar_cur_group=cur_group,
                         sidebar_projects=projects, notif_count=notif_count)

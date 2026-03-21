@@ -52,14 +52,20 @@
                 </div>
                 <div class="todo-list-for-req" data-req-id="{{ r.id }}">
                 {% for t in req_todos.get(r.id, []) %}
+                {% set is_help_request = t.children | length > 0 %}
                 <div class="d-flex align-items-center gap-1 mb-1 ps-2 todo-drag-item {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}" draggable="true" data-todo-id="{{ t.id }}" style="cursor:grab;">
+                    {% if is_help_request %}
+                    <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'hourglass-split text-warning' }}" style="font-size:.9em;" title="等待{{ t.children[0].user.name }}完成"></i>
+                    {% else %}
                     <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="{{ '撤销完成' if t.status == 'done' else '标记完成' }}">
                             <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-secondary' }}"></i>
                         </button>
                     </form>
+                    {% endif %}
                     <span class="small">{{ t.title }}</span>
+                    {% if is_help_request %}<span class="badge bg-warning text-dark" style="font-size:.6em;">@{{ t.children[0].user.name }}</span>{% endif %}
                     {% if t.status != 'done' %}
                     <button class="btn btn-sm py-0 px-0 {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer-home" data-id="{{ t.id }}"
                             title="{{ '暂停番茄钟' if t.timer_running else '启动一个番茄钟' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;">
@@ -352,6 +358,50 @@ document.getElementById('btnAiRecommend').addEventListener('click', function() {
         btn.innerHTML = '<i class="bi bi-robot"></i> AI 推荐今日 Todo';
         showToast('AI 服务不可用', 'danger');
     });
+});
+
+// @autocomplete for todo input
+var _userCache = null;
+function loadUsers(cb) {
+    if (_userCache) return cb(_userCache);
+    fetch('/api/users').then(function(r) { return r.json(); }).then(function(users) {
+        _userCache = users;
+        cb(users);
+    });
+}
+
+document.querySelectorAll('.quick-todo-form input[name="title"]').forEach(function(inp) {
+    var dropdown = document.createElement('div');
+    dropdown.className = 'position-absolute bg-white border rounded shadow-sm small';
+    dropdown.style.cssText = 'z-index:1000;display:none;max-height:150px;overflow-y:auto;width:200px;';
+    inp.parentElement.style.position = 'relative';
+    inp.parentElement.appendChild(dropdown);
+
+    inp.addEventListener('input', function() {
+        var val = inp.value;
+        var atIdx = val.lastIndexOf('@');
+        if (atIdx < 0 || atIdx !== 0) { dropdown.style.display = 'none'; return; }
+        var query = val.substring(atIdx + 1).toLowerCase();
+        loadUsers(function(users) {
+            var matches = users.filter(function(u) {
+                return u.name.toLowerCase().includes(query) || (u.pinyin && u.pinyin.toLowerCase().includes(query));
+            }).slice(0, 8);
+            if (!matches.length) { dropdown.style.display = 'none'; return; }
+            dropdown.innerHTML = matches.map(function(u) {
+                return '<div class="px-2 py-1 user-ac-item" style="cursor:pointer;" data-name="' + u.name + '">' + u.name + '</div>';
+            }).join('');
+            dropdown.style.display = 'block';
+            dropdown.querySelectorAll('.user-ac-item').forEach(function(item) {
+                item.addEventListener('mousedown', function(e) {
+                    e.preventDefault();
+                    inp.value = '@' + item.dataset.name + ' ';
+                    dropdown.style.display = 'none';
+                    inp.focus();
+                });
+            });
+        });
+    });
+    inp.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; }, 200); });
 });
 
 // Rant alias cache

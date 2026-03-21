@@ -226,6 +226,15 @@ def toggle_item(item_id):
     if not was_done and todo.status == TODO_STATUS_DONE:
         from app.services.events import fire, todo_completed
         fire(todo_completed, todo=todo)
+        # Sync parent todo (help request): helper done → requester's todo done
+        if todo.parent_id:
+            parent = db.session.get(Todo, todo.parent_id)
+            if parent and parent.status != TODO_STATUS_DONE:
+                parent.status = TODO_STATUS_DONE
+                parent.done_date = date.today()
+                for pi in parent.items:
+                    pi.is_done = True
+                db.session.commit()
     done, total = todo.items_progress
     return jsonify(ok=True, is_done=item.is_done, todo_done=todo.status == TODO_STATUS_DONE,
                    progress=f'{done}/{total}')
