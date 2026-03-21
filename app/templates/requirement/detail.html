@@ -26,43 +26,6 @@
             </div>
         </div>
 
-        <!-- Sub-tasks -->
-        <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h6 class="mb-0">子任务 ({{ req.tasks | length }})</h6>
-            </div>
-            {% if req.tasks %}
-            <ul class="list-group list-group-flush">
-                {% for t in req.tasks %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <span class="{% if t.status == 'done' %}text-decoration-line-through text-muted{% endif %}">{{ t.title }}</span>
-                    <div>
-                        <form method="POST" action="{{ url_for('requirement.toggle_task', task_id=t.id) }}" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-sm btn-outline-{{ 'success' if t.status == 'done' else ('primary' if t.status == 'in_progress' else 'secondary') }}">
-                                {{ t.status_label }}
-                            </button>
-                        </form>
-                        <form method="POST" action="{{ url_for('requirement.delete_task', task_id=t.id) }}" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('确定删除?')">
-                                <i class="bi bi-x"></i>
-                            </button>
-                        </form>
-                    </div>
-                </li>
-                {% endfor %}
-            </ul>
-            {% endif %}
-            <div class="card-footer">
-                <form method="POST" action="{{ url_for('requirement.add_task', req_id=req.id) }}" class="d-flex gap-2">
-                    {{ task_form.hidden_tag() }}
-                    {{ task_form.title(class="form-control form-control-sm", placeholder="添加子任务...") }}
-                    <button type="submit" class="btn btn-sm btn-primary">添加</button>
-                </form>
-            </div>
-        </div>
-
         <!-- Comments -->
         <div class="card mb-3">
             <div class="card-header"><h6 class="mb-0">评论 ({{ req.comments | length }})</h6></div>

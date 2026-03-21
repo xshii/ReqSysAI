@@ -6,7 +6,7 @@ from app.ai.forms import ParseTextForm, ParseDocxForm, ConfirmForm
 from flask_login import login_required
 from app.extensions import db
 from app.models.project import Project
-from app.models.requirement import Requirement, RequirementTask, Activity
+from app.models.requirement import Requirement, Activity
 from app.models.ai_log import AIParseLog
 from app.services.ai import parse_requirement, refine_requirement, extract_text_from_docx, check_ollama_status
 
@@ -151,7 +151,12 @@ def confirm():
         for line in (form.subtasks.data or '').strip().splitlines():
             line = line.strip()
             if line:
-                db.session.add(RequirementTask(requirement_id=req.id, title=line))
+                sub = Requirement(
+                    number=Requirement.generate_number(), title=line,
+                    project_id=form.project_id.data, parent_id=req.id,
+                    priority=req.priority, created_by=current_user.id,
+                )
+                db.session.add(sub)
 
         db.session.add(Activity(
             requirement_id=req.id, user_id=current_user.id,

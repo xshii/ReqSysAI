@@ -8,11 +8,11 @@ from sqlalchemy.orm import joinedload
 TodoProgress = namedtuple('TodoProgress', 'total done')
 
 from app.requirement import requirement_bp
-from app.requirement.forms import RequirementForm, TaskForm, CommentForm
+from app.requirement.forms import RequirementForm, CommentForm
 
 from app.extensions import db
 from app.models.project import Project, Milestone
-from app.models.requirement import Requirement, RequirementTask, Comment, Activity
+from app.models.requirement import Requirement, Comment, Activity
 from app.models.todo import Todo, TodoItem
 from app.models.user import User
 
@@ -154,9 +154,8 @@ def requirement_create():
 def requirement_detail(req_id):
     req = db.get_or_404(Requirement, req_id)
     comment_form = CommentForm()
-    task_form = TaskForm()
     return render_template('requirement/detail.html', req=req,
-                           comment_form=comment_form, task_form=task_form)
+                           comment_form=comment_form)
 
 
 @requirement_bp.route('/<int:req_id>/edit', methods=['GET', 'POST'])
@@ -286,41 +285,6 @@ def add_comment(req_id):
         _log_activity(req, 'commented', form.content.data[:100])
         db.session.commit()
     return redirect(url_for('requirement.requirement_detail', req_id=req.id))
-
-
-# --- Sub-tasks ---
-
-@requirement_bp.route('/<int:req_id>/tasks', methods=['POST'])
-@login_required
-def add_task(req_id):
-    req = db.get_or_404(Requirement, req_id)
-    form = TaskForm()
-    if form.validate_on_submit():
-        task = RequirementTask(requirement_id=req.id, title=form.title.data)
-        db.session.add(task)
-        _log_activity(req, 'task_added', f'添加子任务「{form.title.data}」')
-        db.session.commit()
-    return redirect(url_for('requirement.requirement_detail', req_id=req.id))
-
-
-@requirement_bp.route('/tasks/<int:task_id>/toggle', methods=['POST'])
-@login_required
-def toggle_task(task_id):
-    task = db.get_or_404(RequirementTask, task_id)
-    next_status = {'pending': 'in_progress', 'in_progress': 'done', 'done': 'pending'}
-    task.status = next_status.get(task.status, 'pending')
-    db.session.commit()
-    return redirect(url_for('requirement.requirement_detail', req_id=task.requirement_id))
-
-
-@requirement_bp.route('/tasks/<int:task_id>/delete', methods=['POST'])
-@login_required
-def delete_task(task_id):
-    task = db.get_or_404(RequirementTask, task_id)
-    req_id = task.requirement_id
-    db.session.delete(task)
-    db.session.commit()
-    return redirect(url_for('requirement.requirement_detail', req_id=req_id))
 
 
 def _build_requirement_form(obj=None):
