@@ -38,9 +38,14 @@ def user_list():
 
     hidden = set(current_app.config.get('HIDDEN_ROLES', []) + ['Admin'])
     visible_roles = [r for r in Role.query.order_by(Role.id).all() if r.name not in hidden]
+
+    from app.models.ip_request import IPChangeRequest
+    ip_requests = IPChangeRequest.query.filter_by(status='pending')\
+        .order_by(IPChangeRequest.created_at.desc()).all()
+
     return render_template('admin/users.html', users=users, visible_roles=visible_roles,
                            all_groups=all_groups, group_counts=group_counts,
-                           filter_group=filter_group)
+                           filter_group=filter_group, ip_requests=ip_requests)
 
 
 @admin_bp.route('/users/new', methods=['GET', 'POST'])
@@ -100,6 +105,38 @@ def user_edit(user_id):
         return redirect(url_for('admin.user_list'))
 
     return render_template('admin/user_form.html', form=form, title=f'编辑用户 - {user.name}', user=user)
+
+
+@admin_bp.route('/ip-request/<int:req_id>/approve', methods=['POST'])
+@admin_required
+def ip_request_approve(req_id):
+    from app.models.ip_request import IPChangeRequest
+    from datetime import datetime
+    r = db.get_or_404(IPChangeRequest, req_id)
+    r.status = 'approved'
+    r.reviewed_by = current_user.id
+    r.reviewed_at = datetime.utcnow()
+    # Update user IP
+    user = db.session.get(User, r.user_id)
+    if user:
+        user.ip_address = r.new_ip
+    db.session.commit()
+    flash(f'已同意 {user.name} 的 IP 更换申请', 'success')
+    return redirect(url_for('admin.user_list'))
+
+
+@admin_bp.route('/ip-request/<int:req_id>/reject', methods=['POST'])
+@admin_required
+def ip_request_reject(req_id):
+    from app.models.ip_request import IPChangeRequest
+    from datetime import datetime
+    r = db.get_or_404(IPChangeRequest, req_id)
+    r.status = 'rejected'
+    r.reviewed_by = current_user.id
+    r.reviewed_at = datetime.utcnow()
+    db.session.commit()
+    flash('已拒绝 IP 更换申请', 'info')
+    return redirect(url_for('admin.user_list'))
 
 
 @admin_bp.route('/users/<int:user_id>/toggle', methods=['POST'])

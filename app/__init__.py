@@ -100,6 +100,9 @@ def create_app(config_name=None):
             if current_user.is_team_manager:
                 from app.models.incentive import Incentive
                 notif_count += Incentive.query.filter_by(status='pending').count()
+            if current_user.is_admin:
+                from app.models.ip_request import IPChangeRequest
+                notif_count += IPChangeRequest.query.filter_by(status='pending').count()
 
             return dict(sidebar_groups=groups, sidebar_cur_group=cur_group,
                         sidebar_projects=projects, notif_count=notif_count)

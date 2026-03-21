@@ -49,8 +49,18 @@ def login():
             user.ip_address = client_ip
             db.session.commit()
         elif user.ip_address != client_ip:
-            flash(f'IP 不匹配（当前 {client_ip}，绑定 {user.ip_address}），请联系管理员修改', 'danger')
-            return render_template('auth/login.html', form=form, client_ip=client_ip)
+            # Check if there's already a pending request
+            from app.models.ip_request import IPChangeRequest
+            pending = IPChangeRequest.query.filter_by(
+                user_id=user.id, status='pending'
+            ).first()
+            if pending:
+                flash('IP 更换申请已提交，请等待管理员审批', 'warning')
+            else:
+                flash(f'IP 不匹配（当前 {client_ip}，绑定 {user.ip_address}）', 'danger')
+            return render_template('auth/login.html', form=form, client_ip=client_ip,
+                                   ip_mismatch=True, mismatch_eid=user.employee_id,
+                                   has_pending=bool(pending))
 
         login_user(user, remember=False)
         session.permanent = True  # 10 min lifetime from config
@@ -59,6 +69,28 @@ def login():
         return redirect(url_for('main.index'))
 
     return render_template('auth/login.html', form=form, client_ip=client_ip)
+
+
+@auth_bp.route('/request-ip-change', methods=['POST'])
+def request_ip_change():
+    """Submit IP change request (no login required)."""
+    from app.models.ip_request import IPChangeRequest
+    eid = request.form.get('employee_id', '').strip().lower()
+    client_ip = _get_client_ip()
+    user = User.query.filter_by(employee_id=eid).first()
+    if not user:
+        flash('工号不存在', 'danger')
+        return redirect(url_for('auth.login'))
+    # Check duplicate
+    pending = IPChangeRequest.query.filter_by(user_id=user.id, status='pending').first()
+    if pending:
+        flash('已有待审批的申请，请等待', 'warning')
+        return redirect(url_for('auth.login'))
+    req = IPChangeRequest(user_id=user.id, old_ip=user.ip_address, new_ip=client_ip)
+    db.session.add(req)
+    db.session.commit()
+    flash('IP 更换申请已提交，请等待管理员审批', 'success')
+    return redirect(url_for('auth.login'))
 
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
