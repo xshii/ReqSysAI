@@ -18,9 +18,12 @@ from app.utils.upload import save_photo
 @login_required
 def index():
     """List incentives with status filter."""
-    is_reviewer = current_user.has_role('PL', 'XM') or current_user.is_admin
+    is_reviewer = current_user.has_role('PL', 'XM', 'LM', 'HR') or current_user.is_admin
     status_filter = request.args.get('status', '')
+    # Ordinary users can only see their own, forced to 'mine'
     scope = request.args.get('scope', 'all' if is_reviewer else 'mine')
+    if not is_reviewer:
+        scope = 'mine'
 
     period = request.args.get('period', '1m')
     period_days = {'1m': 30, '3m': 90, '6m': 180, '1y': 365}.get(period, 30)

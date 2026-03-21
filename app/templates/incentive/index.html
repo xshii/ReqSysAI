@@ -101,10 +101,12 @@
                 </div>
             </div>
             <div class="text-end">
-                {% if is_reviewer or inc.status == 'pending' %}
+                {% if is_reviewer %}
                 <span class="badge bg-{{ inc.status_color }}">{{ inc.status_label }}</span>
+                {% elif inc.status == 'pending' %}
+                <span class="badge bg-warning text-dark">待评审</span>
                 {% else %}
-                <span class="badge bg-secondary">已评审</span>
+                <span class="badge bg-secondary">已提交</span>
                 {% endif %}
                 {% if is_reviewer and inc.status == 'pending' %}
                 <button class="btn btn-sm btn-outline-primary mt-1" data-bs-toggle="modal" data-bs-target="#reviewModal"

@@ -120,11 +120,11 @@
 <!-- Row 4: Summary + High Risk -->
 <div class="report-section">
     <h6>整体进展</h6>
-    <p class="ps-2 mb-1">{{ ai.summary }}</p>
+    <div class="report-summary">{{ ai.summary }}</div>
     {% set high_risks = report_data.open_risks | selectattr('severity', 'equalto', 'high') | list %}
     {% if high_risks %}
-    <div class="alert alert-danger py-2 mb-0 small">
-        <strong><i class="bi bi-exclamation-triangle-fill"></i> 高风险通报：</strong>
+    <div style="background:#fef2f2;border:1px solid #fecaca;padding:8px 12px;font-size:.84rem;margin-top:4px;">
+        <strong>高风险通报：</strong>
         {% for r in high_risks %}{{ r.title }}{% if not loop.last %}；{% endif %}{% endfor %}
     </div>
     {% endif %}
@@ -133,9 +133,9 @@
 <!-- Sub-project progress (parent projects only) -->
 {% if report_data.sub_projects %}
 <div class="report-section">
-    <h6>子项目进展</h6>
+    <h6>专题进展</h6>
     <table class="report-table">
-        <thead><tr><th>子项目</th><th>Owner</th><th>一句话进展</th></tr></thead>
+        <thead><tr><th>专题</th><th>负责人</th><th>一句话进展</th></tr></thead>
         <tbody>
         {% for sp in report_data.sub_projects %}
         <tr>
@@ -163,15 +163,15 @@
 
 <!-- Row 6: Risks & Issues -->
 <div class="report-section">
-    <h6>风险 & 问题</h6>
+    <h6 class="risk-title">风险 & 问题</h6>
     {% if report_data.open_risks %}
     <table class="report-table">
         <thead><tr><th>风险</th><th>严重程度</th><th>责任人</th><th>跟踪人</th><th>预计闭环</th></tr></thead>
         <tbody>
         {% for r in report_data.open_risks %}
-        <tr>
-            <td>{{ r.title }}{% if r.is_overdue %} <span class="badge bg-danger">超期</span>{% endif %}</td>
-            <td><span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span></td>
+        <tr class="{{ 'row-risk' if r.is_overdue else '' }}">
+            <td>{{ r.title }}{% if r.is_overdue %} <span class="fw-bold">(超期)</span>{% endif %}</td>
+            <td>{{ r.severity_label }}</td>
             <td>{{ r.owner or '-' }}</td>
             <td>{{ r.tracker.name if r.tracker else '-' }}</td>
             <td class="{{ 'text-danger fw-bold' if r.is_overdue else '' }}">{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>

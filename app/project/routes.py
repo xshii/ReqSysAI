@@ -34,12 +34,15 @@ def project_create():
     from app.models.project import MilestoneTemplate
 
     form = ProjectForm()
+    form.parent_id.choices = [(0, '-- 无（顶级项目）--')] + [
+        (p.id, p.name) for p in Project.query.filter_by(status='active').order_by(Project.name).all()]
     templates = MilestoneTemplate.query.order_by(MilestoneTemplate.name).all()
 
     if form.validate_on_submit():
         project = Project(
             name=form.name.data,
             description=form.description.data,
+            parent_id=form.parent_id.data or None,
             created_by=current_user.id,
         )
         db.session.add(project)
@@ -135,9 +138,15 @@ def toggle_follow(project_id):
 def project_edit(project_id):
     project = db.get_or_404(Project, project_id)
     form = ProjectForm(obj=project)
+    form.parent_id.choices = [(0, '-- 无（顶级项目）--')] + [
+        (p.id, p.name) for p in Project.query.filter(
+            Project.status == 'active', Project.id != project_id).order_by(Project.name).all()]
+    if not form.is_submitted():
+        form.parent_id.data = project.parent_id or 0
     if form.validate_on_submit():
         project.name = form.name.data
         project.description = form.description.data
+        project.parent_id = form.parent_id.data or None
         db.session.commit()
         flash('项目更新成功', 'success')
         return redirect(url_for('project.project_detail', project_id=project.id))

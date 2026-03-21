@@ -233,33 +233,6 @@
 
     <!-- Right column -->
     <div class="col-md-5">
-        <!-- Milestones -->
-        {% if milestones %}
-        <div class="card mb-3 border-0 shadow-sm">
-            <div class="card-header py-2 bg-white">
-                <i class="bi bi-flag-fill text-warning"></i> 里程碑
-            </div>
-            <div class="list-group list-group-flush">
-                {% for ms in milestones %}
-                {% set ms_days = (ms.due_date - today).days if ms.due_date else 999 %}
-                <div class="list-group-item py-2 small d-flex justify-content-between align-items-center">
-                    <div>
-                        <span class="fw-bold">{{ ms.project.name }}</span>
-                        <span class="text-muted mx-1">·</span>
-                        {{ ms.name }}
-                    </div>
-                    <div>
-                        {% if ms.due_date %}
-                        <span class="badge {{ 'bg-danger' if ms_days < 0 else 'bg-warning text-dark' if ms_days <= 7 else 'bg-light text-dark border' }}">
-                            {% if ms_days < 0 %}已逾期{{ -ms_days }}天{% elif ms_days == 0 %}今天截止{% else %}剩{{ ms_days }}天{% endif %}
-                        </span>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
 
         <!-- Contribution Heatmap -->
         <div class="card mb-3 border-0 shadow-sm">

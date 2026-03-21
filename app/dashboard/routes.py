@@ -24,6 +24,50 @@ from app.services.statistics import (
 )
 
 
+def _build_sub_projects(cur_project, monday):
+    """Build sub-project progress list for parent project weekly report."""
+    if not cur_project or not cur_project.children:
+        return []
+    sub_projects = []
+    for child in cur_project.children:
+        child_saved = WeeklyReport.query.filter_by(
+            project_id=child.id, week_start=monday).first()
+        from app.models.project_member import ProjectMember as PM_
+        fo = PM_.query.filter_by(project_id=child.id, project_role='FO').first()
+        summary = child_saved.summary if child_saved and child_saved.summary else None
+        if summary is None:
+            # AI generate one-line summary for child project
+            child_reqs = Requirement.query.filter_by(project_id=child.id, parent_id=None).all()
+            c_total = len(child_reqs)
+            c_done = sum(1 for r in child_reqs if r.status in ('done', 'closed'))
+            c_dev = sum(1 for r in child_reqs if r.status == 'in_dev')
+            c_overdue = sum(1 for r in child_reqs if r.due_date and r.due_date < date.today()
+                           and r.status not in ('done', 'closed'))
+            # Completed todos this week
+            child_req_ids = [r.id for r in child_reqs]
+            week_done = 0
+            if child_req_ids:
+                from app.models.todo import todo_requirements as tr_
+                week_done = Todo.query.filter(
+                    Todo.done_date >= monday, Todo.done_date <= date.today()
+                ).join(tr_, Todo.id == tr_.c.todo_id).filter(
+                    tr_.c.requirement_id.in_(child_req_ids)).count()
+            context = (f'{child.name}：需求 {c_done}/{c_total} 完成，{c_dev}个开发中，'
+                       f'本周完成 {week_done} 个todo'
+                       + (f'，{c_overdue}个延期' if c_overdue else ''))
+            try:
+                _, raw = call_ollama(f'用一句话（不超过30字）总结以下项目进展，直接输出文字：\n{context}')
+                summary = (raw or '').strip()[:50] if raw else context
+            except Exception:
+                summary = context
+        sub_projects.append({
+            'project': child,
+            'owner': fo.user if fo and fo.user else (child.owner if child.owner else None),
+            'summary': summary,
+        })
+    return sub_projects
+
+
 @dashboard_bp.route('/requirements')
 @login_required
 def requirement_progress():
@@ -323,6 +367,18 @@ def weekly_report():
             for name in all_persons:
                 lines.append(f'- {name}: 完成 {person_done.get(name, 0)} 个任务，进行中 {person_active.get(name, 0)} 个')
 
+        # Sub-project context for AI
+        if cur_project and cur_project.children:
+            lines.append('\n专题（子项目）进展：')
+            for child in cur_project.children:
+                child_reqs = Requirement.query.filter_by(project_id=child.id, parent_id=None).all()
+                c_total = len(child_reqs)
+                c_done = sum(1 for r in child_reqs if r.status in ('done', 'closed'))
+                from app.models.project_member import ProjectMember as PM_
+                fo = PM_.query.filter_by(project_id=child.id, project_role='FO').first()
+                fo_name = fo.display_name if fo else (child.owner.name if child.owner else '未分配')
+                lines.append(f'- {child.name}（负责人：{fo_name}，需求 {c_done}/{c_total} 完成，进度 {child.progress}%）')
+
         # AI prompt: only generate analysis (summary, risks, plan)
         tpl = get_prompt('weekly_report')
         prompt = tpl.format(project_name=project_name) + '\n\n' + '\n'.join(lines)
@@ -362,6 +418,8 @@ def weekly_report():
                 people_map[pname]['_total'] += people_map[pname][rnum]
 
         # Package all data for template and Excel
+        sub_projects = _build_sub_projects(cur_project, monday)
+
         report_data = {
             'project_name': project_name,
             'today': date.today(),
@@ -380,6 +438,7 @@ def weekly_report():
             'people_map': people_map,
             'people_map_reqs': people_map_reqs,
             'ai': ai_analysis,
+            'sub_projects': sub_projects,
         }
 
         # Save to DB
@@ -486,6 +545,20 @@ def weekly_report():
             'plan': json_lib.loads(saved.plan_json) if saved.plan_json else [],
         }
 
+        # Sub-projects
+        sub_projects = []
+        if cur_project and cur_project.children:
+            for child in cur_project.children:
+                child_saved = WeeklyReport.query.filter_by(
+                    project_id=child.id, week_start=monday).first()
+                from app.models.project_member import ProjectMember as PM_
+                fo = PM_.query.filter_by(project_id=child.id, project_role='FO').first()
+                sub_projects.append({
+                    'project': child,
+                    'owner': fo.user if fo and fo.user else (child.owner if child.owner else None),
+                    'summary': child_saved.summary if child_saved and child_saved.summary else None,
+                })
+
         report_data = {
             'project_name': project_name,
             'today': date.today(),
@@ -504,6 +577,7 @@ def weekly_report():
             'people_map': people_map,
             'people_map_reqs': people_map_reqs,
             'ai': ai_analysis,
+            'sub_projects': sub_projects,
         }
 
         return render_template('dashboard/weekly_report.html',
@@ -1053,7 +1127,14 @@ def emotion_predict():
     if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
         from flask import abort
         abort(403)
-    return render_template('dashboard/emotion.html')
+    from app.models.emotion import EmotionRecord
+    # Load saved records grouped by date
+    records = EmotionRecord.query.order_by(EmotionRecord.scan_date.desc(), EmotionRecord.risk_level.desc()).all()
+    dates = sorted(set(r.scan_date for r in records), reverse=True)
+    grouped = {}
+    for d in dates:
+        grouped[d] = [r for r in records if r.scan_date == d]
+    return render_template('dashboard/emotion.html', grouped=grouped, dates=dates)
 
 
 @dashboard_bp.route('/emotion/analyze', methods=['POST'])
@@ -1111,3 +1192,78 @@ def emotion_analyze():
     if isinstance(result, list):
         return jsonify(ok=True, members=result)
     return jsonify(ok=False, raw=raw or '分析失败')
+
+
+@dashboard_bp.route('/emotion/save', methods=['POST'])
+@login_required
+def emotion_save():
+    """Save AI emotion analysis results."""
+    if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
+        return jsonify(ok=False), 403
+    import json as json_lib
+    from app.models.emotion import EmotionRecord
+    data = request.get_json() or {}
+    members = data.get('members', [])
+    today = date.today()
+    # Delete existing records for today (re-save)
+    EmotionRecord.query.filter_by(scan_date=today).delete()
+    for m in members:
+        db.session.add(EmotionRecord(
+            scan_date=today,
+            member_name=m.get('name', ''),
+            status=m.get('status', '正常'),
+            risk_level=m.get('risk_level', 'low'),
+            signals=json_lib.dumps(m.get('signals', []), ensure_ascii=False),
+            suggestion=m.get('suggestion', ''),
+            created_by=current_user.id,
+        ))
+    db.session.commit()
+    return jsonify(ok=True, count=len(members))
+
+
+@dashboard_bp.route('/emotion/delete/<scan_date>', methods=['POST'])
+@login_required
+def emotion_delete(scan_date):
+    """Delete all emotion records for a specific date."""
+    if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
+        return jsonify(ok=False), 403
+    from app.models.emotion import EmotionRecord
+    deleted = EmotionRecord.query.filter_by(scan_date=scan_date).delete()
+    db.session.commit()
+    flash(f'已删除 {scan_date} 的记录', 'success')
+    return redirect(url_for('dashboard.emotion_predict'))
+
+
+@dashboard_bp.route('/emotion/comment/<int:record_id>', methods=['POST'])
+@login_required
+def emotion_comment(record_id):
+    """Add comment to an emotion record. Supports #comment and @person for todo."""
+    from app.models.emotion import EmotionRecord, EmotionComment
+    from app.models.todo import Todo, TodoItem
+    import re
+
+    record = db.get_or_404(EmotionRecord, record_id)
+    content = request.form.get('content', '').strip()[:500]
+    if not content:
+        return redirect(url_for('dashboard.emotion_predict'))
+
+    # Save comment
+    db.session.add(EmotionComment(record_id=record.id, user_id=current_user.id, content=content))
+
+    # Check for @mention — create a follow-up todo
+    at_match = re.search(r'@(\S+)', content)
+    if at_match:
+        target_name = at_match.group(1)
+        target_user = User.query.filter(
+            db.or_(User.name == target_name, User.pinyin.ilike(f'{target_name}%'))
+        ).filter_by(is_active=True).first()
+        if target_user:
+            clean_content = re.sub(r'@\S+', '', content).strip()
+            todo_title = f'[情绪跟进] {record.member_name}：{clean_content[:50]}'
+            todo = Todo(user_id=target_user.id, title=todo_title,
+                        due_date=date.today(), category='team', source='help')
+            todo.items.append(TodoItem(title=todo_title, sort_order=0))
+            db.session.add(todo)
+
+    db.session.commit()
+    return redirect(url_for('dashboard.emotion_predict'))

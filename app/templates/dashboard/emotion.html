@@ -4,64 +4,130 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4>情绪预测 · 人员流失风险</h4>
-    <button class="btn btn-primary btn-sm" id="btnAnalyze" onclick="runAnalyze()"><i class="bi bi-robot"></i> AI 分析</button>
+    <button class="btn btn-primary btn-sm" id="btnAnalyze" onclick="runAnalyze()"><i class="bi bi-robot"></i> 分析</button>
 </div>
 
-<div id="resultPanel" class="d-none">
+<!-- AI Result (live, unsaved) -->
+<div id="resultPanel" class="d-none mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="fw-bold small text-primary">分析结果（未保存）</span>
+        <button class="btn btn-sm btn-success" id="btnSave" onclick="saveResults()"><i class="bi bi-check-lg"></i> 保存</button>
+    </div>
     <div class="row g-3" id="memberCards"></div>
 </div>
 
+<!-- Saved History -->
+{% if dates %}
+{% for d in dates %}
+{% set records = grouped[d] %}
+<div class="card mb-3">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span class="fw-bold small">
+            {{ d.strftime('%Y-%m-%d') }}
+            <span class="text-muted">（{{ (today - d).days if (today - d).days > 0 else '' }}{{ '天前' if (today - d).days > 0 else '今天' }}）</span>
+        </span>
+        <form method="POST" action="{{ url_for('dashboard.emotion_delete', scan_date=d.strftime('%Y-%m-%d')) }}" class="d-inline">
+            <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('删除 {{ d.strftime("%Y-%m-%d") }} 的记录？')"><i class="bi bi-trash"></i></button>
+        </form>
+    </div>
+    <div class="card-body py-2">
+        <div class="row g-2">
+        {% for r in records %}
+        {% set s_map = {'正常': 'success', '疲劳': 'warning', '低迷': 'secondary', '预警': 'danger'} %}
+        {% set r_map = {'low': 'success', 'medium': 'warning', 'high': 'danger'} %}
+        {% set r_label = {'low': '低', 'medium': '中', 'high': '高'} %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card border-{{ s_map.get(r.status, 'secondary') }} h-100">
+                <div class="card-header py-1 bg-{{ s_map.get(r.status, 'secondary') }} bg-opacity-10 d-flex justify-content-between small">
+                    <strong>{{ r.member_name }}</strong>
+                    <div>
+                        <span class="badge bg-{{ s_map.get(r.status, 'secondary') }}">{{ r.status }}</span>
+                        <span class="badge bg-{{ r_map.get(r.risk_level, 'secondary') }}">风险:{{ r_label.get(r.risk_level, '低') }}</span>
+                    </div>
+                </div>
+                <div class="card-body py-2 small">
+                    {% if r.signals_list %}
+                    <div class="mb-1"><strong>信号：</strong>
+                        <ul class="mb-0 ps-3">{% for s in r.signals_list %}<li>{{ s }}</li>{% endfor %}</ul>
+                    </div>
+                    {% endif %}
+                    <div><strong>建议：</strong>{{ r.suggestion or '-' }}</div>
+                    <!-- Comments -->
+                    {% if r.comments %}
+                    <div class="mt-2 border-top pt-1">
+                        {% for c in r.comments %}
+                        <div class="text-muted" style="font-size:.8em;">
+                            <strong>{{ c.user.name }}</strong> <span>{{ c.created_at.strftime('%m-%d %H:%M') }}</span>：{{ c.content }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <!-- Comment input -->
+                    <form method="POST" action="{{ url_for('dashboard.emotion_comment', record_id=r.id) }}" class="mt-1">
+                        <div class="input-group input-group-sm">
+                            <input type="text" name="content" class="form-control" placeholder="#评论 或 @某人跟进" maxlength="500" required style="font-size:.8em;">
+                            <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-send"></i></button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% elif not dates %}
 <div id="emptyHint" class="text-center text-muted py-5">
     <i class="bi bi-emoji-neutral" style="font-size:3em;"></i>
-    <p class="mt-2">点击"AI 分析"按钮，分析团队成员的工作状态和流失风险</p>
+    <p class="mt-2">点击"分析"按钮，分析团队成员的工作状态和流失风险</p>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
+var _aiMembers = null;
+
 function runAnalyze() {
     var btn = document.getElementById('btnAnalyze');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 分析中（约30秒）...';
-    document.getElementById('emptyHint').classList.add('d-none');
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 分析中...';
+    var hint = document.getElementById('emptyHint');
+    if (hint) hint.classList.add('d-none');
 
     fetch('{{ url_for("dashboard.emotion_analyze") }}', {method: 'POST'})
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(d) {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-robot"></i> AI 分析';
+        btn.innerHTML = '<i class="bi bi-robot"></i> 分析';
         if (!d.ok) { alert('分析失败：' + (d.raw || d.msg || '')); return; }
 
+        _aiMembers = d.members;
         var container = document.getElementById('memberCards');
         container.innerHTML = '';
-        var statusMap = {'正常': {color: 'success', icon: 'emoji-smile'}, '疲劳': {color: 'warning', icon: 'emoji-dizzy'}, '低迷': {color: 'secondary', icon: 'emoji-frown'}, '预警': {color: 'danger', icon: 'emoji-angry'}};
+        var statusMap = {'正常': 'success', '疲劳': 'warning', '低迷': 'secondary', '预警': 'danger'};
         var riskMap = {'low': 'success', 'medium': 'warning', 'high': 'danger'};
         var riskLabel = {'low': '低', 'medium': '中', 'high': '高'};
-
-        // Sort: high risk first
         var order = {'high': 0, 'medium': 1, 'low': 2};
         d.members.sort(function(a, b) { return (order[a.risk_level] || 2) - (order[b.risk_level] || 2); });
 
         d.members.forEach(function(m) {
-            var s = statusMap[m.status] || statusMap['正常'];
+            var sc = statusMap[m.status] || 'secondary';
             var rc = riskMap[m.risk_level] || 'secondary';
             var rl = riskLabel[m.risk_level] || '低';
-
             var signals = '';
             if (m.signals && m.signals.length) {
-                signals = '<ul class="mb-1 ps-3">';
-                m.signals.forEach(function(sig) { signals += '<li>' + sig + '</li>'; });
+                signals = '<ul class="mb-0 ps-3">';
+                m.signals.forEach(function(s) { signals += '<li>' + s + '</li>'; });
                 signals += '</ul>';
             }
-
             container.innerHTML +=
-                '<div class="col-md-6 col-lg-4">' +
-                '<div class="card border-' + s.color + ' h-100">' +
-                '<div class="card-header py-2 bg-' + s.color + ' bg-opacity-10 d-flex justify-content-between">' +
-                '<span><i class="bi bi-' + s.icon + '"></i> <strong>' + m.name + '</strong></span>' +
-                '<div><span class="badge bg-' + s.color + ' me-1">' + m.status + '</span>' +
-                '<span class="badge bg-' + rc + '">流失风险: ' + rl + '</span></div>' +
-                '</div>' +
+                '<div class="col-md-6 col-lg-4"><div class="card border-' + sc + ' h-100">' +
+                '<div class="card-header py-1 bg-' + sc + ' bg-opacity-10 d-flex justify-content-between small">' +
+                '<strong>' + m.name + '</strong>' +
+                '<div><span class="badge bg-' + sc + '">' + m.status + '</span> ' +
+                '<span class="badge bg-' + rc + '">风险:' + rl + '</span></div></div>' +
                 '<div class="card-body py-2 small">' +
                 (signals ? '<div class="mb-1"><strong>信号：</strong>' + signals + '</div>' : '') +
                 '<div><strong>建议：</strong>' + (m.suggestion || '-') + '</div>' +
@@ -70,8 +136,29 @@ function runAnalyze() {
         document.getElementById('resultPanel').classList.remove('d-none');
     }).catch(function(err) {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-robot"></i> AI 分析';
+        btn.innerHTML = '<i class="bi bi-robot"></i> 分析';
         alert('请求失败：' + err.message);
+    });
+}
+
+function saveResults() {
+    if (!_aiMembers || !_aiMembers.length) return;
+    var btn = document.getElementById('btnSave');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    fetch('{{ url_for("dashboard.emotion_save") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({members: _aiMembers}),
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) {
+            btn.innerHTML = '<i class="bi bi-check"></i> 已保存';
+            setTimeout(function() { location.reload(); }, 500);
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-lg"></i> 保存';
+            alert('保存失败');
+        }
     });
 }
 </script>

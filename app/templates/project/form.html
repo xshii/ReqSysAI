@@ -20,6 +20,10 @@
                         {% for e in form.name.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
                     </div>
                     <div class="mb-3">
+                        <label class="form-label">{{ form.parent_id.label.text }}</label>
+                        {{ form.parent_id(class="form-select") }}
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">{{ form.description.label.text }}</label>
                         {{ form.description(class="form-control", rows=3) }}
                     </div>

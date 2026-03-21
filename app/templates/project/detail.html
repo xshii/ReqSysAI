@@ -4,6 +4,11 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
+        {% if project.parent %}
+        <div class="small text-muted mb-1">
+            <a href="{{ url_for('project.project_detail', project_id=project.parent.id) }}">{{ project.parent.name }}</a> /
+        </div>
+        {% endif %}
         <h4 class="mb-0">{{ project.name }}
             <span class="badge bg-{{ 'success' if project.status == 'active' else 'secondary' }} ms-1" style="font-size:0.6em;">{{ project.status_label }}</span>
         </h4>
@@ -59,6 +64,47 @@
     </div>
 </div>
 
+<!-- Milestone Timeline (full width) -->
+{% if project.milestones %}
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center bg-white">
+        <span class="small fw-bold">里程碑</span>
+        <a href="{{ url_for('project.milestone_create', project_id=project.id) }}" class="btn btn-sm btn-outline-dark py-0"><i class="bi bi-plus"></i></a>
+    </div>
+    <div class="card-body py-2">
+        <div style="overflow-x:auto;">
+            <div class="position-relative" style="padding:0 8px 50px 8px;min-width:{{ project.milestones|length * 110 }}px;">
+                <div style="position:absolute;top:0;left:0;right:0;height:2px;background:#1e293b;"></div>
+                {% set _ms_dates = project.milestones|selectattr('due_date')|map(attribute='due_date')|list %}
+                {% if _ms_dates %}
+                {% set _ms_min = _ms_dates|min %}
+                {% set _ms_max = _ms_dates|max %}
+                {% set _ms_range = (_ms_max - _ms_min).days or 1 %}
+                {% set _today_pos = ((today - _ms_min).days / _ms_range * 100) %}
+                {% if _today_pos >= 0 and _today_pos <= 100 %}
+                <div style="position:absolute;top:-10px;left:{{ _today_pos }}%;transform:translateX(-50%);z-index:3;color:#dc2626;font-size:14px;line-height:1;" title="今天 {{ today.strftime('%m-%d') }}">&#9733;</div>
+                {% endif %}
+                {% endif %}
+                <div class="d-flex justify-content-between">
+                    {% for ms in project.milestones %}
+                    {% set ms_done = ms.status == 'completed' %}
+                    {% set ms_overdue = not ms_done and ms.due_date and ms.due_date < today %}
+                    {% set c = '#10b981' if ms_done else '#dc2626' if ms_overdue else '#1e293b' %}
+                    <div class="text-center" style="flex:1;position:relative;">
+                        <div style="position:absolute;top:-13px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:12px solid {{ c }};"></div>
+                        <div style="margin-top:16px;white-space:nowrap;">
+                            <div class="fw-bold" style="font-size:.82rem;color:{{ c }};">{{ ms.name }}</div>
+                            {% if ms.due_date %}<div style="font-size:.72rem;color:#64748b;">{{ ms.due_date.strftime('%m-%d') }}</div>{% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="row g-3">
     <!-- Left Column -->
     <div class="col-md-8">
@@ -72,6 +118,24 @@
                     <span class="fw-bold">{{ r.number }}</span> {{ r.title }}
                     <span class="badge bg-danger ms-1">延期{{ (today - r.due_date).days }}天</span>
                     <span class="text-muted float-end">{{ r.assignee_display }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Sub-projects -->
+        {% if project.children %}
+        <div class="card mb-3">
+            <div class="card-header py-2 small fw-bold"><i class="bi bi-diagram-3"></i> 专题进展</div>
+            <div class="list-group list-group-flush">
+                {% for child in project.children %}
+                <a href="{{ url_for('project.project_detail', project_id=child.id) }}" class="list-group-item list-group-item-action py-2 small d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>{{ child.name }}</strong>
+                        <span class="badge bg-{{ 'success' if child.status == 'active' else 'secondary' }} ms-1">{{ child.status_label }}</span>
+                    </div>
+                    <span class="text-muted">{{ child.progress }}%</span>
                 </a>
                 {% endfor %}
             </div>
@@ -136,31 +200,6 @@
             {% endif %}
         </div>
 
-        <!-- Milestones -->
-        {% if project.milestones %}
-        <div class="card mb-3">
-            <div class="card-header py-2 d-flex justify-content-between align-items-center">
-                <span class="small fw-bold"><i class="bi bi-flag"></i> 里程碑</span>
-                <a href="{{ url_for('project.milestone_create', project_id=project.id) }}" class="btn btn-sm btn-outline-primary py-0"><i class="bi bi-plus"></i></a>
-            </div>
-            <div class="list-group list-group-flush">
-                {% for ms in project.milestones %}
-                <div class="list-group-item py-2 small d-flex justify-content-between align-items-center">
-                    <div>
-                        {% if ms.status == 'completed' %}<i class="bi bi-check-circle-fill text-success"></i>{% else %}<i class="bi bi-circle text-muted"></i>{% endif %}
-                        <span class="{% if ms.status == 'completed' %}text-decoration-line-through text-muted{% endif %} ms-1">{{ ms.name }}</span>
-                        {% if ms.due_date %}<span class="text-muted ms-2">{{ ms.due_date.strftime('%m-%d') }}</span>{% endif %}
-                    </div>
-                    <div class="d-flex gap-1">
-                        <form method="POST" action="{{ url_for('project.milestone_toggle', ms_id=ms.id) }}" class="d-inline">
-                            <button type="submit" class="btn btn-sm py-0 btn-outline-{{ 'success' if ms.status == 'active' else 'secondary' }}">{{ '完成' if ms.status == 'active' else '重开' }}</button>
-                        </form>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
     </div>
 
     <!-- Right Column -->

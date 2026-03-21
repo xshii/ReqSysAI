@@ -52,13 +52,18 @@
                             <i class="bi bi-house"></i> 首页
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint and 'todo.' in request.endpoint %}active{% endif %}" href="{{ url_for('todo.team') }}">
+                    <li class="nav-item d-flex align-items-center">
+                        <a class="nav-link flex-grow-1 {% if request.endpoint and 'todo.' in request.endpoint %}active{% endif %}" href="{{ url_for('todo.team') }}">
                             <i class="bi bi-list-task"></i> 团队 Todo
                         </a>
+                        {% if sidebar_groups|length > 0 %}
+                        <a href="#" class="me-2 text-muted" onclick="toggleSection('.team-group');return false;" style="font-size:.75rem;">
+                            <i class="bi bi-chevron-down"></i>
+                        </a>
+                        {% endif %}
                     </li>
                     {% for g in sidebar_groups %}
-                    <li class="nav-item">
+                    <li class="nav-item team-group">
                         <a class="nav-link py-1 ps-4 small {% if sidebar_cur_group == g %}fw-bold text-primary{% else %}text-muted{% endif %}" href="{{ url_for('todo.team', group=g) }}">
                             {{ g }}
                         </a>
@@ -68,9 +73,12 @@
                     {% set _cur_pid = request.args.get('project_id', '')|int %}
                     {% set _in_pm = request.endpoint and ('project.' in request.endpoint or 'requirement.' in request.endpoint or request.endpoint == 'dashboard.requirement_progress' or 'ai.' in request.endpoint or (request.endpoint in ('dashboard.stats', 'dashboard.weekly_report') and _cur_pid)) %}
                     {% set _in_pm = _in_pm or (request.endpoint and ('project.risk' in request.endpoint or 'project.meeting' in request.endpoint)) %}
-                    <li class="nav-item">
-                        <a class="nav-link {% if _in_pm %}active{% endif %}" href="{{ url_for('project.project_list') }}">
+                    <li class="nav-item d-flex align-items-center">
+                        <a class="nav-link flex-grow-1 {% if _in_pm %}active{% endif %}" href="{{ url_for('project.project_list') }}">
                             <i class="bi bi-folder"></i> 项目管理
+                        </a>
+                        <a href="#" class="me-2 text-muted" onclick="toggleAllProjects();return false;" title="折叠/展开" style="font-size:.75rem;">
+                            <i class="bi bi-chevron-down" id="projAllToggleIcon"></i>
                         </a>
                     </li>
                     {% set _pns = namespace(count=0, need_collapse=false) %}
@@ -89,71 +97,76 @@
                     {% set _pns.idx = _pns.idx + 1 %}
                     {% set _should_hide = _pns.need_collapse and _pns.idx > 5 and not _always_show %}
                     {% if _pns.idx == 6 and _pns.need_collapse %}
-                    <li class="nav-item proj-more-btn">
-                        <a class="nav-link py-1 ps-4 small text-primary" href="#" onclick="document.querySelectorAll('.proj-collapsed').forEach(e=>e.classList.remove('d-none'));document.querySelectorAll('.proj-more-btn').forEach(e=>e.classList.add('d-none'));return false;">
-                            <i class="bi bi-chevron-down"></i> 展开更多...
+                    <li class="nav-item proj-item proj-toggle-btn">
+                        <a class="nav-link py-1 ps-4 small text-primary" href="#" onclick="toggleProjects();return false;" id="projToggleLink">
+                            <i class="bi bi-chevron-down" id="projToggleIcon"></i> <span id="projToggleText">展开更多...</span>
                         </a>
                     </li>
                     {% endif %}
-                    <li class="nav-item d-flex align-items-center {% if _should_hide %}proj-collapsed d-none{% endif %}">
-                        <a class="nav-link py-1 ps-4 small flex-grow-1 {% if _this_project or _this_p %}fw-bold text-primary{% elif _is_followed %}text-dark{% else %}text-muted{% endif %}"
-                           href="{{ url_for('project.project_detail', project_id=p.id) }}">
-                            {{ p.name }}
-                        </a>
-                        <button class="btn btn-sm p-0 border-0 bg-transparent me-2 follow-btn" data-pid="{{ p.id }}" title="{{ '取消关注' if _is_followed else '关注项目' }}" style="font-size:.75rem;line-height:1;">
+                    <li class="nav-item d-flex align-items-center proj-item {% if _should_hide %}proj-collapsed d-none{% endif %}">
+                        <button class="btn btn-sm p-0 border-0 bg-transparent ms-3 me-0 follow-btn" data-pid="{{ p.id }}" title="{{ '取消关注' if _is_followed else '关注项目' }}" style="font-size:.65rem;line-height:1;flex-shrink:0;">
                             <i class="bi bi-heart{% if _is_followed %}-fill text-danger{% endif %}"></i>
                         </button>
+                        <a class="nav-link py-1 ps-1 small flex-grow-1 text-truncate {% if _this_project or _this_p %}fw-bold text-primary{% elif _is_followed %}text-dark{% else %}text-muted{% endif %}"
+                           href="{{ url_for('project.project_detail', project_id=p.id) }}" title="{{ p.name }}">
+                            {{ p.name }}
+                        </a>
+                        {% if _p_active %}
+                        <a href="#" class="text-muted me-2" onclick="toggleSection('.proj-sub-{{ p.id }}');return false;" style="font-size:.6rem;flex-shrink:0;line-height:1;">
+                            <i class="bi bi-chevron-down"></i>
+                        </a>
+                        {% endif %}
                     </li>
                     {% if _p_active %}
-                    <li class="nav-item">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'requirement.requirement_list' and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('requirement.requirement_list') }}?project_id={{ p.id }}">
                             需求列表
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'requirement.requirement_board' and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('requirement.requirement_board') }}?project_id={{ p.id }}">
                             需求看板
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.risk_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('project.risk_list', project_id=p.id) }}">
                             风险管理 {% if p.risks | selectattr('status', 'equalto', 'open') | list | length %}<span class="badge bg-danger rounded-pill" style="font-size:.6rem;">{{ p.risks | selectattr('status', 'equalto', 'open') | list | length }}</span>{% endif %}
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint and 'project.meeting' in request.endpoint and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('project.meeting_list', project_id=p.id) }}">
                             会议纪要
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.member_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('project.member_list', project_id=p.id) }}">
                             成员管理
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.knowledge_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('project.knowledge_list', project_id=p.id) }}">
                             知识管理
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.permission_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('project.permission_list', project_id=p.id) }}">
                             权限申请
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'dashboard.stats' and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('dashboard.stats') }}?project_id={{ p.id }}">
                             统计报表
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'dashboard.weekly_report' and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('dashboard.weekly_report') }}?project_id={{ p.id }}">
                             AI 周报
@@ -161,11 +174,6 @@
                     </li>
                     {% endif %}
                     {% endfor %}
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint and 'incentive.' in request.endpoint %}active{% endif %}" href="{{ url_for('incentive.index') }}">
-                            <i class="bi bi-star"></i> 激励专区
-                        </a>
-                    </li>
                     <li class="nav-header">报表</li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'dashboard.my_weekly' %}active{% endif %}" href="{{ url_for('dashboard.my_weekly') }}">
@@ -195,6 +203,11 @@
                         </a>
                     </li>
                     {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint and 'incentive.' in request.endpoint %}active{% endif %}" href="{{ url_for('incentive.index') }}">
+                            <i class="bi bi-star"></i> 激励专区
+                        </a>
+                    </li>
                     {% if current_user.is_admin %}
                     <li class="nav-header">系统</li>
                     <li class="nav-item">
@@ -326,24 +339,46 @@
     </script>
     {% endif %}
     <script>
+    function toggleProjects() {
+        var items = document.querySelectorAll('.proj-collapsed');
+        var icon = document.getElementById('projToggleIcon');
+        var text = document.getElementById('projToggleText');
+        var expanded = items.length && !items[0].classList.contains('d-none');
+        items.forEach(function(e) { e.classList.toggle('d-none', expanded); });
+        icon.className = expanded ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
+        text.textContent = expanded ? '展开更多...' : '收起';
+    }
+    function toggleAllProjects() {
+        var items = document.querySelectorAll('.proj-item');
+        var icon = document.getElementById('projAllToggleIcon');
+        if (!items.length) return;
+        var expanded = !items[0].classList.contains('d-none');
+        items.forEach(function(e) { e.classList.toggle('d-none', expanded); });
+        icon.className = expanded ? 'bi bi-chevron-right' : 'bi bi-chevron-down';
+    }
+    function toggleSection(selector) {
+        var items = document.querySelectorAll(selector);
+        if (!items.length) return;
+        var expanded = !items[0].classList.contains('d-none');
+        items.forEach(function(e) { e.classList.toggle('d-none', expanded); });
+    }
     document.addEventListener('click', function(e) {
         var btn = e.target.closest('.follow-btn');
         if (!btn) return;
         e.preventDefault();
         var pid = btn.dataset.pid;
         fetch('/projects/' + pid + '/follow', {method: 'POST'})
-        .then(function(r) { return r.json(); })
+        .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
         .then(function(d) {
-            if (!d.ok) return;
+            if (!d.ok) { location.reload(); return; }
             var icon = btn.querySelector('i');
-            if (d.followed) {
-                icon.className = 'bi bi-heart-fill text-danger';
-                btn.title = '取消关注';
-            } else {
-                icon.className = 'bi bi-heart';
-                btn.title = '关注项目';
-            }
-        });
+            icon.className = d.followed ? 'bi bi-heart-fill text-danger' : 'bi bi-heart';
+            location.reload();
+        })
+        .catch(function() { location.reload(); });
     });
     </script>
     {% block extra_js %}{% endblock %}
