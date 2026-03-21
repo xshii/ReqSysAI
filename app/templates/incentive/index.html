@@ -81,47 +81,53 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header py-2"><h6 class="modal-title">推荐激励</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">激励类别 <span class="text-danger">*</span></label>
-                        <select name="category" class="form-select form-select-sm">
-                            <option value="professional">专业</option>
-                            <option value="proactive">积极</option>
-                            <option value="beyond">超越期望</option>
-                            <option value="clean">代码Clean</option>
-                        </select>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">类别 <span class="text-danger">*</span></label>
+                        <div class="col-9">
+                            <select name="category" class="form-select form-select-sm">
+                                <option value="professional">专业</option>
+                                <option value="proactive">积极</option>
+                                <option value="beyond">超越期望</option>
+                                <option value="clean">代码Clean</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">事迹标题 <span class="text-danger">*</span></label>
-                        <input type="text" name="title" class="form-control" required placeholder="简要描述突出事迹">
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">标题 <span class="text-danger">*</span></label>
+                        <div class="col-9"><input type="text" name="title" class="form-control form-control-sm" required placeholder="简要描述突出事迹"></div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">团队名（团队事迹填写）</label>
-                        <input type="text" name="team_name" class="form-control form-control-sm" placeholder="如：XX攻坚小组">
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">团队名</label>
+                        <div class="col-9"><input type="text" name="team_name" class="form-control form-control-sm" placeholder="团队事迹填写，如：XX攻坚小组"></div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">推荐人物 <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control form-control-sm mb-1" placeholder="搜索姓名..." oninput="filterNominees(this)">
-                        <div class="border rounded p-2" style="max-height:140px;overflow-y:auto;" id="nomineeList">
-                            {% for u in users %}
-                            <div class="form-check nominee-opt">
-                                <input class="form-check-input" type="checkbox" name="nominee_ids" value="{{ u.id }}" id="nom_{{ u.id }}">
-                                <label class="form-check-label small" for="nom_{{ u.id }}">{{ u.name }}{% if u.group %} ({{ u.group }}){% endif %}</label>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">人物 <span class="text-danger">*</span></label>
+                        <div class="col-9">
+                            <div id="selectedNominees" class="d-flex flex-wrap gap-1 mb-1"></div>
+                            <div class="position-relative">
+                                <input type="text" class="form-control form-control-sm" id="nomineeSearch" placeholder="输入姓名搜索添加..." autocomplete="off">
+                                <div id="nomineeDropdown" class="position-absolute bg-white border rounded shadow-sm w-100" style="z-index:1000;display:none;max-height:150px;overflow-y:auto;">
+                                    {% for u in users %}
+                                    <div class="px-2 py-1 small nominee-opt" style="cursor:pointer;" data-id="{{ u.id }}" data-name="{{ u.name }}" data-pinyin="{{ u.pinyin or '' }}">{{ u.name }}{% if u.group %} <span class="text-muted">({{ u.group }})</span>{% endif %}</div>
+                                    {% endfor %}
+                                </div>
                             </div>
-                            {% endfor %}
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">事迹描述 <span class="text-danger">*</span></label>
-                        <textarea name="description" id="descInput" class="form-control" rows="4" required placeholder="详细描述事迹和贡献"></textarea>
-                        <div class="d-flex gap-2 mt-1">
-                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="aiDescribe('polish')"><i class="bi bi-robot"></i> AI润色</button>
-                            <button type="button" class="btn btn-sm btn-outline-success" onclick="aiDescribe('generate')"><i class="bi bi-magic"></i> AI根据人员生成</button>
-                            <span class="small text-muted align-self-center" id="descHint"></span>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">描述 <span class="text-danger">*</span></label>
+                        <div class="col-9">
+                            <textarea name="description" id="descInput" class="form-control form-control-sm" rows="3" required placeholder="详细描述事迹和贡献"></textarea>
+                            <div class="d-flex gap-2 mt-1">
+                                <button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="aiDescribe('polish')"><i class="bi bi-robot"></i> AI润色</button>
+                                <button type="button" class="btn btn-sm btn-outline-success py-0" onclick="aiDescribe('generate')"><i class="bi bi-magic"></i> AI生成</button>
+                                <span class="small text-muted align-self-center" id="descHint"></span>
+                            </div>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">上传照片</label>
-                        <input type="file" name="photo" class="form-control form-control-sm" accept="image/*">
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">照片</label>
+                        <div class="col-9"><input type="file" name="photo" class="form-control form-control-sm" accept="image/*"></div>
                     </div>
                 </div>
                 <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">提交推荐</button></div>
@@ -139,17 +145,19 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header py-2"><h6 class="modal-title" id="reviewTitle">评审激励</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">评语（150字以内）</label>
-                        <textarea name="review_comment" id="reviewComment" class="form-control" rows="3" maxlength="150" placeholder="填写评语"></textarea>
-                        <div class="d-flex justify-content-between mt-1">
-                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="aiPolish()"><i class="bi bi-robot"></i> AI润色</button>
-                            <span class="small text-muted" id="charCount">0/150</span>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">评语</label>
+                        <div class="col-9">
+                            <textarea name="review_comment" id="reviewComment" class="form-control form-control-sm" rows="3" maxlength="150" placeholder="150字以内"></textarea>
+                            <div class="d-flex justify-content-between mt-1">
+                                <button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="aiPolish()"><i class="bi bi-robot"></i> AI润色</button>
+                                <span class="small text-muted" id="charCount">0/150</span>
+                            </div>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">激励金额（元）</label>
-                        <input type="number" name="amount" class="form-control form-control-sm" step="50" min="0" placeholder="可选">
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">金额（元）</label>
+                        <div class="col-9"><input type="number" name="amount" class="form-control form-control-sm" step="50" min="0" placeholder="可选"></div>
                     </div>
                 </div>
                 <div class="modal-footer py-1">
@@ -232,12 +240,50 @@ function checkAI() {
     });
 }
 
-function filterNominees(input) {
-    var q = input.value.toLowerCase();
-    document.querySelectorAll('.nominee-opt').forEach(function(o) {
-        o.style.display = o.querySelector('label').textContent.toLowerCase().includes(q) ? '' : 'none';
+// Nominee tag-select
+(function() {
+    var search = document.getElementById('nomineeSearch');
+    var dropdown = document.getElementById('nomineeDropdown');
+    var selected = document.getElementById('selectedNominees');
+    if (!search) return;
+    var chosen = {};
+
+    search.addEventListener('focus', function() { dropdown.style.display = 'block'; filterDD(); });
+    search.addEventListener('input', filterDD);
+    search.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; }, 200); });
+
+    function filterDD() {
+        var q = search.value.toLowerCase();
+        dropdown.querySelectorAll('.nominee-opt').forEach(function(o) {
+            var name = o.dataset.name.toLowerCase();
+            var py = (o.dataset.pinyin || '').toLowerCase();
+            var id = o.dataset.id;
+            o.style.display = (chosen[id] || (!name.includes(q) && !py.includes(q))) ? 'none' : '';
+        });
+        dropdown.style.display = 'block';
+    }
+
+    dropdown.querySelectorAll('.nominee-opt').forEach(function(o) {
+        o.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            addNominee(o.dataset.id, o.dataset.name);
+            search.value = '';
+            filterDD();
+        });
     });
-}
+
+    function addNominee(id, name) {
+        if (chosen[id]) return;
+        chosen[id] = true;
+        var tag = document.createElement('span');
+        tag.className = 'badge bg-primary d-inline-flex align-items-center gap-1';
+        tag.innerHTML = name + '<input type="hidden" name="nominee_ids" value="' + id + '">'
+            + '<i class="bi bi-x" style="cursor:pointer;font-size:.8em;" onclick="this.parentElement.remove();"></i>';
+        tag.querySelector('i').addEventListener('click', function() { delete chosen[id]; });
+        selected.appendChild(tag);
+    }
+})();
+
 function filterNominees2(input) {
     var q = input.value.toLowerCase();
     document.querySelectorAll('.nominee-opt2').forEach(function(o) {

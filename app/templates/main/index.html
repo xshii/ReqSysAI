@@ -24,18 +24,16 @@
 </div>
 {% endif %}
 
-<h4 class="mb-4">{{ current_user.name }}，{{ today.strftime('%Y-%m-%d') }}</h4>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">{{ current_user.name }}，{{ today.strftime('%Y-%m-%d') }}</h4>
+    <button class="btn btn-sm btn-outline-primary" id="btnAiRecommend" title="AI 根据需求进度和截止日期推荐今日任务">
+        <i class="bi bi-robot"></i> AI 推荐
+    </button>
+</div>
 
 <div class="row">
     <!-- Left: Todo + Requirements -->
     <div class="col-md-7">
-        <!-- AI Recommend -->
-        <div class="d-flex justify-content-between align-items-center mb-2">
-            <span></span>
-            <button class="btn btn-sm btn-outline-primary" id="btnAiRecommend" title="AI 根据需求进度和截止日期推荐今日任务">
-                <i class="bi bi-robot"></i> AI 推荐今日 Todo
-            </button>
-        </div>
         <div id="aiRecommendArea" class="d-none mb-2">
             <div class="card border-primary border-opacity-25">
                 <div class="card-body py-2">
@@ -54,7 +52,7 @@
             <input type="hidden" name="category" value="work">
             <div class="input-group input-group-sm">
                 <span class="input-group-text bg-white border-end-0" style="font-size:.8em;"><i class="bi bi-lightning-charge text-warning"></i></span>
-                <input type="text" name="title" class="form-control border-start-0" placeholder="突发 Todo / @求助人 内容" required style="font-size:.8em;">
+                <input type="text" name="title" class="form-control border-start-0" placeholder="突发Todo / @人名 求助内容" required style="font-size:.8em;">
             </div>
         </form>
 
@@ -71,7 +69,7 @@
                     <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-grow-1 quick-todo-form">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="req_id" value="{{ r.id }}">
-                        <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加Todo / @求助 / #评论" required style="font-size:.8em;">
+                        <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加Todo / @人名 求助 / #总结" required style="font-size:.8em;">
                     </form>
                 </div>
                 <div class="todo-list-for-req" data-req-id="{{ r.id }}">
