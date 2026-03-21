@@ -188,10 +188,13 @@ def requirement_status(req_id):
     if new_status not in req.allowed_next_statuses:
         flash('不允许的状态流转', 'danger')
     else:
+        old_status = req.status
         old_label = req.status_label
         req.status = new_status
         _log_activity(req, 'status_changed', f'{old_label} → {req.status_label}')
         db.session.commit()
+        from app.services.events import fire, requirement_status_changed
+        fire(requirement_status_changed, requirement=req, old_status=old_status, new_status=new_status)
         flash(f'状态已更新为「{req.status_label}」', 'success')
     return redirect(url_for('requirement.requirement_detail', req_id=req.id))
 
@@ -205,10 +208,13 @@ def requirement_status_api(req_id):
     new_status = data.get('status', '')
     if new_status not in req.allowed_next_statuses:
         return jsonify(ok=False, msg=f'不允许从「{req.status_label}」流转到该状态')
+    old_status = req.status
     old_label = req.status_label
     req.status = new_status
     _log_activity(req, 'status_changed', f'{old_label} → {req.status_label}')
     db.session.commit()
+    from app.services.events import fire, requirement_status_changed
+    fire(requirement_status_changed, requirement=req, old_status=old_status, new_status=new_status)
     return jsonify(ok=True, status=new_status, label=req.status_label)
 
 

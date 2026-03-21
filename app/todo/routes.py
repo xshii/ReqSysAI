@@ -94,6 +94,9 @@ def confirm(todo_id):
     for item in todo.items:
         item.is_done = True
     db.session.commit()
+    # Fire domain event for auto-transitions
+    from app.services.events import fire, todo_completed
+    fire(todo_completed, todo=todo)
     return jsonify(ok=True)
 
 

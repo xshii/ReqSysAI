@@ -44,6 +44,14 @@ def create_app(config_name=None):
     # Register error handlers
     _register_error_handlers(app)
 
+    # Domain events
+    from app.services.event_setup import register_events
+    register_events()
+
+    # Full-text search index
+    from app.services.search import init_fts
+    init_fts(app)
+
     # Template filters
     import json as _json
     app.jinja_env.filters['from_json'] = lambda s: _json.loads(s) if s else []

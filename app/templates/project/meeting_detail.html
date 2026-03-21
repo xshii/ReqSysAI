@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}{{ meeting.title }} · {{ project.name }} - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{{ url_for('project.meeting_list', project_id=project.id) }}" class="text-decoration-none">
+        <i class="bi bi-arrow-left"></i> 返回会议列表
+    </a>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h4 class="mb-0">{{ meeting.title }}</h4>
+        <div class="text-muted small">
+            {{ meeting.date.strftime('%Y-%m-%d') }}
+            {% if meeting.attendees %} · 参会人：{{ meeting.attendees }}{% endif %}
+            · 创建人：{{ meeting.creator.name }}
+        </div>
+    </div>
+    <form method="POST" action="{{ url_for('project.meeting_extract', project_id=project.id, meeting_id=meeting.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-primary btn-sm" id="btnExtract">
+            <i class="bi bi-robot"></i> AI 提取
+        </button>
+    </form>
+</div>
+
+<div class="row">
+    <!-- Left: meeting content -->
+    <div class="col-lg-5 mb-3">
+        <div class="card h-100">
+            <div class="card-header py-2"><strong>会议内容</strong></div>
+            <div class="card-body" style="white-space:pre-wrap; font-size:.9rem; max-height:70vh; overflow-y:auto;">{{ meeting.content or '（暂无内容）' }}</div>
+        </div>
+    </div>
+
+    <!-- Right: AI extracted items -->
+    <div class="col-lg-7 mb-3">
+        {% if ai_data %}
+        <div class="card">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                <strong>AI 提取结果</strong>
+                <button class="btn btn-success btn-sm" id="btnApply" onclick="applySelected()">
+                    <i class="bi bi-check2-all"></i> 一键创建选中项
+                </button>
+            </div>
+            <div class="card-body">
+                <!-- Decisions -->
+                {% if ai_data.decisions %}
+                <h6 class="text-primary"><i class="bi bi-bookmark-check"></i> 决议</h6>
+                <div class="mb-3">
+                    {% for d in ai_data.decisions %}
+                    <div class="form-check mb-1">
+                        <input class="form-check-input" type="checkbox" disabled checked>
+                        <label class="form-check-label">
+                            {{ d.content }}
+                            {% if d.owner %}<span class="badge bg-light text-dark">{{ d.owner }}</span>{% endif %}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Todos -->
+                {% if ai_data.todos %}
+                <h6 class="text-info"><i class="bi bi-list-task"></i> 待办</h6>
+                <div class="mb-3">
+                    {% for t in ai_data.todos %}
+                    <div class="form-check mb-1">
+                        <input class="form-check-input ai-item" type="checkbox" data-type="todos"
+                               data-payload='{{ {"title": t.title, "assignee": t.assignee|default("")}|tojson }}'>
+                        <label class="form-check-label">
+                            {{ t.title }}
+                            {% if t.assignee %}<span class="badge bg-light text-dark">{{ t.assignee }}</span>{% endif %}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Requirements -->
+                {% if ai_data.requirements %}
+                <h6 class="text-success"><i class="bi bi-file-earmark-text"></i> 需求</h6>
+                <div class="mb-3">
+                    {% for r in ai_data.requirements %}
+                    <div class="form-check mb-1">
+                        <input class="form-check-input ai-item" type="checkbox" data-type="requirements"
+                               data-payload='{{ {"title": r.title, "description": r.description|default(""), "priority": r.priority|default("medium")}|tojson }}'>
+                        <label class="form-check-label">
+                            {{ r.title }}
+                            {% if r.description %}<span class="text-muted small">- {{ r.description[:60] }}</span>{% endif %}
+                            {% if r.priority %}<span class="badge bg-{{ 'danger' if r.priority == 'high' else ('warning text-dark' if r.priority == 'medium' else 'secondary') }}">{{ r.priority }}</span>{% endif %}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Risks -->
+                {% if ai_data.risks %}
+                <h6 class="text-danger"><i class="bi bi-exclamation-triangle"></i> 风险</h6>
+                <div class="mb-3">
+                    {% for r in ai_data.risks %}
+                    <div class="form-check mb-1">
+                        <input class="form-check-input ai-item" type="checkbox" data-type="risks"
+                               data-payload='{{ {"title": r.title, "severity": r.severity|default("medium")}|tojson }}'>
+                        <label class="form-check-label">
+                            {{ r.title }}
+                            {% if r.severity %}<span class="badge bg-{{ 'danger' if r.severity == 'high' else ('warning text-dark' if r.severity == 'medium' else 'secondary') }}">{{ r.severity }}</span>{% endif %}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if not ai_data.decisions and not ai_data.todos and not ai_data.requirements and not ai_data.risks %}
+                <div class="text-muted">AI 未从内容中提取到结构化信息</div>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-body text-center text-muted py-5">
+                <i class="bi bi-robot" style="font-size:2rem;"></i>
+                <p class="mt-2">点击「AI 提取」按钮，从会议内容中自动提取决议、待办、需求和风险</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function applySelected() {
+    var items = document.querySelectorAll('.ai-item:checked');
+    if (items.length === 0) {
+        alert('请先勾选要创建的项目');
+        return;
+    }
+    var payload = {todos: [], requirements: [], risks: []};
+    items.forEach(function(cb) {
+        var type = cb.dataset.type;
+        var data = JSON.parse(cb.dataset.payload);
+        if (payload[type]) payload[type].push(data);
+    });
+
+    var btn = document.getElementById('btnApply');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 创建中...';
+
+    fetch('{{ url_for("project.meeting_apply", project_id=project.id, meeting_id=meeting.id) }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(function(resp) { return resp.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            alert(data.msg);
+            // Grey out created items
+            items.forEach(function(cb) {
+                cb.disabled = true;
+                cb.closest('.form-check').classList.add('text-muted');
+            });
+        } else {
+            alert(data.msg || '创建失败');
+        }
+    })
+    .catch(function() { alert('请求失败，请重试'); })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check2-all"></i> 一键创建选中项';
+    });
+}
+</script>
+{% endblock %}

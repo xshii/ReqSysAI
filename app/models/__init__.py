@@ -7,3 +7,4 @@ from app.models.report import WeeklyReport  # noqa: F401
 from app.models.incentive import Incentive  # noqa: F401
 from app.models.rant import Rant  # noqa: F401
 from app.models.ai_log import AIParseLog  # noqa: F401
+from app.models.meeting import Meeting  # noqa: F401

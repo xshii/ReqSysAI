@@ -1,4 +1,5 @@
-from datetime import datetime
+import json
+from datetime import datetime, date
 
 from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import current_user
@@ -8,6 +9,7 @@ from app.project.forms import ProjectForm, MilestoneForm
 from flask_login import login_required
 from app.extensions import db
 from app.models.project import Project, Milestone
+from app.models.meeting import Meeting
 from app.models.risk import Risk
 from app.models.user import User
 
@@ -243,3 +245,152 @@ def risk_reopen(risk_id):
     db.session.commit()
     flash('风险已重新打开', 'success')
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
+
+
+# ---- Meeting minutes ----
+
+@project_bp.route('/<int:project_id>/meetings')
+@login_required
+def meeting_list(project_id):
+    project = db.get_or_404(Project, project_id)
+    meetings = Meeting.query.filter_by(project_id=project_id).order_by(Meeting.date.desc()).all()
+    return render_template('project/meetings.html', project=project, meetings=meetings)
+
+
+@project_bp.route('/<int:project_id>/meetings/new', methods=['GET', 'POST'])
+@login_required
+def meeting_create(project_id):
+    project = db.get_or_404(Project, project_id)
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        meeting_date = request.form.get('date', '')
+        attendees = request.form.get('attendees', '').strip()
+        content = request.form.get('content', '').strip()
+
+        # Handle docx upload
+        docx_file = request.files.get('docx_file')
+        if docx_file and docx_file.filename and docx_file.filename.endswith('.docx'):
+            from app.services.ai import extract_text_from_docx
+            content = extract_text_from_docx(docx_file)
+
+        if not title:
+            flash('请输入会议标题', 'danger')
+            return render_template('project/meeting_form.html', project=project)
+
+        meeting = Meeting(
+            project_id=project.id,
+            title=title,
+            date=datetime.strptime(meeting_date, '%Y-%m-%d').date() if meeting_date else date.today(),
+            attendees=attendees,
+            content=content,
+            created_by=current_user.id,
+        )
+        db.session.add(meeting)
+        db.session.commit()
+        flash(f'会议纪要「{meeting.title}」创建成功', 'success')
+        return redirect(url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id))
+    return render_template('project/meeting_form.html', project=project)
+
+
+@project_bp.route('/<int:project_id>/meetings/<int:meeting_id>')
+@login_required
+def meeting_detail(project_id, meeting_id):
+    project = db.get_or_404(Project, project_id)
+    meeting = db.get_or_404(Meeting, meeting_id)
+    ai_data = None
+    if meeting.ai_result:
+        try:
+            ai_data = json.loads(meeting.ai_result)
+        except json.JSONDecodeError:
+            ai_data = None
+    return render_template('project/meeting_detail.html', project=project, meeting=meeting, ai_data=ai_data)
+
+
+@project_bp.route('/<int:project_id>/meetings/<int:meeting_id>/extract', methods=['POST'])
+@login_required
+def meeting_extract(project_id, meeting_id):
+    project = db.get_or_404(Project, project_id)
+    meeting = db.get_or_404(Meeting, meeting_id)
+
+    if not meeting.content or not meeting.content.strip():
+        flash('会议纪要内容为空，无法提取', 'danger')
+        return redirect(url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id))
+
+    from app.services.ai import call_ollama
+    from app.services.prompts import get_prompt
+
+    system_prompt = get_prompt('meeting_extract')
+    parsed, raw = call_ollama(meeting.content, system_prompt=system_prompt)
+
+    if parsed is None:
+        flash('AI 提取失败，请稍后重试。' + (f' ({raw})' if raw else ''), 'danger')
+        return redirect(url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id))
+
+    meeting.ai_result = json.dumps(parsed, ensure_ascii=False)
+    db.session.commit()
+    flash('AI 提取完成', 'success')
+    return redirect(url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id))
+
+
+@project_bp.route('/<int:project_id>/meetings/<int:meeting_id>/apply', methods=['POST'])
+@login_required
+def meeting_apply(project_id, meeting_id):
+    project = db.get_or_404(Project, project_id)
+    meeting = db.get_or_404(Meeting, meeting_id)
+
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify(ok=False, msg='无效的请求数据'), 400
+
+    created_counts = {'todos': 0, 'requirements': 0, 'risks': 0}
+
+    # Create Todos
+    from app.models.todo import Todo
+    for item in data.get('todos', []):
+        todo = Todo(
+            user_id=current_user.id,
+            title=item.get('title', ''),
+            created_date=date.today(),
+        )
+        db.session.add(todo)
+        created_counts['todos'] += 1
+
+    # Create Requirements
+    from app.models.requirement import Requirement
+    for item in data.get('requirements', []):
+        req = Requirement(
+            number=Requirement.generate_number(),
+            project_id=project.id,
+            title=item.get('title', ''),
+            description=item.get('description', ''),
+            priority=item.get('priority', 'medium'),
+            source='meeting',
+            created_by=current_user.id,
+        )
+        db.session.add(req)
+        created_counts['requirements'] += 1
+
+    # Create Risks
+    for item in data.get('risks', []):
+        risk = Risk(
+            project_id=project.id,
+            title=item.get('title', ''),
+            severity=item.get('severity', 'medium'),
+            due_date=date.today(),
+            created_by=current_user.id,
+        )
+        db.session.add(risk)
+        created_counts['risks'] += 1
+
+    db.session.commit()
+
+    parts = []
+    if created_counts['todos']:
+        parts.append(f"{created_counts['todos']} 个待办")
+    if created_counts['requirements']:
+        parts.append(f"{created_counts['requirements']} 个需求")
+    if created_counts['risks']:
+        parts.append(f"{created_counts['risks']} 个风险")
+
+    msg = '已创建 ' + '、'.join(parts) if parts else '未选择任何项目'
+    return jsonify(ok=True, msg=msg)

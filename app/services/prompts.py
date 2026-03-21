@@ -66,6 +66,18 @@ DEFAULTS = {
         '突出他们的贡献和价值，语言正式生动，不超过300字。'
         '只返回事迹描述文本，不要加标题或格式。'
     ),
+    'meeting_extract': (
+        '你是一个会议纪要分析助手。从以下会议纪要中提取结构化信息。\n'
+        '严格返回 JSON，不要返回其他内容：\n'
+        '{"decisions":[{"content":"决议内容","owner":"负责人"}],'
+        '"todos":[{"title":"待办标题","assignee":"负责人"}],'
+        '"requirements":[{"title":"需求标题","description":"简要描述","priority":"high/medium/low"}],'
+        '"risks":[{"title":"风险描述","severity":"high/medium/low"}]}\n'
+        '规则：\n'
+        '- 没有的类别返回空数组\n'
+        '- owner/assignee 尽量从原文提取人名\n'
+        '- 不要编造内容'
+    ),
 }
 
 # Human-readable labels for admin UI
@@ -77,6 +89,7 @@ LABELS = {
     'incentive_polish_comment': '激励评语润色',
     'incentive_polish_desc': '激励事迹润色',
     'incentive_generate': '激励事迹生成',
+    'meeting_extract': '会议纪要提取',
 }
 
 

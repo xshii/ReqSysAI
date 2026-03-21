@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}会议纪要 · {{ project.name }} - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>会议纪要 · {{ project.name }}</h4>
+    <a href="{{ url_for('project.meeting_create', project_id=project.id) }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg"></i> 新建会议纪要
+    </a>
+</div>
+
+{% if meetings %}
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>会议标题</th>
+                <th>日期</th>
+                <th>参会人</th>
+                <th>AI 提取</th>
+                <th>创建人</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for m in meetings %}
+        <tr>
+            <td>
+                <a href="{{ url_for('project.meeting_detail', project_id=project.id, meeting_id=m.id) }}">
+                    {{ m.title }}
+                </a>
+            </td>
+            <td class="small">{{ m.date.strftime('%Y-%m-%d') }}</td>
+            <td class="small text-muted">
+                {% if m.attendees %}
+                    {{ m.attendees[:40] }}{% if m.attendees|length > 40 %}...{% endif %}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>
+                {% if m.has_extraction %}
+                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> 已提取</span>
+                {% else %}
+                    <span class="badge bg-secondary">未提取</span>
+                {% endif %}
+            </td>
+            <td class="small">{{ m.creator.name }}</td>
+            <td>
+                <a href="{{ url_for('project.meeting_detail', project_id=project.id, meeting_id=m.id) }}"
+                   class="btn btn-sm btn-outline-primary py-0">查看</a>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">暂无会议纪要</div>
+{% endif %}
+{% endblock %}

@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from flask import render_template, request, redirect, url_for
+from flask import render_template, request, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 
@@ -161,6 +161,30 @@ def quick_todo():
     db.session.add(todo)
     db.session.commit()
     return redirect(url_for('main.index'))
+
+
+@main_bp.route('/api/search')
+@login_required
+def api_search():
+    """Global search API for Cmd+K modal."""
+    from app.services.search import search
+    q = request.args.get('q', '').strip()
+    if not q:
+        return jsonify(ok=True, results=[])
+    results = search(q)
+    # Add URLs for each result
+    url_map = {
+        'requirement': lambda r: url_for('requirement.requirement_detail', req_id=int(r['id'])),
+        'todo': lambda r: url_for('todo.team'),
+        'project': lambda r: url_for('project.project_detail', project_id=int(r['id'])),
+        'user': lambda r: url_for('admin.user_list'),
+    }
+    type_labels = {'requirement': '需求', 'todo': 'Todo', 'project': '项目', 'user': '用户'}
+    for r in results:
+        fn = url_map.get(r['type'])
+        r['url'] = fn(r) if fn else '#'
+        r['type_label'] = type_labels.get(r['type'], r['type'])
+    return jsonify(ok=True, results=results)
 
 
 @main_bp.route('/todo/<int:todo_id>/toggle', methods=['POST'])

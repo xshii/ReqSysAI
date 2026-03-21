@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}新建会议纪要 · {{ project.name }} - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{{ url_for('project.meeting_list', project_id=project.id) }}" class="text-decoration-none">
+        <i class="bi bi-arrow-left"></i> 返回会议列表
+    </a>
+</div>
+
+<h4 class="mb-3">新建会议纪要 · {{ project.name }}</h4>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+                <label class="form-label">会议标题 <span class="text-danger">*</span></label>
+                <input type="text" name="title" class="form-control" required placeholder="例：第3周项目进度评审会">
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">会议日期</label>
+                    <input type="date" name="date" class="form-control" value="{{ today }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">参会人（逗号分隔）</label>
+                    <input type="text" name="attendees" class="form-control" placeholder="张三, 李四, 王五">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">会议内容</label>
+                <textarea name="content" class="form-control" rows="12" placeholder="粘贴或输入会议纪要内容..."></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">或上传 Word 文档</label>
+                <input type="file" name="docx_file" class="form-control" accept=".docx">
+                <div class="form-text">支持 .docx 格式，上传后将自动提取文本内容</div>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">保存</button>
+                <a href="{{ url_for('project.meeting_list', project_id=project.id) }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

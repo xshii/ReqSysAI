@@ -67,7 +67,7 @@
                     <li class="nav-header">管理</li>
                     {% set _cur_pid = request.args.get('project_id', '')|int %}
                     {% set _in_pm = request.endpoint and ('project.' in request.endpoint or 'requirement.' in request.endpoint or request.endpoint == 'dashboard.requirement_progress' or 'ai.' in request.endpoint or (request.endpoint in ('dashboard.stats', 'dashboard.weekly_report') and _cur_pid)) %}
-                    {% set _in_pm = _in_pm or (request.endpoint and 'project.risk' in request.endpoint) %}
+                    {% set _in_pm = _in_pm or (request.endpoint and ('project.risk' in request.endpoint or 'project.meeting' in request.endpoint)) %}
                     <li class="nav-item">
                         <a class="nav-link {% if _in_pm %}active{% endif %}" href="{{ url_for('project.project_list') }}">
                             <i class="bi bi-folder"></i> 项目管理
@@ -100,6 +100,12 @@
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.risk_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('project.risk_list', project_id=p.id) }}">
                             风险管理 {% if p.risks | selectattr('status', 'equalto', 'open') | list | length %}<span class="badge bg-danger rounded-pill" style="font-size:.6rem;">{{ p.risks | selectattr('status', 'equalto', 'open') | list | length }}</span>{% endif %}
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link py-0 ps-5 small {% if request.endpoint and 'project.meeting' in request.endpoint and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
+                           href="{{ url_for('project.meeting_list', project_id=p.id) }}">
+                            会议纪要
                         </a>
                     </li>
                     <li class="nav-item">
@@ -175,8 +181,93 @@
     {% block public_content %}{% endblock %}
     {% endif %}
 
+    {% if current_user.is_authenticated %}
+    <!-- Global Search Modal (Cmd+K) -->
+    <div class="modal fade" id="searchModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-scrollable" style="margin-top:10vh;">
+            <div class="modal-content">
+                <div class="modal-body p-2">
+                    <input type="text" id="searchInput" class="form-control border-0 shadow-none" placeholder="搜索需求、Todo、项目、人员..." autocomplete="off" style="font-size:1.1em;">
+                    <div id="searchResults" class="mt-2" style="max-height:50vh;overflow-y:auto;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <script src="{{ url_for('static', filename='vendor/js/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% if current_user.is_authenticated %}
+    <script>
+    (function() {
+        var modal = new bootstrap.Modal(document.getElementById('searchModal'));
+        var input = document.getElementById('searchInput');
+        var results = document.getElementById('searchResults');
+        var timer = null, sel = -1, items = [];
+
+        document.addEventListener('keydown', function(e) {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                modal.show();
+                setTimeout(function() { input.focus(); input.select(); }, 200);
+            }
+        });
+
+        input.addEventListener('input', function() {
+            clearTimeout(timer);
+            timer = setTimeout(doSearch, 300);
+        });
+
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, items.length - 1); highlight(); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); highlight(); }
+            else if (e.key === 'Enter' && sel >= 0 && items[sel]) { window.location = items[sel].dataset.url; }
+        });
+
+        function doSearch() {
+            var q = input.value.trim();
+            if (!q) { results.innerHTML = '<div class="text-muted small text-center py-3">输入关键词搜索</div>'; return; }
+            results.innerHTML = '<div class="text-center py-2"><span class="spinner-border spinner-border-sm"></span></div>';
+            fetch('/api/search?q=' + encodeURIComponent(q))
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (!d.ok || !d.results.length) {
+                        results.innerHTML = '<div class="text-muted small text-center py-3">无结果</div>';
+                        items = []; sel = -1; return;
+                    }
+                    var html = '';
+                    var groups = {};
+                    d.results.forEach(function(r) {
+                        if (!groups[r.type_label]) groups[r.type_label] = [];
+                        groups[r.type_label].push(r);
+                    });
+                    for (var g in groups) {
+                        html += '<div class="text-muted small fw-bold px-2 py-1 bg-light">' + g + '</div>';
+                        groups[g].forEach(function(r) {
+                            html += '<a href="' + r.url + '" class="d-block px-2 py-1 text-decoration-none text-dark search-item" data-url="' + r.url + '">'
+                                + '<div class="small">' + r.title + (r.extra ? ' <span class="text-muted">' + r.extra + '</span>' : '') + '</div>'
+                                + (r.snippet ? '<div class="text-muted" style="font-size:.75em;">' + r.snippet + '</div>' : '')
+                                + '</a>';
+                        });
+                    }
+                    results.innerHTML = html;
+                    items = results.querySelectorAll('.search-item');
+                    sel = -1;
+                });
+        }
+
+        function highlight() {
+            items.forEach(function(el, i) {
+                el.style.background = i === sel ? '#e8f0fe' : '';
+            });
+            if (sel >= 0 && items[sel]) items[sel].scrollIntoView({block: 'nearest'});
+        }
+
+        document.getElementById('searchModal').addEventListener('shown.bs.modal', function() { input.focus(); });
+        document.getElementById('searchModal').addEventListener('hidden.bs.modal', function() { input.value = ''; results.innerHTML = ''; sel = -1; });
+    })();
+    </script>
+    {% endif %}
     {% block extra_js %}{% endblock %}
 </body>
 </html>
