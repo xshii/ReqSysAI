@@ -109,24 +109,6 @@
             </div>
         </div>
 
-        <!-- My Risks -->
-        <div class="card mb-3">
-            <div class="card-header py-2"><i class="bi bi-exclamation-triangle text-danger"></i> 我的风险 <span class="badge bg-{{ 'danger' if my_risks else 'secondary' }}">{{ my_risks | length }}</span></div>
-            <div class="card-body py-2">
-            {% for r in my_risks %}
-                <div class="d-flex justify-content-between align-items-center small mb-1">
-                    <span>{{ r.title }}</span>
-                    <span>
-                        <span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span>
-                        {% if r.is_overdue %}<span class="badge bg-danger">超期</span>{% endif %}
-                        <span class="text-muted">{{ r.due_date.strftime('%m-%d') if r.due_date else '' }}</span>
-                    </span>
-                </div>
-            {% else %}
-                <p class="text-muted small mb-0">暂无待处理的风险</p>
-            {% endfor %}
-            </div>
-        </div>
     </div>
 
     <!-- Right column -->
@@ -152,6 +134,25 @@
                     {% endfor %}
                     <span>多</span>
                 </div>
+            </div>
+        </div>
+
+        <!-- My Risks -->
+        <div class="card mb-3 border-0 shadow-sm">
+            <div class="card-header py-2 bg-white"><i class="bi bi-exclamation-triangle text-danger"></i> 我的风险 <span class="badge bg-{{ 'danger' if my_risks else 'secondary' }}">{{ my_risks | length }}</span></div>
+            <div class="card-body py-2">
+            {% for r in my_risks %}
+                <div class="d-flex justify-content-between align-items-center small mb-1">
+                    <span>{{ r.title }}</span>
+                    <span>
+                        <span class="badge bg-{{ r.severity_color }}" style="font-size:.7em;">{{ r.severity_label }}</span>
+                        {% if r.is_overdue %}<span class="badge bg-danger" style="font-size:.7em;">超期</span>{% endif %}
+                        <span class="text-muted">{{ r.due_date.strftime('%m-%d') if r.due_date else '' }}</span>
+                    </span>
+                </div>
+            {% else %}
+                <p class="text-muted small mb-0">暂无待处理的风险</p>
+            {% endfor %}
             </div>
         </div>
 
