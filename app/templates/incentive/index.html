@@ -193,10 +193,10 @@
                     <div class="mb-2"><input type="text" name="title" class="form-control form-control-sm" placeholder="事迹标题" required></div>
                     <div class="mb-2"><input type="text" name="team_name" class="form-control form-control-sm" placeholder="团队名（可选）"></div>
                     <div class="mb-2">
-                        <input type="text" class="form-control form-control-sm" placeholder="搜索人物..." oninput="filterNominees2(this)">
+                        <input type="text" class="form-control form-control-sm" placeholder="搜索姓名/工号..." oninput="filterNominees2(this)">
                         <div class="border rounded p-2 mt-1" style="max-height:100px;overflow-y:auto;" id="nomineeList2">
                             {% for u in users %}
-                            <div class="form-check nominee-opt2"><input class="form-check-input" type="checkbox" name="nominee_ids" value="{{ u.id }}" id="an_{{ u.id }}"><label class="form-check-label small" for="an_{{ u.id }}">{{ u.name }}</label></div>
+                            <div class="form-check nominee-opt2" data-name="{{ u.name }}" data-pinyin="{{ u.pinyin or '' }}" data-eid="{{ u.employee_id }}"><input class="form-check-input" type="checkbox" name="nominee_ids" value="{{ u.id }}" id="an_{{ u.id }}"><label class="form-check-label small" for="an_{{ u.id }}">{{ u.name }} <span class="text-muted">{{ u.employee_id }}</span></label></div>
                             {% endfor %}
                         </div>
                     </div>
@@ -296,7 +296,10 @@ function checkAI() {
 function filterNominees2(input) {
     var q = input.value.toLowerCase();
     document.querySelectorAll('.nominee-opt2').forEach(function(o) {
-        o.style.display = o.querySelector('label').textContent.toLowerCase().includes(q) ? '' : 'none';
+        var name = (o.dataset.name || '').toLowerCase();
+        var py = (o.dataset.pinyin || '').toLowerCase();
+        var eid = (o.dataset.eid || '').toLowerCase();
+        o.style.display = (name.includes(q) || py.includes(q) || eid.includes(q)) ? '' : 'none';
     });
 }
 

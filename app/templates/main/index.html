@@ -466,11 +466,13 @@ document.querySelectorAll('.quick-todo-form input[name="title"]').forEach(functi
         var query = val.substring(atIdx + 1).toLowerCase();
         loadUsers(function(users) {
             var matches = users.filter(function(u) {
-                return u.name.toLowerCase().includes(query) || (u.pinyin && u.pinyin.toLowerCase().includes(query));
+                return u.name.toLowerCase().includes(query)
+                    || (u.pinyin && u.pinyin.toLowerCase().includes(query))
+                    || (u.employee_id && u.employee_id.toLowerCase().includes(query));
             }).slice(0, 8);
             if (!matches.length) { dropdown.style.display = 'none'; return; }
             dropdown.innerHTML = matches.map(function(u) {
-                return '<div class="px-2 py-1 user-ac-item" style="cursor:pointer;" data-name="' + u.name + '">' + u.name + '</div>';
+                return '<div class="px-2 py-1 user-ac-item" style="cursor:pointer;" data-name="' + u.name + '">' + u.name + ' <span class="text-muted">' + (u.employee_id || '') + '</span></div>';
             }).join('');
             dropdown.style.display = 'block';
             dropdown.querySelectorAll('.user-ac-item').forEach(function(item) {

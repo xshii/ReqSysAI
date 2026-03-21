@@ -125,11 +125,11 @@
                         <div class="list-group position-absolute shadow-sm d-none" id="assigneeList" style="z-index:1050;max-height:160px;overflow-y:auto;width:100%;">
                             <a href="#" class="list-group-item list-group-item-action py-1 small assignee-opt"
                                data-id="{{ current_user.id }}" data-name="{{ current_user.name }}（我）"
-                               data-pinyin="{{ current_user.pinyin or '' }}">{{ current_user.name }}（我）</a>
+                               data-pinyin="{{ current_user.pinyin or '' }}" data-eid="{{ current_user.employee_id }}">{{ current_user.name }}（我） <span class="text-muted">{{ current_user.employee_id }}</span></a>
                             {% for au in all_users %}
                             <a href="#" class="list-group-item list-group-item-action py-1 small assignee-opt"
-                               data-id="{{ au.id }}" data-name="{{ au.name }}{% if au.group %} ({{ au.group }}){% endif %}"
-                               data-pinyin="{{ au.pinyin or '' }}">{{ au.name }}{% if au.group %} ({{ au.group }}){% endif %}</a>
+                               data-id="{{ au.id }}" data-name="{{ au.name }}"
+                               data-pinyin="{{ au.pinyin or '' }}" data-eid="{{ au.employee_id }}">{{ au.name }} <span class="text-muted">{{ au.employee_id }}{% if au.group %} · {{ au.group }}{% endif %}</span></a>
                             {% endfor %}
                         </div>
                     </div>
@@ -308,7 +308,8 @@ function filterAssignee() {
     opts.forEach(function(o) {
         var name = o.dataset.name.toLowerCase();
         var py = (o.dataset.pinyin || '').toLowerCase();
-        o.style.display = (name.includes(q) || py.includes(q)) ? '' : 'none';
+        var eid = (o.dataset.eid || '').toLowerCase();
+        o.style.display = (name.includes(q) || py.includes(q) || eid.includes(q)) ? '' : 'none';
     });
     assigneeList.classList.remove('d-none');
 }
