@@ -409,6 +409,34 @@ def ai_recommend_todos():
     return jsonify(ok=True, todos=todos)
 
 
+@main_bp.route('/api/move-todo', methods=['POST'])
+@login_required
+def move_todo():
+    """Move a todo to a different requirement (or to team/risk)."""
+    data = request.get_json() or {}
+    todo_id = data.get('todo_id')
+    target_req_id = data.get('req_id')  # int or 'team'/'risk'/'personal'
+    todo = db.session.get(Todo, todo_id)
+    if not todo or todo.user_id != current_user.id:
+        return jsonify(ok=False)
+
+    # Clear old requirements
+    todo.requirements = []
+    if isinstance(target_req_id, int) and target_req_id > 0:
+        req = db.session.get(Requirement, target_req_id)
+        if req:
+            todo.requirements = [req]
+            todo.category = 'work'
+    elif target_req_id == 'team':
+        todo.category = 'team'
+    elif target_req_id == 'risk':
+        todo.category = 'risk'
+    elif target_req_id == 'personal':
+        todo.category = 'personal'
+    db.session.commit()
+    return jsonify(ok=True)
+
+
 @main_bp.route('/api/users')
 @login_required
 def api_users():

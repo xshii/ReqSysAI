@@ -11,7 +11,7 @@ from app.requirement import requirement_bp
 from app.requirement.forms import RequirementForm, CommentForm
 
 from app.extensions import db
-from app.models.project import Project, Milestone
+from app.models.project import Project
 from app.models.requirement import Requirement, Comment, Activity
 from app.models.todo import Todo, TodoItem, todo_requirements
 from app.models.user import User
@@ -101,7 +101,6 @@ def requirement_create():
             title=form.title.data,
             description=form.description.data,
             project_id=form.project_id.data,
-            milestone_id=form.milestone_id.data or None,
             priority=form.priority.data,
             assignee_id=form.assignee_id.data or None,
             due_date=form.due_date.data,
@@ -166,7 +165,6 @@ def requirement_edit(req_id):
         req.title = form.title.data
         req.description = form.description.data
         req.project_id = form.project_id.data
-        req.milestone_id = form.milestone_id.data or None
         req.priority = form.priority.data
         req.assignee_id = form.assignee_id.data or None
         req.due_date = form.due_date.data
@@ -289,9 +287,6 @@ def add_comment(req_id):
 def _build_requirement_form(obj=None):
     form = RequirementForm(obj=obj)
     form.project_id.choices = [(p.id, p.name) for p in Project.query.filter_by(status='active').all()]
-    form.milestone_id.choices = [(0, '-- 无 --')] + [
-        (m.id, f'{m.project.name} / {m.name}') for m in Milestone.query.filter_by(status='active').all()
-    ]
     form.assignee_id.choices = [(0, '-- 未分配 --')] + [
         (u.id, u.name) for u in User.query.filter_by(is_active=True).all()
     ]

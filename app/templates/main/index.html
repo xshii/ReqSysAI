@@ -761,7 +761,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
     new bootstrap.Tooltip(el);
 });
 
-// Drag-sort todos
+// Drag-sort todos (supports cross-container move)
 (function() {
     var dragEl = null;
     document.querySelectorAll('.todo-drag-item').forEach(function(el) {
@@ -773,47 +773,59 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
         el.addEventListener('dragend', function() {
             el.style.opacity = '';
             dragEl = null;
-            document.querySelectorAll('.todo-drag-item').forEach(function(e) {
-                e.style.borderTop = '';
-                e.style.borderBottom = '';
-            });
+            document.querySelectorAll('.todo-drag-item').forEach(function(e) { e.style.borderTop = ''; e.style.borderBottom = ''; });
+            document.querySelectorAll('.todo-list-for-req').forEach(function(c) { c.style.outline = ''; });
         });
         el.addEventListener('dragover', function(e) {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
-            if (!dragEl || dragEl === el || el.parentElement !== dragEl.parentElement) return;
+            if (!dragEl || dragEl === el) return;
             var rect = el.getBoundingClientRect();
-            var half = rect.top + rect.height / 2;
-            if (e.clientY < half) {
-                el.style.borderTop = '2px solid #0d6efd';
-                el.style.borderBottom = '';
+            if (e.clientY < rect.top + rect.height / 2) {
+                el.style.borderTop = '2px solid #0d6efd'; el.style.borderBottom = '';
             } else {
-                el.style.borderBottom = '2px solid #0d6efd';
-                el.style.borderTop = '';
+                el.style.borderBottom = '2px solid #0d6efd'; el.style.borderTop = '';
             }
         });
-        el.addEventListener('dragleave', function() {
-            el.style.borderTop = '';
-            el.style.borderBottom = '';
-        });
+        el.addEventListener('dragleave', function() { el.style.borderTop = ''; el.style.borderBottom = ''; });
         el.addEventListener('drop', function(e) {
             e.preventDefault();
-            el.style.borderTop = '';
-            el.style.borderBottom = '';
-            if (!dragEl || dragEl === el || el.parentElement !== dragEl.parentElement) return;
+            el.style.borderTop = ''; el.style.borderBottom = '';
+            if (!dragEl || dragEl === el) return;
+            var targetContainer = el.closest('.todo-list-for-req');
+            var sourceContainer = dragEl.closest('.todo-list-for-req');
             var rect = el.getBoundingClientRect();
-            var half = rect.top + rect.height / 2;
-            if (e.clientY < half) {
+            if (e.clientY < rect.top + rect.height / 2) {
                 el.parentElement.insertBefore(dragEl, el);
             } else {
                 el.parentElement.insertBefore(dragEl, el.nextSibling);
             }
-            // Save new order
+            // Same container: reorder
             var ids = [];
-            el.parentElement.querySelectorAll('.todo-drag-item').forEach(function(item) {
-                ids.push(parseInt(item.dataset.todoId));
-            });
+            el.parentElement.querySelectorAll('.todo-drag-item').forEach(function(item) { ids.push(parseInt(item.dataset.todoId)); });
             apiPost('/todos/drag', {order: ids});
+            // Cross container: move todo to new requirement
+            if (targetContainer && sourceContainer !== targetContainer) {
+                var reqId = targetContainer.dataset.reqId;
+                var todoId = parseInt(dragEl.dataset.todoId);
+                var targetReqId = isNaN(parseInt(reqId)) ? reqId : parseInt(reqId);
+                apiPost('{{ url_for("main.move_todo") }}', {todo_id: todoId, req_id: targetReqId});
+            }
+        });
+    });
+    // Also allow drop on empty containers
+    document.querySelectorAll('.todo-list-for-req').forEach(function(container) {
+        container.addEventListener('dragover', function(e) { e.preventDefault(); if (dragEl) container.style.outline = '2px dashed #0d6efd'; });
+        container.addEventListener('dragleave', function() { container.style.outline = ''; });
+        container.addEventListener('drop', function(e) {
+            e.preventDefault();
+            container.style.outline = '';
+            if (!dragEl) return;
+            container.appendChild(dragEl);
+            var reqId = container.dataset.reqId;
+            var todoId = parseInt(dragEl.dataset.todoId);
+            var targetReqId = isNaN(parseInt(reqId)) ? reqId : parseInt(reqId);
+            apiPost('{{ url_for("main.move_todo") }}', {todo_id: todoId, req_id: targetReqId});
         });
     });
 })();
