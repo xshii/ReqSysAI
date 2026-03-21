@@ -679,15 +679,7 @@ function exitFocusMode() {
             if (btn) {
                 btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
                 btn.querySelector('i').className = 'bi bi-play-fill';
-                // Add tomato icon after the button
-                var tomato = document.createElement('span');
-                tomato.style.cssText = 'font-size:.8em;margin-left:2px;';
-                var pct = Math.round(d.minutes / POMODORO_MIN * 100);
-                var cls = pct >= 80 ? 'text-success' : (pct >= 40 ? 'text-warning' : 'text-secondary');
-                var icon = pct >= 80 ? 'bi-circle-fill' : 'bi-circle-half';
-                tomato.innerHTML = '<i class="bi ' + icon + ' ' + cls + '" style="font-size:.5em;"></i>';
-                tomato.title = d.minutes + 'min (' + pct + '%)';
-                btn.parentElement.insertBefore(tomato, btn.nextSibling);
+                if (d.minutes > 0) addTomatoIcon(btn, d.minutes);
             }
             showToast(completed ? '● 番茄完成！' : '◐ 打断，' + d.minutes + '分钟', completed ? 'success' : 'info');
         }
@@ -696,8 +688,24 @@ function exitFocusMode() {
     focusCompleted = false;
 }
 
+function addTomatoIcon(btn, minutes) {
+    var pct = Math.round(minutes / POMODORO_MIN * 100);
+    var cls = pct >= 80 ? 'text-success' : (pct >= 40 ? 'text-warning' : 'text-secondary');
+    var icon = pct >= 80 ? 'bi-circle-fill' : 'bi-circle-half';
+    var tomato = document.createElement('span');
+    tomato.style.cssText = 'font-size:.8em;margin-left:2px;';
+    tomato.innerHTML = '<i class="bi ' + icon + ' ' + cls + '" style="font-size:.5em;"></i>';
+    tomato.title = minutes + 'min (' + pct + '%)';
+    btn.parentElement.insertBefore(tomato, btn.nextSibling);
+}
+
 document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
     btn.addEventListener('click', function() {
+        // If in focus mode for this todo, exit focus mode instead
+        if (focusTodoId == btn.dataset.id && focusOverlay && focusOverlay.style.display !== 'none') {
+            exitFocusMode();
+            return;
+        }
         var todoId = btn.dataset.id;
         var title = btn.closest('.d-flex').querySelector('.small').textContent.trim();
         apiPost('/todos/' + todoId + '/timer', {}).then(function(d) {
@@ -707,10 +715,10 @@ document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
                     btn.querySelector('i').className = 'bi bi-pause-fill';
                     enterFocusMode(todoId, title);
                 } else {
-                    // Already running, stop it
                     btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
                     btn.querySelector('i').className = 'bi bi-play-fill';
-                    showToast('已暂停 (' + d.minutes + '分钟)', 'info');
+                    if (d.minutes > 0) addTomatoIcon(btn, d.minutes);
+                    showToast('◐ 打断，' + d.minutes + '分钟', 'info');
                 }
             }
         });
