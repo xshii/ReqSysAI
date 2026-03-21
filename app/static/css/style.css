@@ -70,7 +70,7 @@ body {
     margin: 0 auto;
 }
 .report-header {
-    background: #1e293b;
+    background: #1e3a5f;
     color: #fff;
     text-align: center;
     padding: 12px 20px;
@@ -93,10 +93,10 @@ body {
     padding: 7px 12px;
     margin-bottom: 0;
     background: #f8fafc;
-    border-left: 3px solid #1e293b;
+    border-left: 3px solid #1e3a5f;
     font-size: 0.85rem;
     font-weight: 700;
-    color: #1e293b;
+    color: #1e3a5f;
 }
 .report-section h6.risk-title {
     border-left-color: #dc2626;
@@ -141,7 +141,7 @@ body {
     font-size: 1.4rem;
     font-weight: 700;
     line-height: 1.2;
-    color: #1e293b;
+    color: #1e3a5f;
 }
 .report-stat .num.highlight { color: #dc2626; }
 .report-stat .label {

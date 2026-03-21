@@ -80,38 +80,36 @@
 {% if report_data.milestones %}
 <div class="report-section mt-3">
     <h6>里程碑</h6>
-    <div style="overflow-x:auto;">
-        <div class="position-relative" style="padding:0 8px 50px 8px;min-width:{{ report_data.milestones|length * 110 }}px;">
-            <!-- Black axis line -->
-            <div style="position:absolute;top:0;left:0;right:0;height:2px;background:#1e293b;"></div>
-            <!-- Today marker -->
-            {% set _ms_dates = report_data.milestones|selectattr('due_date')|map(attribute='due_date')|list %}
-            {% if _ms_dates %}
-            {% set _ms_min = _ms_dates|min %}
-            {% set _ms_max = _ms_dates|max %}
-            {% set _ms_range = (_ms_max - _ms_min).days or 1 %}
-            {% set _today_pos = ((report_data.today - _ms_min).days / _ms_range * 100) %}
-            {% if _today_pos >= 0 and _today_pos <= 100 %}
-            <div style="position:absolute;top:-10px;left:{{ _today_pos }}%;transform:translateX(-50%);z-index:3;color:#ef4444;font-size:14px;line-height:1;" title="今天 {{ report_data.today.strftime('%m-%d') }}">&#9733;</div>
-            {% endif %}
-            {% endif %}
-            <!-- Nodes -->
-            <div class="d-flex justify-content-between">
-                {% for ms in report_data.milestones %}
-                {% set ms_done = ms.status == 'completed' %}
-                {% set ms_overdue = not ms_done and ms.due_date and ms.due_date < report_data.today %}
-                {% set c = '#10b981' if ms_done else '#ef4444' if ms_overdue else '#1e293b' %}
-                <div class="text-center" style="flex:1;position:relative;">
-                    <!-- Triangle pointing up (碑) -->
-                    <div style="position:absolute;top:-13px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:12px solid {{ c }};"></div>
-                    <!-- Label below -->
-                    <div style="margin-top:16px;white-space:nowrap;">
-                        <div class="fw-bold" style="font-size:.88rem;color:{{ c }};">{{ ms.name }}</div>
-                        {% if ms.due_date %}<div style="font-size:.78rem;color:#64748b;">{{ ms.due_date.strftime('%m-%d') }}</div>{% endif %}
-                    </div>
+    <!-- Today star above axis -->
+    {% set _ms_dates = report_data.milestones|selectattr('due_date')|map(attribute='due_date')|list %}
+    {% if _ms_dates %}
+    {% set _ms_min = _ms_dates|min %}
+    {% set _ms_max = _ms_dates|max %}
+    {% set _ms_range = (_ms_max - _ms_min).days or 1 %}
+    {% set _today_pos = ((report_data.today - _ms_min).days / _ms_range * 100) %}
+    {% if _today_pos >= 0 and _today_pos <= 100 %}
+    <div style="position:relative;height:18px;margin:0 8px;">
+        <div style="position:absolute;left:{{ _today_pos }}%;transform:translateX(-50%);color:#dc2626;font-size:14px;line-height:1;" title="今天 {{ report_data.today.strftime('%m-%d') }}">&#9733;</div>
+    </div>
+    {% endif %}
+    {% endif %}
+    <div style="overflow-x:auto;min-width:{{ report_data.milestones|length * 110 }}px;">
+        <!-- Axis line -->
+        <div style="height:2px;background:#1e3a5f;margin:0 8px;"></div>
+        <!-- Triangles + Labels -->
+        <div class="d-flex justify-content-between" style="margin:0 8px;">
+            {% for ms in report_data.milestones %}
+            {% set ms_done = ms.status == 'completed' %}
+            {% set ms_overdue = not ms_done and ms.due_date and ms.due_date < report_data.today %}
+            {% set c = '#10b981' if ms_done else '#dc2626' if ms_overdue else '#1e3a5f' %}
+            <div class="text-center" style="flex:1;">
+                <div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:12px solid {{ c }};margin:0 auto;"></div>
+                <div style="white-space:nowrap;margin-top:4px;">
+                    <div class="fw-bold" style="font-size:.82rem;color:{{ c }};">{{ ms.name }}</div>
+                    {% if ms.due_date %}<div style="font-size:.72rem;color:#64748b;">{{ ms.due_date.strftime('%m-%d') }}</div>{% endif %}
                 </div>
-                {% endfor %}
             </div>
+            {% endfor %}
         </div>
     </div>
 </div>
@@ -356,9 +354,9 @@
 document.querySelectorAll('#btn-gen, #btn-gen-top').forEach(function(genBtn) {
     genBtn.closest('form').addEventListener('submit', function() {
         genBtn.disabled = true;
-        genBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> AI 分析中...';
+        genBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 生成中...';
     });
-}
+});
 
 function copyRichText() {
     var el = document.getElementById('report-content');

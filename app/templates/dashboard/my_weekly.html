@@ -9,7 +9,7 @@
     {% if report %}
     <div class="report-toolbar">
         <button class="btn btn-sm btn-outline-secondary" onclick="copyRichText()"><i class="bi bi-clipboard"></i> 复制</button>
-        <button class="btn btn-sm btn-dark" onclick="exportEml()"><i class="bi bi-envelope-arrow-up"></i> Outlook</button>
+        <button class="btn btn-sm btn-primary" onclick="exportEml()"><i class="bi bi-envelope-arrow-up"></i> Outlook</button>
         <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#emailSettings"><i class="bi bi-gear"></i></button>
     </div>
     {% endif %}
@@ -41,7 +41,7 @@
     {% if offset != 0 %}<a href="?week=0" class="btn btn-sm btn-outline-dark">本周</a>{% endif %}
     <form method="POST" action="?week={{ offset }}" class="d-inline ms-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-sm {{ 'btn-outline-secondary' if report else 'btn-dark' }}" id="btn-gen">
+        <button type="submit" class="btn btn-sm {{ 'btn-outline-secondary' if report else 'btn-primary' }}" id="btn-gen">
             {{ '重新生成' if report else '生成周报' }}
         </button>
     </form>
@@ -201,7 +201,7 @@ function exportEml() {
     var css = 'body{font-family:Microsoft YaHei,sans-serif;font-size:13px;color:#333;}'
         + 'table{width:100%;border-collapse:collapse;}th{background:#f1f5f9;font-weight:600;font-size:12px;}'
         + 'th,td{border:1px solid #e2e8f0;padding:5px 10px;font-size:12px;}'
-        + 'h6{background:#f8fafc;border-left:3px solid #1e293b;padding:7px 12px;font-size:13px;font-weight:700;}'
+        + 'h6{background:#f8fafc;border-left:3px solid #1e3a5f;padding:7px 12px;font-size:13px;font-weight:700;}'
         + '.row-risk{background:#fef2f2;}.highlight{color:#dc2626;}';
     var html = '<html><head><style>' + css + '</style></head><body>' + el.innerHTML + '</body></html>';
     var boundary = 'b_' + Date.now();
