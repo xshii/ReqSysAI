@@ -16,6 +16,7 @@ class Todo(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     title = db.Column(db.String(300), nullable=False)
     status = db.Column(db.String(20), default='todo')  # todo / done
+    category = db.Column(db.String(20), default='work')  # work / team / personal
     parent_id = db.Column(db.Integer, db.ForeignKey('todos.id'), nullable=True)
     sort_order = db.Column(db.Integer, default=0)
     estimated_hours = db.Column(db.Float, nullable=True)

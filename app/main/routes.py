@@ -66,16 +66,22 @@ def index():
         .options(joinedload(Requirement.project))\
         .order_by(Requirement.updated_at.desc()).limit(10).all()
 
-    # Group todos by requirement for merged display
+    # Group todos by category for merged display
     req_todos = {}  # req_id → [todos]
-    team_todos = []  # todos not linked to any requirement
+    team_todos = []
+    personal_todos = []
     for t in my_todos:
-        linked = [r for r in t.requirements if r.status not in REQ_INACTIVE_STATUSES]
-        if linked:
-            for r in linked:
-                req_todos.setdefault(r.id, []).append(t)
-        else:
+        if t.category == 'personal':
+            personal_todos.append(t)
+        elif t.category == 'team' or not t.requirements:
             team_todos.append(t)
+        else:
+            linked = [r for r in t.requirements if r.status not in REQ_INACTIVE_STATUSES]
+            if linked:
+                for r in linked:
+                    req_todos.setdefault(r.id, []).append(t)
+            else:
+                team_todos.append(t)
 
     # My related risks
     my_risks = Risk.query.filter(
@@ -141,7 +147,7 @@ def index():
     return render_template('main/index.html',
         my_todos=my_todos, todo_total=todo_total, todo_done=todo_done,
         my_reqs=my_reqs, my_risks=my_risks, today=today,
-        req_todos=req_todos, team_todos=team_todos,
+        req_todos=req_todos, team_todos=team_todos, personal_todos=personal_todos,
         approved_incentives=approved_incentives, rants=rants,
         ai_ranking=ai_ranking, alerts=alerts,
         heatmap=heatmap, heatmap_start=heatmap_start, timedelta=timedelta,
@@ -158,6 +164,9 @@ def quick_todo():
 
     today = date.today()
     req_id = request.form.get('req_id', type=int)
+    category = request.form.get('category', 'work')
+    if category not in ('work', 'team', 'personal'):
+        category = 'work'
 
     # If same requirement already has a todo today, add as sub-item
     if req_id:
@@ -186,6 +195,7 @@ def quick_todo():
         user_id=current_user.id,
         title=title,
         due_date=today,
+        category=category,
         requirements=reqs,
     )
     todo.items.append(TodoItem(title=title, sort_order=0))

@@ -6,6 +6,12 @@
 TODO_STATUS_TODO = 'todo'
 TODO_STATUS_DONE = 'done'
 
+# Todo categories (work counts for project investment, others don't)
+TODO_CAT_WORK = 'work'
+TODO_CAT_TEAM = 'team'
+TODO_CAT_PERSONAL = 'personal'
+TODO_CATEGORIES_FOR_INVESTMENT = (TODO_CAT_WORK,)  # Only work counts for project stats
+
 # ---------------------------------------------------------------------------
 # Requirement active-status filter (exclude these from "active" queries)
 # Usage: Requirement.status.notin_(REQ_INACTIVE_STATUSES)
