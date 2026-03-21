@@ -277,7 +277,7 @@ def batch_adopt():
     data = request.get_json() or {}
     todos_data = data.get('todos', [])
     today = date.today()
-    created = 0
+    results = []
     for item in todos_data:
         title = (item.get('title') or '').strip()
         if not title:
@@ -294,9 +294,10 @@ def batch_adopt():
                     category='work', source='ai', requirements=reqs)
         todo.items.append(TodoItem(title=full_title, sort_order=0))
         db.session.add(todo)
-        created += 1
+        db.session.flush()
+        results.append({'todo_id': todo.id, 'title': full_title, 'req_id': req_id or 0})
     db.session.commit()
-    return jsonify(ok=True, count=created)
+    return jsonify(ok=True, count=len(results), items=results)
 
 
 @main_bp.route('/api/ai-recommend-todos', methods=['POST'])
