@@ -51,7 +51,7 @@
                     {% else %}
                         <span class="small">{{ t.title }}{% if is_carryover %} <span class="text-warning" style="font-size:.8em;">结转</span>{% endif %}</span>
                     {% endif %}
-                    {% if t.need_help %}<span class="text-danger small" style="font-size:.75em;">🔴{{ t.blocked_reason or '阻塞' }}</span>{% endif %}
+                    {% if t.need_help %}<span class="badge bg-danger" style="font-size:.6em;">阻塞{% if t.blocked_reason %}：{{ t.blocked_reason }}{% endif %}</span>{% endif %}
                     {% if mine %}
                     <button class="btn btn-sm py-0 px-0 {% if t.need_help %}text-danger{% else %}text-muted{% endif %} btn-block ms-1" data-id="{{ t.id }}" title="{{ '解除阻塞' if t.need_help else '标记阻塞' }}" style="font-size:.7em;"><i class="bi bi-{% if t.need_help %}unlock{% else %}lock{% endif %}"></i></button>
                     <button class="btn btn-sm py-0 px-0 text-muted btn-delete ms-1" data-id="{{ t.id }}" style="font-size:.7em;"><i class="bi bi-x"></i></button>
