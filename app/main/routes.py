@@ -330,8 +330,18 @@ def ai_recommend_todos():
     lines.append('\n我的需求：')
     for r in my_reqs_list:
         days_left = (r.due_date - today).days if r.due_date else 999
-        urgency = '⚠️紧急！' if days_left <= 3 else ('⏰临近' if days_left <= 7 else '')
-        due = f'截止{r.due_date.strftime("%m-%d")}(剩{days_left}天)' if r.due_date else '无截止日'
+        if days_left < 0:
+            urgency = f'🔴已延期{-days_left}天！'
+            due = f'截止{r.due_date.strftime("%m-%d")}(已延期{-days_left}天)'
+        elif days_left <= 3:
+            urgency = f'⚠️仅剩{days_left}天！'
+            due = f'截止{r.due_date.strftime("%m-%d")}(仅剩{days_left}天)'
+        elif days_left <= 7:
+            urgency = f'⏰剩{days_left}天'
+            due = f'截止{r.due_date.strftime("%m-%d")}(剩{days_left}天)'
+        else:
+            urgency = ''
+            due = f'截止{r.due_date.strftime("%m-%d")}(剩{days_left}天)' if r.due_date else '无截止日'
         # Count invested todos
         invested = sum(1 for t in recent if any(req.id == r.id for req in t.requirements))
         children = f'，子需求{len(r.children)}个' if r.children else ''
