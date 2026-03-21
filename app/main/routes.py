@@ -106,14 +106,17 @@ def index():
         for r in my_risks if r.is_overdue
     ]
 
-    # Approved incentives: last 30 days excluding recent 7 days (avoid spoiling results)
-    inc_start = today - timedelta(days=30)
+    # Approved incentives: last 2 months excluding recent 7 days; fallback to 3 months if empty
     inc_end = today - timedelta(days=7)
-    approved_incentives = Incentive.query.filter(
-        Incentive.status == 'approved',
-        Incentive.reviewed_at >= str(inc_start),
-        Incentive.reviewed_at <= str(inc_end),
-    ).order_by(Incentive.reviewed_at.desc()).all()
+    for months in (60, 90):
+        inc_start = today - timedelta(days=months)
+        approved_incentives = Incentive.query.filter(
+            Incentive.status == 'approved',
+            Incentive.reviewed_at >= str(inc_start),
+            Incentive.reviewed_at <= str(inc_end),
+        ).order_by(Incentive.reviewed_at.desc()).all()
+        if approved_incentives:
+            break
 
     # AI usage ranking: top5
     ai_stats = db.session.query(
