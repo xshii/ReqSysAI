@@ -19,29 +19,36 @@
         {% for r in display_reqs %}
         <div class="card mb-2">
             <div class="card-body py-2">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="small fw-bold text-primary">{{ r.number }} {{ r.title }}</span>
-                    <span>
-                        <span class="badge bg-{{ r.status_color }}" style="font-size:.7em;">{{ r.status_label }}</span>
-                        {% if r.due_date and r.due_date < today %}<span class="badge bg-danger" style="font-size:.7em;">超期</span>{% endif %}
-                    </span>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <div class="d-flex align-items-center gap-1 flex-shrink-1" style="min-width:0;overflow:hidden;">
+                        <span class="badge bg-{{ r.status_color }}" style="font-size:.65em;flex-shrink:0;">{{ r.status_label }}</span>
+                        {% if r.due_date and r.due_date < today %}<span class="badge bg-danger" style="font-size:.65em;flex-shrink:0;">超期</span>{% endif %}
+                        <span class="small fw-bold text-primary text-nowrap" style="overflow:hidden;text-overflow:ellipsis;" title="{{ r.number }} {{ r.title }}">{{ r.number }} {{ r.title }}</span>
+                    </div>
+                    <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-shrink-0" style="width:140px;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="req_id" value="{{ r.id }}">
+                        <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="+ 添加今日Todo" required style="font-size:.8em;">
+                    </form>
                 </div>
                 {% for t in req_todos.get(r.id, []) %}
-                <div class="d-flex align-items-start gap-2 mb-1 ps-2 {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}">
+                <div class="d-flex align-items-center gap-1 mb-1 ps-2 {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}">
                     <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="{{ '撤销' if t.status == 'done' else '完成' }}">
+                        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="{{ '撤销完成' if t.status == 'done' else '标记完成' }}">
                             <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-secondary' }}"></i>
                         </button>
                     </form>
-                    <span class="small">{{ t.title }}</span>
+                    <span class="small flex-grow-1">{{ t.title }}</span>
+                    {% if t.status != 'done' %}
+                    <button class="btn btn-sm py-0 px-1 {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer-home" data-id="{{ t.id }}"
+                            title="{{ '暂停番茄钟' if t.timer_running else '启动一个番茄钟' }}" data-bs-toggle="tooltip">
+                        <i class="bi bi-{{ 'pause-fill' if t.timer_running else 'play-fill' }}" style="font-size:.75em;"></i>
+                    </button>
+                    {% endif %}
+                    {% if t.actual_minutes %}<span class="text-muted" style="font-size:.7em;">{{ t.actual_minutes }}m</span>{% endif %}
                 </div>
                 {% endfor %}
-                <form method="POST" action="{{ url_for('main.quick_todo') }}" class="ps-2">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="req_id" value="{{ r.id }}">
-                    <input type="text" name="title" class="form-control form-control-sm border-0 bg-transparent px-0" placeholder="+ 添加任务" required style="font-size:.85em;">
-                </form>
             </div>
         </div>
         {% endfor %}
@@ -249,6 +256,20 @@
 
 {% block extra_js %}
 <script>
+// Init Bootstrap tooltips
+document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+    new bootstrap.Tooltip(el);
+});
+
+// Timer toggle (homepage)
+document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        apiPost('/todos/' + btn.dataset.id + '/timer', {}).then(function(d) {
+            if (d && d.ok) location.reload();
+        });
+    });
+});
+
 // AJAX quick-todo for ALL forms (text input + quick buttons)
 document.querySelectorAll('form[action$="/quick-todo"]').forEach(function(form) {
     form.addEventListener('submit', function(e) {
