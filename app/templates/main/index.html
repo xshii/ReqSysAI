@@ -2,6 +2,14 @@
 {% block title %}首页 - 研发协作平台{% endblock %}
 
 {% block content %}
+{% if alerts %}
+<div class="alert alert-danger py-2 mb-3 small">
+    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+    <strong>预警：</strong>
+    {% for a in alerts %}{{ a }}{% if not loop.last %}；{% endif %}{% endfor %}
+</div>
+{% endif %}
+
 <h4 class="mb-4">{{ current_user.name }}，{{ today.strftime('%Y-%m-%d') }}</h4>
 
 <div class="row">
@@ -16,7 +24,12 @@
             <div class="card-body py-2">
             {% for t in my_todos %}
                 <div class="d-flex align-items-start gap-2 mb-1 {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}">
-                    <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle' }} mt-1"></i>
+                    <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent mt-1" title="{{ '撤销完成' if t.status == 'done' else '标记完成' }}">
+                            <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-secondary' }}" style="font-size:1.1em;cursor:pointer;"></i>
+                        </button>
+                    </form>
                     <div>
                         <span class="small">{{ t.title }}</span>
                         {% for r in t.requirements %}<span class="badge bg-light text-dark border small">{{ r.number }}</span>{% endfor %}

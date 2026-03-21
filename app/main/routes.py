@@ -39,6 +39,15 @@ def index():
         db.or_(Risk.tracker_id == current_user.id, Risk.created_by == current_user.id),
     ).order_by(Risk.due_date).all()
 
+    # Alerts: overdue requirements + overdue risks
+    overdue_reqs = [r for r in my_reqs if r.due_date and r.due_date < today and r.status not in ('done', 'closed')]
+    overdue_risks = [r for r in my_risks if r.is_overdue]
+    alerts = []
+    for r in overdue_reqs:
+        alerts.append(f'需求 [{r.number}] {r.title} 已超期 ({r.due_date.strftime("%m-%d")})')
+    for r in overdue_risks:
+        alerts.append(f'风险「{r.title}」已超期 ({r.due_date.strftime("%m-%d") if r.due_date else ""})')
+
     # Last month approved incentives
     from app.models.incentive import Incentive
     last_month_start = today.replace(day=1) - timedelta(days=1)
@@ -88,8 +97,29 @@ def index():
         my_todos=my_todos, todo_total=todo_total, todo_done=todo_done,
         my_reqs=my_reqs, my_risks=my_risks, today=today,
         approved_incentives=approved_incentives, rants=rants,
-        ai_ranking=ai_ranking,
+        ai_ranking=ai_ranking, alerts=alerts,
     )
+
+
+@main_bp.route('/todo/<int:todo_id>/toggle', methods=['POST'])
+@login_required
+def toggle_todo(todo_id):
+    """Toggle todo done/undone from homepage."""
+    todo = db.session.get(Todo, todo_id)
+    if not todo or todo.user_id != current_user.id:
+        return redirect(url_for('main.index'))
+    if todo.status == 'done':
+        todo.status = 'todo'
+        todo.done_date = None
+        for item in todo.items:
+            item.is_done = False
+    else:
+        todo.status = 'done'
+        todo.done_date = date.today()
+        for item in todo.items:
+            item.is_done = True
+    db.session.commit()
+    return redirect(url_for('main.index'))
 
 
 @main_bp.route('/rant', methods=['POST'])

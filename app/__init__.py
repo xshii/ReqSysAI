@@ -61,9 +61,31 @@ def create_app(config_name=None):
             if not cur_group and groups:
                 cur_group = groups[0]
             projects = Project.query.filter_by(status='active').order_by(Project.name).all()
+
+            # Notification counts for navbar bell
+            from app.models.risk import Risk
+            from app.models.requirement import Requirement
+            from datetime import date
+            today = date.today()
+            notif_risks = Risk.query.filter(
+                Risk.status == 'open',
+                db.or_(Risk.tracker_id == current_user.id, Risk.created_by == current_user.id),
+                Risk.due_date <= today,
+            ).count()
+            notif_overdue_reqs = Requirement.query.filter(
+                Requirement.assignee_id == current_user.id,
+                Requirement.status.notin_(['done', 'closed']),
+                Requirement.due_date < today,
+            ).count()
+            notif_count = notif_risks + notif_overdue_reqs
+            if current_user.is_team_manager:
+                from app.models.incentive import Incentive
+                notif_count += Incentive.query.filter_by(status='pending').count()
+
             return dict(sidebar_groups=groups, sidebar_cur_group=cur_group,
-                        sidebar_projects=projects)
-        return dict(sidebar_groups=[], sidebar_cur_group='', sidebar_projects=[])
+                        sidebar_projects=projects, notif_count=notif_count)
+        return dict(sidebar_groups=[], sidebar_cur_group='', sidebar_projects=[],
+                    notif_count=0)
 
     return app
 
