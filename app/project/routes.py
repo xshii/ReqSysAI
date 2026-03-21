@@ -11,6 +11,7 @@ from app.extensions import db
 from app.models.project import Project, Milestone
 from app.models.meeting import Meeting
 from app.models.risk import Risk
+from app.models.project_member import ProjectMember
 from app.models.user import User
 
 
@@ -279,6 +280,46 @@ def risk_comment(risk_id):
         db.session.commit()
         flash('进展已记录', 'success')
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
+
+
+# ---- Project members ----
+
+@project_bp.route('/<int:project_id>/members', methods=['GET', 'POST'])
+@login_required
+def member_list(project_id):
+    project = db.get_or_404(Project, project_id)
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'add':
+            user_id = request.form.get('user_id', type=int)
+            role = request.form.get('project_role', 'DEV')
+            if user_id and not ProjectMember.query.filter_by(project_id=project_id, user_id=user_id).first():
+                db.session.add(ProjectMember(project_id=project_id, user_id=user_id, project_role=role))
+                db.session.commit()
+                flash('成员已添加', 'success')
+        elif action == 'remove':
+            member_id = request.form.get('member_id', type=int)
+            m = db.session.get(ProjectMember, member_id)
+            if m and m.project_id == project_id:
+                db.session.delete(m)
+                db.session.commit()
+                flash('成员已移除', 'success')
+        elif action == 'role':
+            member_id = request.form.get('member_id', type=int)
+            new_role = request.form.get('project_role', 'DEV')
+            m = db.session.get(ProjectMember, member_id)
+            if m and m.project_id == project_id:
+                m.project_role = new_role
+                db.session.commit()
+                flash('角色已更新', 'success')
+        return redirect(url_for('project.member_list', project_id=project_id))
+
+    members = ProjectMember.query.filter_by(project_id=project_id).all()
+    all_users = User.query.filter_by(is_active=True).order_by(User.name).all()
+    member_ids = {m.user_id for m in members}
+    available = [u for u in all_users if u.id not in member_ids]
+    return render_template('project/members.html', project=project, members=members,
+                           available=available, roles=ProjectMember.PROJECT_ROLES)
 
 
 # ---- Meeting minutes ----
