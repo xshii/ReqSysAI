@@ -51,7 +51,7 @@
                     {% endif %}
                 </div>
                 <div>
-                <h6 class="mb-1"><span class="badge bg-{{ inc.category_color }} me-1">{{ inc.category_label }}</span>{{ inc.title }}{% if inc.team_name %} <span class="badge bg-light text-dark border">{{ inc.team_name }}</span>{% endif %}</h6>
+                <h6 class="mb-1"><span class="badge bg-{{ inc.category_color }} me-1">{{ inc.category_label }}</span>{{ inc.title }}</h6>
                 <div class="text-muted small mb-1">
                     推荐人物：{% for u in inc.nominees %}<span class="badge bg-light text-dark border me-1">{{ u.name }}</span>{% endfor %}
                 </div>
@@ -107,7 +107,7 @@
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">标题 <span class="text-danger">*</span></label>
-                        <div class="col-9"><input type="text" name="title" class="form-control form-control-sm" required placeholder="事迹标题 / 团队名"></div>
+                        <div class="col-9"><input type="text" name="title" class="form-control form-control-sm" required placeholder="获奖名称（个人事迹名或团队名）"></div>
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">人员 <span class="text-danger">*</span></label>
@@ -203,8 +203,7 @@
                             <input type="month" name="month" class="form-control form-control-sm" required>
                         </div>
                     </div>
-                    <div class="mb-2"><input type="text" name="title" class="form-control form-control-sm" placeholder="事迹标题" required></div>
-                    <div class="mb-2"><input type="text" name="team_name" class="form-control form-control-sm" placeholder="团队名（可选）"></div>
+                    <div class="mb-2"><input type="text" name="title" class="form-control form-control-sm" placeholder="获奖名称" required></div>
                     <div class="mb-2">
                         <input type="text" class="form-control form-control-sm" placeholder="搜索姓名/工号..." oninput="filterNominees2(this)">
                         <div class="border rounded p-2 mt-1" style="max-height:100px;overflow-y:auto;" id="nomineeList2">

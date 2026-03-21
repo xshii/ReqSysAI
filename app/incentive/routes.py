@@ -40,7 +40,6 @@ def index():
 def submit():
     title = request.form.get('title', '').strip()
     description = request.form.get('description', '').strip()
-    team_name = request.form.get('team_name', '').strip() or None
     nominee_ids = request.form.getlist('nominee_ids', type=int)
 
     if not title or not description or not nominee_ids:
@@ -53,7 +52,7 @@ def submit():
     category = request.form.get('category', 'professional')
     inc = Incentive(
         title=title, description=description, category=category,
-        photo=photo_path, team_name=team_name,
+        photo=photo_path,
         submitted_by=current_user.id, nominees=nominees,
     )
     db.session.add(inc)
@@ -230,7 +229,6 @@ def admin_submit():
     title = request.form.get('title', '').strip()
     description = request.form.get('description', '').strip()
     category = request.form.get('category', 'professional')
-    team_name = request.form.get('team_name', '').strip() or None
     nominee_ids = request.form.getlist('nominee_ids', type=int)
     amount = request.form.get('amount', type=float)
     review_comment = request.form.get('review_comment', '').strip()[:MAX_COMMENT_LENGTH]
@@ -252,7 +250,7 @@ def admin_submit():
     nominees = User.query.filter(User.id.in_(nominee_ids)).all()
     inc = Incentive(
         title=title, description=description or title, category=category,
-        photo=photo_path, team_name=team_name,
+        photo=photo_path,
         submitted_by=current_user.id, nominees=nominees,
         status='approved', amount=amount,
         review_comment=review_comment,
