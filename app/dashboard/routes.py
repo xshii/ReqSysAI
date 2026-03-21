@@ -19,6 +19,7 @@ from app.services.prompts import get_prompt
 from app.services.statistics import (
     week_range, gather_week_stats, gather_project_data,
     get_reviewer, get_todo_progress, TodoProgress,
+    get_delivery_metrics, get_estimate_deviation,
 )
 
 
@@ -68,6 +69,39 @@ def stats():
         data=data, monday=monday, sunday=sunday,
         offset=offset, groups=groups, cur_group=cur_group,
         cur_project=cur_project, cur_project_id=cur_project_id or 0,
+    )
+
+
+@dashboard_bp.route('/metrics')
+@login_required
+def metrics():
+    """Delivery cycle time and estimate-vs-actual deviation analytics."""
+    import statistics as _stats
+
+    cur_project_id = request.args.get('project_id', type=int)
+    cur_project = db.session.get(Project, cur_project_id) if cur_project_id else None
+    projects = Project.query.filter_by(status='active').order_by(Project.name).all()
+
+    delivery = get_delivery_metrics(project_id=cur_project_id)
+    deviation = get_estimate_deviation(project_id=cur_project_id)
+
+    # Delivery summary
+    lead_times = [d['lead_time'] for d in delivery if d['lead_time'] is not None]
+    cycle_times = [d['cycle_time'] for d in delivery if d['cycle_time'] is not None]
+    avg_lead = round(sum(lead_times) / len(lead_times), 1) if lead_times else 0
+    avg_cycle = round(sum(cycle_times) / len(cycle_times), 1) if cycle_times else 0
+
+    # Deviation summary
+    dev_pcts = [d['deviation_pct'] for d in deviation]
+    avg_deviation = round(sum(dev_pcts) / len(dev_pcts), 1) if dev_pcts else 0
+    median_deviation = round(_stats.median(dev_pcts), 1) if dev_pcts else 0
+
+    return render_template('dashboard/metrics.html',
+        delivery=delivery, deviation=deviation,
+        avg_lead=avg_lead, avg_cycle=avg_cycle,
+        avg_deviation=avg_deviation, median_deviation=median_deviation,
+        projects=projects, cur_project=cur_project,
+        cur_project_id=cur_project_id or 0,
     )
 
 

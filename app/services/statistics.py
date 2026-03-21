@@ -274,3 +274,122 @@ def get_hidden_roles():
     """Get set of hidden role names + Admin."""
     from flask import current_app
     return set(current_app.config.get('HIDDEN_ROLES', []) + ['Admin'])
+
+
+def get_delivery_metrics(project_id=None):
+    """Calculate lead time and cycle time for completed requirements.
+
+    - lead_time: created_at -> status='done' (in days)
+    - cycle_time: status='in_dev' -> status='done' (in days)
+    Returns list of dicts with req info + lead_time + cycle_time.
+    """
+    from app.models.requirement import Activity
+
+    # Get all done requirements
+    req_q = Requirement.query.filter(Requirement.status.in_(['done', 'closed']))
+    if project_id:
+        req_q = req_q.filter_by(project_id=project_id)
+    done_reqs = req_q.options(joinedload(Requirement.project)).all()
+
+    if not done_reqs:
+        return []
+
+    req_ids = [r.id for r in done_reqs]
+
+    # Fetch all status_changed activities for these requirements
+    activities = Activity.query.filter(
+        Activity.requirement_id.in_(req_ids),
+        Activity.action == 'status_changed',
+    ).order_by(Activity.created_at).all()
+
+    # Build lookup: req_id -> list of activities
+    act_map = defaultdict(list)
+    for a in activities:
+        act_map[a.requirement_id].append(a)
+
+    done_label = Requirement.STATUS_LABELS['done']
+    in_dev_label = Requirement.STATUS_LABELS['in_dev']
+
+    results = []
+    for req in done_reqs:
+        req_activities = act_map.get(req.id, [])
+
+        # Find the first activity where status changed TO done (detail ends with done_label)
+        done_at = None
+        in_dev_at = None
+        for act in req_activities:
+            detail = act.detail or ''
+            # detail format: "旧状态 → 新状态"
+            if detail.endswith(done_label) and done_at is None:
+                done_at = act.created_at
+            if detail.endswith(in_dev_label) and in_dev_at is None:
+                in_dev_at = act.created_at
+
+        if done_at is None:
+            continue
+
+        lead_time = (done_at - req.created_at).days
+        cycle_time = (done_at - in_dev_at).days if in_dev_at else None
+
+        results.append({
+            'req_number': req.number,
+            'title': req.title,
+            'project_name': req.project.name if req.project else '-',
+            'created_at': req.created_at,
+            'done_at': done_at,
+            'lead_time': lead_time,
+            'cycle_time': cycle_time,
+        })
+
+    return results
+
+
+def get_estimate_deviation(project_id=None):
+    """Compare estimate_days vs actual effort (from linked todos actual_minutes).
+
+    Returns list of dicts: {req_number, title, estimate_days, actual_days, deviation_pct}
+    """
+    # Get requirements with estimate_days > 0
+    req_q = Requirement.query.filter(
+        Requirement.estimate_days.isnot(None),
+        Requirement.estimate_days > 0,
+    )
+    if project_id:
+        req_q = req_q.filter_by(project_id=project_id)
+    reqs = req_q.options(joinedload(Requirement.project)).all()
+
+    if not reqs:
+        return []
+
+    req_ids = [r.id for r in reqs]
+
+    # Sum actual_minutes from linked todos via todo_requirements M2M
+    rows = db.session.query(
+        todo_requirements.c.requirement_id,
+        func.sum(Todo.actual_minutes),
+    ).join(Todo, Todo.id == todo_requirements.c.todo_id)\
+     .filter(
+        todo_requirements.c.requirement_id.in_(req_ids),
+        Todo.actual_minutes.isnot(None),
+    ).group_by(todo_requirements.c.requirement_id).all()
+
+    minutes_map = {rid: int(total or 0) for rid, total in rows}
+
+    results = []
+    for req in reqs:
+        total_minutes = minutes_map.get(req.id, 0)
+        if total_minutes == 0:
+            continue
+        actual_days = round(total_minutes / 480, 2)  # 8h/day = 480 min
+        deviation_pct = round((actual_days - req.estimate_days) / req.estimate_days * 100, 1)
+
+        results.append({
+            'req_number': req.number,
+            'title': req.title,
+            'project_name': req.project.name if req.project else '-',
+            'estimate_days': req.estimate_days,
+            'actual_days': actual_days,
+            'deviation_pct': deviation_pct,
+        })
+
+    return results
