@@ -279,7 +279,11 @@ document.getElementById('btnAiRecommend').addEventListener('click', function() {
     apiPost('{{ url_for("main.ai_recommend_todos") }}', {}).then(function(d) {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-robot"></i> AI 推荐今日 Todo';
-        if (d && d.ok && d.todos.length) {
+        if (!d || !d.ok) {
+            showToast(d && d.msg ? d.msg : 'AI 推荐失败', 'danger');
+            return;
+        }
+        if (d.todos && d.todos.length) {
             var area = document.getElementById('aiRecommendArea');
             var list = document.getElementById('aiRecommendList');
             var html = '';
@@ -324,9 +328,10 @@ document.getElementById('btnAiRecommend').addEventListener('click', function() {
                 });
             });
         } else {
-            showToast(d.msg || '暂无推荐', 'info');
+            showToast('暂无推荐', 'info');
         }
-    }).catch(function() {
+    }).catch(function(e) {
+        console.error('AI recommend error:', e);
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-robot"></i> AI 推荐今日 Todo';
         showToast('AI 服务不可用', 'danger');
@@ -402,28 +407,80 @@ document.querySelectorAll('form[action*="/todo/"][action*="/toggle"]').forEach(f
     });
 });
 
-// Timer (AJAX)
+// Timer + Focus Mode
+var focusOverlay = null;
+var focusInterval = null;
+var focusTodoId = null;
+var focusStartTime = null;
+
+function enterFocusMode(todoId, title) {
+    focusTodoId = todoId;
+    focusStartTime = Date.now();
+    if (!focusOverlay) {
+        focusOverlay = document.createElement('div');
+        focusOverlay.id = 'focusOverlay';
+        focusOverlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#1a1a2e;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;';
+        focusOverlay.innerHTML = '<div style="font-size:1.2em;opacity:.7;margin-bottom:1em;" id="focusTitle"></div>'
+            + '<div style="font-size:6em;font-weight:300;font-variant-numeric:tabular-nums;" id="focusTimer">00:00</div>'
+            + '<div style="margin-top:2em;"><button id="focusStop" style="background:none;border:2px solid rgba(255,255,255,.3);color:white;padding:.5em 2em;border-radius:2em;font-size:1.1em;cursor:pointer;">打断结束</button></div>';
+        document.body.appendChild(focusOverlay);
+        document.getElementById('focusStop').addEventListener('click', exitFocusMode);
+    }
+    document.getElementById('focusTitle').textContent = title;
+    focusOverlay.style.display = 'flex';
+    focusInterval = setInterval(updateFocusTimer, 1000);
+    updateFocusTimer();
+}
+
+function updateFocusTimer() {
+    var elapsed = Math.floor((Date.now() - focusStartTime) / 1000);
+    var m = Math.floor(elapsed / 60);
+    var s = elapsed % 60;
+    document.getElementById('focusTimer').textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+}
+
+function exitFocusMode() {
+    clearInterval(focusInterval);
+    if (focusOverlay) focusOverlay.style.display = 'none';
+    // Stop timer on server
+    apiPost('/todos/' + focusTodoId + '/timer', {}).then(function(d) {
+        if (d && d.ok) {
+            showToast('专注结束，用时 ' + d.minutes + ' 分钟', 'info');
+            // Update button state
+            var btn = document.querySelector('.btn-timer-home[data-id="' + focusTodoId + '"]');
+            if (btn) {
+                btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
+                var icon = btn.querySelector('i');
+                if (icon) icon.className = 'bi bi-play-fill';
+            }
+        }
+    });
+    focusTodoId = null;
+}
+
 document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
     btn.addEventListener('click', function() {
-        apiPost('/todos/' + btn.dataset.id + '/timer', {}).then(function(d) {
+        var todoId = btn.dataset.id;
+        var title = btn.closest('.d-flex').querySelector('.small').textContent.trim();
+        // Start timer on server, then enter focus mode
+        apiPost('/todos/' + todoId + '/timer', {}).then(function(d) {
             if (d && d.ok) {
-                var icon = btn.querySelector('i');
                 if (d.running) {
                     btn.className = btn.className.replace('btn-outline-secondary', 'btn-success');
-                    icon.className = 'bi bi-pause-fill';
-                    btn.title = '暂停番茄钟';
+                    btn.querySelector('i').className = 'bi bi-pause-fill';
+                    enterFocusMode(todoId, title);
                 } else {
                     btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
-                    icon.className = 'bi bi-play-fill';
-                    btn.title = '启动一个番茄钟';
+                    btn.querySelector('i').className = 'bi bi-play-fill';
+                    showToast('已暂停 (' + d.minutes + '分钟)', 'info');
                 }
-                showToast(d.running ? '番茄钟已启动' : '已暂停 (' + d.minutes + '分钟)', d.running ? 'success' : 'info');
             }
         });
     });
 });
 
 // Delete todo
+document.querySelectorAll('.btn-delete-home').forEach(function(btn) {
     btn.addEventListener('click', function() {
         apiPost('/todos/' + btn.dataset.id + '/edit', {title: ''}).then(function(d) {
             if (d && d.ok) btn.closest('.d-flex').remove();
@@ -434,15 +491,6 @@ document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
 // Init Bootstrap tooltips
 document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
     new bootstrap.Tooltip(el);
-});
-
-// Timer toggle (homepage)
-document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-        apiPost('/todos/' + btn.dataset.id + '/timer', {}).then(function(d) {
-            if (d && d.ok) location.reload();
-        });
-    });
 });
 
 // AJAX quick-todo for ALL forms (text input + quick buttons)

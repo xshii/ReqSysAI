@@ -44,6 +44,17 @@ def create_app(config_name=None):
     # Register error handlers
     _register_error_handlers(app)
 
+    # Handle CSRF errors gracefully for JSON requests
+    from flask_wtf.csrf import CSRFError
+    @app.errorhandler(CSRFError)
+    def _handle_csrf_error(e):
+        from flask import request as req, jsonify
+        if req.is_json:
+            return jsonify(ok=False, msg='安全验证过期，请刷新页面'), 400
+        from flask import flash, redirect, url_for
+        flash('安全验证失败，请重试', 'danger')
+        return redirect(req.referrer or url_for('main.index'))
+
     # Domain events
     from app.services.event_setup import register_events
     register_events()

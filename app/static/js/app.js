@@ -38,5 +38,11 @@ function apiPost(url, data) {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-CSRFToken': token},
         body: JSON.stringify(data || {})
-    }).then(function(r) { return r.json(); });
+    }).then(function(r) {
+        if (!r.ok) {
+            console.error('API error:', r.status, url);
+            return {ok: false, msg: 'HTTP ' + r.status};
+        }
+        return r.json().catch(function() { return {ok: false, msg: '响应解析失败'}; });
+    });
 }
