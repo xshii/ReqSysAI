@@ -284,7 +284,7 @@ def toggle_todo(todo_id):
     """Toggle todo done/undone from homepage."""
     todo = db.session.get(Todo, todo_id)
     if not todo or todo.user_id != current_user.id:
-        return redirect(url_for('main.index'))
+        return jsonify(ok=False) if request.is_json else redirect(url_for('main.index'))
     if todo.status == TODO_STATUS_DONE:
         todo.status = TODO_STATUS_TODO
         todo.done_date = None
@@ -296,17 +296,31 @@ def toggle_todo(todo_id):
         for item in todo.items:
             item.is_done = True
     db.session.commit()
+    if request.is_json:
+        return jsonify(ok=True, done=todo.status == TODO_STATUS_DONE)
     return redirect(url_for('main.index'))
 
 
 @main_bp.route('/rant', methods=['POST'])
 @login_required
 def post_rant():
-    content = request.form.get('content', '').strip()[:MAX_RANT_LENGTH]
-    alias = request.form.get('alias', '').strip()[:30] or None
+    is_ajax = request.is_json
+    if is_ajax:
+        data = request.get_json() or {}
+        content = (data.get('content') or '').strip()[:MAX_RANT_LENGTH]
+        alias = (data.get('alias') or '').strip()[:30] or None
+    else:
+        content = request.form.get('content', '').strip()[:MAX_RANT_LENGTH]
+        alias = request.form.get('alias', '').strip()[:30] or None
     if content:
-        db.session.add(Rant(content=content, alias=alias))
+        r = Rant(content=content, alias=alias)
+        db.session.add(r)
         db.session.commit()
+        if is_ajax:
+            return jsonify(ok=True, id=r.id, alias=alias, content=content,
+                           date=r.created_at.strftime('%m-%d'))
+    if is_ajax:
+        return jsonify(ok=False)
     return redirect(url_for('main.index'))
 
 
@@ -317,6 +331,10 @@ def like_rant(rant_id):
     if rant:
         rant.likes = (rant.likes or 0) + 1
         db.session.commit()
+        if request.is_json:
+            return jsonify(ok=True, likes=rant.likes)
+    elif request.is_json:
+        return jsonify(ok=False)
     return redirect(url_for('main.index'))
 
 
@@ -324,9 +342,11 @@ def like_rant(rant_id):
 @login_required
 def delete_rant(rant_id):
     if not current_user.is_admin:
-        return redirect(url_for('main.index'))
+        return jsonify(ok=False) if request.is_json else redirect(url_for('main.index'))
     rant = db.session.get(Rant, rant_id)
     if rant:
         db.session.delete(rant)
         db.session.commit()
+        if request.is_json:
+            return jsonify(ok=True)
     return redirect(url_for('main.index'))

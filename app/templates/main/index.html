@@ -241,37 +241,30 @@
 
         <!-- Graffiti board -->
         <h6 class="mt-4 mb-2"><i class="bi bi-chat-dots"></i> 涂鸦板 <span class="text-muted small">完全匿名</span></h6>
-        <form method="POST" action="{{ url_for('main.post_rant') }}" class="mb-2">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="input-group input-group-sm">
-                <input type="text" name="alias" class="form-control" style="max-width:80px;" placeholder="代号" maxlength="30">
-                <input type="text" name="content" class="form-control" placeholder="吐槽或鼓励..." maxlength="500" required>
-                <button type="submit" class="btn btn-dark">发布</button>
-            </div>
-        </form>
+        <div class="input-group input-group-sm mb-2">
+            <input type="text" id="rantAlias" class="form-control" style="max-width:80px;" placeholder="代号" maxlength="30">
+            <input type="text" id="rantContent" class="form-control" placeholder="吐槽或鼓励..." maxlength="500">
+            <button class="btn btn-dark" id="rantSubmit">发布</button>
+        </div>
+        <div id="rantList">
         {% for r in rants %}
-        <div class="bg-light rounded px-3 py-2 mb-1 small d-flex justify-content-between align-items-start">
+        <div class="bg-light rounded px-3 py-2 mb-1 small d-flex justify-content-between align-items-start rant-row" data-id="{{ r.id }}">
             <div>
                 {% if r.likes and r.likes > 0 and loop.index <= 3 %}<i class="bi bi-fire text-danger"></i> {% endif %}
                 {% if r.alias %}<span class="fw-bold text-primary">{{ r.alias }}：</span>{% endif %}{{ r.content }}
                 <span class="text-muted ms-1">{{ r.created_at.strftime('%m-%d') }}</span>
             </div>
             <div class="d-flex gap-1 ms-2 flex-shrink-0">
-                <form method="POST" action="{{ url_for('main.like_rant', rant_id=r.id) }}" class="d-inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-sm py-0 px-1 {% if r.likes %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}">
-                        <i class="bi bi-heart{% if r.likes %}-fill{% endif %}"></i> {{ r.likes or '' }}
-                    </button>
-                </form>
+                <button class="btn btn-sm py-0 px-1 {% if r.likes %}btn-outline-danger{% else %}btn-outline-secondary{% endif %} rant-like" data-id="{{ r.id }}">
+                    <i class="bi bi-heart{% if r.likes %}-fill{% endif %}"></i> <span>{{ r.likes or '' }}</span>
+                </button>
                 {% if current_user.is_admin %}
-                <form method="POST" action="{{ url_for('main.delete_rant', rant_id=r.id) }}" class="d-inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="return confirm('删除？')"><i class="bi bi-x"></i></button>
-                </form>
+                <button class="btn btn-sm py-0 px-1 btn-outline-secondary rant-del" data-id="{{ r.id }}"><i class="bi bi-x"></i></button>
                 {% endif %}
             </div>
         </div>
         {% endfor %}
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -320,8 +313,97 @@ document.getElementById('btnAiRecommend').addEventListener('click', function() {
     });
 });
 
+// Rant submit (AJAX)
+document.getElementById('rantSubmit').addEventListener('click', function() {
+    var content = document.getElementById('rantContent').value.trim();
+    if (!content) return;
+    var alias = document.getElementById('rantAlias').value.trim();
+    apiPost('{{ url_for("main.post_rant") }}', {content: content, alias: alias}).then(function(d) {
+        if (d && d.ok) {
+            var row = document.createElement('div');
+            row.className = 'bg-light rounded px-3 py-2 mb-1 small d-flex justify-content-between align-items-start rant-row';
+            row.dataset.id = d.id;
+            row.innerHTML = '<div>' + (d.alias ? '<span class="fw-bold text-primary">' + d.alias + '：</span>' : '') + d.content + ' <span class="text-muted ms-1">' + d.date + '</span></div>'
+                + '<div class="d-flex gap-1 ms-2 flex-shrink-0"><button class="btn btn-sm py-0 px-1 btn-outline-secondary rant-like" data-id="' + d.id + '"><i class="bi bi-heart"></i> <span></span></button></div>';
+            var list = document.getElementById('rantList');
+            list.insertBefore(row, list.firstChild);
+            bindRantLike(row.querySelector('.rant-like'));
+            document.getElementById('rantContent').value = '';
+            document.getElementById('rantAlias').value = '';
+        }
+    });
+});
+document.getElementById('rantContent').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') document.getElementById('rantSubmit').click();
+});
+
+// Rant like (AJAX)
+function bindRantLike(btn) {
+    btn.addEventListener('click', function() {
+        apiPost('/rant/' + btn.dataset.id + '/like', {}).then(function(d) {
+            if (d && d.ok) {
+                btn.querySelector('span').textContent = d.likes;
+                btn.querySelector('i').className = 'bi bi-heart-fill';
+                btn.className = 'btn btn-sm py-0 px-1 btn-outline-danger rant-like';
+            }
+        });
+    });
+}
+document.querySelectorAll('.rant-like').forEach(bindRantLike);
+
+// Rant delete (AJAX, admin)
+document.querySelectorAll('.rant-del').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        if (!confirm('删除？')) return;
+        apiPost('/rant/' + btn.dataset.id + '/delete', {}).then(function(d) {
+            if (d && d.ok) btn.closest('.rant-row').remove();
+        });
+    });
+});
+
+// Toggle todo (AJAX)
+document.querySelectorAll('form[action*="/todo/"][action*="/toggle"]').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var todoId = form.action.match(/\/todo\/(\d+)\/toggle/)[1];
+        apiPost('/todo/' + todoId + '/toggle', {}).then(function(d) {
+            if (d && d.ok) {
+                var row = form.closest('.d-flex');
+                var icon = form.querySelector('i');
+                if (d.done) {
+                    row.classList.add('text-muted', 'text-decoration-line-through');
+                    icon.className = 'bi bi-check-circle-fill text-success';
+                } else {
+                    row.classList.remove('text-muted', 'text-decoration-line-through');
+                    icon.className = 'bi bi-circle text-secondary';
+                }
+            }
+        });
+    });
+});
+
+// Timer (AJAX)
+document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        apiPost('/todos/' + btn.dataset.id + '/timer', {}).then(function(d) {
+            if (d && d.ok) {
+                var icon = btn.querySelector('i');
+                if (d.running) {
+                    btn.className = btn.className.replace('btn-outline-secondary', 'btn-success');
+                    icon.className = 'bi bi-pause-fill';
+                    btn.title = '暂停番茄钟';
+                } else {
+                    btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
+                    icon.className = 'bi bi-play-fill';
+                    btn.title = '启动一个番茄钟';
+                }
+                showToast(d.running ? '番茄钟已启动' : '已暂停 (' + d.minutes + '分钟)', d.running ? 'success' : 'info');
+            }
+        });
+    });
+});
+
 // Delete todo
-document.querySelectorAll('.btn-delete-home').forEach(function(btn) {
     btn.addEventListener('click', function() {
         apiPost('/todos/' + btn.dataset.id + '/edit', {title: ''}).then(function(d) {
             if (d && d.ok) btn.closest('.d-flex').remove();
