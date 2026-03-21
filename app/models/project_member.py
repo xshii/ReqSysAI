@@ -12,6 +12,7 @@ class ProjectMember(db.Model):
     external_name = db.Column(db.String(100), nullable=True)  # 外部成员姓名
     external_eid = db.Column(db.String(30), nullable=True)  # 外部成员工号
     project_role = db.Column(db.String(50), default='DEV')  # 支持自定义角色
+    is_key = db.Column(db.Boolean, default=True)  # 关键角色标记，仅PM可见
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     project = db.relationship('Project', backref='members')

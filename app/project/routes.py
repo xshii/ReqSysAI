@@ -324,6 +324,12 @@ def member_list(project_id):
                 m.project_role = new_role
                 db.session.commit()
                 flash('角色已更新', 'success')
+        elif action == 'toggle_key' and is_pm:
+            member_id = request.form.get('member_id', type=int)
+            m = db.session.get(ProjectMember, member_id)
+            if m and m.project_id == project_id:
+                m.is_key = not m.is_key
+                db.session.commit()
         return redirect(url_for('project.member_list', project_id=project_id))
 
     members = ProjectMember.query.filter_by(project_id=project_id).all()
@@ -331,7 +337,8 @@ def member_list(project_id):
     member_ids = {m.user_id for m in members}
     available = [u for u in all_users if u.id not in member_ids]
     return render_template('project/members.html', project=project, members=members,
-                           available=available, roles=ProjectMember.DEFAULT_ROLES, can_edit=can_edit)
+                           available=available, roles=ProjectMember.DEFAULT_ROLES, can_edit=can_edit,
+                           is_pm=can_edit)
 
 
 # ---- Knowledge management ----
