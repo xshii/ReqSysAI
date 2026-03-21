@@ -44,11 +44,13 @@ def login():
             flash('账号已被禁用，请联系管理员', 'danger')
             return render_template('auth/login.html', form=form, client_ip=client_ip)
 
-        if user.ip_address != client_ip:
-            # IP changed — update binding
-            logger.warning('IP changed for %s (%s): %s -> %s', user.employee_id, user.name, user.ip_address, client_ip)
+        if user.ip_address.startswith('pending-'):
+            # First login: bind IP
             user.ip_address = client_ip
             db.session.commit()
+        elif user.ip_address != client_ip:
+            flash(f'IP 不匹配（当前 {client_ip}，绑定 {user.ip_address}），请联系管理员修改', 'danger')
+            return render_template('auth/login.html', form=form, client_ip=client_ip)
 
         login_user(user, remember=False)
         session.permanent = True  # 10 min lifetime from config
