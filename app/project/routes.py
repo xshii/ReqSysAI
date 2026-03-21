@@ -178,8 +178,9 @@ def risk_list(project_id):
     reqs = Requirement.query.filter_by(project_id=project_id).order_by(Requirement.number).all()
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
 
+    from datetime import date
     return render_template('project/risks.html', project=project, risks=risks,
-                           reqs=reqs, users=users,
+                           reqs=reqs, users=users, today=date.today(),
                            cur_status=status, cur_severity=severity)
 
 
