@@ -21,10 +21,11 @@ def _is_port_open(port, host='127.0.0.1', timeout=2):
 
 def _ensure_ssh_tunnel():
     """Check SSH tunnel and establish if needed. Returns (ok, error_msg)."""
+    ssh_enabled = current_app.config.get('OLLAMA_SSH_ENABLED', False)
     ssh_host = current_app.config.get('OLLAMA_SSH_HOST', '')
     local_port = current_app.config.get('OLLAMA_SSH_LOCAL_PORT', 11434)
 
-    if not ssh_host:
+    if not ssh_enabled or not ssh_host:
         # No SSH configured, just check if Ollama is reachable
         if _is_port_open(local_port):
             return True, None
