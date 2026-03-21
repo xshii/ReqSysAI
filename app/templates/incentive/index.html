@@ -97,7 +97,7 @@
                         <div class="col-9"><input type="text" name="title" class="form-control form-control-sm" required placeholder="事迹标题 / 团队名"></div>
                     </div>
                     <div class="row mb-2">
-                        <label class="col-3 col-form-label col-form-label-sm">人物 <span class="text-danger">*</span></label>
+                        <label class="col-3 col-form-label col-form-label-sm">人员 <span class="text-danger">*</span></label>
                         <div class="col-9">
                             <div id="selectedNominees" class="d-flex flex-wrap gap-1 mb-1"></div>
                             <div class="position-relative">
@@ -244,8 +244,18 @@ function checkAI() {
     if (!search) return;
     var chosen = {};
 
-    // Prevent enter from submitting form
-    search.addEventListener('keydown', function(e) { if (e.key === 'Enter') e.preventDefault(); });
+    // Enter selects first visible match
+    search.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            var first = dropdown.querySelector('.nominee-opt[style=""]') || dropdown.querySelector('.nominee-opt:not([style*="none"])');
+            if (first && dropdown.style.display !== 'none') {
+                addNominee(first.dataset.id, first.dataset.name);
+                search.value = '';
+                filterDD();
+            }
+        }
+    });
     search.addEventListener('focus', function() { dropdown.style.display = 'block'; filterDD(); });
     search.addEventListener('input', filterDD);
     search.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; }, 200); });
