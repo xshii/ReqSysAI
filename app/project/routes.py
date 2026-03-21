@@ -329,7 +329,7 @@ def member_list(project_id):
     member_ids = {m.user_id for m in members}
     available = [u for u in all_users if u.id not in member_ids]
     return render_template('project/members.html', project=project, members=members,
-                           available=available, roles=ProjectMember.PROJECT_ROLES, can_edit=can_edit)
+                           available=available, roles=ProjectMember.DEFAULT_ROLES, can_edit=can_edit)
 
 
 # ---- Meeting minutes ----
