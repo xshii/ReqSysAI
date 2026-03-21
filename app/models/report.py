@@ -31,3 +31,22 @@ class WeeklyReport(db.Model):
 
     def __repr__(self):
         return f'<WeeklyReport {self.project_id} {self.week_start}>'
+
+
+class PersonalWeekly(db.Model):
+    """个人周报（AI 生成后自动保存，按 user + week_start 唯一）"""
+    __tablename__ = 'personal_weeklies'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    week_start = db.Column(db.Date, nullable=False)
+    week_end = db.Column(db.Date, nullable=False)
+    ai_html = db.Column(db.Text, nullable=True)  # AI 生成的 HTML
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship('User')
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'week_start', name='uq_user_personal_week'),
+    )

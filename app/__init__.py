@@ -16,6 +16,7 @@ def create_app(config_name=None):
     migrate.init_app(app, db)
     login_manager.init_app(app)
     csrf.init_app(app)
+    app.config['WTF_CSRF_ENABLED'] = False  # Internal app, IP-based auth
 
     # Import models so they are registered with SQLAlchemy
     from app import models  # noqa: F401
@@ -44,17 +45,6 @@ def create_app(config_name=None):
     # Register error handlers
     _register_error_handlers(app)
 
-    # Handle CSRF errors gracefully for JSON requests
-    from flask_wtf.csrf import CSRFError
-    @app.errorhandler(CSRFError)
-    def _handle_csrf_error(e):
-        from flask import request as req, jsonify
-        if req.is_json:
-            return jsonify(ok=False, msg='安全验证过期，请刷新页面'), 400
-        from flask import flash, redirect, url_for
-        flash('安全验证失败，请重试', 'danger')
-        return redirect(req.referrer or url_for('main.index'))
-
     # Domain events
     from app.services.event_setup import register_events
     register_events()
@@ -79,7 +69,12 @@ def create_app(config_name=None):
             cur_group = req.args.get('group', current_user.group or '')
             if not cur_group and groups:
                 cur_group = groups[0]
-            projects = Project.query.filter_by(status='active').order_by(Project.name).all()
+            all_projects = Project.query.filter_by(status='active').order_by(Project.name).all()
+            followed_ids = set(p.id for p in current_user.followed_projects.all())
+            # Followed projects first, then others
+            followed = [p for p in all_projects if p.id in followed_ids]
+            unfollowed = [p for p in all_projects if p.id not in followed_ids]
+            projects = followed + unfollowed
 
             # Notification counts for navbar bell
             from app.models.risk import Risk
@@ -113,9 +108,10 @@ def create_app(config_name=None):
             notif_count += notif_help
 
             return dict(sidebar_groups=groups, sidebar_cur_group=cur_group,
-                        sidebar_projects=projects, notif_count=notif_count)
+                        sidebar_projects=projects, sidebar_followed_ids=followed_ids,
+                        notif_count=notif_count)
         return dict(sidebar_groups=[], sidebar_cur_group='', sidebar_projects=[],
-                    notif_count=0)
+                    sidebar_followed_ids=set(), notif_count=0)
 
     return app
 

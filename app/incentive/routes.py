@@ -352,6 +352,45 @@ def ai_describe():
     return jsonify(ok=False, msg='AI 服务不可用')
 
 
+@incentive_bp.route('/ai-recommend-candidates', methods=['POST'])
+@login_required
+def ai_recommend_candidates():
+    """AI recommends incentive candidates based on recent work data."""
+    if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
+        return jsonify(ok=False, msg='无权限'), 403
+
+    from app.services.ai import call_ollama
+    from app.services.prompts import get_prompt
+    from collections import Counter
+
+    since = date.today() - timedelta(days=30)
+    users = User.query.filter_by(is_active=True).all()
+
+    lines = [f'近30天团队工作数据（截至 {date.today()}）：\n']
+    for u in users:
+        done_count = Todo.query.filter(
+            Todo.user_id == u.id,
+            Todo.created_date >= since,
+            Todo.status == 'done').count()
+        active_count = Todo.query.filter_by(user_id=u.id, status='todo').count()
+        help_count = Todo.query.filter(
+            Todo.user_id == u.id, Todo.source == 'help',
+            Todo.created_date >= since).count()
+        focus_min = db.session.query(db.func.sum(Todo.actual_minutes)).filter(
+            Todo.user_id == u.id, Todo.created_date >= since).scalar() or 0
+        lines.append(
+            f'- {u.name}（{u.group or ""}）：'
+            f'完成 {done_count} 个任务，进行中 {active_count} 个，'
+            f'协助他人 {help_count} 次，番茄钟 {focus_min} 分钟')
+
+    prompt = get_prompt('incentive_recommend') + '\n\n' + '\n'.join(lines)
+    result, raw = call_ollama(prompt)
+
+    if isinstance(result, list):
+        return jsonify(ok=True, candidates=result)
+    return jsonify(ok=False, raw=raw or '生成失败')
+
+
 @incentive_bp.route('/rant', methods=['GET', 'POST'])
 @login_required
 def rant_wall():

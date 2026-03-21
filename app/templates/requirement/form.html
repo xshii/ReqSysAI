@@ -64,7 +64,11 @@
                         </div>
                         <div id="subReqs"></div>
                     </div>
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {{ form.submit.label.text }}</button>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {{ form.submit.label.text }}</button>
+                        <button type="button" class="btn btn-outline-info" id="btnQualityCheck" onclick="qualityCheck()"><i class="bi bi-shield-check"></i> AI 质量检查</button>
+                    </div>
+                    <div id="qualityResult" class="mt-2 d-none"></div>
                 </form>
             </div>
         </div>
@@ -227,6 +231,10 @@ function showAiResult() {
         html += '<br>子需求:';
         aiData.subtasks.forEach(function(st) { html += '<br>  · ' + getSubTitle(st); });
     }
+    if (aiData.recommended_assignee) {
+        html += '<br><span class="text-success"><i class="bi bi-person-check"></i> 推荐负责人: <strong>' + aiData.recommended_assignee + '</strong></span>';
+        if (aiData.assign_reason) html += '<br><span class="text-muted small">理由: ' + aiData.assign_reason + '</span>';
+    }
     document.getElementById('aiPreview').innerHTML = html;
 }
 
@@ -236,6 +244,22 @@ document.getElementById('btnAiFill').addEventListener('click', function() {
     if (aiData.description) document.getElementById('reqDesc').value = aiData.description;
     if (aiData.priority) document.getElementById('reqPriority').value = aiData.priority;
     if (aiData.estimate_days) document.getElementById('reqDays').value = aiData.estimate_days;
+    // Fill assignee from AI recommendation
+    if (aiData.recommended_assignee) {
+        var assigneeSelect = document.getElementById('reqAssignee') || document.querySelector('[name="assignee_id"]');
+        if (assigneeSelect) {
+            for (var i = 0; i < assigneeSelect.options.length; i++) {
+                if (assigneeSelect.options[i].text.indexOf(aiData.recommended_assignee) >= 0) {
+                    assigneeSelect.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+        // Also try user_picker text input
+        var pickerInput = document.querySelector('.user-picker-input');
+        var pickerVal = document.querySelector('.user-picker-val');
+        if (pickerInput) pickerInput.value = aiData.recommended_assignee;
+    }
     // Fill sub-requirements
     if (aiData.subtasks && aiData.subtasks.length) {
         var div = document.getElementById('subReqs');
@@ -248,5 +272,51 @@ document.getElementById('btnAiFill').addEventListener('click', function() {
         addSubReq();
     }
 });
+
+// Quality Check
+function qualityCheck() {
+    var btn = document.getElementById('btnQualityCheck');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 检查中...';
+    var data = {
+        title: document.querySelector('[name="title"]').value,
+        description: document.querySelector('[name="description"]').value,
+        priority: document.querySelector('[name="priority"]').value,
+        estimate_days: document.querySelector('[name="estimate_days"]').value,
+    };
+    fetch('{{ url_for("requirement.ai_quality_check") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-shield-check"></i> AI 质量检查';
+        var panel = document.getElementById('qualityResult');
+        if (d.ok) {
+            var scoreColor = d.score >= 80 ? 'success' : d.score >= 60 ? 'warning' : 'danger';
+            var html = '<div class="alert alert-' + scoreColor + ' py-2 small mb-0">';
+            html += '<strong>质量评分：' + d.score + '/100</strong>';
+            if (d.issues && d.issues.length) {
+                html += '<div class="mt-1"><strong>问题：</strong><ul class="mb-0">';
+                d.issues.forEach(function(i) { html += '<li>' + i + '</li>'; });
+                html += '</ul></div>';
+            }
+            if (d.suggestions && d.suggestions.length) {
+                html += '<div class="mt-1"><strong>建议：</strong><ul class="mb-0">';
+                d.suggestions.forEach(function(s) { html += '<li>' + s + '</li>'; });
+                html += '</ul></div>';
+            }
+            html += '</div>';
+            panel.innerHTML = html;
+            panel.classList.remove('d-none');
+        } else {
+            panel.innerHTML = '<div class="alert alert-danger py-2 small mb-0">检查失败：' + (d.raw || '未知错误') + '</div>';
+            panel.classList.remove('d-none');
+        }
+    }).catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-shield-check"></i> AI 质量检查';
+    });
+}
 </script>
 {% endblock %}

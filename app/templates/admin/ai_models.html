@@ -25,6 +25,58 @@
     </div>
 </div>
 
+<!-- 全局系统提示词 -->
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-header py-2 bg-white d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-chat-square-text"></i> 全局系统提示词 (System Prompt)</span>
+        <span class="text-muted small">每次 AI 调用自动注入，对 Ollama 和 OpenAI 均生效</span>
+    </div>
+    <div class="card-body py-2">
+        <form method="POST" action="{{ url_for('admin.ai_set_system_prompt') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <textarea name="system_prompt" class="form-control form-control-sm mb-2" rows="4"
+                      placeholder="定义 AI 的角色和行为规范，如：你是一个研发项目管理助手，回答要简洁专业...">{{ ai_system_prompt }}</textarea>
+            <button type="submit" class="btn btn-sm btn-primary">保存系统提示词</button>
+        </form>
+    </div>
+</div>
+
+<!-- Ollama 连接配置 -->
+{% if ai_provider == 'ollama' %}
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-header py-2 bg-white"><i class="bi bi-hdd-network"></i> Ollama 连接配置</div>
+    <div class="card-body py-2">
+        <form method="POST" action="{{ url_for('admin.ai_set_ollama') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-4">
+                    <label class="form-label small mb-0">API 地址</label>
+                    <input type="text" name="base_url" class="form-control form-control-sm" placeholder="http://127.0.0.1:11434" value="{{ ollama_base_url }}">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label small mb-0">SSH</label>
+                    <div class="form-check form-switch mt-1">
+                        <input class="form-check-input" type="checkbox" name="ssh_enabled" value="1" id="sshToggle" {% if ollama_ssh_enabled %}checked{% endif %} onchange="document.getElementById('sshFields').style.display=this.checked?'':'none'">
+                    </div>
+                </div>
+                <div id="sshFields" class="col-md-4" style="{{ '' if ollama_ssh_enabled else 'display:none' }}">
+                    <label class="form-label small mb-0">SSH 主机（user@host）</label>
+                    <input type="text" name="ssh_host" class="form-control form-control-sm" placeholder="user@gpu-server" value="{{ ollama_ssh_host }}">
+                </div>
+                <div id="sshPortField" class="col-md-1" style="{{ '' if ollama_ssh_enabled else 'display:none' }}">
+                    <label class="form-label small mb-0">本地端口</label>
+                    <input type="number" name="ssh_local_port" class="form-control form-control-sm" value="{{ ollama_ssh_local_port }}">
+                </div>
+                <div class="col-md-2 d-flex gap-1 align-items-end">
+                    <button type="submit" class="btn btn-sm btn-primary flex-fill">保存</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- OpenAI API 配置 -->
 {% if ai_provider == 'openai' %}
 <div class="card mb-3 border-0 shadow-sm">
     <div class="card-header py-2 bg-white"><i class="bi bi-cloud"></i> OpenAI API 配置</div>
@@ -50,6 +102,17 @@
 </div>
 {% endif %}
 
+<!-- 一键测试 -->
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-body py-2 d-flex align-items-center gap-3">
+        <button class="btn btn-sm btn-outline-success" id="testBtn" onclick="testAI()">
+            <i class="bi bi-lightning"></i> 一键测试 AI（{{ 'OpenAI' if ai_provider == 'openai' else 'Ollama' }}）
+        </button>
+        <span id="testResult" class="small"></span>
+    </div>
+</div>
+
+{% if ai_provider == 'ollama' %}
 {% if err %}
 <div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> AI 服务不可用：{{ err }}</div>
 {% endif %}
@@ -164,6 +227,8 @@
     </div>
 </div>
 
+{% endif %}{# end ollama provider block #}
+
 <!-- AI Prompt Management -->
 <div class="card mt-4">
     <div class="card-header py-2 d-flex justify-content-between align-items-center">
@@ -225,6 +290,41 @@ function resetPrompt(key) {
     if (el && promptDefaults[key]) {
         el.value = promptDefaults[key];
     }
+}
+
+function testAI() {
+    var btn = document.getElementById('testBtn');
+    var result = document.getElementById('testResult');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 测试中...';
+    result.textContent = '';
+    var csrf = document.querySelector('meta[name="csrf-token"]');
+    fetch('{{ url_for("admin.ai_test") }}', {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrf ? csrf.content : '', 'Content-Type': 'application/x-www-form-urlencoded'},
+    }).then(r => r.json()).then(data => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-lightning"></i> 一键测试 AI';
+        if (data.ok) {
+            result.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> 成功：' + data.response + '</span>';
+        } else {
+            result.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle"></i> 失败：' + data.error + '</span>';
+        }
+    }).catch(e => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-lightning"></i> 一键测试 AI';
+        result.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle"></i> 请求失败</span>';
+    });
+}
+
+// SSH toggle also shows/hides port field
+var sshToggle = document.getElementById('sshToggle');
+if (sshToggle) {
+    sshToggle.addEventListener('change', function() {
+        var show = this.checked ? '' : 'none';
+        var pf = document.getElementById('sshPortField');
+        if (pf) pf.style.display = show;
+    });
 }
 </script>
 {% endblock %}

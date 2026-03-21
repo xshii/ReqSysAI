@@ -60,6 +60,10 @@ def edit(todo_id):
         return jsonify(ok=False), 400
     title = (data.get('title') or '').strip()
     if not title:
+        # Also delete child todos (help requests linked via parent_id)
+        children = Todo.query.filter_by(parent_id=todo.id).all()
+        for child in children:
+            db.session.delete(child)
         db.session.delete(todo)
         db.session.commit()
         return jsonify(ok=True, deleted=True)

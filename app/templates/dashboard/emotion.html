@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}情绪预测 - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>情绪预测 · 人员流失风险</h4>
+    <button class="btn btn-primary btn-sm" id="btnAnalyze" onclick="runAnalyze()"><i class="bi bi-robot"></i> AI 分析</button>
+</div>
+
+<div id="resultPanel" class="d-none">
+    <div class="row g-3" id="memberCards"></div>
+</div>
+
+<div id="emptyHint" class="text-center text-muted py-5">
+    <i class="bi bi-emoji-neutral" style="font-size:3em;"></i>
+    <p class="mt-2">点击"AI 分析"按钮，分析团队成员的工作状态和流失风险</p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function runAnalyze() {
+    var btn = document.getElementById('btnAnalyze');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 分析中（约30秒）...';
+    document.getElementById('emptyHint').classList.add('d-none');
+
+    fetch('{{ url_for("dashboard.emotion_analyze") }}', {method: 'POST'})
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(d) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-robot"></i> AI 分析';
+        if (!d.ok) { alert('分析失败：' + (d.raw || d.msg || '')); return; }
+
+        var container = document.getElementById('memberCards');
+        container.innerHTML = '';
+        var statusMap = {'正常': {color: 'success', icon: 'emoji-smile'}, '疲劳': {color: 'warning', icon: 'emoji-dizzy'}, '低迷': {color: 'secondary', icon: 'emoji-frown'}, '预警': {color: 'danger', icon: 'emoji-angry'}};
+        var riskMap = {'low': 'success', 'medium': 'warning', 'high': 'danger'};
+        var riskLabel = {'low': '低', 'medium': '中', 'high': '高'};
+
+        // Sort: high risk first
+        var order = {'high': 0, 'medium': 1, 'low': 2};
+        d.members.sort(function(a, b) { return (order[a.risk_level] || 2) - (order[b.risk_level] || 2); });
+
+        d.members.forEach(function(m) {
+            var s = statusMap[m.status] || statusMap['正常'];
+            var rc = riskMap[m.risk_level] || 'secondary';
+            var rl = riskLabel[m.risk_level] || '低';
+
+            var signals = '';
+            if (m.signals && m.signals.length) {
+                signals = '<ul class="mb-1 ps-3">';
+                m.signals.forEach(function(sig) { signals += '<li>' + sig + '</li>'; });
+                signals += '</ul>';
+            }
+
+            container.innerHTML +=
+                '<div class="col-md-6 col-lg-4">' +
+                '<div class="card border-' + s.color + ' h-100">' +
+                '<div class="card-header py-2 bg-' + s.color + ' bg-opacity-10 d-flex justify-content-between">' +
+                '<span><i class="bi bi-' + s.icon + '"></i> <strong>' + m.name + '</strong></span>' +
+                '<div><span class="badge bg-' + s.color + ' me-1">' + m.status + '</span>' +
+                '<span class="badge bg-' + rc + '">流失风险: ' + rl + '</span></div>' +
+                '</div>' +
+                '<div class="card-body py-2 small">' +
+                (signals ? '<div class="mb-1"><strong>信号：</strong>' + signals + '</div>' : '') +
+                '<div><strong>建议：</strong>' + (m.suggestion || '-') + '</div>' +
+                '</div></div></div>';
+        });
+        document.getElementById('resultPanel').classList.remove('d-none');
+    }).catch(function(err) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-robot"></i> AI 分析';
+        alert('请求失败：' + err.message);
+    });
+}
+</script>
+{% endblock %}

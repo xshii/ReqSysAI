@@ -7,7 +7,6 @@
     <link href="{{ url_for('static', filename='vendor/css/bootstrap.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='vendor/css/bootstrap-icons.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
-    {% if current_user.is_authenticated %}<meta name="csrf-token" content="{{ csrf_token() }}">{% endif %}
     {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -65,7 +64,7 @@
                         </a>
                     </li>
                     {% endfor %}
-                    <li class="nav-header">管理</li>
+                    <li class="nav-header">项目</li>
                     {% set _cur_pid = request.args.get('project_id', '')|int %}
                     {% set _in_pm = request.endpoint and ('project.' in request.endpoint or 'requirement.' in request.endpoint or request.endpoint == 'dashboard.requirement_progress' or 'ai.' in request.endpoint or (request.endpoint in ('dashboard.stats', 'dashboard.weekly_report') and _cur_pid)) %}
                     {% set _in_pm = _in_pm or (request.endpoint and ('project.risk' in request.endpoint or 'project.meeting' in request.endpoint)) %}
@@ -74,15 +73,36 @@
                             <i class="bi bi-folder"></i> 项目管理
                         </a>
                     </li>
+                    {% set _pns = namespace(count=0, need_collapse=false) %}
+                    {# Count non-followed, non-active projects to decide if collapse needed #}
+                    {% for p in sidebar_projects %}
+                    {% set _pns.count = _pns.count + 1 %}
+                    {% endfor %}
+                    {% set _pns.need_collapse = _pns.count > 5 %}
+                    {% set _pns = namespace(idx=0) %}
                     {% for p in sidebar_projects %}
                     {% set _this_project = request.view_args.get('project_id') == p.id if request.view_args else false %}
                     {% set _this_p = _cur_pid == p.id %}
-                    {% set _p_active = _this_project or _this_p %}
-                    <li class="nav-item">
-                        <a class="nav-link py-1 ps-4 small {% if _p_active %}fw-bold text-primary{% else %}text-muted{% endif %}"
+                    {% set _is_followed = p.id in sidebar_followed_ids %}
+                    {% set _p_active = _this_project or _this_p or _is_followed %}
+                    {% set _always_show = _is_followed or _this_project or _this_p %}
+                    {% set _pns.idx = _pns.idx + 1 %}
+                    {% set _should_hide = _pns.need_collapse and _pns.idx > 5 and not _always_show %}
+                    {% if _pns.idx == 6 and _pns.need_collapse %}
+                    <li class="nav-item proj-more-btn">
+                        <a class="nav-link py-1 ps-4 small text-primary" href="#" onclick="document.querySelectorAll('.proj-collapsed').forEach(e=>e.classList.remove('d-none'));document.querySelectorAll('.proj-more-btn').forEach(e=>e.classList.add('d-none'));return false;">
+                            <i class="bi bi-chevron-down"></i> 展开更多...
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item d-flex align-items-center {% if _should_hide %}proj-collapsed d-none{% endif %}">
+                        <a class="nav-link py-1 ps-4 small flex-grow-1 {% if _this_project or _this_p %}fw-bold text-primary{% elif _is_followed %}text-dark{% else %}text-muted{% endif %}"
                            href="{{ url_for('project.project_detail', project_id=p.id) }}">
                             {{ p.name }}
                         </a>
+                        <button class="btn btn-sm p-0 border-0 bg-transparent me-2 follow-btn" data-pid="{{ p.id }}" title="{{ '取消关注' if _is_followed else '关注项目' }}" style="font-size:.75rem;line-height:1;">
+                            <i class="bi bi-heart{% if _is_followed %}-fill text-danger{% endif %}"></i>
+                        </button>
                     </li>
                     {% if _p_active %}
                     <li class="nav-item">
@@ -152,6 +172,8 @@
                             <i class="bi bi-person-lines-fill"></i> 个人周报
                         </a>
                     </li>
+                    {% if current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR') %}
+                    <li class="nav-header">管理</li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'dashboard.resource_map' %}active{% endif %}" href="{{ url_for('dashboard.resource_map') }}">
                             <i class="bi bi-people-fill"></i> 人力投入
@@ -167,6 +189,12 @@
                             <i class="bi bi-speedometer2"></i> 交付度量
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'dashboard.emotion_predict' %}active{% endif %}" href="{{ url_for('dashboard.emotion_predict') }}">
+                            <i class="bi bi-emoji-neutral"></i> 情绪预测
+                        </a>
+                    </li>
+                    {% endif %}
                     {% if current_user.is_admin %}
                     <li class="nav-header">系统</li>
                     <li class="nav-item">
@@ -297,6 +325,27 @@
     })();
     </script>
     {% endif %}
+    <script>
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.follow-btn');
+        if (!btn) return;
+        e.preventDefault();
+        var pid = btn.dataset.pid;
+        fetch('/projects/' + pid + '/follow', {method: 'POST'})
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.ok) return;
+            var icon = btn.querySelector('i');
+            if (d.followed) {
+                icon.className = 'bi bi-heart-fill text-danger';
+                btn.title = '取消关注';
+            } else {
+                icon.className = 'bi bi-heart';
+                btn.title = '关注项目';
+            }
+        });
+    });
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

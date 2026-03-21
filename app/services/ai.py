@@ -123,8 +123,10 @@ def call_ollama(prompt, system_prompt=None, messages=None):
     """Call AI service (Ollama or OpenAI). Returns (parsed_json, raw_text) or (None, None)."""
     if messages is None:
         messages = []
-        if system_prompt:
-            messages.append({'role': 'system', 'content': system_prompt})
+        # Use explicit system_prompt, or fall back to global config
+        sp = system_prompt or current_app.config.get('AI_SYSTEM_PROMPT', '')
+        if sp:
+            messages.append({'role': 'system', 'content': sp})
         messages.append({'role': 'user', 'content': prompt})
 
     input_text = prompt or ''
@@ -159,8 +161,21 @@ def _log_ai_call(raw_input, ai_output):
 
 
 def parse_requirement(text):
-    """Parse requirement from text."""
-    return call_ollama(text, system_prompt=_get_requirement_prompt())
+    """Parse requirement from text, with team context for smart assign."""
+    from app.models.user import User
+    from app.models.todo import Todo
+    team_lines = []
+    try:
+        users = User.query.filter_by(is_active=True).all()
+        for u in users:
+            active = Todo.query.filter_by(user_id=u.id, status='todo').count()
+            team_lines.append(f'- {u.name}（{u.group or ""}）：当前 {active} 个进行中任务')
+    except Exception:
+        pass
+    context = text
+    if team_lines:
+        context = text + '\n\n团队成员：\n' + '\n'.join(team_lines)
+    return call_ollama(context, system_prompt=_get_requirement_prompt())
 
 
 def refine_requirement(original_text, previous_result, feedback):

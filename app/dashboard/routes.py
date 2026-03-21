@@ -10,10 +10,11 @@ from app.extensions import db
 from app.constants import TODO_STATUS_TODO, TODO_STATUS_DONE, REQ_INACTIVE_STATUSES
 from app.models.user import User, Role, Group
 from app.models.project import Project
+from app.models.project_member import ProjectMember
 from app.models.requirement import Requirement
 from app.models.todo import Todo, todo_requirements
 from app.models.risk import Risk
-from app.models.report import WeeklyReport
+from app.models.report import WeeklyReport, PersonalWeekly
 from app.services.ai import call_ollama
 from app.services.prompts import get_prompt
 from app.services.statistics import (
@@ -291,6 +292,12 @@ def weekly_report():
                 reqs_str = ', '.join(r.number for r in t.requirements)
                 lines.append(f'- {t.user.name}: {t.title}（{reqs_str}）')
 
+        # Open risks from DB (needed for both prompt context and template)
+        risk_q = Risk.query.filter_by(status='open')
+        if cur_project_id:
+            risk_q = risk_q.filter_by(project_id=cur_project_id)
+        open_risks = risk_q.order_by(Risk.severity, Risk.due_date).all()
+
         if open_risks:
             lines.append('\n风险&问题（未解决）：')
             for r in open_risks:
@@ -316,11 +323,6 @@ def weekly_report():
             for name in all_persons:
                 lines.append(f'- {name}: 完成 {person_done.get(name, 0)} 个任务，进行中 {person_active.get(name, 0)} 个')
 
-        if req_changes:
-            lines.append('\n需求状态变更：')
-            for r in req_changes:
-                lines.append(f'- [{r.number}] {r.title}（{r.status_label}）')
-
         # AI prompt: only generate analysis (summary, risks, plan)
         tpl = get_prompt('weekly_report')
         prompt = tpl.format(project_name=project_name) + '\n\n' + '\n'.join(lines)
@@ -336,12 +338,6 @@ def weekly_report():
             ai_analysis['summary'] = result.get('summary', ai_analysis['summary'])
             ai_analysis['risks'] = result.get('risks', [])
             ai_analysis['plan'] = result.get('plan', [])
-
-        # Open risks from DB
-        risk_q = Risk.query.filter_by(status='open')
-        if cur_project_id:
-            risk_q = risk_q.filter_by(project_id=cur_project_id)
-        open_risks = risk_q.order_by(Risk.severity, Risk.due_date).all()
 
         # Reviewer: PL of current user's group; if user is PL, then XM
         reviewer = ''
@@ -824,8 +820,13 @@ def my_weekly():
     overdue_todos = [t for t in my_active if t.created_date and t.created_date < monday]
     blocked_todos = [t for t in my_active if t.need_help]
 
+    # Load saved report (if exists)
+    saved = PersonalWeekly.query.filter_by(
+        user_id=current_user.id, week_start=monday).first()
+
     report = None
     ai_report = None
+
     if request.method == 'POST':
         import markdown as md_lib
 
@@ -874,6 +875,21 @@ def my_weekly():
         ai_report = md_lib.markdown(ai_report, extensions=['tables'])
         report = True
 
+        # Auto-save
+        if saved:
+            saved.ai_html = ai_report
+        else:
+            saved = PersonalWeekly(
+                user_id=current_user.id, week_start=monday,
+                week_end=sunday, ai_html=ai_report)
+            db.session.add(saved)
+        db.session.commit()
+
+    elif saved and saved.ai_html:
+        # Load previously saved report
+        ai_report = saved.ai_html
+        report = True
+
     # Calculate totals
     total_focus = sum(t.actual_minutes or 0 for t in my_done)
     reviewer_name = get_reviewer(current_user)
@@ -913,61 +929,185 @@ def resource_map():
     users = User.query.filter_by(is_active=True).order_by(User.group, User.name).all()
     user_ids = [u.id for u in users]
 
+    # All todos in the period (by created_date, which always exists)
     todos = Todo.query.filter(
         Todo.user_id.in_(user_ids),
         Todo.created_date >= start, Todo.created_date <= end,
     ).options(joinedload(Todo.requirements)).all()
 
-    user_date_projects = defaultdict(lambda: defaultdict(set))
+    # Per day: count todos per project, then split the day proportionally
+    # e.g. day has 5 todos for projA + 1 for projB → projA=5/6天, projB=1/6天
+    user_date_proj_count = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     for t in todos:
+        work_date = t.done_date or t.created_date
+        if not work_date:
+            continue
         for r in t.requirements:
             if r.project_id:
-                user_date_projects[t.user_id][t.created_date].add(r.project_id)
+                user_date_proj_count[t.user_id][work_date][r.project_id] += 1
 
     user_project_days = defaultdict(float)
-    for uid, date_projects in user_date_projects.items():
-        for dt, pids in date_projects.items():
-            share = 1.0 / len(pids) if pids else 0
-            for pid in pids:
-                user_project_days[(uid, pid)] += share
+    for uid, dates in user_date_proj_count.items():
+        for dt, proj_counts in dates.items():
+            day_total = sum(proj_counts.values())
+            if day_total <= 0:
+                continue
+            for pid, cnt in proj_counts.items():
+                user_project_days[(uid, pid)] += cnt / day_total
 
     project_ids = sorted(set(pid for (_, pid) in user_project_days))
     projects = {p.id: p for p in Project.query.filter(Project.id.in_(project_ids)).all()} if project_ids else {}
 
-    # Mode 1 (by_person): rows = users, columns = projects
-    person_rows = []
+    # Per-user total days
+    user_total = defaultdict(float)
+    for (uid, pid), d in user_project_days.items():
+        user_total[uid] += d
+
+    # Load expected_ratio from ProjectMember
+    member_map = {}
+    if project_ids:
+        members = ProjectMember.query.filter(
+            ProjectMember.project_id.in_(project_ids),
+            ProjectMember.user_id.isnot(None)).all()
+        for m in members:
+            member_map[(m.user_id, m.project_id)] = m
+
+    # Mode 1 (by_person): flat rows — one row per (person, project)
+    flat_rows = []
     for u in users:
-        proj_days = {}
-        total = 0.0
+        t = user_total.get(u.id, 0)
+        if t <= 0:
+            continue
         for pid in project_ids:
             d = user_project_days.get((u.id, pid), 0)
-            if d > 0:
-                proj_days[pid] = round(d, 1)
-                total += d
-        if total > 0:
-            person_rows.append({'user': u, 'proj_days': proj_days, 'total': round(total, 1)})
+            if d <= 0:
+                continue
+            ratio = round(d / t * 100) if t else 0
+            member = member_map.get((u.id, pid))
+            flat_rows.append({
+                'user': u,
+                'project': projects.get(pid),
+                'project_id': pid,
+                'days': round(d, 1),
+                'ratio': ratio,
+                'expected_ratio': member.expected_ratio if member else None,
+            })
 
-    # Mode 2 (by_project): rows = projects, columns = users
-    active_user_ids = [r['user'].id for r in person_rows]
-    active_users = [r['user'] for r in person_rows]
-    project_rows = []
+    # Mode 2 (by_project): flat rows — one row per (project, person)
+    proj_flat_rows = []
     for pid in project_ids:
         p = projects.get(pid)
         if not p:
             continue
-        user_days = {}
-        total = 0.0
-        for u in active_users:
+        proj_total = sum(user_project_days.get((u.id, pid), 0) for u in users)
+        if proj_total <= 0:
+            continue
+        for u in users:
             d = user_project_days.get((u.id, pid), 0)
-            if d > 0:
-                user_days[u.id] = round(d, 1)
-                total += d
-        if total > 0:
-            project_rows.append({'project': p, 'user_days': user_days, 'total': round(total, 1)})
+            if d <= 0:
+                continue
+            ratio = round(d / proj_total * 100) if proj_total else 0
+            proj_flat_rows.append({
+                'project': p,
+                'project_id': pid,
+                'user': u,
+                'days': round(d, 1),
+                'proj_total': round(proj_total, 1),
+                'ratio': ratio,
+            })
 
+    is_pm = current_user.is_admin or current_user.has_role('PM', 'PL', 'FO', 'LM', 'XM', 'HR')
     return render_template('dashboard/resource_map.html',
-        person_rows=person_rows, project_rows=project_rows,
-        active_users=active_users,
+        flat_rows=flat_rows, proj_flat_rows=proj_flat_rows,
         projects=projects, project_ids=project_ids,
         period=period, mode=mode, label=label, offset=week_offset,
+        is_pm=is_pm,
     )
+
+
+@dashboard_bp.route('/resource-map/expected-ratio', methods=['POST'])
+@login_required
+def save_expected_ratio():
+    from flask import jsonify
+    if not (current_user.is_admin or current_user.has_role('PM', 'PL', 'FO', 'LM', 'XM', 'HR')):
+        return jsonify(ok=False, msg='无权限'), 403
+    uid = request.form.get('user_id', type=int)
+    pid = request.form.get('project_id', type=int)
+    ratio = request.form.get('ratio', type=int)
+    if not uid or not pid:
+        return jsonify(ok=False), 400
+    member = ProjectMember.query.filter_by(user_id=uid, project_id=pid).first()
+    if not member:
+        member = ProjectMember(user_id=uid, project_id=pid, project_role='DEV')
+        db.session.add(member)
+    member.expected_ratio = ratio if ratio and ratio > 0 else None
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+# ---- Emotion prediction ----
+
+@dashboard_bp.route('/emotion')
+@login_required
+def emotion_predict():
+    if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
+        from flask import abort
+        abort(403)
+    return render_template('dashboard/emotion.html')
+
+
+@dashboard_bp.route('/emotion/analyze', methods=['POST'])
+@login_required
+def emotion_analyze():
+    """AI analyzes team emotion and attrition risk."""
+    if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
+        return jsonify(ok=False, msg='无权限'), 403
+
+    from flask import jsonify
+    from collections import defaultdict
+
+    users = User.query.filter_by(is_active=True).order_by(User.name).all()
+    today = date.today()
+    week_ago = today - timedelta(days=7)
+    month_ago = today - timedelta(days=30)
+
+    lines = [f'分析日期：{today}\n']
+    lines.append('团队成员近期工作数据：\n')
+
+    for u in users:
+        # Last 7 days
+        done_7d = Todo.query.filter(
+            Todo.user_id == u.id, Todo.done_date >= week_ago, Todo.done_date <= today).count()
+        # Last 30 days
+        done_30d = Todo.query.filter(
+            Todo.user_id == u.id, Todo.done_date >= month_ago, Todo.done_date <= today).count()
+        # Active (unfinished)
+        active = Todo.query.filter_by(user_id=u.id, status='todo').count()
+        # Blocked
+        blocked = Todo.query.filter(
+            Todo.user_id == u.id, Todo.status == 'todo', Todo.need_help == True).count()
+        # Help given (source='help', this user as helper)
+        help_given = Todo.query.filter(
+            Todo.user_id == u.id, Todo.source == 'help', Todo.created_date >= month_ago).count()
+        # Focus time
+        focus = db.session.query(db.func.sum(Todo.actual_minutes)).filter(
+            Todo.user_id == u.id, Todo.created_date >= month_ago).scalar() or 0
+        # Last active date
+        last_done = db.session.query(db.func.max(Todo.done_date)).filter(
+            Todo.user_id == u.id).scalar()
+        last_str = str(last_done) if last_done else '无记录'
+        # Daily avg (30d)
+        daily_avg = round(done_30d / 30, 1) if done_30d else 0
+
+        lines.append(
+            f'- {u.name}（{u.group or ""}）：\n'
+            f'  近7天完成 {done_7d} 个 | 近30天完成 {done_30d} 个（日均 {daily_avg}）\n'
+            f'  进行中 {active} 个 | 阻塞 {blocked} 个 | 协助他人 {help_given} 次\n'
+            f'  番茄钟 {focus} 分钟 | 最后完成日期 {last_str}')
+
+    prompt = get_prompt('emotion_predict') + '\n\n' + '\n'.join(lines)
+    result, raw = call_ollama(prompt)
+
+    if isinstance(result, list):
+        return jsonify(ok=True, members=result)
+    return jsonify(ok=False, raw=raw or '分析失败')

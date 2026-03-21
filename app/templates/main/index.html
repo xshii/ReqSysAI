@@ -28,7 +28,17 @@
     <button class="btn btn-sm btn-outline-primary ms-2" id="btnAiRecommend" title="AI 根据需求进度和截止日期推荐今日任务" style="vertical-align:middle;">
         <i class="bi bi-robot"></i> AI 推荐
     </button>
+    <button class="btn btn-sm btn-outline-info ms-1" id="btnStandup" style="vertical-align:middle;" onclick="genStandup()">
+        <i class="bi bi-megaphone"></i> 站会摘要
+    </button>
 </h4>
+<div id="standupPanel" class="card border-info mb-3 d-none">
+    <div class="card-header py-1 bg-info bg-opacity-10 d-flex justify-content-between">
+        <span class="small fw-bold"><i class="bi bi-megaphone"></i> 每日站会摘要</span>
+        <button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="document.getElementById('standupPanel').classList.add('d-none')"><i class="bi bi-x"></i></button>
+    </div>
+    <div class="card-body py-2 small" id="standupContent"></div>
+</div>
 
 <div class="row">
     <!-- Left: Todo + Requirements -->
@@ -223,6 +233,34 @@
 
     <!-- Right column -->
     <div class="col-md-5">
+        <!-- Milestones -->
+        {% if milestones %}
+        <div class="card mb-3 border-0 shadow-sm">
+            <div class="card-header py-2 bg-white">
+                <i class="bi bi-flag-fill text-warning"></i> 里程碑
+            </div>
+            <div class="list-group list-group-flush">
+                {% for ms in milestones %}
+                {% set ms_days = (ms.due_date - today).days if ms.due_date else 999 %}
+                <div class="list-group-item py-2 small d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="fw-bold">{{ ms.project.name }}</span>
+                        <span class="text-muted mx-1">·</span>
+                        {{ ms.name }}
+                    </div>
+                    <div>
+                        {% if ms.due_date %}
+                        <span class="badge {{ 'bg-danger' if ms_days < 0 else 'bg-warning text-dark' if ms_days <= 7 else 'bg-light text-dark border' }}">
+                            {% if ms_days < 0 %}已逾期{{ -ms_days }}天{% elif ms_days == 0 %}今天截止{% else %}剩{{ ms_days }}天{% endif %}
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Contribution Heatmap -->
         <div class="card mb-3 border-0 shadow-sm">
             <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#heatmapBody" style="cursor:pointer;">
@@ -385,6 +423,27 @@
 
 {% block extra_js %}
 <script>
+// Daily Standup
+function genStandup() {
+    var btn = document.getElementById('btnStandup');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 生成中...';
+    apiPost('{{ url_for("main.daily_standup") }}', {}).then(function(d) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-megaphone"></i> 站会摘要';
+        if (d && d.ok) {
+            document.getElementById('standupContent').innerHTML = d.html;
+            document.getElementById('standupPanel').classList.remove('d-none');
+        } else {
+            showToast(d && d.error ? d.error : '生成失败', 'danger');
+        }
+    }).catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-megaphone"></i> 站会摘要';
+        showToast('AI 服务不可用', 'danger');
+    });
+}
+
 // AI Recommend
 document.getElementById('btnAiRecommend').addEventListener('click', function() {
     var btn = this;

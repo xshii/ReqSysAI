@@ -4,10 +4,15 @@ from flask_login import UserMixin
 
 from app.extensions import db
 
-# Many-to-many association table
+# Many-to-many association tables
 user_roles = db.Table('user_roles',
     db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
     db.Column('role_id', db.Integer, db.ForeignKey('roles.id'), primary_key=True),
+)
+
+user_followed_projects = db.Table('user_followed_projects',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('project_id', db.Integer, db.ForeignKey('projects.id'), primary_key=True),
 )
 
 
@@ -50,6 +55,7 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     roles = db.relationship('Role', secondary=user_roles, backref='users', lazy='joined')
+    followed_projects = db.relationship('Project', secondary=user_followed_projects, backref='followers', lazy='dynamic')
 
     TEAM_MANAGER_ROLES = {'Admin', 'PL', 'XM', 'HR'}
 

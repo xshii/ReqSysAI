@@ -43,6 +43,10 @@ app/static/uploads/
 config.local.yml
 prompts.yml
 
+# Temp
+cookies.txt
+TODO.md
+
 # Logs
 *.log
 logs/

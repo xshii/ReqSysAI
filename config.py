@@ -55,6 +55,9 @@ class Config:
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', _yml.get('openai', {}).get('api_key', ''))
     OPENAI_MODEL = os.getenv('OPENAI_MODEL', _yml.get('openai', {}).get('model', 'gpt-4o-mini'))
 
+    # AI global system prompt (used for OpenAI and Ollama when no custom model)
+    AI_SYSTEM_PROMPT = _yml.get('ai', {}).get('system_prompt', '')
+
     # App tuning
     TODO_KEEP_DAYS = _yml.get('app', {}).get('todo_keep_days', 7)
     OVERDUE_WARN_DAYS = _yml.get('app', {}).get('overdue_warn_days', 1)

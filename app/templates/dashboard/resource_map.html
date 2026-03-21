@@ -30,118 +30,97 @@
 </div>
 
 {% if mode == 'by_person' %}
-<!-- ===== Mode 1: by person (rows=person, cols=project) ===== -->
-{% if person_rows %}
+<!-- ===== Mode 1: flat rows (person × project) ===== -->
+{% if flat_rows %}
 <div class="card">
     <div class="table-responsive">
-        <table class="table table-hover table-sm mb-0">
+        <table class="table table-hover table-sm">
             <thead class="table-light">
                 <tr>
-                    <th>姓名</th>
-                    <th>团队</th>
-                    {% for pid in project_ids %}
-                    <th class="text-center small">{{ projects[pid].name if projects.get(pid) else '-' }}</th>
-                    {% endfor %}
-                    <th class="text-center">合计</th>
-                    <th>投入分布</th>
+                    <th style="width:80px;">姓名</th>
+                    <th style="width:80px;">工号</th>
+                    <th style="max-width:150px;">项目</th>
+                    <th class="text-center" style="width:80px;">投入天数</th>
+                    <th class="text-center" style="width:90px;">实际比例</th>
+                    <th class="text-center" style="width:90px;">预期比例</th>
+                    <th class="text-center" style="width:70px;">偏差</th>
                 </tr>
             </thead>
             <tbody>
-            {% for row in person_rows %}
-            <tr>
+            {% set ns = namespace(last_uid=0) %}
+            {% for row in flat_rows %}
+            {% set is_first = row.user.id != ns.last_uid %}
+            {% set ns.last_uid = row.user.id %}
+            <tr{% if is_first and not loop.first %} class="border-top border-2"{% endif %}>
+                <td>{% if is_first %}<strong>{{ row.user.name }}</strong>{% endif %}</td>
+                <td class="text-muted small">{% if is_first %}{{ row.user.employee_id or '-' }}{% endif %}</td>
+                <td class="text-truncate" style="max-width:150px;" title="{{ row.project.name if row.project else '' }}">{{ row.project.name if row.project else '-' }}</td>
+                <td class="text-center small">{{ row.days }}</td>
+                <td class="text-center">
+                    <span class="badge bg-primary">{{ row.ratio }}%</span>
+                </td>
+                <td class="text-center">
+                    {% if is_pm %}
+                    <input type="number" class="form-control form-control-sm d-inline-block expected-ratio"
+                           style="width:70px;" min="0" max="100"
+                           value="{{ row.expected_ratio or '' }}"
+                           data-uid="{{ row.user.id }}" data-pid="{{ row.project_id }}"
+                           placeholder="-">
+                    {% else %}
+                    {{ (row.expected_ratio|string + '%') if row.expected_ratio else '-' }}
+                    {% endif %}
+                </td>
+                <td class="text-center">
+                    {% if row.expected_ratio %}
+                    {% set diff = row.ratio - row.expected_ratio %}
+                    <span class="badge {{ 'bg-danger' if diff > 15 or diff < -15 else 'bg-warning text-dark' if diff > 5 or diff < -5 else 'bg-success' }}">
+                        {{ '+' if diff > 0 else '' }}{{ diff }}%
+                    </span>
+                    {% else %}-{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">该时间段内暂无数据</div>
+{% endif %}
+
+{% else %}
+<!-- ===== Mode 2: by project (flat rows: project × person) ===== -->
+{% if proj_flat_rows %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover table-sm">
+            <thead class="table-light">
+                <tr>
+                    <th style="max-width:150px;">项目</th>
+                    <th class="text-center" style="width:80px;">项目合计</th>
+                    <th style="width:80px;">姓名</th>
+                    <th style="width:80px;">工号</th>
+                    <th class="text-center" style="width:80px;">投入天数</th>
+                    <th class="text-center" style="width:70px;">占比</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% set ns = namespace(last_pid=0) %}
+            {% for row in proj_flat_rows %}
+            {% set is_first = row.project_id != ns.last_pid %}
+            {% set ns.last_pid = row.project_id %}
+            <tr{% if is_first and not loop.first %} class="border-top border-2"{% endif %}>
+                <td class="text-truncate" style="max-width:150px;" title="{{ row.project.name }}">{% if is_first %}<strong>{{ row.project.name }}</strong>{% endif %}</td>
+                <td class="text-center">{% if is_first %}<span class="fw-bold">{{ row.proj_total }}</span> 天{% endif %}</td>
                 <td>{{ row.user.name }}</td>
-                <td class="small text-muted">{{ row.user.group or '-' }}</td>
-                {% for pid in project_ids %}
-                {% set d = row.proj_days.get(pid, 0) %}
-                <td class="text-center small">
-                    {% if d > 0 %}{{ d }}<span class="text-muted"> ({{ (d / row.total * 100) | round | int }}%)</span>{% else %}-{% endif %}
-                </td>
-                {% endfor %}
-                <td class="text-center fw-bold">{{ row.total }}</td>
-                <td>
-                    <div class="d-flex" style="height:14px;min-width:100px;">
-                    {% set colors = ['#4A6CF7','#38A169','#ED8936','#E53E3E','#9F7AEA','#319795','#D69E2E','#667EEA'] %}
-                    {% for pid in project_ids %}
-                    {% set d = row.proj_days.get(pid, 0) %}
-                    {% if d > 0 %}
-                    <div style="width:{{ (d / row.total * 100) }}%;background:{{ colors[loop.index0 % 8] }};" title="{{ projects[pid].name }}: {{ d }}天"></div>
-                    {% endif %}
-                    {% endfor %}
-                    </div>
+                <td class="text-muted small">{{ row.user.employee_id or '-' }}</td>
+                <td class="text-center small">{{ row.days }}</td>
+                <td class="text-center">
+                    <span class="badge bg-primary">{{ row.ratio }}%</span>
                 </td>
             </tr>
             {% endfor %}
             </tbody>
-            <tfoot class="table-light">
-                <tr>
-                    <td colspan="2" class="fw-bold">合计</td>
-                    {% for pid in project_ids %}
-                    <td class="text-center fw-bold small">{% set col_total = namespace(v=0) %}{% for pr in person_rows %}{% set col_total.v = col_total.v + pr.proj_days.get(pid, 0) %}{% endfor %}{{ col_total.v | round(1) }}</td>
-                    {% endfor %}
-                    <td class="text-center fw-bold">{{ person_rows | sum(attribute='total') | round(1) }}</td>
-                    <td></td>
-                </tr>
-            </tfoot>
-        </table>
-    </div>
-</div>
-{% else %}
-<div class="text-center text-muted py-5">该时间段内暂无数据</div>
-{% endif %}
-
-{% else %}
-<!-- ===== Mode 2: by project (rows=project, cols=person) ===== -->
-{% if project_rows %}
-<div class="card">
-    <div class="table-responsive">
-        <table class="table table-hover table-sm mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th>项目</th>
-                    {% for u in active_users %}
-                    <th class="text-center small">{{ u.name }}</th>
-                    {% endfor %}
-                    <th class="text-center">合计</th>
-                    <th>人员分布</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for row in project_rows %}
-            <tr>
-                <td>{{ row.project.name }}</td>
-                {% for u in active_users %}
-                {% set d = row.user_days.get(u.id, 0) %}
-                <td class="text-center small">
-                    {% if d > 0 %}{{ d }}<span class="text-muted"> ({{ (d / row.total * 100) | round | int }}%)</span>{% else %}-{% endif %}
-                </td>
-                {% endfor %}
-                <td class="text-center fw-bold">{{ row.total }}</td>
-                <td>
-                    <div class="d-flex" style="height:14px;min-width:100px;">
-                    {% set colors = ['#4A6CF7','#38A169','#ED8936','#E53E3E','#9F7AEA','#319795','#D69E2E','#667EEA'] %}
-                    {% for u in active_users %}
-                    {% set d = row.user_days.get(u.id, 0) %}
-                    {% if d > 0 %}
-                    <div style="width:{{ (d / row.total * 100) }}%;background:{{ colors[loop.index0 % 8] }};" title="{{ u.name }}: {{ d }}天"></div>
-                    {% endif %}
-                    {% endfor %}
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-            <tfoot class="table-light">
-                <tr>
-                    <td class="fw-bold">合计</td>
-                    {% for u in active_users %}
-                    {% set u_total = [] %}
-                    {% for row in project_rows %}{% if u_total.append(row.user_days.get(u.id, 0)) %}{% endif %}{% endfor %}
-                    <td class="text-center fw-bold small">{{ u_total | sum | round(1) }}</td>
-                    {% endfor %}
-                    <td class="text-center fw-bold">{{ project_rows | sum(attribute='total') | round(1) }}</td>
-                    <td></td>
-                </tr>
-            </tfoot>
         </table>
     </div>
 </div>
@@ -149,20 +128,32 @@
 <div class="text-center text-muted py-5">该时间段内暂无数据</div>
 {% endif %}
 {% endif %}
+{% endblock %}
 
-<!-- Legend -->
-{% if person_rows or project_rows %}
-<div class="mt-3 d-flex gap-3 flex-wrap small">
-{% set colors = ['#4A6CF7','#38A169','#ED8936','#E53E3E','#9F7AEA','#319795','#D69E2E','#667EEA'] %}
-{% if mode == 'by_person' %}
-    {% for pid in project_ids %}
-    <span><span style="display:inline-block;width:12px;height:12px;background:{{ colors[loop.index0 % 8] }};border-radius:2px;"></span> {{ projects[pid].name }}</span>
-    {% endfor %}
-{% else %}
-    {% for u in active_users %}
-    <span><span style="display:inline-block;width:12px;height:12px;background:{{ colors[loop.index0 % 8] }};border-radius:2px;"></span> {{ u.name }}</span>
-    {% endfor %}
-{% endif %}
-</div>
-{% endif %}
+{% block extra_js %}
+<script>
+// Save expected ratio on blur
+document.querySelectorAll('.expected-ratio').forEach(input => {
+    input.addEventListener('change', function() {
+        const uid = this.dataset.uid;
+        const pid = this.dataset.pid;
+        const val = this.value;
+        const body = new URLSearchParams({user_id: uid, project_id: pid, ratio: val});
+        const csrf = document.querySelector('meta[name="csrf-token"]');
+        fetch('{{ url_for("dashboard.save_expected_ratio") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrf ? csrf.content : '',
+            },
+            body: body,
+        }).then(r => {
+            if (r.ok) {
+                this.classList.add('border-success');
+                setTimeout(() => this.classList.remove('border-success'), 1000);
+            }
+        });
+    });
+});
+</script>
 {% endblock %}

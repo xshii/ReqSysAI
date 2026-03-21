@@ -8,7 +8,24 @@
         {% if current_user.is_admin %}
         <button class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#adminModal"><i class="bi bi-plus-circle"></i> 管理员录入</button>
         {% endif %}
+        {% if current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR') %}
+        <button class="btn btn-outline-warning btn-sm" id="btnAiIncentive" onclick="aiRecommendCandidates()"><i class="bi bi-robot"></i> AI 推荐候选</button>
+        {% endif %}
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#submitModal"><i class="bi bi-star"></i> 推荐激励</button>
+    </div>
+</div>
+
+<!-- AI Incentive Recommendations -->
+<div id="aiIncentivePanel" class="card border-warning mb-3 d-none">
+    <div class="card-header py-1 bg-warning bg-opacity-10 d-flex justify-content-between">
+        <span class="small fw-bold"><i class="bi bi-robot"></i> AI 推荐激励候选人</span>
+        <button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="document.getElementById('aiIncentivePanel').classList.add('d-none')"><i class="bi bi-x"></i></button>
+    </div>
+    <div class="card-body py-2">
+        <table class="table table-sm small mb-0" id="aiIncentiveTable">
+            <thead class="table-light"><tr><th>候选人</th><th>激励类别</th><th>推荐理由</th></tr></thead>
+            <tbody></tbody>
+        </table>
     </div>
 </div>
 
@@ -263,6 +280,37 @@
 
 {% block extra_js %}
 <script>
+function aiRecommendCandidates() {
+    var btn = document.getElementById('btnAiIncentive');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 分析中...';
+    fetch('{{ url_for("incentive.ai_recommend_candidates") }}', {method: 'POST'})
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(d) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-robot"></i> AI 推荐候选';
+        var panel = document.getElementById('aiIncentivePanel');
+        var tbody = document.querySelector('#aiIncentiveTable tbody');
+        tbody.innerHTML = '';
+        if (d.ok && d.candidates && d.candidates.length) {
+            d.candidates.forEach(function(c) {
+                tbody.innerHTML += '<tr><td><strong>' + (c.name||'') + '</strong></td>'
+                    + '<td><span class="badge bg-info text-dark">' + (c.category||'') + '</span></td>'
+                    + '<td class="small">' + (c.reason||'') + '</td></tr>';
+            });
+            panel.classList.remove('d-none');
+        } else if (d.ok) {
+            alert('未识别到候选人');
+        } else {
+            alert('推荐失败：' + (d.raw || d.msg || ''));
+        }
+    }).catch(function(err) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-robot"></i> AI 推荐候选';
+        alert('请求失败：' + err.message);
+    });
+}
+
 function applyFilter() {
     var url = new URL(window.location);
     var scope = document.getElementById('scopeFilter');

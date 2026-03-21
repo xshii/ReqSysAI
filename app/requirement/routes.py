@@ -300,6 +300,71 @@ def add_comment(req_id):
     return redirect(url_for('requirement.requirement_detail', req_id=req.id))
 
 
+# ---- AI: Smart Assign ----
+
+@requirement_bp.route('/<int:req_id>/ai-assign', methods=['POST'])
+@login_required
+def ai_smart_assign(req_id):
+    """AI recommends best assignee for a requirement."""
+    from app.services.ai import call_ollama
+    from app.services.prompts import get_prompt
+    from collections import Counter
+
+    req = db.get_or_404(Requirement, req_id)
+    users = User.query.filter_by(is_active=True).all()
+
+    # Build context: each user's workload and recent experience
+    lines = [f'需求信息：\n- 标题：{req.title}\n- 描述：{req.description or "无"}\n- 优先级：{req.priority}\n']
+
+    lines.append('团队成员当前状况：')
+    for u in users:
+        active_count = Todo.query.filter_by(user_id=u.id, status='todo').count()
+        # Recent completed req titles (last 30 days)
+        recent_reqs = db.session.query(Requirement.title).join(
+            todo_requirements, Requirement.id == todo_requirements.c.requirement_id
+        ).join(Todo, Todo.id == todo_requirements.c.todo_id).filter(
+            Todo.user_id == u.id, Todo.status == 'done'
+        ).distinct().limit(5).all()
+        exp = '、'.join(r[0][:15] for r in recent_reqs) if recent_reqs else '无近期记录'
+        lines.append(f'- {u.name}（{u.group or ""}）：进行中 {active_count} 个任务，近期经验：{exp}')
+
+    prompt = get_prompt('smart_assign') + '\n\n' + '\n'.join(lines)
+    result, raw = call_ollama(prompt)
+
+    if isinstance(result, dict) and result.get('recommended'):
+        return jsonify(ok=True, **result)
+    return jsonify(ok=False, raw=raw or '生成失败')
+
+
+# ---- AI: Requirement Quality Check ----
+
+@requirement_bp.route('/ai-quality-check', methods=['POST'])
+@login_required
+def ai_quality_check():
+    """AI reviews requirement quality."""
+    from app.services.ai import call_ollama
+    from app.services.prompts import get_prompt
+
+    data = request.get_json() or {}
+    title = data.get('title', '')
+    description = data.get('description', '')
+    priority = data.get('priority', '')
+    estimate = data.get('estimate_days', '')
+
+    context = (
+        f'需求标题：{title}\n'
+        f'需求描述：{description or "未填写"}\n'
+        f'优先级：{priority or "未设置"}\n'
+        f'预估工期：{estimate or "未填写"} 人天'
+    )
+    prompt = get_prompt('req_quality_check') + '\n\n' + context
+    result, raw = call_ollama(prompt)
+
+    if isinstance(result, dict) and 'score' in result:
+        return jsonify(ok=True, **result)
+    return jsonify(ok=False, raw=raw or '生成失败')
+
+
 def _build_requirement_form(obj=None):
     form = RequirementForm(obj=obj)
     form.project_id.choices = [(p.id, p.name) for p in Project.query.filter_by(status='active').all()]

@@ -1,39 +1,52 @@
 {% extends "base.html" %}
 {% block title %}项目周报{% if cur_project %} · {{ cur_project.name }}{% endif %} - 研发协作平台{% endblock %}
 
-{% block extra_css %}
-<style>
-.report-section { margin-bottom: 1.5rem; }
-.report-section h6 { background: #f0f4ff; padding: 6px 12px; border-left: 3px solid #4a6cf7; margin-bottom: 0.5rem; }
-.report-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-.report-table th { background: #f8f9fa; font-weight: 600; }
-.report-table th, .report-table td { border: 1px solid #dee2e6; padding: 5px 10px; }
-.report-header { background: #4a6cf7; color: white; text-align: center; padding: 10px; font-size: 1.1rem; font-weight: bold; border-radius: 6px 6px 0 0; }
-.report-meta { background: #f0f4ff; text-align: center; padding: 6px; font-size: 0.85rem; border-bottom: 1px solid #dee2e6; }
-.risk-item { color: #dc3545; }
-</style>
-{% endblock %}
 
 {% block content %}
+<div class="report-wrap">
+
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4>项目周报{% if cur_project %} · {{ cur_project.name }}{% endif %}</h4>
+    <h4 class="mb-0">项目周报{% if cur_project %} · {{ cur_project.name }}{% endif %}</h4>
     {% if report_data %}
-    <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-outline-primary" onclick="copyRichText()"><i class="bi bi-envelope"></i> 复制富文本</button>
-        {% if report_data %}
+    <div class="report-toolbar">
+        <button class="btn btn-sm btn-outline-primary" onclick="copyRichText()"><i class="bi bi-clipboard"></i> 复制</button>
+        <button class="btn btn-sm btn-success" onclick="exportEml()"><i class="bi bi-envelope-arrow-up"></i> 导出Outlook</button>
         <form method="POST" action="{{ url_for('dashboard.weekly_report_export', week=offset, project_id=cur_project_id) }}" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="ai_summary" value="{{ report_data.ai.summary }}">
             <input type="hidden" name="ai_risks" value="{{ report_data.ai.risks | join('||') }}">
             <input type="hidden" name="ai_plan" value="{{ report_data.ai.plan | join('||') }}">
-            <button type="submit" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出 Excel</button>
+            <button type="submit" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> Excel</button>
         </form>
-        {% endif %}
+        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#emailSettings"><i class="bi bi-gear"></i></button>
     </div>
     {% endif %}
 </div>
 
-<!-- Week selector -->
+<!-- Email Settings -->
+<div class="collapse mb-3" id="emailSettings">
+    <div class="email-settings">
+        <div class="row g-2 small">
+            <div class="col-md-4">
+                <label class="form-label mb-0 fw-bold">邮件标题</label>
+                <input type="text" id="emlSubject" class="form-control form-control-sm"
+                       placeholder="默认：项目名 项目周报（日期）" onchange="saveEmailSettings()">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label mb-0 fw-bold">收件人 (To)</label>
+                <input type="text" id="emlTo" class="form-control form-control-sm"
+                       placeholder="leader@company.com" onchange="saveEmailSettings()">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label mb-0 fw-bold">抄送 (Cc)</label>
+                <input type="text" id="emlCc" class="form-control form-control-sm"
+                       placeholder="pm@company.com" onchange="saveEmailSettings()">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Week selector + Generate button -->
 <div class="d-flex align-items-center gap-2 mb-4">
     <a href="?week={{ offset - 1 }}&project_id={{ cur_project_id }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
     <span class="fw-bold">{{ monday.strftime('%Y-%m-%d') }} ~ {{ sunday.strftime('%Y-%m-%d') }}</span>
@@ -43,6 +56,12 @@
     {% if offset != 0 %}
     <a href="?week=0&project_id={{ cur_project_id }}" class="btn btn-sm btn-outline-primary">本周</a>
     {% endif %}
+    <form method="POST" action="?week={{ offset }}&project_id={{ cur_project_id }}" class="d-inline ms-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm {{ 'btn-outline-secondary' if report_data else 'btn-primary' }}" id="btn-gen-top">
+            <i class="bi bi-robot"></i> {{ '重新生成' if report_data else '生成周报' }}
+        </button>
+    </form>
 </div>
 
 {% if report_data %}
@@ -57,28 +76,46 @@
     发布人：{{ current_user.name }}　｜　审核人：{{ report_data.reviewer }}
 </div>
 
-<!-- Row 3: Milestones -->
+<!-- Row 3: Milestones (timeline) -->
+{% if report_data.milestones %}
 <div class="report-section mt-3">
     <h6>里程碑</h6>
-    {% if report_data.milestones %}
-    <div class="mb-2" id="ms-chart"></div>
-    <table class="report-table">
-        <thead><tr><th>里程碑</th><th>状态</th><th>截止日期</th></tr></thead>
-        <tbody>
-        {% for ms in report_data.milestones %}
-        <tr>
-            <td>{{ ms.name }}</td>
-            <td><span class="badge bg-{{ 'success' if ms.status == 'completed' else ('danger' if ms.due_date and ms.due_date < report_data.today else 'primary') }}">
-                {{ '已完成' if ms.status == 'completed' else ('超期' if ms.due_date and ms.due_date < report_data.today else '进行中') }}</span></td>
-            <td>{{ ms.due_date.strftime('%Y-%m-%d') if ms.due_date else '-' }}</td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <div class="alert alert-warning py-2 mb-0"><i class="bi bi-exclamation-triangle"></i> 缺失里程碑</div>
-    {% endif %}
+    <div style="overflow-x:auto;">
+        <div class="position-relative" style="padding:0 8px 50px 8px;min-width:{{ report_data.milestones|length * 110 }}px;">
+            <!-- Black axis line -->
+            <div style="position:absolute;top:0;left:0;right:0;height:2px;background:#1e293b;"></div>
+            <!-- Today marker -->
+            {% set _ms_dates = report_data.milestones|selectattr('due_date')|map(attribute='due_date')|list %}
+            {% if _ms_dates %}
+            {% set _ms_min = _ms_dates|min %}
+            {% set _ms_max = _ms_dates|max %}
+            {% set _ms_range = (_ms_max - _ms_min).days or 1 %}
+            {% set _today_pos = ((report_data.today - _ms_min).days / _ms_range * 100) %}
+            {% if _today_pos >= 0 and _today_pos <= 100 %}
+            <div style="position:absolute;top:-10px;left:{{ _today_pos }}%;transform:translateX(-50%);z-index:3;color:#ef4444;font-size:14px;line-height:1;" title="今天 {{ report_data.today.strftime('%m-%d') }}">&#9733;</div>
+            {% endif %}
+            {% endif %}
+            <!-- Nodes -->
+            <div class="d-flex justify-content-between">
+                {% for ms in report_data.milestones %}
+                {% set ms_done = ms.status == 'completed' %}
+                {% set ms_overdue = not ms_done and ms.due_date and ms.due_date < report_data.today %}
+                {% set c = '#10b981' if ms_done else '#ef4444' if ms_overdue else '#1e293b' %}
+                <div class="text-center" style="flex:1;position:relative;">
+                    <!-- Triangle pointing up (碑) -->
+                    <div style="position:absolute;top:-13px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:12px solid {{ c }};"></div>
+                    <!-- Label below -->
+                    <div style="margin-top:16px;white-space:nowrap;">
+                        <div class="fw-bold" style="font-size:.88rem;color:{{ c }};">{{ ms.name }}</div>
+                        {% if ms.due_date %}<div style="font-size:.78rem;color:#64748b;">{{ ms.due_date.strftime('%m-%d') }}</div>{% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
 </div>
+{% endif %}
 
 <!-- Row 4: Summary + High Risk -->
 <div class="report-section">
@@ -147,7 +184,7 @@
     {% endif %}
     {% if ai.risks %}
     <div class="mt-2 ps-2 small text-muted">
-        <strong>AI 分析：</strong>{% for r in ai.risks %}{{ r }}{% if not loop.last %}；{% endif %}{% endfor %}
+        <strong>风险研判：</strong>{% for r in ai.risks %}{{ r }}{% if not loop.last %}；{% endif %}{% endfor %}
     </div>
     {% endif %}
 </div>
@@ -165,39 +202,15 @@
 {% set _est_total = report_data.all_reqs | map(attribute='estimate_days') | select('number') | sum %}
 <div class="report-section">
     <h6>需求统计</h6>
-    <div class="d-flex gap-3 flex-wrap ps-2 mb-2">
-        <div class="text-center">
-            <div class="fs-4 fw-bold">{{ _total }}</div>
-            <div class="small text-muted">总需求</div>
-        </div>
-        <div class="text-center">
-            <div class="fs-4 fw-bold text-success">{{ _done }}</div>
-            <div class="small text-muted">已完成</div>
-        </div>
-        <div class="text-center">
-            <div class="fs-4 fw-bold text-primary">{{ _dev }}</div>
-            <div class="small text-muted">开发中</div>
-        </div>
-        <div class="text-center">
-            <div class="fs-4 fw-bold text-warning">{{ _test }}</div>
-            <div class="small text-muted">测试中</div>
-        </div>
-        <div class="text-center">
-            <div class="fs-4 fw-bold text-secondary">{{ _pending }}</div>
-            <div class="small text-muted">待开发</div>
-        </div>
-        <div class="text-center">
-            <div class="fs-4 fw-bold text-danger">{{ _overdue_count | length }}</div>
-            <div class="small text-muted">超期</div>
-        </div>
-        <div class="border-start ps-3 text-center">
-            <div class="fs-4 fw-bold">{{ _est_total | round(1) }}</div>
-            <div class="small text-muted">总人天</div>
-        </div>
-        <div class="text-center">
-            <div class="fs-4 fw-bold text-info">{{ ((_done / _total * 100) | round | int) if _total else 0 }}%</div>
-            <div class="small text-muted">完成率</div>
-        </div>
+    <div class="report-stats mb-2">
+        <div class="report-stat"><div class="num">{{ _total }}</div><div class="label">总需求</div></div>
+        <div class="report-stat"><div class="num text-success">{{ _done }}</div><div class="label">已完成</div></div>
+        <div class="report-stat"><div class="num text-primary">{{ _dev }}</div><div class="label">开发中</div></div>
+        <div class="report-stat"><div class="num text-warning">{{ _test }}</div><div class="label">测试中</div></div>
+        <div class="report-stat"><div class="num text-secondary">{{ _pending }}</div><div class="label">待开发</div></div>
+        <div class="report-stat"><div class="num text-danger">{{ _overdue_count | length }}</div><div class="label">超期</div></div>
+        <div class="report-stat"><div class="num">{{ _est_total | round(1) }}</div><div class="label">总人天</div></div>
+        <div class="report-stat"><div class="num text-info">{{ ((_done / _total * 100) | round | int) if _total else 0 }}%</div><div class="label">完成率</div></div>
     </div>
     <div class="progress mb-2" style="height:8px;">
         <div class="progress-bar bg-success" style="width:{{ (_done / _total * 100) if _total else 0 }}%"></div>
@@ -334,12 +347,13 @@
     </div>
 </div>
 {% endif %}
+
+</div><!-- /report-wrap -->
 {% endblock %}
 
 {% block extra_js %}
 <script>
-var genBtn = document.getElementById('btn-gen');
-if (genBtn) {
+document.querySelectorAll('#btn-gen, #btn-gen-top').forEach(function(genBtn) {
     genBtn.closest('form').addEventListener('submit', function() {
         genBtn.disabled = true;
         genBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> AI 分析中...';
@@ -357,56 +371,54 @@ function copyRichText() {
     ]).then(function() { alert('已复制富文本，可直接粘贴到 Outlook'); });
 }
 
-/* Milestone timeline chart */
+function saveEmailSettings() {
+    localStorage.setItem('proj_weekly_eml_subject', document.getElementById('emlSubject').value);
+    localStorage.setItem('proj_weekly_eml_to', document.getElementById('emlTo').value);
+    localStorage.setItem('proj_weekly_eml_cc', document.getElementById('emlCc').value);
+}
 (function() {
-    var container = document.getElementById('ms-chart');
-    if (!container) return;
-
-    {% if report_data and report_data.milestones %}
-    var milestones = [
-        {% for ms in report_data.milestones %}
-        {name: '{{ ms.name }}', due: '{{ ms.due_date.strftime("%Y-%m-%d") if ms.due_date else "" }}', status: '{{ ms.status }}'},
-        {% endfor %}
-    ];
-    var today = '{{ report_data.today.strftime("%Y-%m-%d") }}';
-    {% else %}
-    return;
-    {% endif %}
-
-    if (milestones.length === 0) return;
-    var todayTs = new Date(today).getTime();
-    var dates = milestones.filter(function(m) { return m.due; }).map(function(m) { return new Date(m.due).getTime(); });
-    if (dates.length === 0) return;
-    var minTs = Math.min.apply(null, dates.concat([todayTs]));
-    var maxTs = Math.max.apply(null, dates.concat([todayTs]));
-    var pad = (maxTs - minTs) * 0.1 || 86400000 * 7;
-    minTs -= pad; maxTs += pad;
-    var range = maxTs - minTs;
-    var W = container.offsetWidth || 700, H = 120, PL = 20, PR = 20, TY = 60;
-    var svg = '<svg width="' + W + '" height="' + H + '" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif;">';
-    svg += '<line x1="' + PL + '" y1="' + TY + '" x2="' + (W-PR) + '" y2="' + TY + '" stroke="#CBD5E0" stroke-width="2"/>';
-    var todayX = PL + (todayTs - minTs) / range * (W - PL - PR);
-    svg += '<line x1="' + todayX + '" y1="20" x2="' + todayX + '" y2="' + (TY+20) + '" stroke="#E53E3E" stroke-width="2" stroke-dasharray="4,3"/>';
-    svg += '<text x="' + todayX + '" y="15" text-anchor="middle" fill="#E53E3E" font-size="10" font-weight="bold">今天</text>';
-    var alt = false;
-    milestones.forEach(function(ms) {
-        if (!ms.due) return;
-        var ts = new Date(ms.due).getTime();
-        var x = PL + (ts - minTs) / range * (W - PL - PR);
-        var color = ms.status === 'completed' ? '#38A169' : (ts < todayTs ? '#E53E3E' : '#4A6CF7');
-        var fill = ms.status === 'completed' ? color : 'white';
-        svg += '<polygon points="' + x + ',' + (TY-8) + ' ' + (x+8) + ',' + TY + ' ' + x + ',' + (TY+8) + ' ' + (x-8) + ',' + TY + '" fill="' + fill + '" stroke="' + color + '" stroke-width="2"/>';
-        var ly = alt ? TY + 28 : TY - 18;
-        var lineY1 = alt ? TY + 8 : TY - 8;
-        var lineY2 = alt ? TY + 18 : TY - 12;
-        svg += '<line x1="' + x + '" y1="' + lineY1 + '" x2="' + x + '" y2="' + lineY2 + '" stroke="' + color + '" stroke-width="1"/>';
-        svg += '<text x="' + x + '" y="' + ly + '" text-anchor="middle" fill="#2D3748" font-size="10">' + ms.name + '</text>';
-        var dateLy = alt ? ly + 12 : ly - 12;
-        svg += '<text x="' + x + '" y="' + dateLy + '" text-anchor="middle" fill="#718096" font-size="9">' + ms.due.substring(5) + '</text>';
-        alt = !alt;
-    });
-    svg += '</svg>';
-    container.innerHTML = svg;
+    var s = document.getElementById('emlSubject'), t = document.getElementById('emlTo'), c = document.getElementById('emlCc');
+    if (s) s.value = localStorage.getItem('proj_weekly_eml_subject') || '';
+    if (t) t.value = localStorage.getItem('proj_weekly_eml_to') || '';
+    if (c) c.value = localStorage.getItem('proj_weekly_eml_cc') || '';
 })();
+
+function encodeHeader(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
+function exportEml() {
+    var el = document.getElementById('report-content');
+    if (!el) return;
+    var defaultSubject = '{{ report_data.project_name if report_data else "" }} 项目周报（{{ monday.strftime("%m-%d") }} ~ {{ sunday.strftime("%m-%d") }}）';
+    var subject = (document.getElementById('emlSubject') || {}).value || defaultSubject;
+    var to = (document.getElementById('emlTo') || {}).value || '';
+    var cc = (document.getElementById('emlCc') || {}).value || '';
+    var html = '<html><head><style>body{font-family:Microsoft YaHei,sans-serif;font-size:14px;color:#333;}'
+        + 'table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#f1f5f9;font-weight:600;}'
+        + 'th,td{border:1px solid #e2e8f0;padding:6px 12px;}h6{background:#f8fafc;border-left:3px solid #4a6cf7;padding:8px 14px;font-size:14px;}'
+        + '.badge{padding:2px 8px;border-radius:4px;font-size:12px;}'
+        + '</style></head><body>' + el.innerHTML + '</body></html>';
+    var boundary = 'boundary_' + Date.now();
+    var headers = [
+        'Subject: ' + encodeHeader(subject),
+        'MIME-Version: 1.0',
+        'Content-Type: multipart/alternative; boundary="' + boundary + '"',
+        'X-Unsent: 1',
+    ];
+    if (to) headers.push('To: ' + to);
+    if (cc) headers.push('Cc: ' + cc);
+    var eml = headers.concat([
+        '', '--' + boundary,
+        'Content-Type: text/html; charset=UTF-8',
+        'Content-Transfer-Encoding: base64',
+        '', btoa(unescape(encodeURIComponent(html))).match(/.{1,76}/g).join('\n'),
+        '', '--' + boundary + '--',
+    ]).join('\r\n');
+    var blob = new Blob([eml], {type: 'message/rfc822'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = subject + '.eml';
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
 </script>
 {% endblock %}

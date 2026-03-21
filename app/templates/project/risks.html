@@ -4,7 +4,10 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4>风险管理 · {{ project.name }}</h4>
-    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg"></i> 登记风险</button>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-warning btn-sm" id="aiScanBtn" onclick="aiRiskScan()"><i class="bi bi-robot"></i> AI 风险识别</button>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg"></i> 登记风险</button>
+    </div>
 </div>
 
 <!-- Filters -->
@@ -235,10 +238,94 @@
         </div>
     </div>
 </div>
+<!-- AI Risk Scan Results -->
+<div id="aiRiskPanel" class="card mt-3 border-warning" style="display:none;">
+    <div class="card-header py-2 bg-warning bg-opacity-10 d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-robot"></i> AI 识别的潜在风险</span>
+        <button class="btn btn-sm btn-outline-secondary py-0" onclick="document.getElementById('aiRiskPanel').style.display='none'"><i class="bi bi-x"></i></button>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-sm small mb-0" id="aiRiskTable">
+            <thead class="table-light">
+                <tr><th>风险</th><th>严重程度</th><th>描述</th><th>建议措施</th><th>责任人</th><th>跟踪人</th><th>预计闭环</th><th>关联需求</th><th>操作</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
+function aiRiskScan() {
+    var btn = document.getElementById('aiScanBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> AI 识别中，请稍候...';
+    fetch('{{ url_for("project.risk_ai_scan", project_id=project.id) }}', {
+        method: 'POST',
+    }).then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    }).then(function(data) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-robot"></i> AI 风险识别';
+        var panel = document.getElementById('aiRiskPanel');
+        var tbody = document.querySelector('#aiRiskTable tbody');
+        tbody.innerHTML = '';
+        if (data.ok && data.risks && data.risks.length > 0) {
+            data.risks.forEach(function(r) {
+                var sevBadge = r.severity === 'high' ? 'bg-danger' : r.severity === 'medium' ? 'bg-warning text-dark' : 'bg-secondary';
+                var sevLabel = r.severity === 'high' ? '高' : r.severity === 'medium' ? '中' : '低';
+                tbody.innerHTML += '<tr>' +
+                    '<td><strong>' + (r.title||'') + '</strong></td>' +
+                    '<td><span class="badge ' + sevBadge + '">' + sevLabel + '</span></td>' +
+                    '<td class="small">' + (r.description||'') + '</td>' +
+                    '<td class="small text-primary">' + (r.suggestion||'') + '</td>' +
+                    '<td class="small">' + (r.owner||'-') + '</td>' +
+                    '<td class="small">' + (r.tracker||'-') + '</td>' +
+                    '<td class="small">' + (r.due_date||'-') + '</td>' +
+                    '<td class="small">' + (r.req_number||'-') + '</td>' +
+                    '<td><button class="btn btn-sm btn-outline-success py-0 adopt-btn" data-risk=\'' + JSON.stringify(r).replace(/'/g, '&#39;') + '\'><i class="bi bi-plus"></i> 采纳</button></td>' +
+                    '</tr>';
+            });
+            panel.style.display = '';
+        } else if (data.ok) {
+            alert(data.msg || '未识别到新风险');
+        } else {
+            alert('识别失败：' + (data.raw || '未知错误'));
+        }
+    }).catch(function(err) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-robot"></i> AI 风险识别';
+        alert('请求失败：' + err.message);
+    });
+}
+
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.adopt-btn');
+    if (!btn) return;
+    var r = JSON.parse(btn.dataset.risk);
+    document.querySelector('#addModal [name="title"]').value = r.title || '';
+    document.querySelector('#addModal [name="description"]').value = (r.description || '') + '\n建议措施：' + (r.suggestion || '');
+    document.querySelector('#addModal [name="severity"]').value = r.severity || 'medium';
+    if (r.due_date) document.querySelector('#addModal [name="due_date"]').value = r.due_date;
+    var ownerField = document.querySelector('#addModal [name="owner"]');
+    if (ownerField && r.owner) ownerField.value = r.owner;
+    var reqField = document.querySelector('#addModal [name="requirement_id"]');
+    if (reqField && r.req_number) {
+        for (var i = 0; i < reqField.options.length; i++) {
+            if (reqField.options[i].text.indexOf(r.req_number) >= 0) {
+                reqField.selectedIndex = i;
+                break;
+            }
+        }
+    }
+    new bootstrap.Modal(document.getElementById('addModal')).show();
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-check"></i> 已填入';
+});
+
 function setResolveId(id) {
     document.getElementById('resolveForm').action = '/projects/risks/' + id + '/resolve';
 }

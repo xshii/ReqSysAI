@@ -14,6 +14,7 @@ from app.models.risk import Risk
 from app.models.project_member import ProjectMember
 from app.models.knowledge import Knowledge, PermissionRequest
 from app.models.user import User
+from app.utils.pinyin import to_pinyin
 
 
 @project_bp.route('/')
@@ -75,8 +76,58 @@ def api_template(tpl_id):
 @project_bp.route('/<int:project_id>')
 @login_required
 def project_detail(project_id):
+    from datetime import date as d_date
+    from app.models.requirement import Requirement
+    from app.models.todo import Todo, todo_requirements
+    from sqlalchemy.orm import joinedload
+
     project = db.get_or_404(Project, project_id)
-    return render_template('project/detail.html', project=project)
+    today = d_date.today()
+
+    # Requirements stats
+    reqs = Requirement.query.filter_by(project_id=project_id, parent_id=None).order_by(Requirement.number).all()
+    req_total = len(reqs)
+    req_done = sum(1 for r in reqs if r.status in ('done', 'closed'))
+    req_overdue = [r for r in reqs if r.due_date and r.due_date < today and r.status not in ('done', 'closed', 'cancelled')]
+
+    # Open risks
+    open_risks = Risk.query.filter_by(project_id=project_id, status='open').order_by(Risk.severity).all()
+
+    # Key members
+    key_members = ProjectMember.query.filter_by(project_id=project_id, is_key=True).all()
+
+    # Recent completed todos (last 7 days)
+    week_ago = today - timedelta(days=7)
+    req_ids = [r.id for r in reqs]
+    recent_done = []
+    if req_ids:
+        recent_done = Todo.query.filter(
+            Todo.done_date >= week_ago
+        ).join(todo_requirements, Todo.id == todo_requirements.c.todo_id).filter(
+            todo_requirements.c.requirement_id.in_(req_ids)
+        ).options(joinedload(Todo.user)).order_by(Todo.done_date.desc()).limit(10).all()
+
+    return render_template('project/detail.html', project=project, today=today,
+                           reqs=reqs, req_total=req_total, req_done=req_done,
+                           req_overdue=req_overdue, open_risks=open_risks,
+                           key_members=key_members, recent_done=recent_done)
+
+
+@project_bp.route('/<int:project_id>/follow', methods=['POST'])
+@login_required
+def toggle_follow(project_id):
+    """Toggle follow/unfollow a project."""
+    project = db.get_or_404(Project, project_id)
+    if project in current_user.followed_projects.all():
+        current_user.followed_projects.remove(project)
+        followed = False
+    else:
+        current_user.followed_projects.append(project)
+        followed = True
+    db.session.commit()
+    if request.is_json:
+        return jsonify(ok=True, followed=followed)
+    return redirect(url_for('project.project_detail', project_id=project_id))
 
 
 @project_bp.route('/<int:project_id>/edit', methods=['GET', 'POST'])
@@ -283,6 +334,94 @@ def risk_comment(risk_id):
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
 
 
+# ---- AI Risk Scan ----
+
+@project_bp.route('/<int:project_id>/risks/ai-scan', methods=['POST'])
+@login_required
+def risk_ai_scan(project_id):
+    """AI scans project data to identify potential risks."""
+    from datetime import date, timedelta
+    from collections import defaultdict
+    from app.models.requirement import Requirement
+    from app.models.todo import Todo, todo_requirements
+    from app.services.ai import call_ollama
+    from app.services.prompts import get_prompt
+    from sqlalchemy.orm import joinedload
+
+    project = db.get_or_404(Project, project_id)
+    reqs = Requirement.query.filter_by(project_id=project_id).order_by(Requirement.number).all()
+    today = date.today()
+
+    # Existing risks (to avoid duplicates)
+    existing_risks = Risk.query.filter_by(project_id=project_id, status='open').all()
+    existing_titles = [r.title for r in existing_risks]
+
+    # Build context
+    lines = [f'项目：{project.name}，当前日期：{today}\n']
+
+    # Existing open risks
+    if existing_risks:
+        lines.append('已登记的未解决风险（不要重复这些）：')
+        for r in existing_risks:
+            lines.append(f'- {r.title}')
+
+    # Requirements overview with delay info
+    lines.append('\n需求清单：')
+    for r in reqs:
+        due_info = ''
+        if r.due_date:
+            days_left = (r.due_date - today).days
+            due_info = f'，已延期{-days_left}天' if days_left < 0 else f'，剩{days_left}天'
+        assignee = r.assignee_display if hasattr(r, 'assignee_display') else ''
+        lines.append(f'- [{r.number}] {r.title}（{r.status_label}，负责人：{assignee}{due_info}）')
+
+    # Blocked and overdue todos
+    project_req_ids = [r.id for r in reqs]
+    if project_req_ids:
+        blocked_todos = Todo.query.filter(
+            Todo.status == 'todo', Todo.need_help == True
+        ).join(todo_requirements, Todo.id == todo_requirements.c.todo_id).filter(
+            todo_requirements.c.requirement_id.in_(project_req_ids)
+        ).options(joinedload(Todo.user), joinedload(Todo.requirements)).all()
+
+        if blocked_todos:
+            lines.append('\n阻塞中的 Todo：')
+            for t in blocked_todos:
+                block_days = (today - t.created_date).days if t.created_date else 0
+                reqs_str = ', '.join(r.number for r in t.requirements)
+                reason = f'，原因：{t.blocked_reason}' if t.blocked_reason else ''
+                lines.append(f'- {t.user.name}: {t.title}（{reqs_str}，阻塞{block_days}天{reason}）')
+
+        # Stale requirements (no completed todo in last 7 days)
+        week_ago = today - timedelta(days=7)
+        active_req_ids = set()
+        recent_todos = Todo.query.filter(
+            Todo.done_date >= week_ago
+        ).join(todo_requirements, Todo.id == todo_requirements.c.todo_id).filter(
+            todo_requirements.c.requirement_id.in_(project_req_ids)
+        ).all()
+        for t in recent_todos:
+            for r in t.requirements:
+                active_req_ids.add(r.id)
+
+        stale_reqs = [r for r in reqs if r.id not in active_req_ids
+                      and r.status not in ('done', 'closed', 'cancelled')]
+        if stale_reqs:
+            lines.append('\n近7天无进展的需求：')
+            for r in stale_reqs:
+                lines.append(f'- [{r.number}] {r.title}（{r.status_label}，负责人：{r.assignee_display if hasattr(r, "assignee_display") else ""}）')
+
+    prompt = get_prompt('risk_scan') + '\n\n' + '\n'.join(lines)
+    result, raw = call_ollama(prompt)
+
+    if isinstance(result, list) and result:
+        return jsonify(ok=True, risks=result)
+    elif isinstance(result, list) and not result:
+        return jsonify(ok=True, risks=[], msg='AI 未识别到新风险')
+    else:
+        return jsonify(ok=False, raw=raw or '生成失败')
+
+
 # ---- Project members ----
 
 @project_bp.route('/<int:project_id>/members', methods=['GET', 'POST'])
@@ -324,7 +463,7 @@ def member_list(project_id):
                 m.project_role = new_role
                 db.session.commit()
                 flash('角色已更新', 'success')
-        elif action == 'toggle_key' and is_pm:
+        elif action == 'toggle_key' and can_edit:
             member_id = request.form.get('member_id', type=int)
             m = db.session.get(ProjectMember, member_id)
             if m and m.project_id == project_id:
@@ -353,7 +492,8 @@ def knowledge_list(project_id):
             db.session.add(Knowledge(
                 project_id=project_id,
                 title=request.form.get('title', '').strip(),
-                category=request.form.get('category', 'doc'),
+                link_type=request.form.get('link_type', 'doc'),
+                biz_category=request.form.get('biz_category', '').strip() or None,
                 link=request.form.get('link', '').strip() or None,
                 created_by=current_user.id,
             ))
@@ -363,10 +503,16 @@ def knowledge_list(project_id):
             k = db.session.get(Knowledge, request.form.get('kid', type=int))
             if k and k.project_id == project_id:
                 k.title = request.form.get('title', k.title).strip()
-                k.category = request.form.get('category', k.category)
+                k.link_type = request.form.get('link_type', k.link_type)
+                k.biz_category = request.form.get('biz_category', '').strip() or None
                 k.link = request.form.get('link', '').strip() or None
                 db.session.commit()
                 flash('已更新', 'success')
+        elif action == 'pin':
+            k = db.session.get(Knowledge, request.form.get('kid', type=int))
+            if k and k.project_id == project_id:
+                k.is_pinned = not k.is_pinned
+                db.session.commit()
         elif action == 'delete':
             k = db.session.get(Knowledge, request.form.get('kid', type=int))
             if k and k.project_id == project_id:
@@ -375,9 +521,14 @@ def knowledge_list(project_id):
                 flash('已删除', 'success')
         return redirect(url_for('project.knowledge_list', project_id=project_id))
 
-    items = Knowledge.query.filter_by(project_id=project_id).order_by(Knowledge.category, Knowledge.title).all()
+    items = Knowledge.query.filter_by(project_id=project_id).order_by(
+        Knowledge.is_pinned.desc(), Knowledge.biz_category, Knowledge.updated_at.desc()).all()
+    # Collect existing biz categories for quick-click
+    existing_biz_cats = sorted(set(
+        k.biz_category for k in items if k.biz_category))
     return render_template('project/knowledge.html', project=project, items=items,
-                           categories=Knowledge.CATEGORY_LABELS)
+                           link_types=Knowledge.LINK_TYPES,
+                           existing_biz_cats=existing_biz_cats)
 
 
 # ---- Permission requests ----
@@ -386,23 +537,63 @@ def knowledge_list(project_id):
 @login_required
 def permission_list(project_id):
     project = db.get_or_404(Project, project_id)
-    is_pm = current_user.is_admin or current_user.has_role('PM', 'PL', 'FO')
+    is_pm = current_user.is_admin or current_user.has_role('PM', 'PL', 'FO', 'LM', 'XM', 'HR')
 
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'add':
             db.session.add(PermissionRequest(
                 project_id=project_id,
+                category=request.form.get('category', '').strip() or None,
                 resource=request.form.get('resource', '').strip(),
+                repo_path=request.form.get('repo_path', '').strip() or None,
+                description=request.form.get('description', '').strip() or None,
                 applicants=request.form.get('applicants', '').strip(),
                 submitter_id=current_user.id,
             ))
             db.session.commit()
             flash('权限申请已登记', 'success')
+        elif action == 'apply':
+            # Batch apply: check multiple permissions, for self or other
+            prid_list = request.form.getlist('prid')
+            apply_for = request.form.get('apply_for', 'self')  # self / other
+            reason = request.form.get('reason', '').strip()
+            if apply_for == 'self':
+                py = to_pinyin(current_user.name).split()[-1] if current_user.name else ''
+                eid = current_user.employee_id or ''
+                entry = f"{current_user.name}({py}) {eid}"
+            else:
+                other_name = request.form.get('other_name', '').strip()
+                other_eid = request.form.get('other_eid', '').strip()
+                entry = other_name
+                if other_eid:
+                    entry += f" {other_eid}"
+            if reason:
+                entry += f" - {reason}"
+            count = 0
+            for prid in prid_list:
+                pr = db.session.get(PermissionRequest, int(prid))
+                if not pr or pr.project_id != project_id or pr.status != 'draft':
+                    continue
+                prev = pr.applicants or ''
+                # Deduplicate by name
+                name_check = current_user.name if apply_for == 'self' else other_name
+                if name_check and name_check in prev:
+                    continue
+                pr.applicants = (prev + '\n' + entry).strip() if prev else entry
+                count += 1
+            if count:
+                db.session.commit()
+                flash(f'已申请 {count} 项权限', 'success')
+            else:
+                flash('未选择权限或已在申请列表中', 'info')
         elif action == 'edit':
             pr = db.session.get(PermissionRequest, request.form.get('prid', type=int))
             if pr and pr.project_id == project_id and pr.status == 'draft':
+                pr.category = request.form.get('category', '').strip() or None
                 pr.resource = request.form.get('resource', pr.resource).strip()
+                pr.repo_path = request.form.get('repo_path', '').strip() or None
+                pr.description = request.form.get('description', '').strip() or None
                 pr.applicants = request.form.get('applicants', pr.applicants).strip()
                 db.session.commit()
                 flash('已更新', 'success')
@@ -422,14 +613,33 @@ def permission_list(project_id):
                 flash('审批完成', 'success')
         elif action == 'delete':
             pr = db.session.get(PermissionRequest, request.form.get('prid', type=int))
-            if pr and pr.project_id == project_id and pr.status == 'draft':
+            if pr and pr.project_id == project_id and pr.status == 'draft' and (
+                    pr.submitter_id == current_user.id or is_pm):
                 db.session.delete(pr)
                 db.session.commit()
                 flash('已删除', 'success')
         return redirect(url_for('project.permission_list', project_id=project_id))
 
-    items = PermissionRequest.query.filter_by(project_id=project_id).order_by(PermissionRequest.created_at.desc()).all()
-    return render_template('project/permissions.html', project=project, items=items, is_pm=is_pm)
+    items = PermissionRequest.query.filter_by(project_id=project_id).order_by(
+        db.case((PermissionRequest.status == 'draft', 0),
+                (PermissionRequest.status == 'submitted', 1), else_=2),
+        PermissionRequest.category, PermissionRequest.resource,
+        PermissionRequest.created_at.desc()).all()
+    # Draft items for the apply modal checklist
+    draft_items = [pr for pr in items if pr.status == 'draft']
+    draft_resources = sorted(set(pr.resource for pr in draft_items))
+    # Collect existing categories for quick-click
+    existing_categories = sorted(set(
+        pr.category for pr in items if pr.category))
+    # Current user's pinyin name for display in "为我申请"
+    py = to_pinyin(current_user.name).split()[-1] if current_user.name else ''
+    my_pinyin_name = f"{current_user.name}({py})" if py else current_user.name
+    # Users for internal member search in "为他人申请"
+    all_users = User.query.order_by(User.name).all()
+    return render_template('project/permissions.html', project=project, items=items,
+                           is_pm=is_pm, draft_items=draft_items, draft_resources=draft_resources,
+                           existing_categories=existing_categories,
+                           my_pinyin_name=my_pinyin_name, all_users=all_users)
 
 
 # ---- Meeting minutes ----

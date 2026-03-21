@@ -157,6 +157,16 @@ def index():
         month_q = month_q.filter(~Rant.id.in_(top_ids))
     rants = top_rants + month_q.order_by(Rant.created_at.desc()).limit(20).all()
 
+    # Milestones from followed projects (upcoming/active)
+    from app.models.project import Milestone
+    followed_pids = [p.id for p in current_user.followed_projects.all()]
+    milestones = []
+    if followed_pids:
+        milestones = Milestone.query.filter(
+            Milestone.project_id.in_(followed_pids),
+            Milestone.status == 'active',
+        ).order_by(Milestone.due_date.asc().nullslast()).all()
+
     return render_template('main/index.html',
         my_todos=my_todos, todo_total=todo_total, todo_done=todo_done,
         my_reqs=my_reqs, my_risks=my_risks, today=today,
@@ -165,6 +175,7 @@ def index():
         approved_incentives=approved_incentives, rants=rants,
         ai_ranking=ai_ranking, alerts=alerts,
         heatmap=heatmap, heatmap_start=heatmap_start, timedelta=timedelta,
+        milestones=milestones,
     )
 
 
@@ -486,10 +497,96 @@ def toggle_todo(todo_id):
         todo.done_date = date.today()
         for item in todo.items:
             item.is_done = True
+    # Cascade status to linked help todos (parent↔child)
+    linked = []
+    if todo.parent_id:
+        linked.append(db.session.get(Todo, todo.parent_id))
+    linked.extend(Todo.query.filter_by(parent_id=todo.id).all())
+    for t in linked:
+        if t and t.status != todo.status:
+            t.status = todo.status
+            t.done_date = todo.done_date
+            for item in t.items:
+                item.is_done = (todo.status == TODO_STATUS_DONE)
     db.session.commit()
     if request.is_json:
         return jsonify(ok=True, done=todo.status == TODO_STATUS_DONE)
     return redirect(url_for('main.index'))
+
+
+# ---- AI: Daily Standup Summary ----
+
+@main_bp.route('/api/daily-standup', methods=['POST'])
+@login_required
+def daily_standup():
+    """Generate daily standup summary for current user's team."""
+    from app.services.ai import call_ollama
+    from app.services.prompts import get_prompt
+    from app.models.risk import Risk
+    import markdown as md_lib
+
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    if today.weekday() == 0:  # Monday → look back to Friday
+        yesterday = today - timedelta(days=3)
+
+    users = User.query.filter_by(is_active=True).order_by(User.name).all()
+    lines = [f'日期：{today}（昨天：{yesterday}）\n']
+
+    for u in users:
+        done_yesterday = Todo.query.filter(
+            Todo.user_id == u.id, Todo.done_date == yesterday
+        ).options(joinedload(Todo.requirements)).all()
+        active_today = Todo.query.filter(
+            Todo.user_id == u.id, Todo.status == 'todo'
+        ).options(joinedload(Todo.requirements)).limit(10).all()
+        blocked = [t for t in active_today if t.need_help]
+
+        lines.append(f'\n{u.name}（{u.group or ""}）：')
+        if done_yesterday:
+            lines.append('  昨日完成：')
+            for t in done_yesterday:
+                reqs = ', '.join(r.number for r in t.requirements)
+                lines.append(f'  - {t.title}（{reqs}）')
+        else:
+            lines.append('  昨日完成：无')
+
+        if active_today:
+            lines.append('  今日进行中：')
+            for t in active_today[:5]:
+                reqs = ', '.join(r.number for r in t.requirements)
+                lines.append(f'  - {t.title}（{reqs}）')
+        if blocked:
+            lines.append('  阻塞：')
+            for t in blocked:
+                reason = f'，原因：{t.blocked_reason}' if t.blocked_reason else ''
+                lines.append(f'  - {t.title}{reason}')
+
+    # Overdue requirements
+    from app.models.requirement import Requirement
+    overdue_reqs = Requirement.query.filter(
+        Requirement.status.notin_(('done', 'closed', 'cancelled')),
+        Requirement.due_date < today
+    ).all()
+    if overdue_reqs:
+        lines.append('\n全组延期需求：')
+        for r in overdue_reqs:
+            days = (today - r.due_date).days
+            lines.append(f'- [{r.number}] {r.title}（延期{days}天，{r.assignee_display}）')
+
+    # Open risks
+    open_risks = Risk.query.filter_by(status='open').all()
+    if open_risks:
+        lines.append('\n未解决风险：')
+        for r in open_risks:
+            lines.append(f'- {r.title}（{r.severity_label}）')
+
+    prompt = get_prompt('daily_standup') + '\n\n' + '\n'.join(lines)
+    _, raw = call_ollama(prompt)
+    if raw:
+        html = md_lib.markdown(raw, extensions=['tables'])
+        return jsonify(ok=True, html=html)
+    return jsonify(ok=False, error='生成失败')
 
 
 @main_bp.route('/rant', methods=['POST'])

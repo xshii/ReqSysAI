@@ -6,6 +6,7 @@ import os
 import requests
 import yaml
 from flask import render_template, redirect, url_for, flash, request, current_app, Response, jsonify
+from flask_login import current_user
 
 logger = logging.getLogger(__name__)
 
@@ -437,9 +438,14 @@ def ai_model_list():
                            prompts=prompts, prompt_labels=PROMPT_LABELS,
                            prompt_defaults=PROMPT_DEFAULTS,
                            ai_provider=ai_provider,
+                           ollama_base_url=current_app.config.get('OLLAMA_BASE_URL', ''),
+                           ollama_ssh_enabled=current_app.config.get('OLLAMA_SSH_ENABLED', False),
+                           ollama_ssh_host=current_app.config.get('OLLAMA_SSH_HOST', ''),
+                           ollama_ssh_local_port=current_app.config.get('OLLAMA_SSH_LOCAL_PORT', 11434),
                            openai_base_url=current_app.config.get('OPENAI_BASE_URL', ''),
                            openai_api_key=current_app.config.get('OPENAI_API_KEY', ''),
-                           openai_model=current_app.config.get('OPENAI_MODEL', 'gpt-4o-mini'))
+                           openai_model=current_app.config.get('OPENAI_MODEL', 'gpt-4o-mini'),
+                           ai_system_prompt=current_app.config.get('AI_SYSTEM_PROMPT', ''))
 
 
 @admin_bp.route('/ai-models/create', methods=['POST'])
@@ -585,3 +591,69 @@ def ai_model_save_prompts():
     save_all_prompts(prompts)
     flash('AI 提示词已保存', 'success')
     return redirect(url_for('admin.ai_model_list'))
+
+
+@admin_bp.route('/ai-models/set-ollama', methods=['POST'])
+@admin_required
+def ai_set_ollama():
+    """Save Ollama connection config (SSH tunnel settings)."""
+    base_url = request.form.get('base_url', '').strip()
+    ssh_enabled = request.form.get('ssh_enabled') == '1'
+    ssh_host = request.form.get('ssh_host', '').strip()
+    ssh_local_port = request.form.get('ssh_local_port', 11434, type=int)
+
+    local_path = os.path.join(current_app.root_path, '..', 'config.local.yml')
+    local_cfg = {}
+    if os.path.exists(local_path):
+        with open(local_path, encoding='utf-8') as f:
+            local_cfg = yaml.safe_load(f) or {}
+    ollama_cfg = local_cfg.setdefault('ollama', {})
+    if base_url:
+        ollama_cfg['base_url'] = base_url
+    ollama_cfg['ssh_enabled'] = ssh_enabled
+    ollama_cfg['ssh_host'] = ssh_host
+    ollama_cfg['ssh_local_port'] = ssh_local_port
+    with open(local_path, 'w', encoding='utf-8') as f:
+        yaml.dump(local_cfg, f, allow_unicode=True, default_flow_style=False)
+
+    current_app.config['OLLAMA_BASE_URL'] = base_url or current_app.config['OLLAMA_BASE_URL']
+    current_app.config['OLLAMA_SSH_ENABLED'] = ssh_enabled
+    current_app.config['OLLAMA_SSH_HOST'] = ssh_host
+    current_app.config['OLLAMA_SSH_LOCAL_PORT'] = ssh_local_port
+    flash('Ollama 连接配置已保存', 'success')
+    return redirect(url_for('admin.ai_model_list'))
+
+
+@admin_bp.route('/ai-models/set-system-prompt', methods=['POST'])
+@admin_required
+def ai_set_system_prompt():
+    """Save global AI system prompt."""
+    prompt = request.form.get('system_prompt', '').strip()
+    local_path = os.path.join(current_app.root_path, '..', 'config.local.yml')
+    local_cfg = {}
+    if os.path.exists(local_path):
+        with open(local_path, encoding='utf-8') as f:
+            local_cfg = yaml.safe_load(f) or {}
+    local_cfg.setdefault('ai', {})['system_prompt'] = prompt
+    with open(local_path, 'w', encoding='utf-8') as f:
+        yaml.dump(local_cfg, f, allow_unicode=True, default_flow_style=False)
+    current_app.config['AI_SYSTEM_PROMPT'] = prompt
+    flash('系统提示词已保存', 'success')
+    return redirect(url_for('admin.ai_model_list'))
+
+
+@admin_bp.route('/ai-models/test', methods=['POST'])
+@admin_required
+def ai_test():
+    """One-click test for current AI provider."""
+    from flask import jsonify
+    from app.services.ai import call_ollama
+    test_prompt = '请用一句话回答：1+1等于几？'
+    try:
+        result, raw = call_ollama(test_prompt)
+        if raw:
+            return jsonify(ok=True, response=raw[:200])
+        else:
+            return jsonify(ok=False, error='AI 返回为空')
+    except Exception as e:
+        return jsonify(ok=False, error=str(e)[:200])
