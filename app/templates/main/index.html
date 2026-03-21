@@ -263,15 +263,15 @@
                     {% endif %}
                     <div class="small" style="min-width:0;">
                         <div>
+                            <button class="btn btn-sm py-0 px-0 {% if inc.likes %}text-danger{% else %}text-secondary{% endif %} inc-like" data-id="{{ inc.id }}" style="font-size:.75em;">
+                                <i class="bi bi-heart{% if inc.likes %}-fill{% endif %}"></i><span>{{ inc.likes or '' }}</span>
+                            </button>
                             <strong>{% for u in inc.nominees %}{{ u.name }}{% if not loop.last %}、{% endif %}{% endfor %}</strong>
                             <span class="badge bg-{{ inc.category_color }}" style="font-size:.6em;">{{ inc.category_label }}</span>
                             {% if inc.team_name %}<span class="badge bg-light text-dark border" style="font-size:.6em;">{{ inc.team_name }}</span>{% endif %}
                         </div>
                         <div class="text-muted text-truncate" title="{{ inc.title }}">{{ inc.title }}</div>
                         {% if inc.review_comment %}<div class="fst-italic text-secondary text-truncate" title="{{ inc.review_comment }}">"{{ inc.review_comment[:80] }}{% if inc.review_comment | length > 80 %}...{% endif %}"</div>{% endif %}
-                        <button class="btn btn-sm py-0 px-1 {% if inc.likes %}btn-outline-danger{% else %}btn-outline-secondary{% endif %} inc-like" data-id="{{ inc.id }}" style="font-size:.75em;">
-                            <i class="bi bi-heart{% if inc.likes %}-fill{% endif %}"></i> <span>{{ inc.likes or '' }}</span>
-                        </button>
                     </div>
                 </div>
                 {% endfor %}
