@@ -182,13 +182,43 @@ def quick_todo():
         category = 'work'
     today = date.today()
 
+    # Handle #comment → add comment to requirement
+    if title.startswith('#') and req_id:
+        from app.models.requirement import Comment
+        comment_text = title[1:].strip()
+        if comment_text:
+            db.session.add(Comment(
+                requirement_id=req_id, user_id=current_user.id, content=comment_text,
+            ))
+            db.session.commit()
+            return jsonify(ok=True, title=comment_text, todo_id=0, action='comment') if is_ajax else redirect(url_for('main.index'))
+
+    # Handle @name → create help todo for that person
+    helper_name = None
+    if '@' in title:
+        import re
+        m = re.match(r'@(\S+)\s*(.*)', title)
+        if m:
+            helper_name = m.group(1)
+            title = m.group(2).strip() or f'协助 {current_user.name}'
+
     reqs = []
     if req_id:
         req = db.session.get(Requirement, req_id)
         if req:
             reqs = [req]
+
+    # Find helper user
+    target_user = current_user
+    if helper_name:
+        helper = User.query.filter(
+            db.or_(User.name == helper_name, User.pinyin.ilike(f'{helper_name}%'))
+        ).filter_by(is_active=True).first()
+        if helper:
+            target_user = helper
+
     todo = Todo(
-        user_id=current_user.id,
+        user_id=target_user.id,
         title=title,
         due_date=today,
         category=category,
@@ -197,7 +227,11 @@ def quick_todo():
     todo.items.append(TodoItem(title=title, sort_order=0))
     db.session.add(todo)
     db.session.commit()
-    return jsonify(ok=True, title=title, todo_id=todo.id) if is_ajax else redirect(url_for('main.index'))
+
+    result = {'ok': True, 'title': title, 'todo_id': todo.id}
+    if helper_name and target_user.id != current_user.id:
+        result['helper'] = target_user.name
+    return jsonify(**result) if is_ajax else redirect(url_for('main.index'))
 
 
 @main_bp.route('/api/ai-recommend-todos', methods=['POST'])
