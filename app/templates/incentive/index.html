@@ -293,6 +293,32 @@ function checkAI() {
         });
     });
 
+    // On form submit: auto-select if search has text
+    var form = search.closest('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            var q = search.value.trim();
+            if (q && !Object.keys(chosen).length) {
+                // Try to auto-select first match
+                var first = dropdown.querySelector('.nominee-opt:not([style*="none"])');
+                if (first) {
+                    addNominee(first.dataset.id, first.dataset.name);
+                    search.value = '';
+                } else {
+                    e.preventDefault();
+                    alert('未找到用户「' + q + '」，请从下拉列表选择');
+                    search.focus();
+                    return;
+                }
+            }
+            if (!selected.querySelector('input[name="nominee_ids"]')) {
+                e.preventDefault();
+                alert('请选择至少一位推荐人员');
+                search.focus();
+            }
+        });
+    }
+
     function addNominee(id, name) {
         if (chosen[id]) return;
         chosen[id] = true;
