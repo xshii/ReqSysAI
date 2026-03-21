@@ -21,7 +21,6 @@ class Todo(db.Model):
     estimated_minutes = db.Column(db.Integer, nullable=True)  # Estimated time in minutes
     parent_id = db.Column(db.Integer, db.ForeignKey('todos.id'), nullable=True)
     sort_order = db.Column(db.Integer, default=0)
-    estimated_hours = db.Column(db.Float, nullable=True)
     due_date = db.Column(db.Date, nullable=True)
     created_date = db.Column(db.Date, default=date.today)
     done_date = db.Column(db.Date, nullable=True)

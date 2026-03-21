@@ -28,7 +28,6 @@ class Requirement(db.Model):
     milestone = db.relationship('Milestone', backref='requirements')
     assignee = db.relationship('User', foreign_keys=[assignee_id], backref='assigned_requirements')
     creator = db.relationship('User', foreign_keys=[created_by], backref='created_requirements')
-    tasks = db.relationship('RequirementTask', back_populates='requirement', cascade='all, delete-orphan')
     comments = db.relationship('Comment', back_populates='requirement', cascade='all, delete-orphan',
                                order_by='Comment.created_at')
     activities = db.relationship('Activity', back_populates='requirement', cascade='all, delete-orphan',
@@ -97,24 +96,6 @@ class Requirement(db.Model):
 
     def __repr__(self):
         return f'<Requirement {self.number}>'
-
-
-class RequirementTask(db.Model):
-    __tablename__ = 'requirement_tasks'
-
-    id = db.Column(db.Integer, primary_key=True)
-    requirement_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=False)
-    title = db.Column(db.String(300), nullable=False)
-    status = db.Column(db.String(20), default='pending')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    requirement = db.relationship('Requirement', back_populates='tasks')
-
-    STATUS_LABELS = {'pending': '待处理', 'in_progress': '进行中', 'done': '已完成'}
-
-    @property
-    def status_label(self):
-        return self.STATUS_LABELS.get(self.status, self.status)
 
 
 class Comment(db.Model):

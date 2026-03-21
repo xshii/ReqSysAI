@@ -13,14 +13,6 @@ from app.models.requirement import Requirement
 from app.models.user import User, Group
 
 
-# ---- Group management ----
-
-@todo_bp.route('/groups')
-@login_required
-def manage_groups():
-    return redirect(url_for('admin.user_list'))
-
-
 # ---- Todo CRUD ----
 
 @todo_bp.route('/add', methods=['POST'])

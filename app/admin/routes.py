@@ -17,7 +17,10 @@ from app.models.user import User, Role, Group
 from app.models.project import MilestoneTemplate, MilestoneTemplateItem
 from app.services.ai import check_ollama_status
 from app.services.prompts import get_all_prompts, save_all_prompts, LABELS as PROMPT_LABELS, DEFAULTS as PROMPT_DEFAULTS
+from app.models.ip_request import IPChangeRequest
 from app.utils.pinyin import to_pinyin
+
+from datetime import datetime
 
 
 @admin_bp.route('/users')
@@ -39,7 +42,6 @@ def user_list():
     hidden = set(current_app.config.get('HIDDEN_ROLES', []) + ['Admin'])
     visible_roles = [r for r in Role.query.order_by(Role.id).all() if r.name not in hidden]
 
-    from app.models.ip_request import IPChangeRequest
     ip_requests = IPChangeRequest.query.filter_by(status='pending')\
         .order_by(IPChangeRequest.created_at.desc()).all()
 
@@ -110,8 +112,6 @@ def user_edit(user_id):
 @admin_bp.route('/ip-request/<int:req_id>/approve', methods=['POST'])
 @admin_required
 def ip_request_approve(req_id):
-    from app.models.ip_request import IPChangeRequest
-    from datetime import datetime
     r = db.get_or_404(IPChangeRequest, req_id)
     r.status = 'approved'
     r.reviewed_by = current_user.id
@@ -128,8 +128,6 @@ def ip_request_approve(req_id):
 @admin_bp.route('/ip-request/<int:req_id>/reject', methods=['POST'])
 @admin_required
 def ip_request_reject(req_id):
-    from app.models.ip_request import IPChangeRequest
-    from datetime import datetime
     r = db.get_or_404(IPChangeRequest, req_id)
     r.status = 'rejected'
     r.reviewed_by = current_user.id

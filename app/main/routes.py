@@ -12,7 +12,7 @@ from app.constants import (
     MAX_RANT_LENGTH,
 )
 from app.models.requirement import Requirement
-from app.models.todo import Todo, TodoItem
+from app.models.todo import Todo, TodoItem, TodoComment, todo_requirements
 from app.models.risk import Risk
 from app.models.incentive import Incentive
 from app.models.ai_log import AIParseLog
@@ -184,7 +184,6 @@ def quick_todo():
 
     # Handle #summary → add comment to the most recent todo for this requirement
     if title.startswith('#') and req_id:
-        from app.models.todo import TodoComment, todo_requirements
         comment_text = title[1:].strip()
         if comment_text:
             # Find latest active todo for this req

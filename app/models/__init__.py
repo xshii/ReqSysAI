@@ -1,6 +1,6 @@
 from app.models.user import User, Role, Group  # noqa: F401
 from app.models.project import Project, Milestone, MilestoneTemplate, MilestoneTemplateItem  # noqa: F401
-from app.models.requirement import Requirement, RequirementTask, Comment, Activity  # noqa: F401
+from app.models.requirement import Requirement, Comment, Activity  # noqa: F401
 from app.models.todo import Todo, TodoItem  # noqa: F401
 from app.models.risk import Risk  # noqa: F401
 from app.models.report import WeeklyReport  # noqa: F401

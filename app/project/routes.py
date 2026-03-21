@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import current_user
@@ -29,7 +29,6 @@ def project_list():
 @login_required
 def project_create():
     from app.models.project import MilestoneTemplate
-    from datetime import timedelta
 
     form = ProjectForm()
     templates = MilestoneTemplate.query.order_by(MilestoneTemplate.name).all()
@@ -178,7 +177,6 @@ def risk_list(project_id):
     reqs = Requirement.query.filter_by(project_id=project_id).order_by(Requirement.number).all()
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
 
-    from datetime import date
     return render_template('project/risks.html', project=project, risks=risks,
                            reqs=reqs, users=users, today=date.today(),
                            cur_status=status, cur_severity=severity)
@@ -260,9 +258,8 @@ def risk_edit(risk_id):
     risk.tracker_id = tracker_id if tracker_id else None
     due = request.form.get('due_date', '')
     if due:
-        from datetime import datetime as dt
         try:
-            risk.due_date = dt.strptime(due, '%Y-%m-%d').date()
+            risk.due_date = datetime.strptime(due, '%Y-%m-%d').date()
         except ValueError:
             pass
     db.session.commit()

@@ -175,21 +175,16 @@ def profile():
         current_user.group = form.group.data or None
         current_user.pomodoro_minutes = request.form.get('pomodoro_minutes', type=int) or 45
         # Handle avatar upload
-        import os, uuid
-        avatar = request.files.get('avatar')
-        if avatar and avatar.filename:
-            ext = os.path.splitext(avatar.filename)[1].lower()
-            if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp'):
-                fname = f'{current_user.id}_{uuid.uuid4().hex[:8]}{ext}'
-                save_dir = os.path.join(current_app.root_path, 'static', 'uploads', 'avatar')
-                os.makedirs(save_dir, exist_ok=True)
-                # Delete old avatar
-                if current_user.avatar:
-                    old_path = os.path.join(current_app.root_path, 'static', current_user.avatar)
-                    if os.path.exists(old_path):
-                        os.remove(old_path)
-                avatar.save(os.path.join(save_dir, fname))
-                current_user.avatar = f'uploads/avatar/{fname}'
+        from app.utils.upload import save_photo
+        new_avatar = save_photo(request.files.get('avatar'), folder='avatar')
+        if new_avatar:
+            # Delete old avatar
+            if current_user.avatar:
+                import os
+                old_path = os.path.join(current_app.root_path, 'static', current_user.avatar)
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+            current_user.avatar = new_avatar
         db.session.commit()
         flash('个人信息已更新', 'success')
         return redirect(url_for('auth.profile'))

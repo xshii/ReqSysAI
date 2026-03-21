@@ -13,7 +13,7 @@ from app.requirement.forms import RequirementForm, CommentForm
 from app.extensions import db
 from app.models.project import Project, Milestone
 from app.models.requirement import Requirement, Comment, Activity
-from app.models.todo import Todo, TodoItem
+from app.models.todo import Todo, TodoItem, todo_requirements
 from app.models.user import User
 
 PER_PAGE = 20
@@ -67,7 +67,6 @@ def requirement_list():
     pagination = query.paginate(page=page, per_page=PER_PAGE, error_out=False)
 
     # Todo progress per requirement
-    from app.models.todo import Todo, todo_requirements
     req_ids = [r.id for r in pagination.items]
     todo_counts = {}
     if req_ids:
