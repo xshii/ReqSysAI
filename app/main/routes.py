@@ -64,7 +64,7 @@ def index():
     my_reqs = Requirement.query.filter_by(assignee_id=current_user.id)\
         .filter(Requirement.status.notin_(REQ_INACTIVE_STATUSES))\
         .options(joinedload(Requirement.project))\
-        .order_by(Requirement.updated_at.desc()).limit(10).all()
+        .order_by(Requirement.due_date.asc().nullslast(), Requirement.priority, Requirement.updated_at.desc()).limit(10).all()
 
     # Group todos by category for merged display
     req_todos = {}  # req_id → [todos]
