@@ -29,7 +29,13 @@ def index():
         q = q.filter_by(status=status_filter)
     items = q.order_by(Incentive.created_at.desc()).all()
 
-    users = User.query.filter(User.is_active == True, User.id != current_user.id).order_by(User.name).all()
+    # Exclude admin system account and self from nominees
+    admin_eid = current_app.config.get('ADMIN_CONFIG', {}).get('employee_id', '')
+    users = User.query.filter(
+        User.is_active == True,
+        User.id != current_user.id,
+        User.employee_id != admin_eid,
+    ).order_by(User.name).all()
     return render_template('incentive/index.html',
         items=items, users=users, is_reviewer=is_reviewer,
         status_filter=status_filter, scope=scope)
