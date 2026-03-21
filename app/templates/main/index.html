@@ -185,48 +185,48 @@
             </div>
         </div>
 
-        <h6 class="mb-3"><i class="bi bi-star-fill text-warning"></i> 激励之星</h6>
-        {% if approved_incentives %}
-        {% for inc in approved_incentives %}
-        <div class="card mb-3 border-0 shadow-sm overflow-hidden">
-            {% if inc.photo %}
-            <img src="{{ url_for('static', filename=inc.photo) }}" class="card-img-top" style="height:140px;object-fit:cover;">
-            {% else %}
-            <div class="bg-gradient d-flex align-items-center justify-content-center gap-2 py-3"
-                 style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);">
-                {% for u in inc.nominees[:4] %}
-                {% if u.avatar %}
-                <img src="{{ url_for('static', filename=u.avatar) }}" class="rounded-circle border border-2 border-white" style="width:48px;height:48px;object-fit:cover;">
-                {% else %}
-                <div class="rounded-circle bg-white text-primary d-flex align-items-center justify-content-center fw-bold" style="width:48px;height:48px;">{{ u.name[0] }}</div>
-                {% endif %}
-                {% endfor %}
-                {% if inc.nominees | length > 4 %}<div class="rounded-circle bg-white bg-opacity-50 text-white d-flex align-items-center justify-content-center" style="width:48px;height:48px;">+{{ inc.nominees | length - 4 }}</div>{% endif %}
+        <!-- Incentive Stars -->
+        <div class="card mb-3 border-0 shadow-sm">
+            <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#incentiveBody" style="cursor:pointer;">
+                <i class="bi bi-star-fill text-warning"></i> 激励之星 <span class="badge bg-secondary">{{ approved_incentives | length }}</span> <i class="bi bi-chevron-down float-end mt-1" style="font-size:.7em;"></i>
             </div>
-            {% endif %}
+            <div class="collapse" id="incentiveBody">
             <div class="card-body py-2">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="fw-bold small">{% for u in inc.nominees %}{{ u.name }}{% if not loop.last %}、{% endif %}{% endfor %}</span>
-                    <span class="badge bg-{{ inc.category_color }}">{{ inc.category_label }}</span>
+                {% if approved_incentives %}
+                {% for inc in approved_incentives %}
+                <div class="d-flex gap-2 mb-2 pb-2 {% if not loop.last %}border-bottom{% endif %}">
+                    <div class="flex-shrink-0">
+                        {% if inc.nominees[0].avatar %}
+                        <img src="{{ url_for('static', filename=inc.nominees[0].avatar) }}" class="rounded-circle" style="width:32px;height:32px;object-fit:cover;">
+                        {% else %}
+                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold" style="width:32px;height:32px;font-size:.8em;">{{ inc.nominees[0].name[0] }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="small">
+                        <div><strong>{% for u in inc.nominees %}{{ u.name }}{% if not loop.last %}、{% endif %}{% endfor %}</strong> <span class="badge bg-{{ inc.category_color }}" style="font-size:.65em;">{{ inc.category_label }}</span></div>
+                        <div class="text-muted">{{ inc.title }}</div>
+                        {% if inc.review_comment %}<div class="fst-italic text-secondary">"{{ inc.review_comment[:60] }}"</div>{% endif %}
+                    </div>
                 </div>
-                {% if inc.team_name %}<div class="text-primary small">{{ inc.team_name }}</div>{% endif %}
-                <div class="small text-muted">{{ inc.title }}</div>
-                {% if inc.review_comment %}<div class="fst-italic small text-secondary mt-1">"{{ inc.review_comment[:80] }}"</div>{% endif %}
+                {% endfor %}
+                {% else %}
+                <p class="text-muted small mb-0 text-center py-2">上月暂无激励记录</p>
+                {% endif %}
+            </div>
             </div>
         </div>
-        {% endfor %}
-        {% else %}
-        <div class="text-center text-muted py-4 small">上月暂无激励记录</div>
-        {% endif %}
 
         <!-- AI Usage Ranking -->
-        {% if ai_ranking %}
         <div class="card mb-3 border-0 shadow-sm">
-            <div class="card-header py-2 bg-white"><i class="bi bi-robot"></i> AI 服务使用排行</div>
+            <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#aiRankBody" style="cursor:pointer;">
+                <i class="bi bi-robot"></i> AI 使用排行 <span class="badge bg-secondary">{{ ai_ranking | length }}</span> <i class="bi bi-chevron-down float-end mt-1" style="font-size:.7em;"></i>
+            </div>
+            <div class="collapse" id="aiRankBody">
             <div class="card-body py-2 px-3">
+                {% if ai_ranking %}
                 <table class="table table-sm table-borderless mb-0 small">
                     <thead class="text-muted">
-                        <tr><th style="width:30px">#</th><th>用户</th><th class="text-end">调用次数</th><th class="text-end">Token (估)</th></tr>
+                        <tr><th style="width:30px">#</th><th>用户</th><th class="text-end">调用</th><th class="text-end">Token</th></tr>
                     </thead>
                     <tbody>
                     {% for u in ai_ranking %}
@@ -239,12 +239,20 @@
                     {% endfor %}
                     </tbody>
                 </table>
+                {% else %}
+                <p class="text-muted small mb-0 text-center py-2">暂无使用记录</p>
+                {% endif %}
+            </div>
             </div>
         </div>
-        {% endif %}
 
         <!-- Graffiti board -->
-        <h6 class="mt-4 mb-2"><i class="bi bi-chat-dots"></i> 涂鸦板 <span class="text-muted small">完全匿名</span></h6>
+        <div class="card mb-3 border-0 shadow-sm">
+            <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#rantBody" style="cursor:pointer;">
+                <i class="bi bi-chat-dots"></i> 涂鸦板 <span class="text-muted small">完全匿名</span> <i class="bi bi-chevron-down float-end mt-1" style="font-size:.7em;"></i>
+            </div>
+            <div class="collapse show" id="rantBody">
+            <div class="card-body py-2">
         <div class="input-group input-group-sm mb-2">
             <input type="text" id="rantAlias" class="form-control" style="max-width:80px;" placeholder="代号" maxlength="30">
             <input type="text" id="rantContent" class="form-control" placeholder="吐槽或鼓励..." maxlength="500">
@@ -268,6 +276,9 @@
             </div>
         </div>
         {% endfor %}
+        </div>
+            </div>
+            </div>
         </div>
     </div>
 </div>
