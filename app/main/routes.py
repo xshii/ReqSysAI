@@ -70,6 +70,7 @@ def index():
     req_todos = {}  # req_id → [todos]
     team_todos = []
     personal_todos = []
+    req_map = {r.id: r for r in my_reqs}  # Known requirements
     for t in my_todos:
         if t.category == 'personal':
             personal_todos.append(t)
@@ -80,8 +81,12 @@ def index():
             if linked:
                 for r in linked:
                     req_todos.setdefault(r.id, []).append(t)
+                    if r.id not in req_map:
+                        req_map[r.id] = r  # Add requirement not in my_reqs
             else:
                 team_todos.append(t)
+    # Merge any extra requirements from todos into display list
+    display_reqs = list(my_reqs) + [r for rid, r in req_map.items() if rid not in {x.id for x in my_reqs}]
 
     # My related risks
     my_risks = Risk.query.filter(
@@ -148,6 +153,7 @@ def index():
         my_todos=my_todos, todo_total=todo_total, todo_done=todo_done,
         my_reqs=my_reqs, my_risks=my_risks, today=today,
         req_todos=req_todos, team_todos=team_todos, personal_todos=personal_todos,
+        display_reqs=display_reqs,
         approved_incentives=approved_incentives, rants=rants,
         ai_ranking=ai_ranking, alerts=alerts,
         heatmap=heatmap, heatmap_start=heatmap_start, timedelta=timedelta,
