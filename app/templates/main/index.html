@@ -22,13 +22,6 @@
                 <span class="badge bg-{{ 'success' if todo_done == todo_total and todo_total > 0 else 'secondary' }}">{{ todo_done }}/{{ todo_total }}</span>
             </div>
             <div class="card-body py-2">
-            <form method="POST" action="{{ url_for('main.quick_todo') }}" class="mb-2">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="input-group input-group-sm">
-                    <input type="text" name="title" class="form-control" placeholder="快速新建 Todo，回车创建{% if recent_req_hint %} (自动关联 {{ recent_req_hint }}){% endif %}" required>
-                    <button type="submit" class="btn btn-outline-primary"><i class="bi bi-plus"></i></button>
-                </div>
-            </form>
             {% for t in my_todos %}
                 <div class="d-flex align-items-start gap-2 mb-1 {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}">
                     <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
@@ -46,6 +39,48 @@
             {% else %}
                 <p class="text-muted small mb-0">今天还没有 Todo</p>
             {% endfor %}
+            </div>
+        </div>
+
+        <!-- My Requirements + Quick Todo per Requirement -->
+        <div class="card mb-3">
+            <div class="card-header py-2"><i class="bi bi-clipboard-check"></i> 当前投入需求 <span class="badge bg-secondary">{{ my_reqs | length }}</span></div>
+            <div class="card-body py-2">
+            {% for r in my_reqs %}
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center small">
+                        <span>{{ r.number }} {{ r.title }}</span>
+                        <span>
+                            <span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
+                            {% if r.due_date and r.due_date < today and r.status not in ('done','closed') %}<span class="badge bg-danger">超期</span>{% endif %}
+                        </span>
+                    </div>
+                    <form method="POST" action="{{ url_for('main.quick_todo') }}" class="mt-1">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="req_id" value="{{ r.id }}">
+                        <div class="input-group input-group-sm">
+                            <input type="text" name="title" class="form-control" placeholder="+ 新建 Todo" required>
+                            <button type="submit" class="btn btn-outline-primary"><i class="bi bi-plus"></i></button>
+                        </div>
+                    </form>
+                </div>
+            {% else %}
+                <p class="text-muted small mb-0">暂无进行中的需求</p>
+            {% endfor %}
+            </div>
+        </div>
+
+        <!-- Team Affairs Todo (not linked to any requirement) -->
+        <div class="card mb-3">
+            <div class="card-header py-2"><i class="bi bi-people"></i> 团队事务</div>
+            <div class="card-body py-2">
+                <form method="POST" action="{{ url_for('main.quick_todo') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="input-group input-group-sm">
+                        <input type="text" name="title" class="form-control" placeholder="+ 新建团队事务 Todo（不关联需求）" required>
+                        <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-plus"></i></button>
+                    </div>
+                </form>
             </div>
         </div>
 
@@ -72,24 +107,6 @@
                     <div style="width:11px;height:11px;background:#216e39;border-radius:2px;"></div>
                     <span>多</span>
                 </div>
-            </div>
-        </div>
-
-        <!-- My Requirements -->
-        <div class="card mb-3">
-            <div class="card-header py-2"><i class="bi bi-clipboard-check"></i> 我的需求 <span class="badge bg-secondary">{{ my_reqs | length }}</span></div>
-            <div class="card-body py-2">
-            {% for r in my_reqs %}
-                <div class="d-flex justify-content-between align-items-center small mb-1">
-                    <span>{{ r.number }} {{ r.title }}</span>
-                    <span>
-                        <span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
-                        {% if r.due_date and r.due_date < today and r.status not in ('done','closed') %}<span class="badge bg-danger">超期</span>{% endif %}
-                    </span>
-                </div>
-            {% else %}
-                <p class="text-muted small mb-0">暂无进行中的需求</p>
-            {% endfor %}
             </div>
         </div>
 

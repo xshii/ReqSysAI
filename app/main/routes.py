@@ -145,18 +145,23 @@ def index():
 @main_bp.route('/quick-todo', methods=['POST'])
 @login_required
 def quick_todo():
-    """Create todo from homepage quick input. Auto-links yesterday's requirements."""
+    """Create todo from homepage. If req_id given, link to that requirement."""
     title = request.form.get('title', '').strip()
     if not title:
         return redirect(url_for('main.index'))
 
     today = date.today()
-    recent_reqs = _yesterday_reqs(current_user.id, _prev_workday(today))
+    req_id = request.form.get('req_id', type=int)
+    reqs = []
+    if req_id:
+        req = db.session.get(Requirement, req_id)
+        if req:
+            reqs = [req]
     todo = Todo(
         user_id=current_user.id,
         title=title,
         due_date=today,
-        requirements=recent_reqs[:MAX_RECENT_REQS_FOR_QUICK_TODO],
+        requirements=reqs,
     )
     todo.items.append(TodoItem(title=title, sort_order=0))
     db.session.add(todo)
