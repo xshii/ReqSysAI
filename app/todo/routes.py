@@ -439,6 +439,13 @@ def team():
     user_todos = {}
     for t in all_todos:
         user_todos.setdefault(t.user_id, []).append(t)
+    # Sort each user's todos: req-linked first (grouped by req_id), then unlinked
+    for uid in user_todos:
+        user_todos[uid].sort(key=lambda t: (
+            0 if t.requirements else 1,  # req-linked first
+            t.requirements[0].id if t.requirements else 999999,  # group by req
+            1 if t.status == TODO_STATUS_DONE else 0,  # active before done
+        ))
 
     form = TodoForm()
     reqs = Requirement.query.filter(Requirement.status.notin_(REQ_INACTIVE_STATUSES))\
