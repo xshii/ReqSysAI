@@ -90,6 +90,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// ---- Clear native tooltips before DOM removal ----
+(function() {
+    var origRemove = Element.prototype.remove;
+    Element.prototype.remove = function() {
+        this.removeAttribute('title');
+        this.querySelectorAll('[title]').forEach(function(el) { el.removeAttribute('title'); });
+        return origRemove.call(this);
+    };
+})();
+
 // ---- AJAX helper for JSON POST ----
 function apiPost(url, data) {
     var csrfMeta = document.querySelector('meta[name="csrf-token"]');

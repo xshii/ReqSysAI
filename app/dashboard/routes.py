@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta
 from io import BytesIO
 
-from flask import render_template, request, send_file, flash, redirect, url_for
+from flask import render_template, request, send_file, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 
@@ -1102,7 +1102,7 @@ def resource_map():
 @dashboard_bp.route('/resource-map/expected-ratio', methods=['POST'])
 @login_required
 def save_expected_ratio():
-    from flask import jsonify
+
     if not (current_user.is_admin or current_user.has_role('PM', 'PL', 'FO', 'LM', 'XM', 'HR')):
         return jsonify(ok=False, msg='无权限'), 403
     uid = request.form.get('user_id', type=int)
@@ -1134,7 +1134,7 @@ def emotion_predict():
     grouped = {}
     for d in dates:
         grouped[d] = [r for r in records if r.scan_date == d]
-    return render_template('dashboard/emotion.html', grouped=grouped, dates=dates)
+    return render_template('dashboard/emotion.html', grouped=grouped, dates=dates, today=date.today())
 
 
 @dashboard_bp.route('/emotion/analyze', methods=['POST'])
@@ -1144,7 +1144,7 @@ def emotion_analyze():
     if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
         return jsonify(ok=False, msg='无权限'), 403
 
-    from flask import jsonify
+
     from collections import defaultdict
 
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
@@ -1226,7 +1226,8 @@ def emotion_save():
 def emotion_delete(scan_date):
     """Delete all emotion records for a specific date."""
     if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
-        return jsonify(ok=False), 403
+        from flask import abort
+        abort(403)
     from app.models.emotion import EmotionRecord
     deleted = EmotionRecord.query.filter_by(scan_date=scan_date).delete()
     db.session.commit()
