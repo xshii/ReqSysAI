@@ -78,7 +78,7 @@
                     </div>
                     {% if mine %}
                     <div class="d-flex gap-1 flex-shrink-0 ms-3">
-                        <button class="btn btn-sm {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer" data-id="{{ t.id }}" title="{{ '停止计时' if t.timer_running else '开始专注' }}"><i class="bi bi-stopwatch"></i></button>
+                        <button class="btn btn-sm {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer" data-id="{{ t.id }}" title="{{ '暂停' if t.timer_running else '开始专注' }}"><i class="bi bi-{{ 'pause-fill' if t.timer_running else 'play-fill' }}"></i></button>
                         <button class="btn btn-sm btn-outline-primary btn-help" data-id="{{ t.id }}" data-title="{{ t.title }}" title="派给他人"><i class="bi bi-person-plus"></i></button>
                         <button class="btn btn-sm btn-outline-danger btn-delete" data-id="{{ t.id }}" title="删除"><i class="bi bi-trash"></i></button>
                     </div>
