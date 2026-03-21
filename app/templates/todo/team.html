@@ -32,22 +32,17 @@
 </div>
 {% endif %}
 
-{# Split todos into active (left) vs all-done-today (right) per user #}
+{# Split todos into active (left) vs done-today (right) by individual status #}
 {% set ns = namespace(left=[], right=[]) %}
 {% for u in users %}
     {% set todos = user_todos.get(u.id, []) %}
-    {% if todos %}
-        {% set active = todos | selectattr('status', 'equalto', 'todo') | list %}
-        {% if active | length == 0 %}
-            {% for t in todos %}
-                {% set _ = ns.right.append(t) %}
-            {% endfor %}
+    {% for t in todos %}
+        {% if t.status == 'done' %}
+            {% set _ = ns.right.append(t) %}
         {% else %}
-            {% for t in todos %}
-                {% set _ = ns.left.append(t) %}
-            {% endfor %}
+            {% set _ = ns.left.append(t) %}
         {% endif %}
-    {% endif %}
+    {% endfor %}
 {% endfor %}
 
 <div class="row">
