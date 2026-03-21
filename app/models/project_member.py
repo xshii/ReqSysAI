@@ -8,14 +8,15 @@ class ProjectMember(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    project_role = db.Column(db.String(30), default='DEV')  # PM/PL/DEV/QA/UI
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # null = external
+    external_name = db.Column(db.String(100), nullable=True)  # 外部成员姓名
+    project_role = db.Column(db.String(50), default='DEV')  # 支持自定义角色
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     project = db.relationship('Project', backref='members')
     user = db.relationship('User', backref='project_memberships')
 
-    PROJECT_ROLES = {
+    DEFAULT_ROLES = {
         'PM': '项目经理',
         'PL': '技术负责人',
         'DEV': '开发',
@@ -24,7 +25,11 @@ class ProjectMember(db.Model):
     }
 
     @property
-    def role_label(self):
-        return self.PROJECT_ROLES.get(self.project_role, self.project_role)
+    def display_name(self):
+        if self.user:
+            return self.user.name
+        return self.external_name or '未知'
 
-    __table_args__ = (db.UniqueConstraint('project_id', 'user_id'),)
+    @property
+    def role_label(self):
+        return self.DEFAULT_ROLES.get(self.project_role, self.project_role)

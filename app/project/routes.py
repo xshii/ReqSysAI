@@ -288,15 +288,25 @@ def risk_comment(risk_id):
 @login_required
 def member_list(project_id):
     project = db.get_or_404(Project, project_id)
-    if request.method == 'POST':
+    can_edit = current_user.is_admin or current_user.has_role('PM', 'PL', 'FO')
+    if request.method == 'POST' and can_edit:
         action = request.form.get('action')
         if action == 'add':
             user_id = request.form.get('user_id', type=int)
-            role = request.form.get('project_role', 'DEV')
-            if user_id and not ProjectMember.query.filter_by(project_id=project_id, user_id=user_id).first():
-                db.session.add(ProjectMember(project_id=project_id, user_id=user_id, project_role=role))
+            ext_name = request.form.get('external_name', '').strip()
+            role = request.form.get('project_role', 'DEV').strip()
+            custom_role = request.form.get('custom_role', '').strip()
+            if custom_role:
+                role = custom_role
+            if user_id:
+                if not ProjectMember.query.filter_by(project_id=project_id, user_id=user_id).first():
+                    db.session.add(ProjectMember(project_id=project_id, user_id=user_id, project_role=role))
+                    db.session.commit()
+                    flash('成员已添加', 'success')
+            elif ext_name:
+                db.session.add(ProjectMember(project_id=project_id, external_name=ext_name, project_role=role))
                 db.session.commit()
-                flash('成员已添加', 'success')
+                flash(f'外部成员 {ext_name} 已添加', 'success')
         elif action == 'remove':
             member_id = request.form.get('member_id', type=int)
             m = db.session.get(ProjectMember, member_id)
@@ -319,7 +329,7 @@ def member_list(project_id):
     member_ids = {m.user_id for m in members}
     available = [u for u in all_users if u.id not in member_ids]
     return render_template('project/members.html', project=project, members=members,
-                           available=available, roles=ProjectMember.PROJECT_ROLES)
+                           available=available, roles=ProjectMember.PROJECT_ROLES, can_edit=can_edit)
 
 
 # ---- Meeting minutes ----
