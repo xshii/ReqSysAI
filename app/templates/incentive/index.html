@@ -33,7 +33,14 @@
     </select>
     <span class="text-muted small">{{ items | length }} 条</span>
     {% if can_export %}
-    <a href="{{ url_for('incentive.export_csv', period=period) }}" class="btn btn-sm btn-outline-success ms-auto"><i class="bi bi-download"></i> 导出CSV</a>
+    <div class="ms-auto d-flex gap-1">
+        <a href="{{ url_for('incentive.export_csv', period=period) }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出</a>
+        <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('csvImportInput').click()"><i class="bi bi-upload"></i> 导入</button>
+        <form method="POST" action="{{ url_for('incentive.import_csv') }}" enctype="multipart/form-data" id="csvImportForm" class="d-none">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="csv_file" id="csvImportInput" accept=".csv" onchange="this.form.submit()">
+        </form>
+    </div>
     {% endif %}
 </div>
 

@@ -73,6 +73,11 @@ class Incentive(db.Model):
         return self.CATEGORY_COLORS.get(self.category, 'secondary')
 
     @property
+    def award_type(self):
+        """团队奖 or 个人奖, based on nominee count."""
+        return '团队奖' if len(self.all_nominee_names) > 1 else '个人奖'
+
+    @property
     def status_label(self):
         return self.STATUS_LABELS.get(self.status, self.status)
 

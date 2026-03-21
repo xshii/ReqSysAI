@@ -119,29 +119,118 @@ def export_csv():
     buf = io.StringIO()
     buf.write('\ufeff')
     writer = csv.writer(buf)
-    writer.writerow(['ID', '获奖名称', '成员', '工号', '小组', '类别', '金额', '获奖年月', '评语'])
+    writer.writerow(['ID', '获奖名称', '类别', '导向', '成员', '工号', '小组', '金额', '获奖年月', '评语'])
     for inc in items:
+        common = [inc.id, inc.title, inc.award_type, inc.category_label]
+        tail = [inc.amount or '', inc.reviewed_at.strftime('%Y-%m') if inc.reviewed_at else '', inc.review_comment or '']
         for u in inc.nominees:
-            writer.writerow([
-                inc.id, inc.title, u.name, u.employee_id, u.group or '',
-                inc.category_label, inc.amount or '',
-                inc.reviewed_at.strftime('%Y-%m') if inc.reviewed_at else '',
-                inc.review_comment or '',
-            ])
-        # External nominees
+            writer.writerow(common + [u.name, u.employee_id, u.group or ''] + tail)
         if inc.external_nominees:
             for name in inc.external_nominees.split(','):
                 name = name.strip()
                 if name:
-                    writer.writerow([
-                        inc.id, inc.title, name, '', '',
-                        inc.category_label, inc.amount or '',
-                        inc.reviewed_at.strftime('%Y-%m') if inc.reviewed_at else '',
-                        inc.review_comment or '',
-                    ])
+                    writer.writerow(common + [name, '', ''] + tail)
 
     return Response(buf.getvalue(), mimetype='text/csv; charset=utf-8',
                     headers={'Content-Disposition': 'attachment; filename=incentives.csv'})
+
+
+@incentive_bp.route('/import-csv', methods=['POST'])
+@login_required
+def import_csv():
+    """Import incentives from CSV. Reviewer/admin only."""
+    if not (current_user.has_role('PL', 'XM', 'HR', 'LM') or current_user.is_admin):
+        flash('无权限', 'danger')
+        return redirect(url_for('incentive.index'))
+
+    import csv, io
+    file = request.files.get('csv_file')
+    if not file or not file.filename.lower().endswith('.csv'):
+        flash('请选择 CSV 文件', 'danger')
+        return redirect(url_for('incentive.index'))
+
+    raw = file.read()
+    for enc in ('utf-8-sig', 'gbk', 'utf-8'):
+        try:
+            text = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        flash('编码无法识别', 'danger')
+        return redirect(url_for('incentive.index'))
+
+    reader = csv.DictReader(io.StringIO(text))
+    required = {'获奖名称', '成员'}
+    if not required.issubset(set(reader.fieldnames or [])):
+        flash('CSV 缺少必填列：获奖名称, 成员', 'danger')
+        return redirect(url_for('incentive.index'))
+
+    # Group rows by ID or title (same ID = same incentive, multiple nominees)
+    groups = {}
+    for row in reader:
+        key = row.get('ID', '').strip() or row.get('获奖名称', '').strip()
+        if not key:
+            continue
+        if key not in groups:
+            groups[key] = {'title': row.get('获奖名称', '').strip(), 'rows': []}
+        groups[key]['rows'].append(row)
+
+    cat_reverse = {v: k for k, v in Incentive.CATEGORY_LABELS.items()}
+    created = 0
+    for key, g in groups.items():
+        title = g['title']
+        if not title:
+            continue
+        first = g['rows'][0]
+        category = cat_reverse.get(first.get('导向', '').strip(), 'professional')
+        amount = None
+        try:
+            amount = float(first.get('金额', '').strip())
+        except (ValueError, AttributeError):
+            pass
+        comment = first.get('评语', '').strip()[:150]
+        month_str = first.get('获奖年月', '').strip()
+
+        reviewed_at = datetime.utcnow()
+        if month_str:
+            try:
+                reviewed_at = datetime.strptime(month_str + '-15', '%Y-%m-%d')
+            except ValueError:
+                pass
+
+        # Collect nominees
+        nominee_users = []
+        ext_names = []
+        for row in g['rows']:
+            name = row.get('成员', '').strip()
+            eid = row.get('工号', '').strip()
+            if eid:
+                u = User.query.filter_by(employee_id=eid.lower()).first()
+                if u:
+                    nominee_users.append(u)
+                    continue
+            if name:
+                u = User.query.filter_by(name=name).first()
+                if u:
+                    nominee_users.append(u)
+                else:
+                    ext_names.append(name)
+
+        inc = Incentive(
+            title=title, description=title, category=category,
+            submitted_by=current_user.id, status='approved',
+            amount=amount, review_comment=comment,
+            reviewed_by=current_user.id, reviewed_at=reviewed_at,
+            nominees=nominee_users,
+            external_nominees=','.join(ext_names) if ext_names else None,
+        )
+        db.session.add(inc)
+        created += 1
+
+    db.session.commit()
+    flash(f'导入完成：{created} 条激励', 'success')
+    return redirect(url_for('incentive.index'))
 
 
 @incentive_bp.route('/<int:inc_id>/like', methods=['POST'])
