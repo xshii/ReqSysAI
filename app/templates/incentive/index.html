@@ -104,7 +104,7 @@
                                 <input type="text" class="form-control form-control-sm" id="nomineeSearch" placeholder="输入姓名搜索添加..." autocomplete="off">
                                 <div id="nomineeDropdown" class="position-absolute bg-white border rounded shadow-sm w-100" style="z-index:1000;display:none;max-height:150px;overflow-y:auto;">
                                     {% for u in users %}
-                                    <div class="px-2 py-1 small nominee-opt" style="cursor:pointer;" data-id="{{ u.id }}" data-name="{{ u.name }}" data-pinyin="{{ u.pinyin or '' }}">{{ u.name }}{% if u.group %} <span class="text-muted">({{ u.group }})</span>{% endif %}</div>
+                                    <div class="px-2 py-1 small nominee-opt" style="cursor:pointer;" data-id="{{ u.id }}" data-name="{{ u.name }}" data-eid="{{ u.employee_id }}" data-pinyin="{{ u.pinyin or '' }}">{{ u.name }} <span class="text-muted">{{ u.employee_id }}{% if u.group %} · {{ u.group }}{% endif %}</span></div>
                                     {% endfor %}
                                 </div>
                             </div>
@@ -265,8 +265,9 @@ function checkAI() {
         dropdown.querySelectorAll('.nominee-opt').forEach(function(o) {
             var name = o.dataset.name.toLowerCase();
             var py = (o.dataset.pinyin || '').toLowerCase();
+            var eid = (o.dataset.eid || '').toLowerCase();
             var id = o.dataset.id;
-            o.style.display = (chosen[id] || (!name.includes(q) && !py.includes(q))) ? 'none' : '';
+            o.style.display = (chosen[id] || (!name.includes(q) && !py.includes(q) && !eid.includes(q))) ? 'none' : '';
         });
         dropdown.style.display = 'block';
     }
