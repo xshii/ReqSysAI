@@ -1,6 +1,7 @@
 from collections import namedtuple
+from datetime import date
 
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 
@@ -193,6 +194,57 @@ def requirement_status(req_id):
         db.session.commit()
         flash(f'状态已更新为「{req.status_label}」', 'success')
     return redirect(url_for('requirement.requirement_detail', req_id=req.id))
+
+
+@requirement_bp.route('/<int:req_id>/status-api', methods=['POST'])
+@login_required
+def requirement_status_api(req_id):
+    """JSON API for kanban drag status change."""
+    req = db.get_or_404(Requirement, req_id)
+    data = request.get_json() or {}
+    new_status = data.get('status', '')
+    if new_status not in req.allowed_next_statuses:
+        return jsonify(ok=False, msg=f'不允许从「{req.status_label}」流转到该状态')
+    old_label = req.status_label
+    req.status = new_status
+    _log_activity(req, 'status_changed', f'{old_label} → {req.status_label}')
+    db.session.commit()
+    return jsonify(ok=True, status=new_status, label=req.status_label)
+
+
+@requirement_bp.route('/board')
+@login_required
+def requirement_board():
+    """Kanban board view for requirements."""
+    project_id = request.args.get('project_id', type=int)
+    assignee_id = request.args.get('assignee_id', type=int)
+    swimlane = request.args.get('swimlane', '')  # '' or 'assignee'
+
+    query = Requirement.query.filter(Requirement.parent_id.is_(None)).options(
+        joinedload(Requirement.project), joinedload(Requirement.assignee),
+    )
+    if project_id:
+        query = query.filter_by(project_id=project_id)
+    if assignee_id:
+        query = query.filter_by(assignee_id=assignee_id)
+
+    reqs = query.order_by(Requirement.priority, Requirement.updated_at.desc()).all()
+
+    # Group by status for columns
+    columns = list(Requirement._STATUS_META.keys())
+    board = {s: [] for s in columns}
+    for r in reqs:
+        if r.status in board:
+            board[r.status].append(r)
+
+    return render_template('requirement/board.html',
+        board=board, columns=columns,
+        status_meta=Requirement._STATUS_META,
+        projects=Project.query.filter_by(status='active').all(),
+        users=User.query.filter_by(is_active=True).order_by(User.name).all(),
+        cur_project=project_id, cur_assignee=assignee_id, swimlane=swimlane,
+        today=date.today(),
+    )
 
 
 # --- Comments ---

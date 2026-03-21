@@ -152,6 +152,73 @@ def profile():
     return render_template('auth/profile.html', form=form)
 
 
+@auth_bp.route('/profile/stats')
+@login_required
+def profile_stats():
+    """Personal efficiency dashboard."""
+    from datetime import date, timedelta
+    from app.models.todo import Todo
+    from app.models.requirement import Requirement
+    from app.models.incentive import Incentive
+    from app.constants import TODO_STATUS_DONE, HEATMAP_DAYS
+
+    today = date.today()
+    uid = current_user.id
+
+    # Monthly todo trend (last 6 months)
+    six_months_ago = today - timedelta(days=180)
+    monthly_todos = db.session.query(
+        db.func.strftime('%Y-%m', Todo.done_date).label('month'),
+        db.func.count(Todo.id),
+    ).filter(
+        Todo.user_id == uid, Todo.status == TODO_STATUS_DONE,
+        Todo.done_date >= six_months_ago,
+    ).group_by('month').order_by('month').all()
+
+    # Focus time (actual_minutes) aggregated by month
+    monthly_focus = db.session.query(
+        db.func.strftime('%Y-%m', Todo.done_date).label('month'),
+        db.func.sum(Todo.actual_minutes),
+    ).filter(
+        Todo.user_id == uid, Todo.status == TODO_STATUS_DONE,
+        Todo.done_date >= six_months_ago, Todo.actual_minutes > 0,
+    ).group_by('month').order_by('month').all()
+
+    # Requirements participated (assigned)
+    req_count = Requirement.query.filter_by(assignee_id=uid).count()
+    req_done = Requirement.query.filter_by(assignee_id=uid, status='done').count()
+
+    # Incentives received
+    incentive_count = db.session.query(db.func.count(Incentive.id)).filter(
+        Incentive.status == 'approved',
+        Incentive.nominees.any(id=uid),
+    ).scalar() or 0
+
+    # Contribution heatmap (365 days for annual view)
+    year_ago = today - timedelta(days=365)
+    heatmap_rows = db.session.query(
+        Todo.done_date, db.func.count(Todo.id),
+    ).filter(
+        Todo.user_id == uid, Todo.status == TODO_STATUS_DONE,
+        Todo.done_date >= year_ago,
+    ).group_by(Todo.done_date).all()
+    heatmap = {str(row[0]): row[1] for row in heatmap_rows}
+
+    # Total focus hours
+    total_focus = db.session.query(
+        db.func.sum(Todo.actual_minutes),
+    ).filter(Todo.user_id == uid, Todo.actual_minutes > 0).scalar() or 0
+
+    return render_template('auth/stats.html',
+        monthly_todos=monthly_todos, monthly_focus=monthly_focus,
+        req_count=req_count, req_done=req_done,
+        incentive_count=incentive_count,
+        heatmap=heatmap, heatmap_start=year_ago, today=today,
+        total_focus_hours=round(total_focus / 60, 1),
+        timedelta=timedelta,
+    )
+
+
 @auth_bp.route('/logout')
 @login_required
 def logout():

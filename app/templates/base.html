@@ -32,6 +32,7 @@
                         <span class="badge bg-light text-primary ms-1">{{ current_user.role_names }}</span>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="{{ url_for('auth.profile_stats') }}"><i class="bi bi-graph-up"></i> 个人效能</a></li>
                         <li><a class="dropdown-item" href="{{ url_for('auth.profile') }}"><i class="bi bi-gear"></i> 个人设置</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="bi bi-box-arrow-right"></i> 退出登录</a></li>
@@ -84,9 +85,15 @@
                     </li>
                     {% if _p_active %}
                     <li class="nav-item">
-                        <a class="nav-link py-0 ps-5 small {% if request.endpoint and 'requirement.' in request.endpoint and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
+                        <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'requirement.requirement_list' and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('requirement.requirement_list') }}?project_id={{ p.id }}">
-                            需求管理
+                            需求列表
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'requirement.requirement_board' and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
+                           href="{{ url_for('requirement.requirement_board') }}?project_id={{ p.id }}">
+                            需求看板
                         </a>
                     </li>
                     <li class="nav-item">

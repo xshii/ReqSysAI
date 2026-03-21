@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}需求看板 - 研发协作平台{% endblock %}
+
+{% block extra_css %}
+<style>
+.kanban-col { min-height: 400px; }
+.kanban-card { cursor: grab; transition: transform 0.1s; }
+.kanban-card:active { cursor: grabbing; transform: scale(0.97); }
+.kanban-card.drag-over { border-top: 3px solid #0d6efd; }
+.kanban-col.drag-target { background: #e8f0fe; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>需求看板</h4>
+    <div class="d-flex gap-2">
+        <select class="form-select form-select-sm" style="width:auto;" onchange="applyFilter()" id="fProject">
+            <option value="">全部项目</option>
+            {% for p in projects %}<option value="{{ p.id }}" {% if cur_project == p.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+        </select>
+        <select class="form-select form-select-sm" style="width:auto;" onchange="applyFilter()" id="fAssignee">
+            <option value="">全部负责人</option>
+            {% for u in users %}<option value="{{ u.id }}" {% if cur_assignee == u.id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
+        </select>
+        <a href="{{ url_for('requirement.requirement_list', project_id=cur_project or '') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list"></i> 列表</a>
+    </div>
+</div>
+
+<div class="d-flex gap-2" style="overflow-x:auto;">
+    {% for status in columns %}
+    {% set meta = status_meta[status] %}
+    {% set reqs = board[status] %}
+    <div class="flex-fill" style="min-width:200px;max-width:250px;">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="badge bg-{{ meta[1] }} px-2 py-1">{{ meta[0] }}</span>
+            <span class="text-muted small">{{ reqs | length }}</span>
+        </div>
+        <div class="kanban-col rounded p-1 bg-light" data-status="{{ status }}"
+             ondragover="onDragOver(event)" ondragenter="onDragEnter(event, this)" ondragleave="onDragLeave(this)" ondrop="onDrop(event, this)">
+            {% for r in reqs %}
+            <div class="card mb-2 kanban-card shadow-sm" draggable="true" data-id="{{ r.id }}" data-status="{{ r.status }}"
+                 ondragstart="onDragStart(event, this)">
+                <div class="card-body py-2 px-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="text-decoration-none text-dark small fw-bold">{{ r.title }}</a>
+                        <span class="badge bg-{{ r.priority_color }} ms-1" style="font-size:.65em;">{{ r.priority_label }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-1">
+                        <span class="text-muted" style="font-size:.75em;">{{ r.number }}</span>
+                        <span class="text-muted" style="font-size:.75em;">
+                            {% if r.assignee %}{{ r.assignee.name }}{% else %}未分配{% endif %}
+                        </span>
+                    </div>
+                    {% if r.due_date %}
+                    <div class="mt-1" style="font-size:.7em;">
+                        <span class="{{ 'text-danger fw-bold' if r.due_date < today else 'text-muted' }}">
+                            <i class="bi bi-calendar"></i> {{ r.due_date.strftime('%m-%d') }}
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div id="toast" class="position-fixed bottom-0 end-0 p-3" style="z-index:9999;display:none;">
+    <div class="toast show" role="alert">
+        <div class="toast-body" id="toastMsg"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var csrfToken = '{{ csrf_token() }}';
+var dragId = null;
+
+function applyFilter() {
+    var url = new URL(window.location);
+    var p = document.getElementById('fProject').value;
+    var a = document.getElementById('fAssignee').value;
+    if (p) url.searchParams.set('project_id', p); else url.searchParams.delete('project_id');
+    if (a) url.searchParams.set('assignee_id', a); else url.searchParams.delete('assignee_id');
+    window.location = url;
+}
+
+function onDragStart(e, card) {
+    dragId = card.dataset.id;
+    e.dataTransfer.effectAllowed = 'move';
+    card.classList.add('opacity-50');
+    setTimeout(function() { card.classList.remove('opacity-50'); }, 200);
+}
+
+function onDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+function onDragEnter(e, col) { e.preventDefault(); col.classList.add('drag-target'); }
+function onDragLeave(col) { col.classList.remove('drag-target'); }
+
+function onDrop(e, col) {
+    e.preventDefault();
+    col.classList.remove('drag-target');
+    var newStatus = col.dataset.status;
+    if (!dragId) return;
+
+    fetch('/requirements/' + dragId + '/status-api', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+        body: JSON.stringify({status: newStatus})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) {
+            location.reload();
+        } else {
+            showToast(d.msg || '状态流转失败');
+        }
+    }).catch(function() { showToast('网络错误'); });
+}
+
+function showToast(msg) {
+    var el = document.getElementById('toast');
+    document.getElementById('toastMsg').textContent = msg;
+    el.style.display = 'block';
+    setTimeout(function() { el.style.display = 'none'; }, 3000);
+}
+</script>
+{% endblock %}
