@@ -32,6 +32,25 @@ def index():
         .options(joinedload(Requirement.project))\
         .order_by(Requirement.updated_at.desc()).limit(10).all()
 
+    # Yesterday's linked requirements for quick-todo hint
+    yesterday = today - timedelta(days=1)
+    if today.weekday() == 0:  # Monday → look back to Friday
+        yesterday = today - timedelta(days=3)
+    yesterday_todos = Todo.query.filter_by(user_id=current_user.id).filter(
+        db.or_(
+            db.and_(Todo.status == 'done', Todo.done_date == yesterday),
+            db.and_(Todo.status == 'todo', Todo.created_date <= yesterday),
+        )
+    ).options(joinedload(Todo.requirements)).all()
+    recent_req_tags = []
+    seen_rids = set()
+    for t in yesterday_todos:
+        for r in t.requirements:
+            if r.id not in seen_rids and r.status not in ('done', 'closed'):
+                recent_req_tags.append(r.number)
+                seen_rids.add(r.id)
+    recent_req_hint = '、'.join(recent_req_tags[:3]) if recent_req_tags else ''
+
     # My related risks (tracker or created_by)
     from app.models.risk import Risk
     my_risks = Risk.query.filter(
@@ -98,7 +117,49 @@ def index():
         my_reqs=my_reqs, my_risks=my_risks, today=today,
         approved_incentives=approved_incentives, rants=rants,
         ai_ranking=ai_ranking, alerts=alerts,
+        recent_req_hint=recent_req_hint,
     )
+
+
+@main_bp.route('/quick-todo', methods=['POST'])
+@login_required
+def quick_todo():
+    """Create todo from homepage quick input. Auto-links yesterday's requirements."""
+    title = request.form.get('title', '').strip()
+    if not title:
+        return redirect(url_for('main.index'))
+
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    # If today is Monday, look back to Friday
+    if today.weekday() == 0:
+        yesterday = today - timedelta(days=3)
+
+    # Find requirements linked to yesterday's todos
+    yesterday_todos = Todo.query.filter_by(user_id=current_user.id).filter(
+        db.or_(
+            db.and_(Todo.status == 'done', Todo.done_date == yesterday),
+            db.and_(Todo.status == 'todo', Todo.created_date <= yesterday),
+        )
+    ).options(joinedload(Todo.requirements)).all()
+
+    recent_reqs = []
+    seen = set()
+    for t in yesterday_todos:
+        for r in t.requirements:
+            if r.id not in seen and r.status not in ('done', 'closed'):
+                recent_reqs.append(r)
+                seen.add(r.id)
+
+    todo = Todo(
+        user_id=current_user.id,
+        title=title,
+        due_date=today,
+        requirements=recent_reqs[:3],  # Link top 3 recent requirements
+    )
+    db.session.add(todo)
+    db.session.commit()
+    return redirect(url_for('main.index'))
 
 
 @main_bp.route('/todo/<int:todo_id>/toggle', methods=['POST'])
