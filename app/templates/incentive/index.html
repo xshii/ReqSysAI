@@ -79,7 +79,7 @@
                 {% endif %}
                 <div class="text-muted small mt-1">
                     提交人：{{ inc.submitter.name }} · {{ inc.created_at.strftime('%m-%d %H:%M') }}
-                    {% if inc.amount and is_reviewer %} · 金额：¥{{ inc.amount }}{% endif %}
+                    {% if is_reviewer %}{% if inc.amount %} · ¥{{ inc.amount }}{% endif %} · {{ inc.source_label }}{% endif %}
                 </div>
                 </div>
             </div>
@@ -184,6 +184,17 @@
                         <label class="col-3 col-form-label col-form-label-sm">金额（元）</label>
                         <div class="col-9"><input type="number" name="amount" class="form-control form-control-sm" step="50" min="0" placeholder="可选"></div>
                     </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">激励来源</label>
+                        <div class="col-9">
+                            <select name="source" class="form-select form-select-sm">
+                                <option value="instant" selected>及时激励</option>
+                                <option value="special">专项激励</option>
+                                <option value="knowledge">知识管理激励</option>
+                                <option value="improvement">持续改进激励</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer py-1">
                     <button type="submit" name="action" value="reject" class="btn btn-sm btn-outline-danger">拒绝</button>
@@ -229,8 +240,16 @@
                         </div>
                     </div>
                     <div class="row">
-                        <div class="col-6 mb-2"><input type="number" name="amount" class="form-control form-control-sm" placeholder="金额（元）" step="50"></div>
-                        <div class="col-6 mb-2"><input type="file" name="photo" class="form-control form-control-sm" accept="image/*"></div>
+                        <div class="col-4 mb-2"><input type="number" name="amount" class="form-control form-control-sm" placeholder="金额" step="50"></div>
+                        <div class="col-4 mb-2">
+                            <select name="source" class="form-select form-select-sm">
+                                <option value="instant">及时激励</option>
+                                <option value="special">专项激励</option>
+                                <option value="knowledge">知识管理激励</option>
+                                <option value="improvement">持续改进激励</option>
+                            </select>
+                        </div>
+                        <div class="col-4 mb-2"><input type="file" name="photo" class="form-control form-control-sm" accept="image/*"></div>
                     </div>
                     <div class="mb-2"><textarea name="review_comment" class="form-control form-control-sm" rows="2" maxlength="150" placeholder="评语（150字）"></textarea></div>
                 </div>

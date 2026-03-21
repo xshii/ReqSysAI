@@ -29,6 +29,13 @@ class Incentive(db.Model):
         'beyond': 'warning text-dark',
         'clean': 'info',
     }
+    source = db.Column(db.String(30), default='instant')  # 激励来源
+
+    @property
+    def source_label(self):
+        from app.constants import INCENTIVE_SOURCE_LABELS
+        return INCENTIVE_SOURCE_LABELS.get(self.source, self.source)
+
     photo = db.Column(db.String(300), nullable=True)
     team_name = db.Column(db.String(100), nullable=True)  # legacy, kept for data compat
     external_nominees = db.Column(db.String(500), nullable=True)  # 非系统内人员，逗号分隔

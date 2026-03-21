@@ -83,9 +83,11 @@ def review(inc_id):
     comment = request.form.get('review_comment', '').strip()[:MAX_COMMENT_LENGTH]
     amount = request.form.get('amount', type=float)
 
+    source = request.form.get('source', 'instant')
     if action == 'approve':
         inc.status = 'approved'
         inc.amount = amount
+        inc.source = source
     elif action == 'reject':
         inc.status = 'rejected'
     inc.review_comment = comment
@@ -119,10 +121,10 @@ def export_csv():
     buf = io.StringIO()
     buf.write('\ufeff')
     writer = csv.writer(buf)
-    writer.writerow(['ID', '获奖名称', '类别', '导向', '成员', '工号', '小组', '金额', '获奖年月', '评语'])
+    writer.writerow(['ID', '获奖名称', '类别', '导向', '成员', '工号', '小组', '金额', '激励来源', '获奖年月', '评语'])
     for inc in items:
         common = [inc.id, inc.title, inc.award_type, inc.category_label]
-        tail = [inc.amount or '', inc.reviewed_at.strftime('%Y-%m') if inc.reviewed_at else '', inc.review_comment or '']
+        tail = [inc.amount or '', inc.source_label, inc.reviewed_at.strftime('%Y-%m') if inc.reviewed_at else '', inc.review_comment or '']
         for u in inc.nominees:
             writer.writerow(common + [u.name, u.employee_id, u.group or ''] + tail)
         if inc.external_nominees:
@@ -400,6 +402,7 @@ def admin_submit():
         photo=photo_path,
         submitted_by=current_user.id, nominees=nominees,
         status='approved', amount=amount,
+        source=request.form.get('source', 'instant'),
         review_comment=review_comment,
         reviewed_by=current_user.id, reviewed_at=reviewed_at,
     )
