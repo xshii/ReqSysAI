@@ -174,7 +174,7 @@ function showAiState(state, msg) {
 
 document.getElementById('btnAiParse').addEventListener('click', function() {
     var text = document.getElementById('aiInput').value.trim();
-    if (!text) return;
+    if (!text) { showAiState('error', '请先输入需要解析的文本'); return; }
     showAiState('loading');
     checkAI().then(function() {
         return fetch('{{ url_for("ai.api_parse") }}', {
