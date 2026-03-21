@@ -72,9 +72,18 @@
                         </button>
                     </form>
                     <span class="small">{{ t.title }}</span>
+                    {% if t.need_help %}<span class="badge bg-danger" style="font-size:.55em;">阻塞{% if t.blocked_reason %}：{{ t.blocked_reason }}{% endif %}</span>{% endif %}
                     {% if t.source == 'ai' %}<span class="badge bg-info" style="font-size:.55em;">AI</span>{% endif %}
+                    {% if t.status != 'done' %}
+                    <button class="btn btn-sm py-0 px-0 {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer-home" data-id="{{ t.id }}" title="{{ '暂停番茄钟' if t.timer_running else '启动番茄钟' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;">
+                        <i class="bi bi-{{ 'clock-fill' if t.timer_running else 'clock' }}"></i>
+                    </button>
+                    <button class="btn btn-sm py-0 px-0 {% if t.need_help %}text-danger{% else %}text-muted{% endif %} btn-block-home" data-id="{{ t.id }}" title="{{ '解除阻塞' if t.need_help else '标记阻塞' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;">
+                        <i class="bi bi-{% if t.need_help %}play-circle{% else %}pause-circle{% endif %}"></i>
+                    </button>
+                    {% endif %}
                     {{ pomodoro_icons(t.actual_minutes, current_user.pomodoro_minutes) }}
-                    <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>
+                    <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" title="删除" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>
                 </div>
                 {% endfor %}
                 </div>
@@ -586,6 +595,7 @@ function createTodoRow(todoId, title, opts) {
     row.innerHTML = '<i class="bi bi-circle text-secondary"></i>'
         + ' <span class="small">' + title + '</span>' + badge
         + ' <button class="btn btn-sm py-0 px-0 btn-outline-secondary btn-timer-r" data-id="' + todoId + '" style="font-size:.7em;line-height:1;" title="启动番茄钟"><i class="bi bi-clock"></i></button>'
+        + ' <button class="btn btn-sm py-0 px-0 text-muted btn-block-r" data-id="' + todoId + '" style="font-size:.7em;line-height:1;" title="标记阻塞"><i class="bi bi-pause-circle"></i></button>'
         + ' <button class="btn btn-sm py-0 px-0 text-muted btn-del-r" data-id="' + todoId + '" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>';
     // Bind timer
     row.querySelector('.btn-timer-r').addEventListener('click', function() {
@@ -597,6 +607,12 @@ function createTodoRow(todoId, title, opts) {
                 enterFocusMode(todoId, title);
             }
         });
+    });
+    // Bind blocker
+    row.querySelector('.btn-block-r').addEventListener('click', function() {
+        var reason = prompt('阻塞原因（可选）：');
+        if (reason === null) return;
+        apiPost('/todos/' + todoId + '/block', {reason: reason}).then(function(x) { if (x && x.ok) location.reload(); });
     });
     // Bind delete
     row.querySelector('.btn-del-r').addEventListener('click', function() {

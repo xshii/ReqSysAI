@@ -1,8 +1,27 @@
 {% extends "base.html" %}
-{% block title %}个人周报 - 研发协作平台{% endblock %}
+{% block title %}个人周报 · {{ current_user.name }} - 研发协作平台{% endblock %}
+
+{% block extra_css %}
+<style>
+.report-section { margin-bottom: 1.5rem; }
+.report-section h6 { background: #f0f4ff; padding: 6px 12px; border-left: 3px solid #4a6cf7; margin-bottom: 0.5rem; }
+.report-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.report-table th { background: #f8f9fa; font-weight: 600; }
+.report-table th, .report-table td { border: 1px solid #dee2e6; padding: 5px 10px; }
+.report-header { background: #4a6cf7; color: white; text-align: center; padding: 10px; font-size: 1.1rem; font-weight: bold; border-radius: 6px 6px 0 0; }
+.report-meta { background: #f0f4ff; text-align: center; padding: 6px; font-size: 0.85rem; border-bottom: 1px solid #dee2e6; }
+</style>
+{% endblock %}
 
 {% block content %}
-<h4 class="mb-3">个人周报 · {{ current_user.name }}</h4>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>个人周报 · {{ current_user.name }}</h4>
+    <div class="d-flex gap-2">
+        {% if report %}
+        <button class="btn btn-sm btn-outline-primary" onclick="copyRichText()"><i class="bi bi-envelope"></i> 复制富文本</button>
+        {% endif %}
+    </div>
+</div>
 
 <div class="d-flex align-items-center gap-2 mb-4">
     <a href="?week={{ offset - 1 }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
@@ -13,80 +32,142 @@
     {% if offset != 0 %}
     <a href="?week=0" class="btn btn-sm btn-outline-primary">本周</a>
     {% endif %}
+    <form method="POST" action="?week={{ offset }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-primary" id="btn-gen"><i class="bi bi-robot"></i> {{ '重新生成' if report else '生成周报' }}</button>
+    </form>
 </div>
 
-<div class="row">
-    <div class="col-md-6">
-        <!-- Done -->
-        <div class="card mb-3">
-            <div class="card-header py-2"><i class="bi bi-check-circle text-success"></i> 已完成 <span class="badge bg-success">{{ my_done | length }}</span></div>
-            <div class="card-body py-2">
-            {% for t in my_done %}
-                <div class="mb-1">
-                    <span>{{ t.title }}</span>
-                    {% for r in t.requirements %}<span class="badge bg-light text-dark small">{{ r.number }}</span>{% endfor %}
-                </div>
-            {% else %}<p class="text-muted small mb-0">暂无</p>{% endfor %}
-            </div>
-        </div>
+{% if report %}
+<div id="report-content">
 
-        <!-- Active -->
-        <div class="card mb-3">
-            <div class="card-header py-2"><i class="bi bi-circle text-primary"></i> 进行中 <span class="badge bg-primary">{{ my_active | length }}</span></div>
-            <div class="card-body py-2">
-            {% for t in my_active %}
-                <div class="mb-1">
-                    <span>{{ t.title }}</span>
-                    {% for r in t.requirements %}<span class="badge bg-light text-dark small">{{ r.number }}</span>{% endfor %}
-                </div>
-            {% else %}<p class="text-muted small mb-0">暂无</p>{% endfor %}
-            </div>
-        </div>
-
-        <!-- My requirements -->
-        {% if my_reqs %}
-        <div class="card mb-3">
-            <div class="card-header py-2">参与的需求</div>
-            <div class="card-body py-2">
-            {% for r in my_reqs %}
-                <div class="d-flex justify-content-between small mb-1">
-                    <span>{{ r.number }} {{ r.title }}</span>
-                    <span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
-                </div>
-            {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-    </div>
-
-    <div class="col-md-6">
-        {% if report %}
-        <div class="card">
-            <div class="card-header py-2 d-flex justify-content-between">
-                <span><i class="bi bi-robot"></i> AI 个人周报</span>
-                <button class="btn btn-sm btn-outline-secondary py-0" onclick="navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([document.getElementById('my-report').innerHTML],{type:'text/html'}),'text/plain':new Blob([document.getElementById('my-report').innerText],{type:'text/plain'})})]).then(function(){alert('已复制')})">
-                    <i class="bi bi-clipboard"></i> 复制
-                </button>
-            </div>
-            <div class="card-body" id="my-report">{{ report | safe }}</div>
-        </div>
-        <form method="POST" action="?week={{ offset }}" class="mt-2">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-sm btn-outline-primary" id="btn-gen"><i class="bi bi-arrow-clockwise"></i> 重新生成</button>
-        </form>
-        {% else %}
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <p class="text-muted">基于本周 Todo 数据生成个人周报</p>
-                <form method="POST" action="?week={{ offset }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-primary" id="btn-gen"><i class="bi bi-robot"></i> 生成个人周报</button>
-                </form>
-            </div>
-        </div>
-        {% endif %}
-    </div>
+<!-- Header -->
+<div class="report-header">{{ current_user.name }} 个人周报（{{ monday.strftime('%m-%d') }} ~ {{ sunday.strftime('%m-%d') }}）</div>
+<div class="report-meta">
+    {{ current_user.name }}（{{ current_user.group or '' }}）　｜　审核人：{{ reviewer }}
 </div>
+
+<!-- Summary stats -->
+<div class="report-section">
+    <h6>📊 本周概览</h6>
+    <table class="report-table">
+        <tr>
+            <th style="width:25%;">完成 Todo</th>
+            <td style="width:25%;">{{ my_done | length }} 个</td>
+            <th style="width:25%;">进行中</th>
+            <td>{{ my_active | length }} 个</td>
+        </tr>
+        <tr>
+            <th>延期未完成</th>
+            <td>{{ overdue_todos | length }} 个</td>
+            <th>阻塞中</th>
+            <td>{{ blocked_todos | length }} 个</td>
+        </tr>
+        <tr>
+            <th>参与需求</th>
+            <td>{{ my_reqs | length }} 个</td>
+            <th>番茄钟总时长</th>
+            <td>{{ total_focus_min }} 分钟</td>
+        </tr>
+    </table>
+</div>
+
+<!-- Completed -->
+{% if my_done %}
+<div class="report-section">
+    <h6>✅ 本周已完成</h6>
+    <table class="report-table">
+        <thead><tr><th>任务</th><th>关联需求</th><th>用时</th></tr></thead>
+        <tbody>
+        {% for t in my_done %}
+        <tr>
+            <td>{{ t.title }}</td>
+            <td>{% for r in t.requirements %}{{ r.number }}{% if not loop.last %}、{% endif %}{% endfor %}</td>
+            <td>{{ t.actual_minutes or '-' }}{% if t.actual_minutes %}min{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Overdue -->
+{% if overdue_todos %}
+<div class="report-section">
+    <h6>⚠️ 延期未完成</h6>
+    <table class="report-table">
+        <thead><tr><th>任务</th><th>关联需求</th><th>延期天数</th></tr></thead>
+        <tbody>
+        {% for t in overdue_todos %}
+        <tr class="table-warning">
+            <td>{{ t.title }}</td>
+            <td>{% for r in t.requirements %}{{ r.number }}{% if not loop.last %}、{% endif %}{% endfor %}</td>
+            <td>{{ (today - t.created_date).days }} 天</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Blocked -->
+{% if blocked_todos %}
+<div class="report-section">
+    <h6>🔴 阻塞中</h6>
+    <table class="report-table">
+        <thead><tr><th>任务</th><th>关联需求</th><th>阻塞原因</th></tr></thead>
+        <tbody>
+        {% for t in blocked_todos %}
+        <tr class="table-danger">
+            <td>{{ t.title }}</td>
+            <td>{% for r in t.requirements %}{{ r.number }}{% if not loop.last %}、{% endif %}{% endfor %}</td>
+            <td>{{ t.blocked_reason or '未填写' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Requirements status -->
+{% if my_reqs %}
+<div class="report-section">
+    <h6>📋 参与需求状态</h6>
+    <table class="report-table">
+        <thead><tr><th>编号</th><th>需求</th><th>状态</th><th>投入Todo</th><th>截止日</th></tr></thead>
+        <tbody>
+        {% for r in my_reqs %}
+        <tr>
+            <td>{{ r.number }}</td>
+            <td>{{ r.title }}</td>
+            <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span></td>
+            <td>{{ req_days.get(r.number, 0) }} 个</td>
+            <td class="{{ 'text-danger fw-bold' if r.due_date and r.due_date < today and r.status not in ('done','closed') else '' }}">
+                {{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}
+                {% if r.due_date and r.due_date < today and r.status not in ('done','closed') %}(延期{{ (today - r.due_date).days }}天){% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- AI Analysis -->
+{% if ai_report %}
+<div class="report-section">
+    <h6>🤖 AI 分析</h6>
+    <div class="border p-3 rounded" id="ai-content">{{ ai_report | safe }}</div>
+</div>
+{% endif %}
+
+</div><!-- end report-content -->
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-file-text" style="font-size:3em;"></i>
+    <p class="mt-2">点击上方"生成周报"按钮，AI 将根据本周 Todo 数据生成个人周报</p>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -97,6 +178,15 @@ if (genBtn) {
         genBtn.disabled = true;
         genBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 生成中...';
     });
+}
+
+function copyRichText() {
+    var el = document.getElementById('report-content');
+    if (!el) return;
+    navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([el.innerHTML], {type: 'text/html'}),
+        'text/plain': new Blob([el.innerText], {type: 'text/plain'})
+    })]).then(function() { alert('已复制富文本，可粘贴到邮件/文档'); });
 }
 </script>
 {% endblock %}

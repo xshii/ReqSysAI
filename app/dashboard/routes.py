@@ -820,15 +820,16 @@ def my_weekly():
         for r in t.requirements:
             req_days[r.number] = req_days.get(r.number, 0) + 1
 
+    # Categorize active todos (needed for both GET and POST)
+    overdue_todos = [t for t in my_active if t.created_date and t.created_date < monday]
+    blocked_todos = [t for t in my_active if t.need_help]
+
     report = None
+    ai_report = None
     if request.method == 'POST':
         import markdown as md_lib
 
         lines = [f'本周（{monday} ~ {sunday}）{current_user.name} 的工作数据：\n']
-
-        # Categorize active todos
-        overdue_todos = [t for t in my_active if t.created_date and t.created_date < monday]
-        blocked_todos = [t for t in my_active if t.need_help]
         normal_active = [t for t in my_active if t not in overdue_todos and t not in blocked_todos]
 
         if my_done:
@@ -869,12 +870,20 @@ def my_weekly():
 
         prompt = get_prompt('personal_weekly') + '\n\n' + '\n'.join(lines)
         _, raw = call_ollama(prompt)
-        report = raw or '生成失败，请重试'
-        report = md_lib.markdown(report, extensions=['tables'])
+        ai_report = raw or '生成失败，请重试'
+        ai_report = md_lib.markdown(ai_report, extensions=['tables'])
+        report = True
+
+    # Calculate totals
+    total_focus = sum(t.actual_minutes or 0 for t in my_done)
+    reviewer_name = get_reviewer(current_user)
 
     return render_template('dashboard/my_weekly.html',
         my_done=my_done, my_active=my_active, my_reqs=my_reqs,
-        req_days=req_days, report=report,
+        req_days=req_days, report=report, ai_report=ai_report,
+        overdue_todos=overdue_todos, blocked_todos=blocked_todos,
+        total_focus_min=total_focus, reviewer=reviewer_name,
+        today=date.today(),
         monday=monday, sunday=sunday, offset=offset,
     )
 
