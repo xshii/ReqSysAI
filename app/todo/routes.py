@@ -89,7 +89,10 @@ def confirm(todo_id):
         return jsonify(ok=False), 403
     todo.status = 'done'
     todo.done_date = date.today()
-    # Also check all items
+    # Record timer if running
+    if todo.started_at:
+        todo.actual_minutes = todo.elapsed_minutes
+        todo.started_at = None
     for item in todo.items:
         item.is_done = True
     db.session.commit()
@@ -105,8 +108,77 @@ def reopen(todo_id):
         return jsonify(ok=False), 403
     todo.status = 'todo'
     todo.done_date = None
+    todo.started_at = None
     db.session.commit()
     return jsonify(ok=True)
+
+
+# ---- Timer ----
+
+@todo_bp.route('/<int:todo_id>/timer', methods=['POST'])
+@login_required
+def timer(todo_id):
+    """Start or stop focus timer."""
+    todo = db.get_or_404(Todo, todo_id)
+    if todo.user_id != current_user.id:
+        return jsonify(ok=False), 403
+    from datetime import datetime as dt
+    if todo.started_at:
+        # Stop timer, record elapsed
+        todo.actual_minutes = (todo.actual_minutes or 0) + todo.elapsed_minutes
+        todo.started_at = None
+    else:
+        todo.started_at = dt.utcnow()
+    db.session.commit()
+    return jsonify(ok=True, running=todo.timer_running,
+                   minutes=todo.actual_minutes or 0)
+
+
+# ---- Help / Comments ----
+
+@todo_bp.route('/<int:todo_id>/need-help', methods=['POST'])
+@login_required
+def toggle_help(todo_id):
+    """Toggle need_help flag."""
+    todo = db.get_or_404(Todo, todo_id)
+    if todo.user_id != current_user.id:
+        return jsonify(ok=False), 403
+    todo.need_help = not todo.need_help
+    db.session.commit()
+    return jsonify(ok=True, need_help=todo.need_help)
+
+
+@todo_bp.route('/<int:todo_id>/comments', methods=['GET'])
+@login_required
+def get_comments(todo_id):
+    """Get comments for a todo."""
+    from app.models.todo import TodoComment
+    comments = TodoComment.query.filter_by(todo_id=todo_id)\
+        .order_by(TodoComment.created_at).all()
+    return jsonify(ok=True, comments=[
+        {'id': c.id, 'user': c.user.name, 'content': c.content,
+         'time': c.created_at.strftime('%m-%d %H:%M')}
+        for c in comments
+    ])
+
+
+@todo_bp.route('/<int:todo_id>/comments', methods=['POST'])
+@login_required
+def add_comment(todo_id):
+    """Add a comment/progress update to a todo."""
+    from app.models.todo import TodoComment
+    data = request.get_json() or {}
+    content = (data.get('content') or '').strip()
+    if not content:
+        return jsonify(ok=False, msg='内容不能为空')
+    db.session.get(Todo, todo_id)  # Ensure exists
+    c = TodoComment(todo_id=todo_id, user_id=current_user.id, content=content[:500])
+    db.session.add(c)
+    db.session.commit()
+    return jsonify(ok=True, comment={
+        'id': c.id, 'user': c.user.name, 'content': c.content,
+        'time': c.created_at.strftime('%m-%d %H:%M'),
+    })
 
 
 # ---- Sub-items ----
@@ -397,9 +469,16 @@ def team():
             help_due_options.append((d, label))
         d += timedelta(days=1)
 
+    # Todos marked as needing help (team-wide)
+    help_todos = Todo.query.filter(
+        Todo.need_help == True, Todo.status == 'todo',
+        Todo.user_id.in_(user_ids),
+    ).options(joinedload(Todo.requirements)).order_by(Todo.created_at.desc()).all()
+
     return render_template('todo/team.html',
         users=users, user_todos=user_todos, groups=groups,
         cur_group=cur_group, today=today, form=form,
         reqs=reqs, default_req_ids=default_req_ids, all_users=all_users_list,
         due_options=due_options, help_due_options=help_due_options,
+        help_todos=help_todos,
     )

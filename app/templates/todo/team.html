@@ -18,6 +18,20 @@
 </div>
 
 
+{% if help_todos %}
+<div class="alert alert-warning py-2 mb-3">
+    <strong><i class="bi bi-hand-index"></i> 需要帮助</strong>
+    <div class="d-flex flex-wrap gap-2 mt-1">
+        {% for t in help_todos %}
+        <span class="badge bg-white text-dark border py-1 px-2">
+            <strong>{{ t.user.name }}</strong>：{{ t.title }}
+            {% for r in t.requirements %}<span class="text-muted">{{ r.number }}</span>{% endfor %}
+        </span>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 {# Split todos into active (left) vs all-done-today (right) per user #}
 {% set ns = namespace(left=[], right=[]) %}
 {% for u in users %}
@@ -50,7 +64,12 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <h6 class="mb-1">{{ t.title }}</h6>
+                        <h6 class="mb-1">
+                            {{ t.title }}
+                            {% if t.need_help %}<span class="badge bg-warning text-dark"><i class="bi bi-hand-index"></i> 求助中</span>{% endif %}
+                            {% if t.timer_running %}<span class="badge bg-success"><i class="bi bi-stopwatch"></i> 专注中</span>{% endif %}
+                            {% if t.actual_minutes %}<span class="badge bg-light text-dark border" title="实际用时"><i class="bi bi-clock"></i> {{ t.actual_minutes }}分钟</span>{% endif %}
+                        </h6>
                         <div class="text-muted small">
                             {{ t.user.name }} <span class="text-muted">{{ t.user.employee_id }}</span>
                             {% if t.user.group %}<span class="badge bg-light text-dark">{{ t.user.group }}</span>{% endif %}
@@ -78,9 +97,12 @@
                         {% endif %}
                     </div>
                     {% if mine %}
-                    <div class="d-flex gap-2 flex-shrink-0 ms-3">
+                    <div class="d-flex gap-1 flex-shrink-0 ms-3">
+                        <button class="btn btn-sm {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer" data-id="{{ t.id }}" title="{{ '停止计时' if t.timer_running else '开始专注' }}"><i class="bi bi-stopwatch"></i></button>
+                        <button class="btn btn-sm {{ 'btn-warning' if t.need_help else 'btn-outline-warning' }} btn-need-help" data-id="{{ t.id }}" title="{{ '取消求助' if t.need_help else '标记求助' }}"><i class="bi bi-hand-index"></i></button>
+                        <button class="btn btn-sm btn-outline-info btn-comment" data-id="{{ t.id }}" title="进展评论"><i class="bi bi-chat-dots"></i></button>
                         <button class="btn btn-sm btn-outline-success btn-confirm" data-id="{{ t.id }}" title="确认完成"><i class="bi bi-check-lg"></i></button>
-                        <button class="btn btn-sm btn-outline-primary btn-help" data-id="{{ t.id }}" data-title="{{ t.title }}" title="求助"><i class="bi bi-person-plus"></i></button>
+                        <button class="btn btn-sm btn-outline-primary btn-help" data-id="{{ t.id }}" data-title="{{ t.title }}" title="派给他人"><i class="bi bi-person-plus"></i></button>
                         <button class="btn btn-sm btn-outline-danger btn-delete" data-id="{{ t.id }}" title="删除"><i class="bi bi-trash"></i></button>
                     </div>
                     {% endif %}
@@ -105,6 +127,14 @@
                     <input type="text" class="form-control form-control-sm add-item-input" data-todo-id="{{ t.id }}" placeholder="+ 添加子项，回车确认">
                 </div>
                 {% endif %}
+                <!-- Comments (hidden by default, toggled by button) -->
+                <div class="mt-2 border-top pt-2 d-none comment-section" id="comments-{{ t.id }}">
+                    <div class="comment-list small"></div>
+                    <div class="input-group input-group-sm mt-1">
+                        <input type="text" class="form-control comment-input" data-todo-id="{{ t.id }}" placeholder="写评论/进展..." maxlength="500">
+                        <button class="btn btn-outline-primary comment-submit" data-todo-id="{{ t.id }}"><i class="bi bi-send"></i></button>
+                    </div>
+                </div>
             </div>
         </div>
         {% else %}
@@ -382,6 +412,68 @@ document.addEventListener('click', function(e) {
         assigneeList.classList.add('d-none');
         assigneeInput.value = assigneeSelectedName;  // revert to last valid selection
     }
+});
+
+/* Timer */
+document.querySelectorAll('.btn-timer').forEach(function(b) {
+    b.addEventListener('click', function(e) {
+        e.stopPropagation();
+        api('/todos/' + b.dataset.id + '/timer').then(function(r) { if (r.ok) location.reload(); });
+    });
+});
+
+/* Need Help toggle */
+document.querySelectorAll('.btn-need-help').forEach(function(b) {
+    b.addEventListener('click', function(e) {
+        e.stopPropagation();
+        api('/todos/' + b.dataset.id + '/need-help').then(function(r) { if (r.ok) location.reload(); });
+    });
+});
+
+/* Comments toggle + load */
+document.querySelectorAll('.btn-comment').forEach(function(b) {
+    b.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var sec = document.getElementById('comments-' + b.dataset.id);
+        if (!sec) return;
+        sec.classList.toggle('d-none');
+        if (!sec.classList.contains('d-none') && !sec.dataset.loaded) {
+            fetch('/todos/' + b.dataset.id + '/comments', {headers: {'X-CSRFToken': csrfToken}})
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.ok) {
+                        var html = d.comments.map(function(c) {
+                            return '<div class="mb-1"><strong>' + c.user + '</strong> <span class="text-muted">' + c.time + '</span><br>' + c.content + '</div>';
+                        }).join('');
+                        sec.querySelector('.comment-list').innerHTML = html || '<span class="text-muted">暂无评论</span>';
+                        sec.dataset.loaded = '1';
+                    }
+                });
+        }
+    });
+});
+
+/* Comment submit */
+document.querySelectorAll('.comment-submit').forEach(function(b) {
+    b.addEventListener('click', function() {
+        var inp = b.parentElement.querySelector('.comment-input');
+        var content = inp.value.trim();
+        if (!content) return;
+        api('/todos/' + b.dataset.todoId + '/comments', {content: content})
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.ok) {
+                    var list = document.querySelector('#comments-' + b.dataset.todoId + ' .comment-list');
+                    list.innerHTML += '<div class="mb-1"><strong>' + d.comment.user + '</strong> <span class="text-muted">' + d.comment.time + '</span><br>' + d.comment.content + '</div>';
+                    inp.value = '';
+                }
+            });
+    });
+});
+document.querySelectorAll('.comment-input').forEach(function(inp) {
+    inp.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); inp.parentElement.querySelector('.comment-submit').click(); }
+    });
 });
 
 /* AI spinner */

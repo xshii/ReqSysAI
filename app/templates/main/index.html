@@ -49,6 +49,32 @@
             </div>
         </div>
 
+        <!-- Contribution Heatmap -->
+        <div class="card mb-3">
+            <div class="card-header py-2"><i class="bi bi-calendar-check"></i> 完成热力图 <span class="text-muted small">近90天</span></div>
+            <div class="card-body py-2 px-3" style="overflow-x:auto;">
+                <div class="d-flex gap-1 flex-wrap" style="max-width:100%;">
+                {% set ns = namespace(d=heatmap_start) %}
+                {% for i in range(91) %}
+                    {% set ds = ns.d.strftime('%Y-%m-%d') %}
+                    {% set cnt = heatmap.get(ds, 0) %}
+                    {% set color = '#ebedf0' if cnt == 0 else ('#9be9a8' if cnt <= 2 else ('#40c463' if cnt <= 4 else ('#30a14e' if cnt <= 6 else '#216e39'))) %}
+                    <div style="width:11px;height:11px;background:{{ color }};border-radius:2px;" title="{{ ds }}：{{ cnt }} 个"></div>
+                    {% set ns.d = ns.d + timedelta(days=1) %}
+                {% endfor %}
+                </div>
+                <div class="d-flex align-items-center gap-1 mt-1 small text-muted">
+                    <span>少</span>
+                    <div style="width:11px;height:11px;background:#ebedf0;border-radius:2px;"></div>
+                    <div style="width:11px;height:11px;background:#9be9a8;border-radius:2px;"></div>
+                    <div style="width:11px;height:11px;background:#40c463;border-radius:2px;"></div>
+                    <div style="width:11px;height:11px;background:#30a14e;border-radius:2px;"></div>
+                    <div style="width:11px;height:11px;background:#216e39;border-radius:2px;"></div>
+                    <span>多</span>
+                </div>
+            </div>
+        </div>
+
         <!-- My Requirements -->
         <div class="card mb-3">
             <div class="card-header py-2"><i class="bi bi-clipboard-check"></i> 我的需求 <span class="badge bg-secondary">{{ my_reqs | length }}</span></div>

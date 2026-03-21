@@ -101,6 +101,17 @@ def index():
             'tokens': est_tokens,
         })
 
+    # Contribution heatmap: last 90 days completed todos
+    heatmap_start = today - timedelta(days=90)
+    heatmap_rows = db.session.query(
+        Todo.done_date, db.func.count(Todo.id),
+    ).filter(
+        Todo.user_id == current_user.id,
+        Todo.status == 'done',
+        Todo.done_date >= heatmap_start,
+    ).group_by(Todo.done_date).all()
+    heatmap = {str(row[0]): row[1] for row in heatmap_rows}
+
     # Graffiti board: top3 all-time + current month
     from app.models.rant import Rant
     month_start = today.replace(day=1)
@@ -118,6 +129,7 @@ def index():
         approved_incentives=approved_incentives, rants=rants,
         ai_ranking=ai_ranking, alerts=alerts,
         recent_req_hint=recent_req_hint,
+        heatmap=heatmap, heatmap_start=heatmap_start, timedelta=timedelta,
     )
 
 

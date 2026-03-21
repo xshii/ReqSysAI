@@ -22,10 +22,15 @@ class Todo(db.Model):
     due_date = db.Column(db.Date, nullable=True)
     created_date = db.Column(db.Date, default=date.today)
     done_date = db.Column(db.Date, nullable=True)
+    need_help = db.Column(db.Boolean, default=False)
+    started_at = db.Column(db.DateTime, nullable=True)  # Timer start
+    actual_minutes = db.Column(db.Integer, nullable=True)  # Recorded on completion
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = db.relationship('User', backref='todos')
+    comments = db.relationship('TodoComment', backref='todo', cascade='all, delete-orphan',
+                               order_by='TodoComment.created_at')
     requirements = db.relationship('Requirement', secondary=todo_requirements, backref='todos', lazy='joined')
     parent = db.relationship('Todo', remote_side=[id], backref='children')
     items = db.relationship('TodoItem', backref='todo', cascade='all, delete-orphan',
@@ -83,8 +88,33 @@ class Todo(db.Model):
         """True if due_date is set and past."""
         return self.due_date and self.due_date < date.today() and self.status != 'done'
 
+    @property
+    def timer_running(self):
+        return self.started_at is not None and self.status != 'done'
+
+    @property
+    def elapsed_minutes(self):
+        if not self.started_at:
+            return 0
+        return int((datetime.utcnow() - self.started_at).total_seconds() / 60)
+
     def __repr__(self):
         return f'<Todo {self.title}>'
+
+
+class TodoComment(db.Model):
+    __tablename__ = 'todo_comments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    todo_id = db.Column(db.Integer, db.ForeignKey('todos.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    content = db.Column(db.String(500), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User')
+
+    def __repr__(self):
+        return f'<TodoComment {self.id}>'
 
 
 class TodoItem(db.Model):
