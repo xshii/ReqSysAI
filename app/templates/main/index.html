@@ -606,10 +606,34 @@ document.querySelectorAll('form[action$="/quick-todo"]').forEach(function(form) 
         if (cat) data.category = cat.value;
         apiPost('{{ url_for("main.quick_todo") }}', data).then(function(d) {
             if (d && d.ok) {
+                var todoId = d.todo_id;
                 var row = document.createElement('div');
-                row.className = 'd-flex align-items-center gap-1 mb-1 ps-2';
-                row.innerHTML = '<i class="bi bi-circle text-secondary"></i> <span class="small">' + title + '</span>';
-                // Insert into the todo-list container in the same card
+                row.className = 'd-flex align-items-center gap-1 mb-1 ps-2 todo-drag-item';
+                row.draggable = true;
+                row.style.cursor = 'grab';
+                row.dataset.todoId = todoId;
+                row.innerHTML = '<i class="bi bi-circle text-secondary" style="cursor:pointer;" onclick="apiPost(\'/todo/' + todoId + '/toggle\',{}).then(function(x){if(x&&x.ok)location.reload()})"></i>'
+                    + ' <span class="small">' + title + '</span>'
+                    + ' <button class="btn btn-sm py-0 px-0 btn-outline-secondary btn-timer-home" data-id="' + todoId + '" style="font-size:.7em;line-height:1;" title="启动一个番茄钟"><i class="bi bi-play-fill"></i></button>'
+                    + ' <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="' + todoId + '" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>';
+                // Bind timer
+                row.querySelector('.btn-timer-home').addEventListener('click', function() {
+                    var btn = this;
+                    apiPost('/todos/' + todoId + '/timer', {}).then(function(x) {
+                        if (x && x.ok && x.running) {
+                            btn.className = btn.className.replace('btn-outline-secondary', 'btn-success');
+                            btn.querySelector('i').className = 'bi bi-pause-fill';
+                            enterFocusMode(todoId, title);
+                        }
+                    });
+                });
+                // Bind delete
+                row.querySelector('.btn-delete-home').addEventListener('click', function() {
+                    apiPost('/todos/' + todoId + '/edit', {title: ''}).then(function(x) {
+                        if (x && x.ok) row.remove();
+                    });
+                });
+                // Insert into the todo-list container
                 var reqIdInput = form.querySelector('input[name="req_id"]');
                 var rid = reqIdInput ? reqIdInput.value : '';
                 var listContainer = rid ? document.querySelector('.todo-list-for-req[data-req-id="' + rid + '"]') : null;
