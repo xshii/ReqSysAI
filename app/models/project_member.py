@@ -10,6 +10,7 @@ class ProjectMember(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # null = external
     external_name = db.Column(db.String(100), nullable=True)  # 外部成员姓名
+    external_eid = db.Column(db.String(30), nullable=True)  # 外部成员工号
     project_role = db.Column(db.String(50), default='DEV')  # 支持自定义角色
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -29,6 +30,12 @@ class ProjectMember(db.Model):
         if self.user:
             return self.user.name
         return self.external_name or '未知'
+
+    @property
+    def display_eid(self):
+        if self.user:
+            return self.user.employee_id
+        return self.external_eid or ''
 
     @property
     def role_label(self):

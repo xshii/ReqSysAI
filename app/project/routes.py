@@ -304,7 +304,8 @@ def member_list(project_id):
                     db.session.commit()
                     flash('成员已添加', 'success')
             elif ext_name:
-                db.session.add(ProjectMember(project_id=project_id, external_name=ext_name, project_role=role))
+                ext_eid = request.form.get('external_eid', '').strip()
+                db.session.add(ProjectMember(project_id=project_id, external_name=ext_name, external_eid=ext_eid, project_role=role))
                 db.session.commit()
                 flash(f'外部成员 {ext_name} 已添加', 'success')
         elif action == 'remove':
