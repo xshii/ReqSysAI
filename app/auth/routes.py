@@ -30,6 +30,16 @@ def login():
         return redirect(url_for('main.index'))
 
     client_ip = _get_client_ip()
+
+    # Auto-login by IP: if a user is bound to this IP, login directly
+    auto_user = User.query.filter_by(ip_address=client_ip, is_active=True).first()
+    if auto_user and request.method == 'GET':
+        login_user(auto_user, remember=False)
+        session.permanent = True
+        auto_user.last_login = datetime.utcnow()
+        db.session.commit()
+        return redirect(url_for('main.index'))
+
     form = LoginForm()
 
     if form.validate_on_submit():
