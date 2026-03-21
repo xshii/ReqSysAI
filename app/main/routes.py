@@ -270,6 +270,33 @@ def quick_todo():
     return jsonify(ok=True, title=title, todo_id=todo.id) if is_ajax else redirect(url_for('main.index'))
 
 
+@main_bp.route('/api/batch-adopt', methods=['POST'])
+@login_required
+def batch_adopt():
+    """Adopt multiple AI-recommended todos at once."""
+    data = request.get_json() or {}
+    todos_data = data.get('todos', [])
+    today = date.today()
+    created = 0
+    for item in todos_data:
+        title = (item.get('title') or '').strip()
+        if not title:
+            continue
+        req_id = item.get('req_id')
+        reqs = []
+        if req_id:
+            req = db.session.get(Requirement, req_id)
+            if req:
+                reqs = [req]
+        todo = Todo(user_id=current_user.id, title=title, due_date=today,
+                    category='work', requirements=reqs)
+        todo.items.append(TodoItem(title=title, sort_order=0))
+        db.session.add(todo)
+        created += 1
+    db.session.commit()
+    return jsonify(ok=True, count=created)
+
+
 @main_bp.route('/api/ai-recommend-todos', methods=['POST'])
 @login_required
 def ai_recommend_todos():
