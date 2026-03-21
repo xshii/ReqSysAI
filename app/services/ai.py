@@ -86,6 +86,11 @@ def call_ollama(prompt, system_prompt=None, messages=None):
             messages.append({'role': 'system', 'content': system_prompt})
         messages.append({'role': 'user', 'content': prompt})
 
+    # Build input text for logging
+    input_text = prompt or ''
+    if not input_text and messages:
+        input_text = ' '.join(m.get('content', '') for m in messages if m.get('role') == 'user')
+
     try:
         resp = requests.post(
             f'{base_url}/api/chat',
@@ -95,10 +100,32 @@ def call_ollama(prompt, system_prompt=None, messages=None):
         )
         resp.raise_for_status()
         raw = resp.json().get('message', {}).get('content', '')
+        _log_ai_call(input_text, raw)
         return _extract_json(raw), raw
     except requests.RequestException:
         logger.exception('Ollama API error')
         return None, None
+
+
+def _log_ai_call(raw_input, ai_output):
+    """Record AI call to AIParseLog for usage tracking."""
+    try:
+        from flask_login import current_user
+        if not current_user or not current_user.is_authenticated:
+            return
+        from app.models.ai_log import AIParseLog
+        from app.extensions import db
+        max_len = current_app.config.get('AI_INPUT_MAX', 5000)
+        log = AIParseLog(
+            input_type='api_call',
+            raw_input=(raw_input or '')[:max_len],
+            ai_output=ai_output,
+            created_by=current_user.id,
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception:
+        logger.debug('Failed to log AI call', exc_info=True)
 
 
 def parse_requirement(text):
