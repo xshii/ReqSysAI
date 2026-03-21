@@ -342,10 +342,16 @@ def ai_recommend_todos():
         else:
             urgency = ''
             due = f'截止{r.due_date.strftime("%m-%d")}(剩{days_left}天)' if r.due_date else '无截止日'
-        # Count invested todos
+        # Analyze investment status
         invested = sum(1 for t in recent if any(req.id == r.id for req in t.requirements))
+        if invested == 0:
+            invest_warn = '⚠️近5天无投入，需要关注'
+        elif invested <= 2:
+            invest_warn = f'近5天投入较少({invested}个todo)'
+        else:
+            invest_warn = f'近5天持续投入中({invested}个todo)'
         children = f'，子需求{len(r.children)}个' if r.children else ''
-        lines.append(f'  {urgency}{r.number} {r.title}（{r.status_label}，{due}，预估{r.estimate_days or "?"}人天，近5天投入{invested}个todo{children}）')
+        lines.append(f'  {urgency}{r.number} {r.title}（{r.status_label}，{due}，预估{r.estimate_days or "?"}人天，{invest_warn}{children}）')
 
     if recent:
         lines.append('\n近5天工作记录：')
