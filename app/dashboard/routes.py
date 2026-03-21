@@ -825,20 +825,47 @@ def my_weekly():
         import markdown as md_lib
 
         lines = [f'本周（{monday} ~ {sunday}）{current_user.name} 的工作数据：\n']
+
+        # Categorize active todos
+        overdue_todos = [t for t in my_active if t.created_date and t.created_date < monday]
+        blocked_todos = [t for t in my_active if t.need_help]
+        normal_active = [t for t in my_active if t not in overdue_todos and t not in blocked_todos]
+
         if my_done:
-            lines.append('已完成：')
+            lines.append('本周已完成：')
             for t in my_done:
                 reqs = ', '.join(r.number for r in t.requirements)
-                lines.append(f'- {t.title}（{reqs}）')
-        if my_active:
+                time_str = f'，用时{t.actual_minutes}分钟' if t.actual_minutes else ''
+                lines.append(f'- ✓ {t.title}（{reqs}{time_str}）')
+
+        if normal_active:
             lines.append('\n进行中：')
-            for t in my_active:
+            for t in normal_active:
                 reqs = ', '.join(r.number for r in t.requirements)
-                lines.append(f'- {t.title}（{reqs}）')
+                lines.append(f'- ○ {t.title}（{reqs}）')
+
+        if overdue_todos:
+            lines.append('\n延期未完成（上周遗留）：')
+            for t in overdue_todos:
+                reqs = ', '.join(r.number for r in t.requirements)
+                days = (date.today() - t.created_date).days
+                lines.append(f'- ⚠️ {t.title}（{reqs}，已延期{days}天）')
+
+        if blocked_todos:
+            lines.append('\n阻塞中：')
+            for t in blocked_todos:
+                reqs = ', '.join(r.number for r in t.requirements)
+                reason = f'，原因：{t.blocked_reason}' if t.blocked_reason else ''
+                lines.append(f'- 🔴 {t.title}（{reqs}{reason}）')
+
         if my_reqs:
-            lines.append('\n参与的需求：')
+            lines.append('\n参与的需求及状态：')
             for r in my_reqs:
-                lines.append(f'- [{r.number}] {r.title}（{r.status_label}）')
+                due_info = ''
+                if r.due_date:
+                    days_left = (r.due_date - date.today()).days
+                    due_info = f'，已延期{-days_left}天' if days_left < 0 else f'，剩{days_left}天'
+                lines.append(f'- [{r.number}] {r.title}（{r.status_label}{due_info}）')
 
         prompt = get_prompt('personal_weekly') + '\n\n' + '\n'.join(lines)
         _, raw = call_ollama(prompt)
