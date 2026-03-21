@@ -50,6 +50,10 @@
                         <label class="form-label">{{ form.group.label.text }}</label>
                         {{ form.group(class="form-select") }}
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">番茄钟时长（分钟）</label>
+                        <input type="number" name="pomodoro_minutes" class="form-control" value="{{ current_user.pomodoro_minutes or 45 }}" min="5" max="120" step="5">
+                    </div>
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-check-lg"></i> 保存
                     </button>

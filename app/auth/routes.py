@@ -163,6 +163,7 @@ def profile():
         selected_roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
         current_user.roles = kept_roles + selected_roles
         current_user.group = form.group.data or None
+        current_user.pomodoro_minutes = request.form.get('pomodoro_minutes', type=int) or 45
         # Handle avatar upload
         import os, uuid
         avatar = request.files.get('avatar')

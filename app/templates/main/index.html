@@ -66,7 +66,9 @@
                         <i class="bi bi-{{ 'pause-fill' if t.timer_running else 'play-fill' }}"></i>
                     </button>
                     {% endif %}
-                    {% if t.actual_minutes %}<span class="text-muted" style="font-size:.7em;">{{ t.actual_minutes }}m</span>{% endif %}
+                    {% if t.actual_minutes %}
+                    <span style="font-size:.8em;" title="{{ t.actual_minutes }}分钟">{% if t.actual_minutes >= (current_user.pomodoro_minutes or 45) %}🍅{% else %}🍅½{% endif %}</span>
+                    {% endif %}
                     <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" title="删除" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>
                 </div>
                 {% endfor %}
@@ -406,26 +408,32 @@ document.querySelectorAll('form[action*="/todo/"][action*="/toggle"]').forEach(f
     });
 });
 
-// Timer + Focus Mode
+// Timer + Focus Mode (Pomodoro countdown)
+var POMODORO_MIN = {{ current_user.pomodoro_minutes or 45 }};
 var focusOverlay = null;
 var focusInterval = null;
 var focusTodoId = null;
 var focusStartTime = null;
+var focusCompleted = false;
 
 function enterFocusMode(todoId, title) {
     focusTodoId = todoId;
     focusStartTime = Date.now();
+    focusCompleted = false;
     if (!focusOverlay) {
         focusOverlay = document.createElement('div');
         focusOverlay.id = 'focusOverlay';
         focusOverlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#1a1a2e;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;';
         focusOverlay.innerHTML = '<div style="font-size:1.2em;opacity:.7;margin-bottom:1em;" id="focusTitle"></div>'
-            + '<div style="font-size:6em;font-weight:300;font-variant-numeric:tabular-nums;" id="focusTimer">00:00</div>'
+            + '<div style="font-size:6em;font-weight:300;font-variant-numeric:tabular-nums;" id="focusTimer">45:00</div>'
+            + '<div id="focusDoneMsg" style="display:none;font-size:1.5em;margin-top:1em;">🍅 番茄完成！</div>'
             + '<div style="margin-top:2em;"><button id="focusStop" style="background:none;border:2px solid rgba(255,255,255,.3);color:white;padding:.5em 2em;border-radius:2em;font-size:1.1em;cursor:pointer;">打断结束</button></div>';
         document.body.appendChild(focusOverlay);
         document.getElementById('focusStop').addEventListener('click', exitFocusMode);
     }
     document.getElementById('focusTitle').textContent = title;
+    document.getElementById('focusDoneMsg').style.display = 'none';
+    document.getElementById('focusStop').textContent = '打断结束';
     focusOverlay.style.display = 'flex';
     focusInterval = setInterval(updateFocusTimer, 1000);
     updateFocusTimer();
@@ -433,35 +441,48 @@ function enterFocusMode(todoId, title) {
 
 function updateFocusTimer() {
     var elapsed = Math.floor((Date.now() - focusStartTime) / 1000);
-    var m = Math.floor(elapsed / 60);
-    var s = elapsed % 60;
+    var remaining = POMODORO_MIN * 60 - elapsed;
+    if (remaining <= 0) {
+        // Pomodoro complete!
+        remaining = 0;
+        focusCompleted = true;
+        clearInterval(focusInterval);
+        document.getElementById('focusDoneMsg').style.display = 'block';
+        document.getElementById('focusStop').textContent = '完成';
+    }
+    var m = Math.floor(remaining / 60);
+    var s = remaining % 60;
     document.getElementById('focusTimer').textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
 }
 
 function exitFocusMode() {
     clearInterval(focusInterval);
     if (focusOverlay) focusOverlay.style.display = 'none';
-    // Stop timer on server
+    var completed = focusCompleted;
     apiPost('/todos/' + focusTodoId + '/timer', {}).then(function(d) {
         if (d && d.ok) {
-            showToast('专注结束，用时 ' + d.minutes + ' 分钟', 'info');
-            // Update button state
             var btn = document.querySelector('.btn-timer-home[data-id="' + focusTodoId + '"]');
             if (btn) {
                 btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
-                var icon = btn.querySelector('i');
-                if (icon) icon.className = 'bi bi-play-fill';
+                btn.querySelector('i').className = 'bi bi-play-fill';
+                // Add tomato icon after the button
+                var tomato = document.createElement('span');
+                tomato.style.cssText = 'font-size:.8em;margin-left:2px;';
+                tomato.textContent = completed ? '🍅' : '🍅½';
+                tomato.title = completed ? '完整番茄 (' + d.minutes + 'min)' : '半个番茄 (' + d.minutes + 'min)';
+                btn.parentElement.insertBefore(tomato, btn.nextSibling);
             }
+            showToast(completed ? '🍅 番茄完成！' : '🍅½ 打断，' + d.minutes + '分钟', completed ? 'success' : 'info');
         }
     });
     focusTodoId = null;
+    focusCompleted = false;
 }
 
 document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
     btn.addEventListener('click', function() {
         var todoId = btn.dataset.id;
         var title = btn.closest('.d-flex').querySelector('.small').textContent.trim();
-        // Start timer on server, then enter focus mode
         apiPost('/todos/' + todoId + '/timer', {}).then(function(d) {
             if (d && d.ok) {
                 if (d.running) {
@@ -469,6 +490,7 @@ document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
                     btn.querySelector('i').className = 'bi bi-pause-fill';
                     enterFocusMode(todoId, title);
                 } else {
+                    // Already running, stop it
                     btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
                     btn.querySelector('i').className = 'bi bi-play-fill';
                     showToast('已暂停 (' + d.minutes + '分钟)', 'info');

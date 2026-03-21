@@ -45,6 +45,7 @@ class User(UserMixin, db.Model):
     avatar = db.Column(db.String(300), nullable=True)  # 个人照片路径
     group = db.Column(db.String(50), nullable=True)
     is_active = db.Column(db.Boolean, default=True)
+    pomodoro_minutes = db.Column(db.Integer, default=45)
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
