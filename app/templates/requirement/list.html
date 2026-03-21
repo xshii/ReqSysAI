@@ -100,7 +100,7 @@
                     {% if r.status not in ('done', 'closed') %}
                     <form method="POST" action="{{ url_for('requirement.quick_todo_for_req', req_id=r.id) }}" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm btn-outline-primary py-0" title="创建 Todo"><i class="bi bi-plus-circle"></i></button>
+                        <button type="submit" class="btn btn-sm btn-outline-primary py-0">New Todo</button>
                     </form>
                     {% endif %}
                 </td>
