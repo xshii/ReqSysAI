@@ -194,6 +194,7 @@ def quick_todo():
         category=category,
         requirements=reqs,
     )
+    todo.items.append(TodoItem(title=title, sort_order=0))
     db.session.add(todo)
     db.session.commit()
     return jsonify(ok=True, title=title, todo_id=todo.id) if is_ajax else redirect(url_for('main.index'))
