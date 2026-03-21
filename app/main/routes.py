@@ -365,6 +365,19 @@ def ai_recommend_todos():
             req_tag = t.requirements[0].number if t.requirements else '无需求'
             lines.append(f'  {status} [{req_tag}] {t.title} ({t.created_date.strftime("%m-%d")})')
 
+    # My open risks
+    from app.models.risk import Risk
+    my_risks_ai = Risk.query.filter(
+        Risk.status == 'open',
+        db.or_(Risk.tracker_id == current_user.id, Risk.created_by == current_user.id),
+    ).order_by(Risk.due_date).all()
+    if my_risks_ai:
+        lines.append('\n我的风险&问题：')
+        for r in my_risks_ai:
+            r_days = (r.due_date - today).days if r.due_date else 999
+            r_status = f'已延期{-r_days}天' if r_days < 0 else f'剩{r_days}天'
+            lines.append(f'  🔥 {r.title}（{r.severity_label}，{r_status}）')
+
     if today_titles:
         lines.append('\n今天已有的任务（不要重复）：')
         for title in today_titles:
