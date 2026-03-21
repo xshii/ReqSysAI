@@ -436,16 +436,23 @@ def team():
         Todo.done_date.desc(),  # 已完成按完成时间倒序
     ).all() if user_ids else []
 
-    user_todos = {}
+    # Split into active (left) and done (right) per user
+    user_active = {}  # uid → [active todos]
+    user_done = {}    # uid → [done todos]
     for t in all_todos:
-        user_todos.setdefault(t.user_id, []).append(t)
-    # Sort each user's todos: req-linked first (grouped by req_id), then unlinked
-    for uid in user_todos:
-        user_todos[uid].sort(key=lambda t: (
-            0 if t.requirements else 1,  # req-linked first
-            t.requirements[0].id if t.requirements else 999999,  # group by req
-            1 if t.status == TODO_STATUS_DONE else 0,  # active before done
+        if t.status == TODO_STATUS_DONE:
+            user_done.setdefault(t.user_id, []).append(t)
+        else:
+            user_active.setdefault(t.user_id, []).append(t)
+    # Sort active: req-linked first (grouped by req_id), then unlinked
+    for uid in user_active:
+        user_active[uid].sort(key=lambda t: (
+            0 if t.requirements else 1,
+            t.requirements[0].id if t.requirements else 999999,
         ))
+    # Sort done: newest first
+    for uid in user_done:
+        user_done[uid].sort(key=lambda t: t.done_date or t.created_date, reverse=True)
 
     form = TodoForm()
     reqs = Requirement.query.filter(Requirement.status.notin_(REQ_INACTIVE_STATUSES))\
@@ -492,7 +499,7 @@ def team():
     ).options(joinedload(Todo.requirements)).order_by(Todo.created_at.desc()).all()
 
     return render_template('todo/team.html',
-        users=users, user_todos=user_todos, groups=groups,
+        users=users, user_active=user_active, user_done=user_done, groups=groups,
         cur_group=cur_group, today=today, form=form,
         reqs=reqs, default_req_ids=default_req_ids, all_users=all_users_list,
         due_options=due_options, help_due_options=help_due_options,

@@ -19,91 +19,92 @@
 
 
 <div class="row">
-    <!-- By person -->
+    <!-- Left: today active -->
     <div class="col-md-7">
+        <h6 class="text-muted mb-3"><i class="bi bi-circle"></i> 今日 Todo</h6>
         {% for u in users %}
-        {% set todos = user_todos.get(u.id, []) %}
+        {% set todos = user_active.get(u.id, []) %}
         {% if todos %}
         {% set mine = u.id == current_user.id %}
-        {% set u_done = todos | selectattr('status', 'equalto', 'done') | list | length %}
         <div class="card mb-3">
             <div class="card-header py-2 d-flex justify-content-between align-items-center">
                 <span class="fw-bold small">{{ u.name }} <span class="text-muted">{{ u.group or '' }}</span></span>
-                <span class="badge bg-{{ 'success' if u_done == todos | length else 'secondary' }}">{{ u_done }}/{{ todos | length }}</span>
+                <span class="badge bg-secondary">{{ todos | length }}</span>
             </div>
             <div class="card-body py-2">
-        {# Group todos by requirement within this user's card #}
-        {% set seen_reqs = namespace(ids=[]) %}
-        {% for t in todos %}
-            {# Show requirement header if new requirement #}
-            {% set req = t.requirements[0] if t.requirements else None %}
-            {% set rid = req.id if req else 0 %}
-            {% if rid and rid not in seen_reqs.ids %}
-                {% if seen_reqs.ids %}<div class="mt-2"></div>{% endif %}
-                <div class="small fw-bold text-primary mb-1">{{ req.number }} {{ req.title }}</div>
-                {% set _ = seen_reqs.ids.append(rid) %}
-            {% elif not rid and 0 not in seen_reqs.ids %}
-                {% if seen_reqs.ids %}<div class="mt-2"></div>{% endif %}
-                <div class="small fw-bold text-secondary mb-1"><i class="bi bi-people"></i> 团队事务</div>
-                {% set _ = seen_reqs.ids.append(0) %}
-            {% endif %}
-            <div class="d-flex align-items-start gap-2 mb-1 ps-2 todo-card {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}" data-id="{{ t.id }}">
-                {% if t.items %}
-                    {% set done_count, total_count = t.items_progress %}
-                    {% for item in t.items %}
-                    <div class="form-check" style="font-size:.85em;">
-                        <input class="form-check-input item-cb" type="checkbox" data-item-id="{{ item.id }}"
-                               {% if item.is_done %}checked{% endif %} {% if not mine %}disabled{% endif %}>
-                        <label class="form-check-label {% if item.is_done %}text-decoration-line-through text-muted{% endif %}">{{ item.title }}</label>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <span class="small">{{ t.title }}</span>
+            {% set seen_reqs = namespace(ids=[]) %}
+            {% for t in todos %}
+                {% set req = t.requirements[0] if t.requirements else None %}
+                {% set rid = req.id if req else 0 %}
+                {% if rid and rid not in seen_reqs.ids %}
+                    {% if seen_reqs.ids %}<div class="mt-2"></div>{% endif %}
+                    <div class="small fw-bold text-primary mb-1">{{ req.number }} {{ req.title }}</div>
+                    {% set _ = seen_reqs.ids.append(rid) %}
+                {% elif not rid and 0 not in seen_reqs.ids %}
+                    {% if seen_reqs.ids %}<div class="mt-2"></div>{% endif %}
+                    <div class="small fw-bold text-secondary mb-1"><i class="bi bi-people"></i> 团队事务</div>
+                    {% set _ = seen_reqs.ids.append(0) %}
                 {% endif %}
-                {% if t.timer_running %}<span class="badge bg-success" style="font-size:.65em;"><i class="bi bi-stopwatch"></i></span>{% endif %}
-                {% if t.actual_minutes %}<span class="badge bg-light text-dark border" style="font-size:.65em;"><i class="bi bi-clock"></i> {{ t.actual_minutes }}m</span>{% endif %}
-                {% if mine and t.status != 'done' %}
-                <button class="btn btn-sm py-0 px-1 {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer" data-id="{{ t.id }}" style="font-size:.7em;"><i class="bi bi-{{ 'pause-fill' if t.timer_running else 'play-fill' }}"></i></button>
-                {% endif %}
-            </div>
-        {% endfor %}
+                {# Overdue highlight: created before today = yesterday's carryover #}
+                {% set is_carryover = t.created_date and t.created_date < today %}
+                <div class="mb-1 ps-2 todo-card {% if is_carryover %}bg-warning bg-opacity-10 border-start border-3 border-warning{% endif %}" data-id="{{ t.id }}">
+                    {% if t.items %}
+                        {% for item in t.items %}
+                        <div class="form-check" style="font-size:.85em;">
+                            <input class="form-check-input item-cb" type="checkbox" data-item-id="{{ item.id }}"
+                                   {% if item.is_done %}checked{% endif %} {% if not mine %}disabled{% endif %}>
+                            <label class="form-check-label {% if item.is_done %}text-decoration-line-through text-muted{% endif %}">
+                                {{ item.title }}
+                                {% if is_carryover and loop.first %}<span class="text-warning" style="font-size:.8em;">结转</span>{% endif %}
+                            </label>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <span class="small">{{ t.title }}{% if is_carryover %} <span class="text-warning" style="font-size:.8em;">结转</span>{% endif %}</span>
+                    {% endif %}
+                    {% if t.timer_running %}<span class="badge bg-success" style="font-size:.65em;"><i class="bi bi-stopwatch"></i></span>{% endif %}
+                    {% if mine %}
+                    <button class="btn btn-sm py-0 px-1 {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer" data-id="{{ t.id }}" style="font-size:.7em;"><i class="bi bi-{{ 'pause-fill' if t.timer_running else 'play-fill' }}"></i></button>
+                    {% endif %}
+                </div>
+            {% endfor %}
             </div>
         </div>
         {% endif %}
         {% endfor %}
-        {% if not user_todos %}
+        {% if not user_active %}
         <div class="text-center text-muted py-4">
-            <i class="bi bi-people" style="font-size:2em;"></i>
-            <p class="small mt-1">团队今天还没有 Todo</p>
+            <i class="bi bi-check-circle" style="font-size:2em;"></i>
+            <p class="small mt-1">全部完成！</p>
         </div>
         {% endif %}
     </div>
 
-    <!-- Right: summary -->
+    <!-- Right: done this week -->
     <div class="col-md-5">
-        <div class="card mb-3">
-            <div class="card-header py-2"><i class="bi bi-bar-chart"></i> 团队概览</div>
+        <h6 class="text-muted mb-3"><i class="bi bi-check-circle"></i> 近一周已完成</h6>
+        {% for u in users %}
+        {% set todos = user_done.get(u.id, []) %}
+        {% if todos %}
+        <div class="card mb-3 border-success bg-success bg-opacity-10">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center bg-transparent">
+                <span class="fw-bold small">{{ u.name }}</span>
+                <span class="badge bg-success">{{ todos | length }}</span>
+            </div>
             <div class="card-body py-2">
-                {% for u in users %}
-                {% set todos = user_todos.get(u.id, []) %}
-                {% set u_total = todos | length %}
-                {% set u_done = todos | selectattr('status', 'equalto', 'done') | list | length %}
-                <div class="d-flex justify-content-between align-items-center small mb-1">
-                    <span>{{ u.name }}</span>
-                    <div class="d-flex align-items-center gap-1" style="min-width:100px;">
-                        {% if u_total > 0 %}
-                        <div class="progress flex-grow-1" style="height:6px;">
-                            <div class="progress-bar bg-success" style="width:{{ (u_done / u_total * 100) | round }}%"></div>
-                        </div>
-                        <span class="text-muted" style="font-size:.8em;">{{ u_done }}/{{ u_total }}</span>
-                        {% else %}
-                        <span class="text-muted" style="font-size:.8em;">-</span>
-                        {% endif %}
-                    </div>
+                {% for t in todos %}
+                <div class="d-flex justify-content-between align-items-center small mb-1 text-muted">
+                    <span class="text-decoration-line-through">{{ t.title }}</span>
+                    <span style="font-size:.8em;">{{ t.done_date.strftime('%m-%d') if t.done_date else '' }}{% if t.actual_minutes %} · {{ t.actual_minutes }}m{% endif %}</span>
                 </div>
                 {% endfor %}
             </div>
         </div>
+        {% endif %}
+        {% endfor %}
+        {% if not user_done %}
+        <div class="text-center text-muted py-4 small">暂无</div>
+        {% endif %}
     </div>
 </div>
 
