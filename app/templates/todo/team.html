@@ -47,23 +47,18 @@
                 {% endif %}
                 {# Overdue highlight: created before today = yesterday's carryover #}
                 {% set is_carryover = t.created_date and t.created_date < today %}
-                <div class="mb-1 ps-2 todo-card {% if is_carryover %}bg-warning bg-opacity-10 border-start border-3 border-warning{% endif %}" data-id="{{ t.id }}">
+                <div class="d-flex align-items-center mb-1 ps-2 todo-card {% if is_carryover %}bg-warning bg-opacity-10 border-start border-3 border-warning{% endif %}" data-id="{{ t.id }}">
                     {% if t.items %}
                         {% for item in t.items %}
-                        <div class="form-check" style="font-size:.85em;">
-                            <input class="form-check-input item-cb" type="checkbox" data-item-id="{{ item.id }}"
-                                   {% if item.is_done %}checked{% endif %} {% if not mine %}disabled{% endif %}>
-                            <label class="form-check-label {% if item.is_done %}text-decoration-line-through text-muted{% endif %}">
-                                {{ item.title }}
-                                {% if is_carryover and loop.first %}<span class="text-warning" style="font-size:.8em;">结转</span>{% endif %}
-                            </label>
-                        </div>
+                        <input class="form-check-input me-1 item-cb" type="checkbox" data-item-id="{{ item.id }}" style="font-size:.85em;"
+                               {% if item.is_done %}checked{% endif %} {% if not mine %}disabled{% endif %}>
+                        <span class="small {% if item.is_done %}text-decoration-line-through text-muted{% endif %}">{{ item.title }}{% if is_carryover and loop.first %} <span class="text-warning" style="font-size:.8em;">结转</span>{% endif %}</span>
                         {% endfor %}
                     {% else %}
                         <span class="small">{{ t.title }}{% if is_carryover %} <span class="text-warning" style="font-size:.8em;">结转</span>{% endif %}</span>
                     {% endif %}
                     {% if mine %}
-                    <button class="btn btn-sm py-0 px-0 text-muted btn-delete" data-id="{{ t.id }}" style="font-size:.7em;"><i class="bi bi-x"></i></button>
+                    <button class="btn btn-sm py-0 px-0 text-muted btn-delete ms-1" data-id="{{ t.id }}" style="font-size:.7em;"><i class="bi bi-x"></i></button>
                     {% endif %}
                 </div>
             {% endfor %}
