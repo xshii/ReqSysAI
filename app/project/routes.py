@@ -12,6 +12,7 @@ from app.models.project import Project, Milestone
 from app.models.meeting import Meeting
 from app.models.risk import Risk
 from app.models.project_member import ProjectMember
+from app.models.knowledge import Knowledge, PermissionRequest
 from app.models.user import User
 
 
@@ -331,6 +332,95 @@ def member_list(project_id):
     available = [u for u in all_users if u.id not in member_ids]
     return render_template('project/members.html', project=project, members=members,
                            available=available, roles=ProjectMember.DEFAULT_ROLES, can_edit=can_edit)
+
+
+# ---- Knowledge management ----
+
+@project_bp.route('/<int:project_id>/knowledge', methods=['GET', 'POST'])
+@login_required
+def knowledge_list(project_id):
+    project = db.get_or_404(Project, project_id)
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'add':
+            db.session.add(Knowledge(
+                project_id=project_id,
+                title=request.form.get('title', '').strip(),
+                category=request.form.get('category', 'doc'),
+                link=request.form.get('link', '').strip() or None,
+                created_by=current_user.id,
+            ))
+            db.session.commit()
+            flash('知识条目已添加', 'success')
+        elif action == 'edit':
+            k = db.session.get(Knowledge, request.form.get('kid', type=int))
+            if k and k.project_id == project_id:
+                k.title = request.form.get('title', k.title).strip()
+                k.category = request.form.get('category', k.category)
+                k.link = request.form.get('link', '').strip() or None
+                db.session.commit()
+                flash('已更新', 'success')
+        elif action == 'delete':
+            k = db.session.get(Knowledge, request.form.get('kid', type=int))
+            if k and k.project_id == project_id:
+                db.session.delete(k)
+                db.session.commit()
+                flash('已删除', 'success')
+        return redirect(url_for('project.knowledge_list', project_id=project_id))
+
+    items = Knowledge.query.filter_by(project_id=project_id).order_by(Knowledge.category, Knowledge.title).all()
+    return render_template('project/knowledge.html', project=project, items=items,
+                           categories=Knowledge.CATEGORY_LABELS)
+
+
+# ---- Permission requests ----
+
+@project_bp.route('/<int:project_id>/permissions', methods=['GET', 'POST'])
+@login_required
+def permission_list(project_id):
+    project = db.get_or_404(Project, project_id)
+    is_pm = current_user.is_admin or current_user.has_role('PM', 'PL', 'FO')
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'add':
+            db.session.add(PermissionRequest(
+                project_id=project_id,
+                resource=request.form.get('resource', '').strip(),
+                applicants=request.form.get('applicants', '').strip(),
+                submitter_id=current_user.id,
+            ))
+            db.session.commit()
+            flash('权限申请已登记', 'success')
+        elif action == 'edit':
+            pr = db.session.get(PermissionRequest, request.form.get('prid', type=int))
+            if pr and pr.project_id == project_id and pr.status == 'draft':
+                pr.resource = request.form.get('resource', pr.resource).strip()
+                pr.applicants = request.form.get('applicants', pr.applicants).strip()
+                db.session.commit()
+                flash('已更新', 'success')
+        elif action == 'submit' and is_pm:
+            pr = db.session.get(PermissionRequest, request.form.get('prid', type=int))
+            if pr and pr.project_id == project_id and pr.status == 'draft':
+                pr.status = 'submitted'
+                db.session.commit()
+                flash('已提交审批', 'success')
+        elif action == 'approve' and is_pm:
+            pr = db.session.get(PermissionRequest, request.form.get('prid', type=int))
+            if pr and pr.project_id == project_id and pr.status == 'submitted':
+                pr.status = 'approved'
+                db.session.commit()
+                flash('审批完成', 'success')
+        elif action == 'delete':
+            pr = db.session.get(PermissionRequest, request.form.get('prid', type=int))
+            if pr and pr.project_id == project_id and pr.status == 'draft':
+                db.session.delete(pr)
+                db.session.commit()
+                flash('已删除', 'success')
+        return redirect(url_for('project.permission_list', project_id=project_id))
+
+    items = PermissionRequest.query.filter_by(project_id=project_id).order_by(PermissionRequest.created_at.desc()).all()
+    return render_template('project/permissions.html', project=project, items=items, is_pm=is_pm)
 
 
 # ---- Meeting minutes ----

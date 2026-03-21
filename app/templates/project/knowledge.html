@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}知识管理 · {{ project.name }} - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>知识管理 · {{ project.name }}</h4>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg"></i> 添加</button>
+</div>
+
+{% if items %}
+<div class="table-responsive">
+    <table class="table table-hover small">
+        <thead class="table-light"><tr><th>标题</th><th>分类</th><th>链接</th><th>创建人</th><th>更新</th><th>操作</th></tr></thead>
+        <tbody>
+        {% for k in items %}
+        <tr>
+            <td>{{ k.title }}</td>
+            <td><span class="badge bg-secondary">{{ k.category_label }}</span></td>
+            <td>{% if k.link %}<a href="{{ k.link }}" target="_blank" class="text-truncate d-inline-block" style="max-width:200px;">{{ k.link }}</a>{% else %}-{% endif %}</td>
+            <td>{{ k.creator.name }}</td>
+            <td class="text-muted">{{ k.updated_at.strftime('%m-%d') }}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary py-0" data-bs-toggle="modal" data-bs-target="#editModal"
+                        onclick="setEdit({{ k.id }}, '{{ k.title }}', '{{ k.category }}', '{{ k.link or '' }}')">编辑</button>
+                <form method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="kid" value="{{ k.id }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('删除？')"><i class="bi bi-x"></i></button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">暂无知识条目</div>
+{% endif %}
+
+<!-- Add Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="add">
+                <div class="modal-header py-2"><h6 class="modal-title">添加知识</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">标题 *</label>
+                        <div class="col-9"><input type="text" name="title" class="form-control form-control-sm" required></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">分类</label>
+                        <div class="col-9">
+                            <select name="category" class="form-select form-select-sm">
+                                {% for k, v in categories.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">链接</label>
+                        <div class="col-9"><input type="url" name="link" class="form-control form-control-sm" placeholder="https://..."></div>
+                    </div>
+                </div>
+                <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">添加</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="kid" id="editKid">
+                <div class="modal-header py-2"><h6 class="modal-title">编辑知识</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">标题</label>
+                        <div class="col-9"><input type="text" name="title" id="editTitle" class="form-control form-control-sm" required></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">分类</label>
+                        <div class="col-9">
+                            <select name="category" id="editCat" class="form-select form-select-sm">
+                                {% for k, v in categories.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">链接</label>
+                        <div class="col-9"><input type="url" name="link" id="editLink" class="form-control form-control-sm"></div>
+                    </div>
+                </div>
+                <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">保存</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function setEdit(id, title, cat, link) {
+    document.getElementById('editKid').value = id;
+    document.getElementById('editTitle').value = title;
+    document.getElementById('editCat').value = cat;
+    document.getElementById('editLink').value = link;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}权限申请 · {{ project.name }} - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>权限申请 · {{ project.name }}</h4>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg"></i> 登记</button>
+</div>
+
+{% if items %}
+<div class="table-responsive">
+    <table class="table table-hover small">
+        <thead class="table-light"><tr><th>群组/代码仓</th><th>申请人</th><th>提交人</th><th>状态</th><th>日期</th><th>操作</th></tr></thead>
+        <tbody>
+        {% for pr in items %}
+        <tr>
+            <td>{{ pr.resource }}</td>
+            <td>{% for n in pr.applicant_list %}<span class="badge bg-light text-dark border me-1">{{ n }}</span>{% endfor %}</td>
+            <td>{{ pr.submitter.name }}</td>
+            <td>
+                {% if pr.status == 'draft' %}<span class="badge bg-secondary">草稿</span>
+                {% elif pr.status == 'submitted' %}<span class="badge bg-warning text-dark">已提交审批</span>
+                {% else %}<span class="badge bg-success">审批完成</span>{% endif %}
+            </td>
+            <td class="text-muted">{{ pr.created_at.strftime('%m-%d') }}</td>
+            <td>
+                {% if pr.status == 'draft' %}
+                <button class="btn btn-sm btn-outline-primary py-0" data-bs-toggle="modal" data-bs-target="#editModal"
+                        onclick="setEditPR({{ pr.id }}, '{{ pr.resource }}', '{{ pr.applicants }}')">编辑</button>
+                {% if is_pm %}
+                <form method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="submit">
+                    <input type="hidden" name="prid" value="{{ pr.id }}">
+                    <button type="submit" class="btn btn-sm btn-outline-warning py-0">提交审批</button>
+                </form>
+                {% endif %}
+                <form method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="delete">
+                    <input type="hidden" name="prid" value="{{ pr.id }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('删除？')"><i class="bi bi-x"></i></button>
+                </form>
+                {% elif pr.status == 'submitted' and is_pm %}
+                <form method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="approve">
+                    <input type="hidden" name="prid" value="{{ pr.id }}">
+                    <button type="submit" class="btn btn-sm btn-success py-0">审批完成</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">暂无权限申请</div>
+{% endif %}
+
+<!-- Add Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="add">
+                <div class="modal-header py-2"><h6 class="modal-title">登记权限申请</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">群组/代码仓 *</label>
+                        <div class="col-9"><input type="text" name="resource" class="form-control form-control-sm" required placeholder="如：gitlab/project-x"></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">申请人 *</label>
+                        <div class="col-9"><input type="text" name="applicants" class="form-control form-control-sm" required placeholder="多人用逗号分隔，如：张三,李四,外部王总"></div>
+                    </div>
+                </div>
+                <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">登记</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="prid" id="editPRid">
+                <div class="modal-header py-2"><h6 class="modal-title">编辑权限申请</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">群组/代码仓</label>
+                        <div class="col-9"><input type="text" name="resource" id="editPRres" class="form-control form-control-sm" required></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">申请人</label>
+                        <div class="col-9"><input type="text" name="applicants" id="editPRapp" class="form-control form-control-sm" required></div>
+                    </div>
+                </div>
+                <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">保存</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function setEditPR(id, resource, applicants) {
+    document.getElementById('editPRid').value = id;
+    document.getElementById('editPRres').value = resource;
+    document.getElementById('editPRapp').value = applicants;
+}
+</script>
+{% endblock %}

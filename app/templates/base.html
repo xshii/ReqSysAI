@@ -116,6 +116,18 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.knowledge_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
+                           href="{{ url_for('project.knowledge_list', project_id=p.id) }}">
+                            知识管理
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.permission_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
+                           href="{{ url_for('project.permission_list', project_id=p.id) }}">
+                            权限申请
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'dashboard.stats' and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('dashboard.stats') }}?project_id={{ p.id }}">
                             统计报表
