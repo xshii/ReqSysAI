@@ -790,11 +790,14 @@ document.querySelectorAll('form[action$="/quick-todo"]').forEach(function(form) 
                 var row = createTodoRow(d.todo_id, title, {helper: d.helper || ''});
                 var reqIdInput = form.querySelector('input[name="req_id"]');
                 var rid = reqIdInput ? reqIdInput.value : '';
-                var listContainer = rid ? document.querySelector('.todo-list-for-req[data-req-id="' + rid + '"]') : null;
+                var catInput = form.querySelector('input[name="category"]');
+                var catVal = catInput ? catInput.value : '';
+                var listContainer = rid ? document.querySelector('.todo-list-for-req[data-req-id="' + rid + '"]')
+                    : (catVal ? document.querySelector('.todo-list-for-req[data-req-id="' + catVal + '"]') : null);
                 if (listContainer) {
                     listContainer.appendChild(row);
                 } else {
-                    form.parentElement.insertBefore(row, form);
+                    form.closest('.card-body').querySelector('.todo-list-for-req').appendChild(row);
                 }
                 if (titleInput.type === 'text') titleInput.value = '';
                 showToast(d.helper ? '已向 ' + d.helper + ' 发起求助' : title + ' 已添加', 'success');
