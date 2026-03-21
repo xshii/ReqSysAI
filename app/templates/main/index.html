@@ -34,6 +34,16 @@
             </div>
         </div>
 
+        {# Quick urgent todo (no requirement) #}
+        <form method="POST" action="{{ url_for('main.quick_todo') }}" class="mb-2 quick-todo-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="category" value="work">
+            <div class="input-group input-group-sm">
+                <span class="input-group-text bg-white border-end-0" style="font-size:.8em;"><i class="bi bi-lightning-charge text-warning"></i></span>
+                <input type="text" name="title" class="form-control border-start-0" placeholder="突发 Todo / @求助人 内容" required style="font-size:.8em;">
+            </div>
+        </form>
+
         {# Each requirement with its todos #}
         {% for r in display_reqs %}
         <div class="card mb-2">
