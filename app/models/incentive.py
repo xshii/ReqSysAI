@@ -37,7 +37,7 @@ class Incentive(db.Model):
         return INCENTIVE_SOURCE_LABELS.get(self.source, self.source)
 
     photo = db.Column(db.String(300), nullable=True)
-    team_name = db.Column(db.String(100), nullable=True)  # legacy, kept for data compat
+    team_name = db.Column(db.String(100), nullable=True)  # 已废弃，待下次迁移删除
     external_nominees = db.Column(db.String(500), nullable=True)  # 非系统内人员，逗号分隔
     submitted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 

@@ -9,7 +9,7 @@ class Requirement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     number = db.Column(db.String(20), unique=True, nullable=False, index=True)  # REQ-001
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
-    milestone_id = db.Column(db.Integer, db.ForeignKey('milestones.id'), nullable=True)  # legacy
+    milestone_id = db.Column(db.Integer, db.ForeignKey('milestones.id'), nullable=True)  # 已废弃，待下次迁移删除
     title = db.Column(db.String(300), nullable=False)
     description = db.Column(db.Text)
     priority = db.Column(db.String(20), default='medium')
