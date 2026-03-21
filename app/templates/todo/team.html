@@ -62,9 +62,7 @@
                     {% else %}
                         <span class="small">{{ t.title }}{% if is_carryover %} <span class="text-warning" style="font-size:.8em;">结转</span>{% endif %}</span>
                     {% endif %}
-                    {% if t.timer_running %}<span class="badge bg-success" style="font-size:.65em;"><i class="bi bi-stopwatch"></i></span>{% endif %}
                     {% if mine %}
-                    <button class="btn btn-sm py-0 px-1 {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer" data-id="{{ t.id }}" style="font-size:.7em;"><i class="bi bi-{{ 'pause-fill' if t.timer_running else 'play-fill' }}"></i></button>
                     <button class="btn btn-sm py-0 px-0 text-muted btn-delete" data-id="{{ t.id }}" style="font-size:.7em;"><i class="bi bi-x"></i></button>
                     {% endif %}
                 </div>
