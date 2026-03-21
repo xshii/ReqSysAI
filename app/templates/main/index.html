@@ -120,12 +120,12 @@
                             title="{{ '暂停番茄钟' if t.timer_running else '启动一个番茄钟' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;">
                         <i class="bi bi-{{ 'pause-fill' if t.timer_running else 'play-fill' }}"></i>
                     </button>
-                    <button class="btn btn-sm py-0 px-0 {% if t.need_help %}text-danger{% else %}text-muted{% endif %} btn-block-home" data-id="{{ t.id }}" title="{{ '解除阻塞' if t.need_help else '标记阻塞' }}" style="font-size:.7em;line-height:1;">
+                    <button class="btn btn-sm py-0 px-0 {% if t.need_help %}text-danger{% else %}text-muted{% endif %} btn-block-home" data-id="{{ t.id }}" title="{{ '解除阻塞' if t.need_help else '标记阻塞' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;">
                         <i class="bi bi-{% if t.need_help %}unlock{% else %}lock{% endif %}"></i>
                     </button>
                     {% endif %}
                     {{ pomodoro_icons(t.actual_minutes, current_user.pomodoro_minutes) }}
-                    <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" title="删除" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>
+                    <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" title="删除" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>
                 </div>
                 {% endfor %}
                 </div>
