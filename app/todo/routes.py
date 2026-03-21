@@ -421,6 +421,7 @@ def team():
     user_ids = [u.id for u in users]
     all_todos = Todo.query.filter(
         Todo.user_id.in_(user_ids),
+        Todo.category != 'personal',  # Exclude personal todos from team view
         db.or_(
             Todo.status == TODO_STATUS_TODO,
             db.and_(Todo.status == TODO_STATUS_DONE, Todo.done_date >= week_ago),
