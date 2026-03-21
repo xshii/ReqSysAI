@@ -24,12 +24,11 @@
 </div>
 {% endif %}
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h4 class="mb-0">{{ current_user.name }}，{{ today.strftime('%Y-%m-%d') }}</h4>
-    <button class="btn btn-sm btn-outline-primary" id="btnAiRecommend" title="AI 根据需求进度和截止日期推荐今日任务">
+<h4 class="mb-3">{{ current_user.name }}，{{ today.strftime('%Y-%m-%d') }}
+    <button class="btn btn-sm btn-outline-primary ms-2" id="btnAiRecommend" title="AI 根据需求进度和截止日期推荐今日任务" style="vertical-align:middle;">
         <i class="bi bi-robot"></i> AI 推荐
     </button>
-</div>
+</h4>
 
 <div class="row">
     <!-- Left: Todo + Requirements -->
