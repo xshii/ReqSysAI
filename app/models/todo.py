@@ -111,7 +111,7 @@ class TodoComment(db.Model):
     content = db.Column(db.String(500), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    user = db.relationship('User')
+    user = db.relationship('User', lazy='joined')
 
     def __repr__(self):
         return f'<TodoComment {self.id}>'

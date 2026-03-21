@@ -79,7 +79,6 @@
                     {% if mine %}
                     <div class="d-flex gap-1 flex-shrink-0 ms-3">
                         <button class="btn btn-sm {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer" data-id="{{ t.id }}" title="{{ '停止计时' if t.timer_running else '开始专注' }}"><i class="bi bi-stopwatch"></i></button>
-                        <button class="btn btn-sm btn-outline-info btn-comment" data-id="{{ t.id }}" title="进展评论"><i class="bi bi-chat-dots"></i></button>
                         <button class="btn btn-sm btn-outline-primary btn-help" data-id="{{ t.id }}" data-title="{{ t.title }}" title="派给他人"><i class="bi bi-person-plus"></i></button>
                         <button class="btn btn-sm btn-outline-danger btn-delete" data-id="{{ t.id }}" title="删除"><i class="bi bi-trash"></i></button>
                     </div>
@@ -105,12 +104,18 @@
                     <input type="text" class="form-control form-control-sm add-item-input" data-todo-id="{{ t.id }}" placeholder="+ 添加子项，回车确认">
                 </div>
                 {% endif %}
-                <!-- Comments (hidden by default, toggled by button) -->
-                <div class="mt-2 border-top pt-2 d-none comment-section" id="comments-{{ t.id }}">
-                    <div class="comment-list small"></div>
-                    <div class="input-group input-group-sm mt-1">
+                <!-- Comments -->
+                {% if t.comments %}
+                <div class="mt-2 border-top pt-1">
+                    {% for c in t.comments %}
+                    <div class="small text-muted mb-1"><strong>{{ c.user.name }}</strong> <span style="font-size:.8em;">{{ c.created_at.strftime('%m-%d %H:%M') }}</span>：{{ c.content }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div class="mt-1">
+                    <div class="input-group input-group-sm">
                         <input type="text" class="form-control comment-input" data-todo-id="{{ t.id }}" placeholder="写评论/进展..." maxlength="500">
-                        <button class="btn btn-outline-primary comment-submit" data-todo-id="{{ t.id }}"><i class="bi bi-send"></i></button>
+                        <button class="btn btn-outline-secondary comment-submit" data-todo-id="{{ t.id }}"><i class="bi bi-send"></i></button>
                     </div>
                 </div>
             </div>
@@ -397,29 +402,6 @@ document.querySelectorAll('.btn-timer').forEach(function(b) {
     });
 });
 
-/* Comments toggle + load */
-document.querySelectorAll('.btn-comment').forEach(function(b) {
-    b.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var sec = document.getElementById('comments-' + b.dataset.id);
-        if (!sec) return;
-        sec.classList.toggle('d-none');
-        if (!sec.classList.contains('d-none') && !sec.dataset.loaded) {
-            fetch('/todos/' + b.dataset.id + '/comments', {headers: {'X-CSRFToken': csrfToken}})
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                    if (d.ok) {
-                        var html = d.comments.map(function(c) {
-                            return '<div class="mb-1"><strong>' + c.user + '</strong> <span class="text-muted">' + c.time + '</span><br>' + c.content + '</div>';
-                        }).join('');
-                        sec.querySelector('.comment-list').innerHTML = html || '<span class="text-muted">暂无评论</span>';
-                        sec.dataset.loaded = '1';
-                    }
-                });
-        }
-    });
-});
-
 /* Comment submit */
 document.querySelectorAll('.comment-submit').forEach(function(b) {
     b.addEventListener('click', function() {
@@ -428,13 +410,7 @@ document.querySelectorAll('.comment-submit').forEach(function(b) {
         if (!content) return;
         api('/todos/' + b.dataset.todoId + '/comments', {content: content})
             .then(function(r) { return r.json(); })
-            .then(function(d) {
-                if (d.ok) {
-                    var list = document.querySelector('#comments-' + b.dataset.todoId + ' .comment-list');
-                    list.innerHTML += '<div class="mb-1"><strong>' + d.comment.user + '</strong> <span class="text-muted">' + d.comment.time + '</span><br>' + d.comment.content + '</div>';
-                    inp.value = '';
-                }
-            });
+            .then(function(d) { if (d.ok) location.reload(); });
     });
 });
 document.querySelectorAll('.comment-input').forEach(function(inp) {

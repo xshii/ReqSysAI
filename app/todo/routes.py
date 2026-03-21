@@ -428,6 +428,7 @@ def team():
     ).options(
         joinedload(Todo.requirements), joinedload(Todo.parent),
         joinedload(Todo.children), joinedload(Todo.items),
+        joinedload(Todo.comments),
     ).order_by(
         db.case((Todo.status == TODO_STATUS_TODO, 0), else_=1),  # 未完成在前
         Todo.sort_order,
