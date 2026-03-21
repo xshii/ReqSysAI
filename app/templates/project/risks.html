@@ -29,6 +29,7 @@
                 <th>责任人</th>
                 <th>跟踪人</th>
                 <th>关联需求</th>
+                <th>提出</th>
                 <th>预计闭环</th>
                 <th>操作</th>
             </tr>
@@ -65,6 +66,7 @@
             <td>{{ r.owner or '-' }}</td>
             <td>{{ r.tracker.name if r.tracker else '-' }}</td>
             <td>{% if r.requirement %}<span class="small">{{ r.requirement.number }}</span>{% else %}-{% endif %}</td>
+            <td class="small text-muted">{{ r.created_at.strftime('%m-%d') }}</td>
             <td class="small {{ 'text-danger fw-bold' if r.is_overdue else '' }}">{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
             <td>
                 {% if r.status == 'open' %}
