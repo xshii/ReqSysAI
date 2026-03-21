@@ -68,6 +68,8 @@
             <td class="small {{ 'text-danger fw-bold' if r.is_overdue else '' }}">{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
             <td>
                 {% if r.status == 'open' %}
+                <button class="btn btn-sm btn-outline-primary py-0" data-bs-toggle="modal" data-bs-target="#editRiskModal"
+                        onclick="setEditRisk({{ r.id }}, '{{ r.title }}', '{{ r.severity }}', '{{ r.owner or '' }}', '{{ r.tracker_id or '' }}', '{{ r.due_date.strftime('%Y-%m-%d') if r.due_date else '' }}')">编辑</button>
                 <button class="btn btn-sm btn-outline-success py-0" data-bs-toggle="modal" data-bs-target="#resolveModal" onclick="setResolveId({{ r.id }})">解决</button>
                 {% elif r.status == 'resolved' %}
                 <form method="POST" action="{{ url_for('project.risk_close', risk_id=r.id) }}" class="d-inline">
@@ -162,6 +164,57 @@
     </div>
 </div>
 
+<!-- 编辑风险弹窗 -->
+<div class="modal fade" id="editRiskModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="editRiskForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title">编辑风险</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">标题</label>
+                        <div class="col-9"><input type="text" name="title" id="editRiskTitle" class="form-control form-control-sm" required></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">严重程度</label>
+                        <div class="col-9">
+                            <select name="severity" id="editRiskSeverity" class="form-select form-select-sm">
+                                <option value="high">高</option>
+                                <option value="medium">中</option>
+                                <option value="low">低</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">责任人</label>
+                        <div class="col-9"><input type="text" name="owner" id="editRiskOwner" class="form-control form-control-sm"></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">跟踪人</label>
+                        <div class="col-9">
+                            <select name="tracker_id" id="editRiskTracker" class="form-select form-select-sm">
+                                <option value="">-</option>
+                                {% for u in users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">闭环日期</label>
+                        <div class="col-9"><input type="date" name="due_date" id="editRiskDue" class="form-control form-control-sm" required></div>
+                    </div>
+                </div>
+                <div class="modal-footer py-1">
+                    <button type="submit" class="btn btn-sm btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- 解决风险弹窗 -->
 <div class="modal fade" id="resolveModal" tabindex="-1">
     <div class="modal-dialog">
@@ -189,6 +242,15 @@
 <script>
 function setResolveId(id) {
     document.getElementById('resolveForm').action = '/projects/risks/' + id + '/resolve';
+}
+
+function setEditRisk(id, title, severity, owner, trackerId, dueDate) {
+    document.getElementById('editRiskForm').action = '/projects/risks/' + id + '/edit';
+    document.getElementById('editRiskTitle').value = title;
+    document.getElementById('editRiskSeverity').value = severity;
+    document.getElementById('editRiskOwner').value = owner;
+    document.getElementById('editRiskTracker').value = trackerId;
+    document.getElementById('editRiskDue').value = dueDate;
 }
 
 /* Requirement search with Tab completion */

@@ -247,6 +247,28 @@ def risk_reopen(risk_id):
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
 
 
+@project_bp.route('/risks/<int:risk_id>/edit', methods=['POST'])
+@login_required
+def risk_edit(risk_id):
+    """Edit risk details."""
+    risk = db.get_or_404(Risk, risk_id)
+    risk.title = request.form.get('title', risk.title).strip()
+    risk.severity = request.form.get('severity', risk.severity)
+    risk.owner = request.form.get('owner', '').strip() or None
+    tracker_id = request.form.get('tracker_id', type=int)
+    risk.tracker_id = tracker_id if tracker_id else None
+    due = request.form.get('due_date', '')
+    if due:
+        from datetime import datetime as dt
+        try:
+            risk.due_date = dt.strptime(due, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    db.session.commit()
+    flash('风险已更新', 'success')
+    return redirect(url_for('project.risk_list', project_id=risk.project_id))
+
+
 @project_bp.route('/risks/<int:risk_id>/comment', methods=['POST'])
 @login_required
 def risk_comment(risk_id):
