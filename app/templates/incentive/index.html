@@ -53,7 +53,7 @@
                 <div>
                 <h6 class="mb-1"><span class="badge bg-{{ inc.category_color }} me-1">{{ inc.category_label }}</span>{{ inc.title }}</h6>
                 <div class="text-muted small mb-1">
-                    推荐人物：{% for u in inc.nominees %}<span class="badge bg-light text-dark border me-1">{{ u.name }}</span>{% endfor %}
+                    推荐人员：{% for n in inc.all_nominee_names %}<span class="badge bg-light text-dark border me-1">{{ n }}</span>{% endfor %}
                 </div>
                 <p class="mb-1 small">{{ inc.description }}</p>
                 {% if inc.review_comment and is_reviewer %}
@@ -256,16 +256,20 @@ function checkAI() {
     if (!search) return;
     var chosen = {};
 
-    // Enter selects first visible match
+    // Enter: select first match or add as external
     search.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
             e.preventDefault();
-            var first = dropdown.querySelector('.nominee-opt[style=""]') || dropdown.querySelector('.nominee-opt:not([style*="none"])');
-            if (first && dropdown.style.display !== 'none') {
+            var q = search.value.trim();
+            if (!q) return;
+            var first = dropdown.querySelector('.nominee-opt:not([style*="none"])');
+            if (first) {
                 addNominee(first.dataset.id, first.dataset.name);
-                search.value = '';
-                filterDD();
+            } else {
+                addExternal(q);
             }
+            search.value = '';
+            filterDD();
         }
     });
     search.addEventListener('focus', function() { dropdown.style.display = 'block'; filterDD(); });
@@ -293,30 +297,39 @@ function checkAI() {
         });
     });
 
-    // On form submit: auto-select if search has text
+    // Enter: select first match, or add as external name
+    // On form submit: auto-add remaining text
     var form = search.closest('form');
     if (form) {
         form.addEventListener('submit', function(e) {
             var q = search.value.trim();
-            if (q && !Object.keys(chosen).length) {
-                // Try to auto-select first match
+            if (q) {
                 var first = dropdown.querySelector('.nominee-opt:not([style*="none"])');
                 if (first) {
                     addNominee(first.dataset.id, first.dataset.name);
-                    search.value = '';
                 } else {
-                    e.preventDefault();
-                    alert('未找到用户「' + q + '」，请从下拉列表选择');
-                    search.focus();
-                    return;
+                    addExternal(q);
                 }
+                search.value = '';
             }
-            if (!selected.querySelector('input[name="nominee_ids"]')) {
+            if (!selected.querySelector('input[name="nominee_ids"]') && !selected.querySelector('input[name="external_nominees"]')) {
                 e.preventDefault();
                 alert('请选择至少一位推荐人员');
                 search.focus();
             }
         });
+    }
+
+    function addExternal(name) {
+        if (chosen['ext_' + name]) return;
+        chosen['ext_' + name] = true;
+        var tag = document.createElement('span');
+        tag.className = 'badge bg-secondary d-inline-flex align-items-center gap-1';
+        tag.innerHTML = name + ' <span class="text-muted" style="font-size:.7em;">外部</span>'
+            + '<input type="hidden" name="external_nominees" value="' + name + '">'
+            + '<i class="bi bi-x" style="cursor:pointer;font-size:.8em;"></i>';
+        tag.querySelector('i').addEventListener('click', function() { delete chosen['ext_' + name]; tag.remove(); });
+        selected.appendChild(tag);
     }
 
     function addNominee(id, name) {

@@ -29,8 +29,9 @@ class Incentive(db.Model):
         'beyond': 'warning text-dark',
         'clean': 'info',
     }
-    photo = db.Column(db.String(300), nullable=True)  # 照片路径
-    team_name = db.Column(db.String(100), nullable=True)  # 团队名（团队事迹）
+    photo = db.Column(db.String(300), nullable=True)
+    team_name = db.Column(db.String(100), nullable=True)  # legacy, kept for data compat
+    external_nominees = db.Column(db.String(500), nullable=True)  # 非系统内人员，逗号分隔
     submitted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     # 评审
@@ -46,6 +47,14 @@ class Incentive(db.Model):
     submitter = db.relationship('User', foreign_keys=[submitted_by], backref='submitted_incentives')
     reviewer = db.relationship('User', foreign_keys=[reviewed_by], backref='reviewed_incentives')
     nominees = db.relationship('User', secondary=incentive_nominees, backref='nominated_incentives')
+
+    @property
+    def all_nominee_names(self):
+        """All nominee names: system users + external."""
+        names = [u.name for u in self.nominees]
+        if self.external_nominees:
+            names.extend(n.strip() for n in self.external_nominees.split(',') if n.strip())
+        return names
 
     _STATUS_META = {
         'pending':  ('待评审', 'warning text-dark'),

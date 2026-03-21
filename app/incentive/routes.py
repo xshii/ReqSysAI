@@ -42,17 +42,22 @@ def submit():
     description = request.form.get('description', '').strip()
     nominee_ids = request.form.getlist('nominee_ids', type=int)
 
-    if not title or not description or not nominee_ids:
-        flash('请填写完整信息', 'danger')
+    if not title or not description:
+        flash('请填写标题和描述', 'danger')
         return redirect(url_for('incentive.index'))
 
     photo_path = save_photo(request.files.get('photo'))
 
-    nominees = User.query.filter(User.id.in_(nominee_ids)).all()
+    nominees = User.query.filter(User.id.in_(nominee_ids)).all() if nominee_ids else []
+    ext_names = request.form.getlist('external_nominees')
+    ext_str = ','.join(n.strip() for n in ext_names if n.strip()) or None
+    if not nominees and not ext_str:
+        flash('请选择至少一位推荐人员', 'danger')
+        return redirect(url_for('incentive.index'))
     category = request.form.get('category', 'professional')
     inc = Incentive(
         title=title, description=description, category=category,
-        photo=photo_path,
+        photo=photo_path, external_nominees=ext_str,
         submitted_by=current_user.id, nominees=nominees,
     )
     db.session.add(inc)

@@ -266,7 +266,7 @@
                             <button class="btn btn-sm py-0 px-0 {% if inc.likes %}text-danger{% else %}text-secondary{% endif %} inc-like" data-id="{{ inc.id }}" style="font-size:.75em;">
                                 <i class="bi bi-heart{% if inc.likes %}-fill{% endif %}"></i><span>{{ inc.likes or '' }}</span>
                             </button>
-                            <strong>{% for u in inc.nominees %}{{ u.name }}{% if not loop.last %}、{% endif %}{% endfor %}</strong>
+                            <strong>{{ inc.all_nominee_names | join('、') }}</strong>
                             <span class="badge bg-{{ inc.category_color }}" style="font-size:.6em;">{{ inc.category_label }}</span>
                         </div>
                         <div class="text-muted text-truncate" title="{{ inc.title }}">{{ inc.title }}</div>
