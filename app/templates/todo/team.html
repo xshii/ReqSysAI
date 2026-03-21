@@ -41,7 +41,7 @@
                 {% endif %}
                 {# Overdue highlight: created before today = yesterday's carryover #}
                 {% set is_carryover = t.created_date and t.created_date < today %}
-                <div class="d-flex align-items-center mb-1 ps-2 todo-card {% if is_carryover %}bg-warning bg-opacity-10 border-start border-3 border-warning{% endif %}" data-id="{{ t.id }}">
+                <div class="d-flex align-items-center mb-1 ps-2 todo-card {% if t.need_help %}bg-danger bg-opacity-10 border-start border-3 border-danger{% elif is_carryover %}bg-warning bg-opacity-10 border-start border-3 border-warning{% endif %}" data-id="{{ t.id }}">
                     {% if t.items %}
                         {% for item in t.items %}
                         <input class="form-check-input me-1 item-cb" type="checkbox" data-item-id="{{ item.id }}" style="font-size:.85em;"
@@ -51,7 +51,9 @@
                     {% else %}
                         <span class="small">{{ t.title }}{% if is_carryover %} <span class="text-warning" style="font-size:.8em;">结转</span>{% endif %}</span>
                     {% endif %}
+                    {% if t.need_help %}<span class="text-danger small" style="font-size:.75em;">🔴{{ t.blocked_reason or '阻塞' }}</span>{% endif %}
                     {% if mine %}
+                    <button class="btn btn-sm py-0 px-0 {% if t.need_help %}text-danger{% else %}text-muted{% endif %} btn-block ms-1" data-id="{{ t.id }}" title="{{ '解除阻塞' if t.need_help else '标记阻塞' }}" style="font-size:.7em;"><i class="bi bi-{% if t.need_help %}unlock{% else %}lock{% endif %}"></i></button>
                     <button class="btn btn-sm py-0 px-0 text-muted btn-delete ms-1" data-id="{{ t.id }}" style="font-size:.7em;"><i class="bi bi-x"></i></button>
                     {% endif %}
                 </div>
@@ -238,6 +240,23 @@ document.querySelectorAll('.add-item-input').forEach(function(inp) {
         var title = inp.value.trim();
         if (!title) return;
         api('/todos/' + inp.dataset.todoId + '/items/add', {title: title}).then(function(r) { if (r.ok) location.reload(); });
+    });
+});
+
+/* Block toggle */
+document.querySelectorAll('.btn-block').forEach(function(b) {
+    b.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var isBlocked = b.querySelector('i').classList.contains('bi-unlock');
+        if (isBlocked) {
+            // Unblock
+            api('/todos/' + b.dataset.id + '/block', {}).then(function(r) { if (r.ok) location.reload(); });
+        } else {
+            // Block - ask reason
+            var reason = prompt('阻塞原因（可选）：');
+            if (reason === null) return; // cancelled
+            api('/todos/' + b.dataset.id + '/block', {reason: reason}).then(function(r) { if (r.ok) location.reload(); });
+        }
     });
 });
 

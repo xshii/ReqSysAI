@@ -24,7 +24,8 @@ class Todo(db.Model):
     due_date = db.Column(db.Date, nullable=True)
     created_date = db.Column(db.Date, default=date.today)
     done_date = db.Column(db.Date, nullable=True)
-    need_help = db.Column(db.Boolean, default=False)
+    need_help = db.Column(db.Boolean, default=False)  # 阻塞标记
+    blocked_reason = db.Column(db.String(200), nullable=True)  # 阻塞原因
     started_at = db.Column(db.DateTime, nullable=True)  # Timer start
     actual_minutes = db.Column(db.Integer, nullable=True)  # Recorded on completion
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

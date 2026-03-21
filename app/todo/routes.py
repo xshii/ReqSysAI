@@ -128,16 +128,24 @@ def timer(todo_id):
 
 # ---- Help / Comments ----
 
-@todo_bp.route('/<int:todo_id>/need-help', methods=['POST'])
+@todo_bp.route('/<int:todo_id>/block', methods=['POST'])
 @login_required
-def toggle_help(todo_id):
-    """Toggle need_help flag."""
+def toggle_block(todo_id):
+    """Toggle blocked status with optional reason."""
     todo = db.get_or_404(Todo, todo_id)
     if todo.user_id != current_user.id:
         return jsonify(ok=False), 403
-    todo.need_help = not todo.need_help
+    data = request.get_json() or {}
+    if todo.need_help:
+        # Unblock
+        todo.need_help = False
+        todo.blocked_reason = None
+    else:
+        # Block
+        todo.need_help = True
+        todo.blocked_reason = (data.get('reason') or '').strip()[:200] or None
     db.session.commit()
-    return jsonify(ok=True, need_help=todo.need_help)
+    return jsonify(ok=True, blocked=todo.need_help, reason=todo.blocked_reason)
 
 
 @todo_bp.route('/<int:todo_id>/comments', methods=['GET'])
@@ -448,6 +456,7 @@ def team():
     # Sort active: req-linked first (grouped by req_id), then unlinked
     for uid in user_active:
         user_active[uid].sort(key=lambda t: (
+            0 if t.need_help else 1,  # Blocked first
             0 if t.requirements else 1,
             t.requirements[0].id if t.requirements else 999999,
         ))
