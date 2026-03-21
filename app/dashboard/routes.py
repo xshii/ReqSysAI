@@ -268,7 +268,10 @@ def weekly_report():
             for r in all_reqs:
                 due_str = f'，预期 {r.due_date.strftime("%m-%d")}' if r.due_date else ''
                 days_str = f'，预估 {r.estimate_days}人天' if r.estimate_days else ''
-                overdue = '⚠️超期' if (r.due_date and r.due_date < date.today() and r.status not in REQ_INACTIVE_STATUSES) else ''
+                if r.due_date and r.due_date < date.today() and r.status not in REQ_INACTIVE_STATUSES:
+                    overdue = f'⚠️已延期{(date.today() - r.due_date).days}天'
+                else:
+                    overdue = ''
                 children_str = ''
                 if r.children:
                     done_children = sum(1 for c in r.children if c.status in REQ_INACTIVE_STATUSES)
@@ -287,6 +290,18 @@ def weekly_report():
             for t in todos_active:
                 reqs_str = ', '.join(r.number for r in t.requirements)
                 lines.append(f'- {t.user.name}: {t.title}（{reqs_str}）')
+
+        if open_risks:
+            lines.append('\n风险&问题（未解决）：')
+            for r in open_risks:
+                r_days = (r.due_date - date.today()).days if r.due_date else 999
+                r_status = f'已延期{-r_days}天' if r_days < 0 else f'剩{r_days}天'
+                lines.append(f'- {r.title}（{r.severity_label}，{r_status}，跟踪人：{r.tracker.name if r.tracker else "无"}）')
+
+        if req_changes:
+            lines.append('\n本周需求状态变更：')
+            for r in req_changes:
+                lines.append(f'- [{r.number}] {r.title}（{r.status_label}）')
 
         if req_investment:
             lines.append('\n需求投入汇总（人×天）：')
