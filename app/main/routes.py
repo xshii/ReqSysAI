@@ -200,6 +200,60 @@ def quick_todo():
     return jsonify(ok=True, title=title, todo_id=todo.id) if is_ajax else redirect(url_for('main.index'))
 
 
+@main_bp.route('/api/ai-recommend-todos', methods=['POST'])
+@login_required
+def ai_recommend_todos():
+    """AI recommends today's todos based on requirements, deadlines, and recent work."""
+    from app.services.ai import call_ollama
+    from app.services.prompts import get_prompt
+
+    today = date.today()
+
+    # Gather context: active requirements with deadlines
+    my_reqs = Requirement.query.filter_by(assignee_id=current_user.id)\
+        .filter(Requirement.status.notin_(REQ_INACTIVE_STATUSES))\
+        .order_by(Requirement.priority, Requirement.due_date).all()
+    if not my_reqs:
+        return jsonify(ok=False, msg='暂无进行中的需求')
+
+    # Recent todos (last 3 days) for continuity
+    recent = Todo.query.filter_by(user_id=current_user.id)\
+        .filter(Todo.created_date >= today - timedelta(days=3))\
+        .options(joinedload(Todo.requirements)).all()
+
+    lines = []
+    for r in my_reqs:
+        due = f'，截止 {r.due_date.strftime("%m-%d")}' if r.due_date else ''
+        days_left = (r.due_date - today).days if r.due_date else 999
+        urgency = '【紧急】' if days_left <= 3 else ''
+        lines.append(f'{urgency}{r.number} {r.title}（{r.status_label}{due}，预估{r.estimate_days or "?"}人天）')
+
+    if recent:
+        lines.append('\n近3天已做的任务：')
+        for t in recent:
+            status = '✓' if t.status == TODO_STATUS_DONE else '○'
+            lines.append(f'  {status} {t.title}')
+
+    prompt = get_prompt('todo_recommend') + '\n\n' + '\n'.join(lines)
+    result, _ = call_ollama(prompt)
+    if not result:
+        return jsonify(ok=False, msg='AI 推荐失败，请重试')
+    if isinstance(result, dict):
+        result = [result]
+    if not isinstance(result, list):
+        return jsonify(ok=False, msg='AI 返回格式异常')
+
+    # Normalize results
+    todos = []
+    for item in result:
+        if isinstance(item, dict) and item.get('title'):
+            todos.append({
+                'title': item['title'],
+                'req_number': item.get('req_number', ''),
+            })
+    return jsonify(ok=True, todos=todos)
+
+
 @main_bp.route('/api/search')
 @login_required
 def api_search():

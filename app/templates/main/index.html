@@ -15,6 +15,25 @@
 <div class="row">
     <!-- Left: Todo + Requirements -->
     <div class="col-md-7">
+        <!-- AI Recommend -->
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span></span>
+            <button class="btn btn-sm btn-outline-primary" id="btnAiRecommend" title="AI 根据需求进度和截止日期推荐今日任务">
+                <i class="bi bi-robot"></i> AI 推荐今日 Todo
+            </button>
+        </div>
+        <div id="aiRecommendArea" class="d-none mb-2">
+            <div class="card border-primary border-opacity-25">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="small fw-bold text-primary"><i class="bi bi-robot"></i> AI 推荐</span>
+                        <button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="document.getElementById('aiRecommendArea').classList.add('d-none')"><i class="bi bi-x"></i></button>
+                    </div>
+                    <div id="aiRecommendList"></div>
+                </div>
+            </div>
+        </div>
+
         {# Each requirement with its todos #}
         {% for r in display_reqs %}
         <div class="card mb-2">
@@ -47,6 +66,7 @@
                     </button>
                     {% endif %}
                     {% if t.actual_minutes %}<span class="text-muted" style="font-size:.7em;">{{ t.actual_minutes }}m</span>{% endif %}
+                    <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" title="删除" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>
                 </div>
                 {% endfor %}
             </div>
@@ -58,12 +78,13 @@
             <div class="card-body py-2">
                 <div class="small fw-bold text-secondary mb-1"><i class="bi bi-people"></i> 团队事务</div>
                 {% for t in team_todos %}
-                <div class="d-flex align-items-start gap-2 mb-1 ps-2 {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}">
+                <div class="d-flex align-items-center gap-1 mb-1 ps-2 {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}">
                     <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent"><i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-secondary' }}"></i></button>
                     </form>
                     <span class="small">{{ t.title }}</span>
+                    <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" style="font-size:.7em;"><i class="bi bi-x"></i></button>
                 </div>
                 {% endfor %}
                 <form method="POST" action="{{ url_for('main.quick_todo') }}" class="ps-2">
@@ -79,12 +100,13 @@
             <div class="card-body py-2">
                 <div class="small fw-bold text-secondary mb-1"><i class="bi bi-person-hearts"></i> 个人提升</div>
                 {% for t in personal_todos %}
-                <div class="d-flex align-items-start gap-2 mb-1 ps-2 {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}">
+                <div class="d-flex align-items-center gap-1 mb-1 ps-2 {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}">
                     <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent"><i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-secondary' }}"></i></button>
                     </form>
                     <span class="small">{{ t.title }}</span>
+                    <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" style="font-size:.7em;"><i class="bi bi-x"></i></button>
                 </div>
                 {% endfor %}
                 <div class="d-flex gap-1 ps-2 mb-1 flex-wrap">
@@ -256,6 +278,57 @@
 
 {% block extra_js %}
 <script>
+// AI Recommend
+document.getElementById('btnAiRecommend').addEventListener('click', function() {
+    var btn = this;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 推荐中...';
+    apiPost('{{ url_for("main.ai_recommend_todos") }}', {}).then(function(d) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-robot"></i> AI 推荐今日 Todo';
+        if (d && d.ok && d.todos.length) {
+            var area = document.getElementById('aiRecommendArea');
+            var list = document.getElementById('aiRecommendList');
+            var html = '';
+            d.todos.forEach(function(t, i) {
+                html += '<div class="d-flex align-items-center gap-1 mb-1 ai-rec-item" id="aiRec' + i + '">'
+                    + '<span class="small flex-grow-1">' + (t.req_number ? '<span class="text-muted">' + t.req_number + '</span> ' : '') + t.title + '</span>'
+                    + '<button class="btn btn-sm py-0 px-1 btn-outline-success ai-adopt" data-title="' + t.title.replace(/"/g, '&quot;') + '" data-req="' + (t.req_number || '') + '" title="采纳"><i class="bi bi-plus"></i></button>'
+                    + '<button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="this.closest(\'.ai-rec-item\').remove()" title="忽略"><i class="bi bi-x"></i></button>'
+                    + '</div>';
+            });
+            list.innerHTML = html;
+            area.classList.remove('d-none');
+            // Bind adopt buttons
+            list.querySelectorAll('.ai-adopt').forEach(function(ab) {
+                ab.addEventListener('click', function() {
+                    apiPost('{{ url_for("main.quick_todo") }}', {title: ab.dataset.title, category: 'work'}).then(function(r) {
+                        if (r && r.ok) {
+                            ab.closest('.ai-rec-item').remove();
+                            showToast(ab.dataset.title + ' 已采纳', 'success');
+                        }
+                    });
+                });
+            });
+        } else {
+            showToast(d.msg || '暂无推荐', 'info');
+        }
+    }).catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-robot"></i> AI 推荐今日 Todo';
+        showToast('AI 服务不可用', 'danger');
+    });
+});
+
+// Delete todo
+document.querySelectorAll('.btn-delete-home').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        apiPost('/todos/' + btn.dataset.id + '/edit', {title: ''}).then(function(d) {
+            if (d && d.ok) btn.closest('.d-flex').remove();
+        });
+    });
+});
+
 // Init Bootstrap tooltips
 document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
     new bootstrap.Tooltip(el);
