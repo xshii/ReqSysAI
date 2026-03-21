@@ -10,7 +10,7 @@
 {% if items %}
 <div class="table-responsive">
     <table class="table table-hover small">
-        <thead class="table-light"><tr><th>群组/代码仓</th><th>申请人</th><th>提交人</th><th>状态</th><th>日期</th><th>操作</th></tr></thead>
+        <thead class="table-light"><tr><th>群组/代码仓</th><th>申请人</th><th>提交人</th><th>状态</th><th>登记</th><th>提交审批</th><th>审批通过</th><th>操作</th></tr></thead>
         <tbody>
         {% for pr in items %}
         <tr>
@@ -23,6 +23,8 @@
                 {% else %}<span class="badge bg-success">审批完成</span>{% endif %}
             </td>
             <td class="text-muted">{{ pr.created_at.strftime('%m-%d') }}</td>
+            <td class="text-muted">{{ pr.submitted_at.strftime('%m-%d') if pr.submitted_at else '-' }}</td>
+            <td class="text-muted">{{ pr.approved_at.strftime('%m-%d') if pr.approved_at else '-' }}</td>
             <td>
                 {% if pr.status == 'draft' %}
                 <button class="btn btn-sm btn-outline-primary py-0" data-bs-toggle="modal" data-bs-target="#editModal"

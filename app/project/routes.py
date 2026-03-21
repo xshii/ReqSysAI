@@ -410,12 +410,14 @@ def permission_list(project_id):
             pr = db.session.get(PermissionRequest, request.form.get('prid', type=int))
             if pr and pr.project_id == project_id and pr.status == 'draft':
                 pr.status = 'submitted'
+                pr.submitted_at = datetime.utcnow()
                 db.session.commit()
                 flash('已提交审批', 'success')
         elif action == 'approve' and is_pm:
             pr = db.session.get(PermissionRequest, request.form.get('prid', type=int))
             if pr and pr.project_id == project_id and pr.status == 'submitted':
                 pr.status = 'approved'
+                pr.approved_at = datetime.utcnow()
                 db.session.commit()
                 flash('审批完成', 'success')
         elif action == 'delete':
