@@ -69,7 +69,7 @@
             <td>
                 {% if r.status == 'open' %}
                 <button class="btn btn-sm btn-outline-primary py-0" data-bs-toggle="modal" data-bs-target="#editRiskModal"
-                        onclick="setEditRisk({{ r.id }}, '{{ r.title }}', '{{ r.severity }}', '{{ r.owner or '' }}', '{{ r.tracker_id or '' }}', '{{ r.due_date.strftime('%Y-%m-%d') if r.due_date else '' }}')">编辑</button>
+                        onclick="setEditRisk({{ r.id }}, '{{ r.title }}', '{{ r.severity }}', '{{ r.owner or '' }}', '{{ r.owner or '' }}', '{{ r.tracker_id or '' }}', '{{ r.tracker.name if r.tracker else '' }}', '{{ r.due_date.strftime('%Y-%m-%d') if r.due_date else '' }}')">编辑</button>
                 <button class="btn btn-sm btn-outline-success py-0" data-bs-toggle="modal" data-bs-target="#resolveModal" onclick="setResolveId({{ r.id }})">解决</button>
                 {% elif r.status == 'resolved' %}
                 <form method="POST" action="{{ url_for('project.risk_close', risk_id=r.id) }}" class="d-inline">
@@ -125,19 +125,15 @@
                             <input type="date" name="due_date" class="form-control form-control-sm" required>
                         </div>
                     </div>
+                    {% from "_user_picker.html" import user_picker %}
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">责任人（可填外部人员）</label>
-                            <input type="text" name="owner" class="form-control form-control-sm" placeholder="姓名">
+                            <label class="form-label">责任人</label>
+                            {{ user_picker('owner', users, mode='text', placeholder='搜索或输入外部人员') }}
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">跟踪人</label>
-                            <select name="tracker_id" class="form-select form-select-sm" id="trackerId">
-                                <option value="">选择跟踪人</option>
-                                {% for u in users %}
-                                <option value="{{ u.id }}">{{ u.name }}</option>
-                                {% endfor %}
-                            </select>
+                            {{ user_picker('tracker_id', users, mode='id', placeholder='搜索姓名/工号...') }}
                         </div>
                     </div>
                     <div class="mb-3 position-relative">
@@ -191,16 +187,11 @@
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">责任人</label>
-                        <div class="col-9"><input type="text" name="owner" id="editRiskOwner" class="form-control form-control-sm"></div>
+                        <div class="col-9">{{ user_picker('owner', users, mode='text', placeholder='搜索或输入外部人员') }}</div>
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">跟踪人</label>
-                        <div class="col-9">
-                            <select name="tracker_id" id="editRiskTracker" class="form-select form-select-sm">
-                                <option value="">-</option>
-                                {% for u in users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
-                            </select>
-                        </div>
+                        <div class="col-9">{{ user_picker('tracker_id', users, mode='id', placeholder='搜索姓名/工号...') }}</div>
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">闭环日期</label>
@@ -244,13 +235,24 @@ function setResolveId(id) {
     document.getElementById('resolveForm').action = '/projects/risks/' + id + '/resolve';
 }
 
-function setEditRisk(id, title, severity, owner, trackerId, dueDate) {
+function setEditRisk(id, title, severity, owner, ownerName, trackerId, trackerName, dueDate) {
     document.getElementById('editRiskForm').action = '/projects/risks/' + id + '/edit';
     document.getElementById('editRiskTitle').value = title;
     document.getElementById('editRiskSeverity').value = severity;
-    document.getElementById('editRiskOwner').value = owner;
-    document.getElementById('editRiskTracker').value = trackerId;
     document.getElementById('editRiskDue').value = dueDate;
+    // Set user pickers in edit modal
+    var editModal = document.getElementById('editRiskModal');
+    var pickers = editModal.querySelectorAll('.user-picker-wrap');
+    // First picker = owner (text mode)
+    if (pickers[0]) {
+        pickers[0].querySelector('.user-picker-val').value = ownerName || '';
+        pickers[0].querySelector('.user-picker-input').value = ownerName || '';
+    }
+    // Second picker = tracker (id mode)
+    if (pickers[1]) {
+        pickers[1].querySelector('.user-picker-val').value = trackerId || '';
+        pickers[1].querySelector('.user-picker-input').value = trackerName || '';
+    }
 }
 
 /* Requirement search with Tab completion */

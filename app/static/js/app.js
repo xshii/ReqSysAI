@@ -30,6 +30,56 @@ function showToast(msg, type) {
     setTimeout(function() { _toastEl.style.display = 'none'; }, 3000);
 }
 
+// ---- User picker component ----
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.user-picker-wrap').forEach(function(wrap) {
+        var input = wrap.querySelector('.user-picker-input');
+        var hidden = wrap.querySelector('.user-picker-val');
+        var list = wrap.querySelector('.user-picker-list');
+        var mode = input.dataset.mode || 'id'; // 'id' or 'text'
+
+        input.addEventListener('focus', function() { filter(); list.style.display = 'block'; });
+        input.addEventListener('input', function() {
+            filter();
+            if (mode === 'text') hidden.value = input.value.trim();
+            else hidden.value = ''; // Clear selection until picked
+        });
+        input.addEventListener('blur', function() {
+            setTimeout(function() { list.style.display = 'none'; }, 200);
+            // text mode: keep typed value
+            if (mode === 'text' && input.value.trim()) hidden.value = input.value.trim();
+        });
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                var first = list.querySelector('.user-picker-opt:not([style*="none"])');
+                if (first) selectOpt(first);
+            }
+        });
+
+        function filter() {
+            var q = input.value.toLowerCase();
+            list.querySelectorAll('.user-picker-opt').forEach(function(o) {
+                var name = o.dataset.name.toLowerCase();
+                var py = (o.dataset.pinyin || '').toLowerCase();
+                var eid = (o.dataset.eid || '').toLowerCase();
+                o.style.display = (name.includes(q) || py.includes(q) || eid.includes(q)) ? '' : 'none';
+            });
+            list.style.display = 'block';
+        }
+
+        function selectOpt(o) {
+            input.value = o.dataset.name;
+            hidden.value = mode === 'id' ? o.dataset.id : o.dataset.name;
+            list.style.display = 'none';
+        }
+
+        list.querySelectorAll('.user-picker-opt').forEach(function(o) {
+            o.addEventListener('mousedown', function(e) { e.preventDefault(); selectOpt(o); });
+        });
+    });
+});
+
 // ---- AJAX helper for JSON POST ----
 function apiPost(url, data) {
     var csrfMeta = document.querySelector('meta[name="csrf-token"]');

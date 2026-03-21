@@ -1,0 +1,26 @@
+{# Reusable user picker component
+   Args:
+     name: form field name (e.g. "assignee_id", "owner")
+     users: user list
+     value: current value (user_id or name string)
+     value_name: current display name (optional, for pre-fill)
+     mode: "id" (stores user.id) or "text" (stores name, allows free text)
+     placeholder: input placeholder
+     size: "sm" or "" (default)
+#}
+{% macro user_picker(name, users, value='', value_name='', mode='id', placeholder='搜索姓名/工号...', size='sm') %}
+<div class="position-relative user-picker-wrap">
+    <input type="hidden" name="{{ name }}" class="user-picker-val" value="{{ value }}">
+    <input type="text" class="form-control form-control-{{ size }} user-picker-input" value="{{ value_name }}"
+           placeholder="{{ placeholder }}" autocomplete="off"
+           data-mode="{{ mode }}">
+    <div class="position-absolute bg-white border rounded shadow-sm w-100 user-picker-list" style="z-index:1050;display:none;max-height:160px;overflow-y:auto;">
+        {% for u in users %}
+        <div class="px-2 py-1 small user-picker-opt" style="cursor:pointer;"
+             data-id="{{ u.id }}" data-name="{{ u.name }}" data-eid="{{ u.employee_id }}" data-pinyin="{{ u.pinyin or '' }}">
+            {{ u.name }} <span class="text-muted">{{ u.employee_id }}{% if u.group %} · {{ u.group }}{% endif %}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endmacro %}
