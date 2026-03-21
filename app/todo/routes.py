@@ -212,17 +212,22 @@ def toggle_item(item_id):
     if item.todo.user_id != current_user.id:
         return jsonify(ok=False), 403
     item.is_done = not item.is_done
-    # Auto-complete todo if all items done
+    # Auto-complete todo if all items done; reopen if unchecked
     todo = item.todo
+    was_done = todo.status == TODO_STATUS_DONE
     if todo.items and all(i.is_done for i in todo.items):
         todo.status = TODO_STATUS_DONE
         todo.done_date = date.today()
-    elif todo.status == 'done':
+    elif todo.status == TODO_STATUS_DONE:
         todo.status = TODO_STATUS_TODO
         todo.done_date = None
     db.session.commit()
+    # Fire event if just completed
+    if not was_done and todo.status == TODO_STATUS_DONE:
+        from app.services.events import fire, todo_completed
+        fire(todo_completed, todo=todo)
     done, total = todo.items_progress
-    return jsonify(ok=True, is_done=item.is_done, todo_done=todo.status == 'done',
+    return jsonify(ok=True, is_done=item.is_done, todo_done=todo.status == TODO_STATUS_DONE,
                    progress=f'{done}/{total}')
 
 
