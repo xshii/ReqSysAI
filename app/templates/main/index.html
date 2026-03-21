@@ -350,11 +350,17 @@ document.getElementById('btnAiRecommend').addEventListener('click', function() {
     });
 });
 
+// Rant alias cache
+var rantAliasEl = document.getElementById('rantAlias');
+var savedAlias = localStorage.getItem('rant_alias');
+if (savedAlias) rantAliasEl.value = savedAlias;
+
 // Rant submit (AJAX)
 document.getElementById('rantSubmit').addEventListener('click', function() {
     var content = document.getElementById('rantContent').value.trim();
     if (!content) return;
-    var alias = document.getElementById('rantAlias').value.trim();
+    var alias = rantAliasEl.value.trim();
+    if (alias) localStorage.setItem('rant_alias', alias);
     apiPost('{{ url_for("main.post_rant") }}', {content: content, alias: alias}).then(function(d) {
         if (d && d.ok) {
             var row = document.createElement('div');
