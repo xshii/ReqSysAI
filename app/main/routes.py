@@ -246,12 +246,12 @@ def quick_todo():
         ).filter_by(is_active=True).first()
         if helper and helper.id != current_user.id:
             my_todo = Todo(user_id=current_user.id, title=title, due_date=today,
-                           category=category, requirements=reqs)
+                           category=category, source='help', requirements=reqs)
             my_todo.items.append(TodoItem(title=title, sort_order=0))
             db.session.add(my_todo)
             db.session.flush()
             helper_todo = Todo(user_id=helper.id, title=title, due_date=today,
-                               category=category, parent_id=my_todo.id, requirements=reqs)
+                               category=category, source='help', parent_id=my_todo.id, requirements=reqs)
             helper_todo.items.append(TodoItem(title=title, sort_order=0))
             db.session.add(helper_todo)
             db.session.commit()
@@ -288,8 +288,10 @@ def batch_adopt():
             req = db.session.get(Requirement, req_id)
             if req:
                 reqs = [req]
+        est = item.get('est_min', 0) or 0
         todo = Todo(user_id=current_user.id, title=title, due_date=today,
-                    category='work', requirements=reqs)
+                    category='work', source='ai', estimated_minutes=est if est > 0 else None,
+                    requirements=reqs)
         todo.items.append(TodoItem(title=title, sort_order=0))
         db.session.add(todo)
         created += 1
@@ -365,6 +367,7 @@ def ai_recommend_todos():
                 'req_number': req_num,
                 'req_id': req_map.get(req_num, 0),
                 'reason': item.get('reason', ''),
+                'est_min': item.get('est_min', 0),
             })
     return jsonify(ok=True, todos=todos)
 

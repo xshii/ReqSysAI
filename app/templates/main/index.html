@@ -89,7 +89,9 @@
                     </form>
                     {% endif %}
                     <span class="small">{{ t.title }}</span>
-                    {% if is_help_request %}<span class="badge bg-warning text-dark" style="font-size:.6em;">@{{ t.children[0].user.name }}</span>{% endif %}
+                    {% if t.estimated_minutes %}<span class="text-muted" style="font-size:.65em;">~{{ t.estimated_minutes }}m</span>{% endif %}
+                    {% if t.source == 'ai' %}<span class="badge bg-info" style="font-size:.55em;">AI</span>{% endif %}
+                    {% if is_help_request %}<span class="badge bg-warning text-dark" style="font-size:.55em;">@{{ t.children[0].user.name }}</span>{% endif %}
                     {% if t.status != 'done' %}
                     <button class="btn btn-sm py-0 px-0 {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer-home" data-id="{{ t.id }}"
                             title="{{ '暂停番茄钟' if t.timer_running else '启动一个番茄钟' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;">
@@ -359,7 +361,8 @@ document.getElementById('btnAiRecommend').addEventListener('click', function() {
                     + '<span class="small flex-grow-1">'
                     + (t.req_number ? '<span class="text-muted">' + t.req_number + '</span> ' : '')
                     + t.title
-                    + (t.reason ? ' <span class="text-muted" style="font-size:.8em;">(' + t.reason + ')</span>' : '')
+                    + (t.est_min ? ' <span class="text-muted" style="font-size:.75em;">~' + t.est_min + 'min</span>' : '')
+                    + (t.reason ? ' <span class="text-muted" style="font-size:.75em;">(' + t.reason + ')</span>' : '')
                     + '</span>'
                     + '<button class="btn btn-sm py-0 px-1 btn-success ai-adopt" data-title="' + t.title.replace(/"/g, '&quot;') + '" data-req-id="' + (t.req_id || 0) + '" title="采纳">采纳</button>'
                     + '<button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="this.closest(\'.ai-rec-item\').remove()" title="忽略"><i class="bi bi-x"></i></button>'
@@ -383,8 +386,12 @@ document.getElementById('btnAiRecommend').addEventListener('click', function() {
                                 row.className = 'd-flex align-items-center gap-1 mb-1 ps-2';
                                 row.innerHTML = '<i class="bi bi-circle text-secondary"></i>'
                                     + ' <span class="small">' + ab.dataset.title + '</span>'
-                                    + ' <span class="badge bg-info" style="font-size:.6em;">AI</span>';
+                                    + ' <span class="badge bg-info" style="font-size:.55em;">AI</span>'
+                                    + ' <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="' + r.todo_id + '" style="font-size:.7em;"><i class="bi bi-x"></i></button>';
                                 listEl.appendChild(row);
+                                row.querySelector('.btn-delete-home').addEventListener('click', function() {
+                                    apiPost('/todos/' + r.todo_id + '/edit', {title: ''}).then(function(x) { if (x && x.ok) row.remove(); });
+                                });
                             }
                             showToast(ab.dataset.title + ' 已采纳', 'success');
                         }
@@ -421,7 +428,9 @@ document.getElementById('btnAdoptAll').addEventListener('click', function() {
                     row.className = 'd-flex align-items-center gap-1 mb-1 ps-2';
                     row.innerHTML = '<i class="bi bi-circle text-secondary"></i>'
                         + ' <span class="small">' + t.title + '</span>'
-                        + ' <span class="badge bg-info" style="font-size:.6em;">AI</span>';
+                        + (t.est_min ? ' <span class="text-muted" style="font-size:.65em;">~' + t.est_min + 'min</span>' : '')
+                        + ' <span class="badge bg-info" style="font-size:.55em;">AI</span>'
+                        + ' <button class="btn btn-sm py-0 px-0 text-muted" style="font-size:.7em;" onclick="apiPost(\'/todos/0/edit\',{title:\'\'}).then(function(){this.closest(\'.d-flex\').remove()}.bind(this))"><i class="bi bi-x"></i></button>';
                     listEl.appendChild(row);
                 }
             });
