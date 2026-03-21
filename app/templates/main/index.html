@@ -89,7 +89,6 @@
                     </form>
                     {% endif %}
                     <span class="small">{{ t.title }}</span>
-                    {% if t.estimated_minutes %}<span class="text-muted" style="font-size:.65em;">~{{ t.estimated_minutes }}m</span>{% endif %}
                     {% if t.source == 'ai' %}<span class="badge bg-info" style="font-size:.55em;">AI</span>{% endif %}
                     {% if is_help_request %}<span class="badge bg-warning text-dark" style="font-size:.55em;">@{{ t.children[0].user.name }}</span>{% endif %}
                     {% if t.status != 'done' %}
@@ -361,7 +360,7 @@ document.getElementById('btnAiRecommend').addEventListener('click', function() {
                     + '<span class="small flex-grow-1">'
                     + (t.req_number ? '<span class="text-muted">' + t.req_number + '</span> ' : '')
                     + t.title
-                    + (t.est_min ? ' <span class="text-muted" style="font-size:.75em;">~' + t.est_min + 'min</span>' : '')
+
                     + (t.reason ? ' <span class="text-muted" style="font-size:.75em;">(' + t.reason + ')</span>' : '')
                     + '</span>'
                     + '<button class="btn btn-sm py-0 px-1 btn-success ai-adopt" data-title="' + t.title.replace(/"/g, '&quot;') + '" data-req-id="' + (t.req_id || 0) + '" title="采纳">采纳</button>'
@@ -428,7 +427,7 @@ document.getElementById('btnAdoptAll').addEventListener('click', function() {
                     row.className = 'd-flex align-items-center gap-1 mb-1 ps-2';
                     row.innerHTML = '<i class="bi bi-circle text-secondary"></i>'
                         + ' <span class="small">' + t.title + '</span>'
-                        + (t.est_min ? ' <span class="text-muted" style="font-size:.65em;">~' + t.est_min + 'min</span>' : '')
+
                         + ' <span class="badge bg-info" style="font-size:.55em;">AI</span>'
                         + ' <button class="btn btn-sm py-0 px-0 text-muted" style="font-size:.7em;" onclick="apiPost(\'/todos/0/edit\',{title:\'\'}).then(function(){this.closest(\'.d-flex\').remove()}.bind(this))"><i class="bi bi-x"></i></button>';
                     listEl.appendChild(row);
