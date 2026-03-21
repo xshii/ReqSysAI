@@ -249,3 +249,38 @@
     </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+// AJAX quick-todo: no page reload
+document.querySelectorAll('form[action$="/quick-todo"]').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var inp = form.querySelector('input[name="title"]');
+        var title = inp.value.trim();
+        if (!title) return;
+        var data = {title: title};
+        var reqId = form.querySelector('input[name="req_id"]');
+        if (reqId) data.req_id = parseInt(reqId.value);
+        var cat = form.querySelector('input[name="category"]');
+        if (cat) data.category = cat.value;
+        apiPost('{{ url_for("main.quick_todo") }}', data).then(function(d) {
+            if (d.ok) {
+                // Insert new todo line before the input
+                var row = document.createElement('div');
+                row.className = 'd-flex align-items-start gap-2 mb-1 ps-2';
+                row.innerHTML = '<i class="bi bi-circle text-secondary"></i> <span class="small">' + title + '</span>';
+                form.parentElement.insertBefore(row, form);
+                inp.value = '';
+                // Update counter
+                var badge = document.querySelector('.card-header .badge');
+                if (badge) {
+                    var parts = badge.textContent.split('/');
+                    badge.textContent = parts[0] + '/' + (parseInt(parts[1]) + 1);
+                }
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

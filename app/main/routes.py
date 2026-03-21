@@ -157,16 +157,24 @@ def index():
 @main_bp.route('/quick-todo', methods=['POST'])
 @login_required
 def quick_todo():
-    """Create todo from homepage. If req_id given, link to that requirement."""
-    title = request.form.get('title', '').strip()
-    if not title:
-        return redirect(url_for('main.index'))
+    """Create todo from homepage. Supports both form and JSON."""
+    is_ajax = request.is_json
+    if is_ajax:
+        data = request.get_json() or {}
+        title = (data.get('title') or '').strip()
+        req_id = data.get('req_id')
+        category = data.get('category', 'work')
+    else:
+        title = request.form.get('title', '').strip()
+        req_id = request.form.get('req_id', type=int)
+        category = request.form.get('category', 'work')
 
-    today = date.today()
-    req_id = request.form.get('req_id', type=int)
-    category = request.form.get('category', 'work')
+    if not title:
+        return jsonify(ok=False) if is_ajax else redirect(url_for('main.index'))
+
     if category not in ('work', 'team', 'personal'):
         category = 'work'
+    today = date.today()
 
     # If same requirement already has a todo today, add as sub-item
     if req_id:
@@ -179,12 +187,11 @@ def quick_todo():
          .filter(todo_requirements.c.requirement_id == req_id).first()
         if existing:
             existing.items.append(TodoItem(title=title, sort_order=len(existing.items)))
-            # Reopen if was done
             if existing.status == TODO_STATUS_DONE:
                 existing.status = TODO_STATUS_TODO
                 existing.done_date = None
             db.session.commit()
-            return redirect(url_for('main.index'))
+            return jsonify(ok=True, title=title, todo_id=existing.id, merged=True) if is_ajax else redirect(url_for('main.index'))
 
     reqs = []
     if req_id:
@@ -201,7 +208,7 @@ def quick_todo():
     todo.items.append(TodoItem(title=title, sort_order=0))
     db.session.add(todo)
     db.session.commit()
-    return redirect(url_for('main.index'))
+    return jsonify(ok=True, title=title, todo_id=todo.id, merged=False) if is_ajax else redirect(url_for('main.index'))
 
 
 @main_bp.route('/api/search')
