@@ -103,8 +103,9 @@ def index():
         for r in my_risks if r.is_overdue
     ]
 
-    # Last month approved incentives
-    last_month_start = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+    # This month + last month approved incentives
+    this_month_start = today.replace(day=1)
+    last_month_start = (this_month_start - timedelta(days=1)).replace(day=1)
     approved_incentives = Incentive.query.filter(
         Incentive.status == 'approved',
         Incentive.reviewed_at >= str(last_month_start),
