@@ -7,9 +7,15 @@ from sqlalchemy.orm import joinedload
 
 from app.dashboard import dashboard_bp
 from app.extensions import db
-from app.models.user import User
+from app.constants import TODO_STATUS_TODO, TODO_STATUS_DONE, REQ_INACTIVE_STATUSES
+from app.models.user import User, Role, Group
+from app.models.project import Project
 from app.models.requirement import Requirement
-from app.models.todo import Todo
+from app.models.todo import Todo, todo_requirements
+from app.models.risk import Risk
+from app.models.report import WeeklyReport
+from app.services.ai import call_ollama
+from app.services.prompts import get_prompt
 from app.services.statistics import (
     week_range, gather_week_stats, gather_project_data,
     get_reviewer, get_todo_progress, TodoProgress,
@@ -19,7 +25,6 @@ from app.services.statistics import (
 @dashboard_bp.route('/requirements')
 @login_required
 def requirement_progress():
-    from app.models.project import Project
 
     cur_status = request.args.get('status', '')
     cur_project = request.args.get('project_id', type=int)
@@ -49,8 +54,6 @@ def requirement_progress():
 @dashboard_bp.route('/stats')
 @login_required
 def stats():
-    from app.models.project import Project
-    from app.models.user import Group
 
     offset = request.args.get('week', 0, type=int)
     cur_group = request.args.get('group', '')
@@ -135,7 +138,6 @@ def stats_export():
 @dashboard_bp.route('/weekly-report', methods=['GET', 'POST'])
 @login_required
 def weekly_report():
-    from app.models.project import Project
 
     offset = request.args.get('week', 0, type=int)
     cur_project_id = request.args.get('project_id', type=int)
@@ -143,10 +145,7 @@ def weekly_report():
     cur_project = db.session.get(Project, cur_project_id) if cur_project_id else None
 
     if request.method == 'POST':
-        from app.services.ai import call_ollama
-        from app.models.todo import todo_requirements
-        from app.models.risk import Risk
-        from app.models.report import WeeklyReport as WR_check
+        WR_check = WeeklyReport
         frozen = WR_check.query.filter_by(project_id=cur_project_id, week_start=monday, is_frozen=True).first()
         if frozen:
             flash('周报已冻结，无法重新生成', 'warning')
@@ -235,10 +234,10 @@ def weekly_report():
             for r in all_reqs:
                 due_str = f'，预期 {r.due_date.strftime("%m-%d")}' if r.due_date else ''
                 days_str = f'，预估 {r.estimate_days}人天' if r.estimate_days else ''
-                overdue = '⚠️超期' if (r.due_date and r.due_date < date.today() and r.status not in ('done', 'closed')) else ''
+                overdue = '⚠️超期' if (r.due_date and r.due_date < date.today() and r.status not in REQ_INACTIVE_STATUSES) else ''
                 children_str = ''
                 if r.children:
-                    done_children = sum(1 for c in r.children if c.status in ('done', 'closed'))
+                    done_children = sum(1 for c in r.children if c.status in REQ_INACTIVE_STATUSES)
                     children_str = f'，子需求 {done_children}/{len(r.children)} 完成'
                 assignee = r.assignee.name if r.assignee else '未分配'
                 lines.append(f'- [{r.number}] {r.title}（{r.status_label}，{assignee}{days_str}{due_str}{children_str}）{overdue}')
@@ -274,7 +273,6 @@ def weekly_report():
                 lines.append(f'- [{r.number}] {r.title}（{r.status_label}）')
 
         # AI prompt: only generate analysis (summary, risks, plan)
-        from app.services.prompts import get_prompt
         tpl = get_prompt('weekly_report')
         prompt = tpl.format(project_name=project_name) + '\n\n' + '\n'.join(lines)
 
@@ -297,7 +295,6 @@ def weekly_report():
         open_risks = risk_q.order_by(Risk.severity, Risk.due_date).all()
 
         # Reviewer: PL of current user's group; if user is PL, then XM
-        from app.models.user import Role
         reviewer = ''
         if current_user.has_role('PL'):
             xm_users = User.query.filter(User.is_active == True, User.group == current_user.group)\
@@ -342,7 +339,6 @@ def weekly_report():
 
         # Save to DB
         import json as json_lib
-        from app.models.report import WeeklyReport
         saved = WeeklyReport.query.filter_by(project_id=cur_project_id, week_start=monday).first()
         if saved:
             saved.summary = ai_analysis['summary']
@@ -368,16 +364,12 @@ def weekly_report():
         )
 
     # GET: check if saved report exists, and load full DB data
-    from app.models.report import WeeklyReport
     import json as json_lib
     saved = WeeklyReport.query.filter_by(project_id=cur_project_id, week_start=monday).first() if cur_project_id else None
 
     if saved:
         # Load saved AI analysis + fresh DB data
-        from app.models.todo import todo_requirements
-        from app.models.risk import Risk
         from collections import Counter
-        from app.models.user import Role
 
         project_name = cur_project.name if cur_project else '研发团队'
 
@@ -486,7 +478,6 @@ def weekly_report():
 @login_required
 def weekly_report_save():
     """Save manually edited report content."""
-    from app.models.report import WeeklyReport
     import json as json_lib
 
     cur_project_id = request.form.get('project_id', type=int)
@@ -522,8 +513,6 @@ def weekly_report_save():
 @login_required
 def weekly_report_freeze():
     """Freeze/unfreeze weekly report. Only project PM (owner) can freeze."""
-    from app.models.report import WeeklyReport
-    from app.models.project import Project
 
     cur_project_id = request.form.get('project_id', type=int)
     week_start = request.form.get('week_start')
@@ -562,8 +551,6 @@ def weekly_report_export():
     """Export weekly report as formatted Excel."""
     import openpyxl
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-    from app.models.project import Project
-    from app.models.todo import todo_requirements
 
     offset = request.args.get('week', 0, type=int)
     cur_project_id = request.args.get('project_id', type=int)
@@ -700,9 +687,9 @@ def weekly_report_export():
             invest_str = f'{len(inv["people"])}人·{inv["days"]}天' if inv else '-'
             children_str = ''
             if r.children:
-                dc = sum(1 for c in r.children if c.status in ('done', 'closed'))
+                dc = sum(1 for c in r.children if c.status in REQ_INACTIVE_STATUSES)
                 children_str = f' ({dc}/{len(r.children)})'
-            overdue = ' [超期]' if (r.due_date and r.due_date < date.today() and r.status not in ('done', 'closed')) else ''
+            overdue = ' [超期]' if (r.due_date and r.due_date < date.today() and r.status not in REQ_INACTIVE_STATUSES) else ''
             write_table_row([
                 r.number,
                 r.title + children_str,
@@ -786,7 +773,6 @@ def my_weekly():
 
     report = None
     if request.method == 'POST':
-        from app.services.ai import call_ollama
         import markdown as md_lib
 
         lines = [f'本周（{monday} ~ {sunday}）{current_user.name} 的工作数据：\n']
@@ -805,7 +791,6 @@ def my_weekly():
             for r in my_reqs:
                 lines.append(f'- [{r.number}] {r.title}（{r.status_label}）')
 
-        from app.services.prompts import get_prompt
         prompt = get_prompt('personal_weekly') + '\n\n' + '\n'.join(lines)
         _, raw = call_ollama(prompt)
         report = raw or '生成失败，请重试'
@@ -823,7 +808,6 @@ def my_weekly():
 @dashboard_bp.route('/resource-map')
 @login_required
 def resource_map():
-    from app.models.project import Project
     from collections import defaultdict
 
     period = request.args.get('period', 'week')

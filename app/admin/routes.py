@@ -1,8 +1,10 @@
 import csv
 import io
 import logging
+import os
 
 import requests
+import yaml
 from flask import render_template, redirect, url_for, flash, request, current_app, Response, jsonify
 
 logger = logging.getLogger(__name__)
@@ -12,6 +14,9 @@ from app.admin.forms import UserCreateForm, UserEditForm
 from app.decorators import admin_required
 from app.extensions import db
 from app.models.user import User, Role, Group
+from app.models.project import MilestoneTemplate, MilestoneTemplateItem
+from app.services.ai import check_ollama_status
+from app.services.prompts import get_all_prompts, save_all_prompts, LABELS as PROMPT_LABELS, DEFAULTS as PROMPT_DEFAULTS
 from app.utils.pinyin import to_pinyin
 
 
@@ -299,7 +304,6 @@ def group_export_csv():
 @admin_bp.route('/milestone-templates', methods=['GET', 'POST'])
 @admin_required
 def milestone_template_list():
-    from app.models.project import MilestoneTemplate, MilestoneTemplateItem
 
     if request.method == 'POST':
         action = request.form.get('action')
@@ -342,7 +346,6 @@ def milestone_template_list():
 
 def _ollama_request(method, path, **kwargs):
     """Send request to Ollama API. Returns (response_json, error_msg)."""
-    from app.services.ai import check_ollama_status
     ok, err = check_ollama_status()
     if not ok:
         return None, err
@@ -376,7 +379,6 @@ def ai_model_list():
     current_model = current_app.config['OLLAMA_MODEL']
 
     # Read default system prompt from Modelfile
-    import os
     modelfile_path = os.path.join(current_app.root_path, '..', 'scripts', 'Modelfile.reqsys')
     default_prompt = ''
     if os.path.exists(modelfile_path):
@@ -391,14 +393,13 @@ def ai_model_list():
                     e = content.index('"""', s)
                     default_prompt = content[s:e].strip()
 
-    from app.services.prompts import get_all_prompts, LABELS, DEFAULTS
     prompts = get_all_prompts()
 
     return render_template('admin/ai_models.html',
                            models=models, err=err, current_model=current_model,
                            default_prompt=default_prompt,
-                           prompts=prompts, prompt_labels=LABELS,
-                           prompt_defaults=DEFAULTS)
+                           prompts=prompts, prompt_labels=PROMPT_LABELS,
+                           prompt_defaults=PROMPT_DEFAULTS)
 
 
 @admin_bp.route('/ai-models/create', methods=['POST'])
@@ -418,7 +419,6 @@ def ai_model_create():
         modelfile += f'\nSYSTEM """{escaped}"""'
 
     # Ollama create is synchronous and can take a while
-    from app.services.ai import check_ollama_status
     ok, err = check_ollama_status()
     if not ok:
         flash(f'AI 服务不可用：{err}', 'danger')
@@ -436,7 +436,6 @@ def ai_model_create():
         flash(f'模型 {new_name} 创建成功（基于 {base_model}）', 'success')
 
         # Save Modelfile to scripts/ for reference
-        import os
         scripts_dir = os.path.join(current_app.root_path, '..', 'scripts')
         os.makedirs(scripts_dir, exist_ok=True)
         save_path = os.path.join(scripts_dir, f'Modelfile.{new_name}')
@@ -453,7 +452,6 @@ def ai_model_create():
 @admin_required
 def ai_model_set_active():
     """Update config.local.yml to use selected model."""
-    import yaml, os
     model_name = request.form.get('model_name', '').strip()
     if not model_name:
         flash('请选择模型', 'danger')
@@ -499,9 +497,8 @@ def ai_model_delete():
 @admin_required
 def ai_model_save_prompts():
     """Save AI prompt overrides to prompts.yml."""
-    from app.services.prompts import save_all_prompts, DEFAULTS
     prompts = {}
-    for key in DEFAULTS:
+    for key in PROMPT_DEFAULTS:
         val = request.form.get(f'prompt_{key}', '').strip()
         if val:
             prompts[key] = val
