@@ -8,12 +8,6 @@
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newModal">
             <i class="bi bi-plus-lg"></i> 新建
         </button>
-        <form method="POST" action="{{ url_for('todo.ai_recommend') }}" class="d-inline" id="ai-form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline-primary btn-sm" id="btn-ai">
-                <i class="bi bi-robot"></i> AI 推荐
-            </button>
-        </form>
     </div>
 </div>
 
@@ -356,10 +350,5 @@ document.querySelectorAll('.comment-input').forEach(function(inp) {
 });
 
 /* AI spinner */
-document.getElementById('ai-form').addEventListener('submit', function() {
-    var btn = document.getElementById('btn-ai');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> AI 推荐中...';
-});
 </script>
 {% endblock %}
