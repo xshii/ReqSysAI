@@ -66,10 +66,16 @@ def index():
         .options(joinedload(Requirement.project))\
         .order_by(Requirement.updated_at.desc()).limit(10).all()
 
-    # Yesterday's linked requirements for quick-todo hint
-    yesterday = _prev_workday(today)
-    recent_reqs = _yesterday_reqs(current_user.id, yesterday)
-    recent_req_hint = '、'.join(r.number for r in recent_reqs[:MAX_RECENT_REQS_FOR_QUICK_TODO])
+    # Group todos by requirement for merged display
+    req_todos = {}  # req_id → [todos]
+    team_todos = []  # todos not linked to any requirement
+    for t in my_todos:
+        linked = [r for r in t.requirements if r.status not in REQ_INACTIVE_STATUSES]
+        if linked:
+            for r in linked:
+                req_todos.setdefault(r.id, []).append(t)
+        else:
+            team_todos.append(t)
 
     # My related risks
     my_risks = Risk.query.filter(
@@ -135,9 +141,9 @@ def index():
     return render_template('main/index.html',
         my_todos=my_todos, todo_total=todo_total, todo_done=todo_done,
         my_reqs=my_reqs, my_risks=my_risks, today=today,
+        req_todos=req_todos, team_todos=team_todos,
         approved_incentives=approved_incentives, rants=rants,
         ai_ranking=ai_ranking, alerts=alerts,
-        recent_req_hint=recent_req_hint,
         heatmap=heatmap, heatmap_start=heatmap_start, timedelta=timedelta,
     )
 
@@ -152,6 +158,25 @@ def quick_todo():
 
     today = date.today()
     req_id = request.form.get('req_id', type=int)
+
+    # If same requirement already has a todo today, add as sub-item
+    if req_id:
+        from app.models.todo import todo_requirements
+        existing = Todo.query.filter(
+            Todo.user_id == current_user.id,
+            Todo.created_date == today,
+            Todo.status == TODO_STATUS_TODO,
+        ).join(todo_requirements, Todo.id == todo_requirements.c.todo_id)\
+         .filter(todo_requirements.c.requirement_id == req_id).first()
+        if existing:
+            existing.items.append(TodoItem(title=title, sort_order=len(existing.items)))
+            # Reopen if was done
+            if existing.status == TODO_STATUS_DONE:
+                existing.status = TODO_STATUS_TODO
+                existing.done_date = None
+            db.session.commit()
+            return redirect(url_for('main.index'))
+
     reqs = []
     if req_id:
         req = db.session.get(Requirement, req_id)

@@ -15,78 +15,78 @@
 <div class="row">
     <!-- Left: Todo + Requirements -->
     <div class="col-md-7">
-        <!-- My Todos -->
+        <!-- Today's Work: Requirements + Todos merged -->
         <div class="card mb-3">
             <div class="card-header d-flex justify-content-between align-items-center py-2">
-                <span><i class="bi bi-list-check"></i> 今日 Todo</span>
+                <span><i class="bi bi-list-check"></i> 今日工作</span>
                 <span class="badge bg-{{ 'success' if todo_done == todo_total and todo_total > 0 else 'secondary' }}">{{ todo_done }}/{{ todo_total }}</span>
             </div>
             <div class="card-body py-2">
-            {% for t in my_todos %}
-                <div class="d-flex align-items-start gap-2 mb-1 {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}">
+
+            {# Each requirement with its todos #}
+            {% for r in my_reqs %}
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center border-bottom pb-1 mb-1">
+                    <span class="small fw-bold text-primary">{{ r.number }} {{ r.title }}</span>
+                    <span>
+                        <span class="badge bg-{{ r.status_color }}" style="font-size:.7em;">{{ r.status_label }}</span>
+                        {% if r.due_date and r.due_date < today %}<span class="badge bg-danger" style="font-size:.7em;">超期</span>{% endif %}
+                    </span>
+                </div>
+                {% for t in req_todos.get(r.id, []) %}
+                <div class="d-flex align-items-start gap-2 mb-1 ps-2 {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}">
                     <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent mt-1" title="{{ '撤销完成' if t.status == 'done' else '标记完成' }}">
-                            <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-secondary' }}" style="font-size:1.1em;cursor:pointer;"></i>
+                        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="{{ '撤销' if t.status == 'done' else '完成' }}">
+                            <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-secondary' }}"></i>
                         </button>
                     </form>
-                    <div>
-                        <span class="small">{{ t.title }}</span>
-                        {% for r in t.requirements %}<span class="badge bg-light text-dark border small">{{ r.number }}</span>{% endfor %}
-                        {% if t.overdue_color %}<span class="badge bg-{{ t.overdue_color }} small">{{ '超期' if t.overdue_color == 'danger' else '结转' }}{{ t.workdays_overdue }}天</span>{% endif %}
-                    </div>
+                    <span class="small">{{ t.title }}</span>
                 </div>
-            {% else %}
-                <p class="text-muted small mb-0">今天还没有 Todo</p>
-            {% endfor %}
-            </div>
-        </div>
-
-        <!-- My Requirements + Quick Todo per Requirement -->
-        <div class="card mb-3">
-            <div class="card-header py-2"><i class="bi bi-clipboard-check"></i> 当前投入需求 <span class="badge bg-secondary">{{ my_reqs | length }}</span></div>
-            <div class="card-body py-2">
-            {% for r in my_reqs %}
-                <div class="mb-2">
-                    <div class="d-flex justify-content-between align-items-center small">
-                        <span>{{ r.number }} {{ r.title }}</span>
-                        <span>
-                            <span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
-                            {% if r.due_date and r.due_date < today and r.status not in ('done','closed') %}<span class="badge bg-danger">超期</span>{% endif %}
-                        </span>
-                    </div>
-                    <form method="POST" action="{{ url_for('main.quick_todo') }}" class="mt-1">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="req_id" value="{{ r.id }}">
-                        <div class="input-group input-group-sm">
-                            <input type="text" name="title" class="form-control" placeholder="+ 新建 Todo" required>
-                            <button type="submit" class="btn btn-outline-primary"><i class="bi bi-plus"></i></button>
-                        </div>
-                    </form>
-                </div>
-            {% else %}
-                <p class="text-muted small mb-0">暂无进行中的需求</p>
-            {% endfor %}
-            </div>
-        </div>
-
-        <!-- Team Affairs Todo (not linked to any requirement) -->
-        <div class="card mb-3">
-            <div class="card-header py-2"><i class="bi bi-people"></i> 团队事务</div>
-            <div class="card-body py-2">
-                <form method="POST" action="{{ url_for('main.quick_todo') }}">
+                {% endfor %}
+                <form method="POST" action="{{ url_for('main.quick_todo') }}" class="ps-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <div class="input-group input-group-sm">
-                        <input type="text" name="title" class="form-control" placeholder="+ 新建团队事务 Todo（不关联需求）" required>
-                        <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-plus"></i></button>
-                    </div>
+                    <input type="hidden" name="req_id" value="{{ r.id }}">
+                    <input type="text" name="title" class="form-control form-control-sm border-0 bg-transparent px-0" placeholder="+ 添加任务" required style="font-size:.85em;">
                 </form>
             </div>
+            {% endfor %}
+
+            {# Team affairs todos (no requirement) #}
+            {% if team_todos or not my_reqs %}
+            <div class="mb-2 {% if my_reqs %}mt-3 border-top pt-2{% endif %}">
+                <div class="small fw-bold text-secondary mb-1"><i class="bi bi-people"></i> 团队事务</div>
+                {% for t in team_todos %}
+                <div class="d-flex align-items-start gap-2 mb-1 ps-2 {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}">
+                    <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="{{ '撤销' if t.status == 'done' else '完成' }}">
+                            <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-secondary' }}"></i>
+                        </button>
+                    </form>
+                    <span class="small">{{ t.title }}</span>
+                </div>
+                {% endfor %}
+                <form method="POST" action="{{ url_for('main.quick_todo') }}" class="ps-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="text" name="title" class="form-control form-control-sm border-0 bg-transparent px-0" placeholder="+ 添加团队事务" required style="font-size:.85em;">
+                </form>
+            </div>
+            {% endif %}
+
+            {% if not my_reqs and not team_todos %}
+            <div class="text-center text-muted py-3">
+                <i class="bi bi-inbox" style="font-size:2em;"></i>
+                <p class="small mt-1 mb-0">暂无待办，去需求列表认领任务吧</p>
+            </div>
+            {% endif %}
+            </div>
         </div>
 
-        <!-- Contribution Heatmap -->
+        <!-- Contribution Heatmap (collapsed) -->
         <div class="card mb-3">
-            <div class="card-header py-2"><i class="bi bi-calendar-check"></i> 完成热力图 <span class="text-muted small">近90天</span></div>
+            <div class="card-header py-2" role="button" data-bs-toggle="collapse" data-bs-target="#heatmapBody" style="cursor:pointer;"><i class="bi bi-calendar-check"></i> 完成热力图 <span class="text-muted small">近90天 <i class="bi bi-chevron-down"></i></span></div>
+            <div class="collapse" id="heatmapBody">
             <div class="card-body py-2 px-3" style="overflow-x:auto;">
                 <div class="d-flex gap-1 flex-wrap" style="max-width:100%;">
                 {% set ns = namespace(d=heatmap_start) %}
@@ -107,6 +107,7 @@
                     <div style="width:11px;height:11px;background:#216e39;border-radius:2px;"></div>
                     <span>多</span>
                 </div>
+            </div>
             </div>
         </div>
 
