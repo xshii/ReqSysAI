@@ -69,6 +69,7 @@
                 <th>进度</th>
                 <th>预估</th>
                 <th>日期</th>
+                <th></th>
             </tr>
         </thead>
         <tbody>
@@ -95,6 +96,14 @@
                 </td>
                 <td class="small">{{ r.estimate_days or '-' }}天</td>
                 <td class="text-muted small">{{ r.created_at.strftime('%m-%d') }}</td>
+                <td>
+                    {% if r.status not in ('done', 'closed') %}
+                    <form method="POST" action="{{ url_for('requirement.quick_todo_for_req', req_id=r.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-primary py-0" title="创建 Todo"><i class="bi bi-plus-circle"></i></button>
+                    </form>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>

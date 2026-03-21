@@ -13,6 +13,7 @@ from app.requirement.forms import RequirementForm, TaskForm, CommentForm
 from app.extensions import db
 from app.models.project import Project, Milestone
 from app.models.requirement import Requirement, RequirementTask, Comment, Activity
+from app.models.todo import Todo, TodoItem
 from app.models.user import User
 
 PER_PAGE = 20
@@ -251,6 +252,25 @@ def requirement_board():
         cur_project=project_id, cur_assignee=assignee_id, swimlane=swimlane,
         today=date.today(),
     )
+
+
+@requirement_bp.route('/<int:req_id>/quick-todo', methods=['POST'])
+@login_required
+def quick_todo_for_req(req_id):
+    """Create a todo linked to this requirement."""
+    req = db.get_or_404(Requirement, req_id)
+    title = req.number + ' ' + req.title
+    todo = Todo(
+        user_id=current_user.id,
+        title=title,
+        due_date=date.today(),
+        requirements=[req],
+    )
+    todo.items.append(TodoItem(title=title, sort_order=0))
+    db.session.add(todo)
+    db.session.commit()
+    flash(f'已为 {req.number} 创建 Todo', 'success')
+    return redirect(request.referrer or url_for('requirement.requirement_list'))
 
 
 # --- Comments ---
