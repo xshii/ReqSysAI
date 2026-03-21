@@ -196,8 +196,12 @@ def add_item(todo_id):
         return jsonify(ok=False), 400
     item = TodoItem(todo_id=todo.id, title=title, sort_order=len(todo.items))
     db.session.add(item)
+    # Reopen if todo was done (new sub-item means not finished yet)
+    if todo.status == TODO_STATUS_DONE:
+        todo.status = TODO_STATUS_TODO
+        todo.done_date = None
     db.session.commit()
-    return jsonify(ok=True, id=item.id)
+    return jsonify(ok=True, id=item.id, reopened=todo.status == TODO_STATUS_TODO)
 
 
 @todo_bp.route('/items/<int:item_id>/toggle', methods=['POST'])

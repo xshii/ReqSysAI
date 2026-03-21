@@ -12,7 +12,7 @@ from app.constants import (
     MAX_RANT_LENGTH,
 )
 from app.models.requirement import Requirement
-from app.models.todo import Todo
+from app.models.todo import Todo, TodoItem
 from app.models.risk import Risk
 from app.models.incentive import Incentive
 from app.models.ai_log import AIParseLog
@@ -158,6 +158,7 @@ def quick_todo():
         due_date=today,
         requirements=recent_reqs[:MAX_RECENT_REQS_FOR_QUICK_TODO],
     )
+    todo.items.append(TodoItem(title=title, sort_order=0))
     db.session.add(todo)
     db.session.commit()
     return redirect(url_for('main.index'))

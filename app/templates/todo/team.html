@@ -80,7 +80,6 @@
                     <div class="d-flex gap-1 flex-shrink-0 ms-3">
                         <button class="btn btn-sm {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer" data-id="{{ t.id }}" title="{{ '停止计时' if t.timer_running else '开始专注' }}"><i class="bi bi-stopwatch"></i></button>
                         <button class="btn btn-sm btn-outline-info btn-comment" data-id="{{ t.id }}" title="进展评论"><i class="bi bi-chat-dots"></i></button>
-                        <button class="btn btn-sm btn-outline-success btn-confirm" data-id="{{ t.id }}" title="确认完成"><i class="bi bi-check-lg"></i></button>
                         <button class="btn btn-sm btn-outline-primary btn-help" data-id="{{ t.id }}" data-title="{{ t.title }}" title="派给他人"><i class="bi bi-person-plus"></i></button>
                         <button class="btn btn-sm btn-outline-danger btn-delete" data-id="{{ t.id }}" title="删除"><i class="bi bi-trash"></i></button>
                     </div>
@@ -308,10 +307,7 @@ document.querySelectorAll('.add-item-input').forEach(function(inp) {
     });
 });
 
-/* Confirm / Reopen / Delete */
-document.querySelectorAll('.btn-confirm').forEach(function(b) {
-    b.addEventListener('click', function(e) { e.stopPropagation(); api('/todos/' + b.dataset.id + '/confirm').then(function(r) { if (r.ok) location.reload(); }); });
-});
+/* Reopen / Delete */
 document.querySelectorAll('.btn-reopen').forEach(function(b) {
     b.addEventListener('click', function(e) { e.stopPropagation(); api('/todos/' + b.dataset.id + '/reopen').then(function(r) { if (r.ok) location.reload(); }); });
 });
