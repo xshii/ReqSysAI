@@ -1,6 +1,20 @@
 {% extends "base.html" %}
 {% block title %}首页 - 研发协作平台{% endblock %}
 
+{# Pomodoro icons macro: multiple tomatoes with color by completion % #}
+{% macro pomodoro_icons(minutes, pomo_min) %}
+{% if minutes and minutes > 0 %}
+{% set pomo = pomo_min or 45 %}
+{% set full = (minutes // pomo) | int %}
+{% set remainder_pct = ((minutes % pomo) / pomo * 100) | int %}
+{% for i in range(full) %}<i class="bi bi-circle-fill text-success" style="font-size:.5em;" title="番茄 #{{ i+1 }}"></i>{% endfor %}
+{% if remainder_pct >= 80 %}<i class="bi bi-circle-fill text-success" style="font-size:.5em;" title="{{ remainder_pct }}%"></i>
+{% elif remainder_pct >= 40 %}<i class="bi bi-circle-half text-warning" style="font-size:.5em;" title="{{ remainder_pct }}%"></i>
+{% elif remainder_pct > 0 %}<i class="bi bi-circle-half text-secondary" style="font-size:.5em;" title="{{ remainder_pct }}%"></i>
+{% endif %}
+{% endif %}
+{% endmacro %}
+
 {% block content %}
 {% if alerts %}
 <div class="alert alert-danger py-2 mb-3 small">
@@ -82,13 +96,7 @@
                         <i class="bi bi-{{ 'pause-fill' if t.timer_running else 'play-fill' }}"></i>
                     </button>
                     {% endif %}
-                    {% if t.actual_minutes %}
-                    {% if t.actual_minutes >= (current_user.pomodoro_minutes or 45) %}
-                    <i class="bi bi-circle-fill text-danger" style="font-size:.5em;" title="完整番茄 {{ t.actual_minutes }}min"></i>
-                    {% else %}
-                    <i class="bi bi-circle-half text-warning" style="font-size:.5em;" title="半番茄 {{ t.actual_minutes }}min"></i>
-                    {% endif %}
-                    {% endif %}
+                    {{ pomodoro_icons(t.actual_minutes, current_user.pomodoro_minutes) }}
                     <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" title="删除" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>
                 </div>
                 {% endfor %}
@@ -97,10 +105,21 @@
         </div>
         {% endfor %}
 
-        {# Team affairs #}
+        {# Team affairs - same style as requirement cards #}
         <div class="card mb-2">
             <div class="card-body py-2">
-                <div class="small fw-bold text-secondary mb-1"><i class="bi bi-people"></i> 团队事务</div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <div class="d-flex align-items-center gap-1 flex-shrink-1">
+                        <span class="badge bg-secondary" style="font-size:.65em;">团队</span>
+                        <span class="small fw-bold text-secondary"><i class="bi bi-people"></i> 团队事务</span>
+                    </div>
+                    <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-grow-1 quick-todo-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="category" value="team">
+                        <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加团队事务 / @小组名 全组接收" required style="font-size:.8em;">
+                    </form>
+                </div>
+                <div class="todo-list-for-req" data-req-id="team">
                 {% for t in team_todos %}
                 <div class="d-flex align-items-center gap-1 mb-1 ps-2 todo-drag-item {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}" draggable="true" data-todo-id="{{ t.id }}" style="cursor:grab;">
                     <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
@@ -108,21 +127,29 @@
                         <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent"><i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-secondary' }}"></i></button>
                     </form>
                     <span class="small">{{ t.title }}</span>
+                    {{ pomodoro_icons(t.actual_minutes, current_user.pomodoro_minutes) }}
                     <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" style="font-size:.7em;"><i class="bi bi-x"></i></button>
                 </div>
                 {% endfor %}
-                <form method="POST" action="{{ url_for('main.quick_todo') }}" class="ps-2">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="category" value="team">
-                    <input type="text" name="title" class="form-control form-control-sm border-0 bg-transparent px-0" placeholder="+ 添加团队事务" required style="font-size:.85em;">
-                </form>
+                </div>
             </div>
         </div>
 
-        {# Personal growth #}
+        {# Personal growth - same style #}
         <div class="card mb-2">
             <div class="card-body py-2">
-                <div class="small fw-bold text-secondary mb-1"><i class="bi bi-person-hearts"></i> 个人提升</div>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <div class="d-flex align-items-center gap-1 flex-shrink-1">
+                        <span class="badge bg-light text-dark border" style="font-size:.65em;">个人</span>
+                        <span class="small fw-bold text-secondary"><i class="bi bi-person-hearts"></i> 个人提升</span>
+                    </div>
+                    <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-grow-1 quick-todo-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="category" value="personal">
+                        <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加个人事项" required style="font-size:.8em;">
+                    </form>
+                </div>
+                <div class="todo-list-for-req" data-req-id="personal">
                 {% for t in personal_todos %}
                 <div class="d-flex align-items-center gap-1 mb-1 ps-2 todo-drag-item {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}" draggable="true" data-todo-id="{{ t.id }}" style="cursor:grab;">
                     <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
@@ -130,10 +157,12 @@
                         <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent"><i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-secondary' }}"></i></button>
                     </form>
                     <span class="small">{{ t.title }}</span>
+                    {{ pomodoro_icons(t.actual_minutes, current_user.pomodoro_minutes) }}
                     <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" style="font-size:.7em;"><i class="bi bi-x"></i></button>
                 </div>
                 {% endfor %}
-                <div class="d-flex gap-1 ps-2 mb-1 flex-wrap">
+                </div>
+                <div class="d-flex gap-1 ps-2 mt-1 flex-wrap">
                     {% for label in ['跑步','喝水','阅读','冥想','拉伸'] %}
                     <form method="POST" action="{{ url_for('main.quick_todo') }}" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -143,11 +172,6 @@
                     </form>
                     {% endfor %}
                 </div>
-                <form method="POST" action="{{ url_for('main.quick_todo') }}" class="ps-2">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="category" value="personal">
-                    <input type="text" name="title" class="form-control form-control-sm border-0 bg-transparent px-0" placeholder="+ 自定义" required style="font-size:.85em;">
-                </form>
             </div>
         </div>
 
@@ -164,7 +188,10 @@
     <div class="col-md-5">
         <!-- Contribution Heatmap -->
         <div class="card mb-3 border-0 shadow-sm">
-            <div class="card-header py-2 bg-white"><i class="bi bi-calendar-check"></i> 完成热力图 <span class="text-muted small">近90天</span></div>
+            <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#heatmapBody" style="cursor:pointer;">
+                <i class="bi bi-calendar-check"></i> 完成热力图 <span class="text-muted small">近90天</span> <i class="bi bi-chevron-down float-end mt-1" style="font-size:.7em;"></i>
+            </div>
+            <div class="collapse show" id="heatmapBody">
             <div class="card-body py-2 px-3">
                 <div class="d-flex gap-1 flex-wrap">
                 {% set ns = namespace(d=heatmap_start) %}
@@ -184,11 +211,15 @@
                     <span>多</span>
                 </div>
             </div>
+            </div>
         </div>
 
         <!-- My Risks -->
         <div class="card mb-3 border-0 shadow-sm">
-            <div class="card-header py-2 bg-white"><i class="bi bi-exclamation-triangle text-danger"></i> 我的风险 <span class="badge bg-{{ 'danger' if my_risks else 'secondary' }}">{{ my_risks | length }}</span></div>
+            <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#riskBody" style="cursor:pointer;">
+                <i class="bi bi-exclamation-triangle text-danger"></i> 我的风险 <span class="badge bg-{{ 'danger' if my_risks else 'secondary' }}">{{ my_risks | length }}</span> <i class="bi bi-chevron-down float-end mt-1" style="font-size:.7em;"></i>
+            </div>
+            <div class="collapse show" id="riskBody">
             <div class="card-body py-2">
             {% for r in my_risks %}
                 <div class="d-flex justify-content-between align-items-center small mb-1">
@@ -202,6 +233,7 @@
             {% else %}
                 <p class="text-muted small mb-0">暂无待处理的风险</p>
             {% endfor %}
+            </div>
             </div>
         </div>
 
@@ -549,8 +581,11 @@ function exitFocusMode() {
                 // Add tomato icon after the button
                 var tomato = document.createElement('span');
                 tomato.style.cssText = 'font-size:.8em;margin-left:2px;';
-                tomato.innerHTML = completed ? '<i class="bi bi-circle-fill text-danger"></i>' : '<i class="bi bi-circle-half text-warning"></i>';
-                tomato.title = completed ? '完整番茄 (' + d.minutes + 'min)' : '半番茄 (' + d.minutes + 'min)';
+                var pct = Math.round(d.minutes / POMODORO_MIN * 100);
+                var cls = pct >= 80 ? 'text-success' : (pct >= 40 ? 'text-warning' : 'text-secondary');
+                var icon = pct >= 80 ? 'bi-circle-fill' : 'bi-circle-half';
+                tomato.innerHTML = '<i class="bi ' + icon + ' ' + cls + '" style="font-size:.5em;"></i>';
+                tomato.title = d.minutes + 'min (' + pct + '%)';
                 btn.parentElement.insertBefore(tomato, btn.nextSibling);
             }
             showToast(completed ? '● 番茄完成！' : '◐ 打断，' + d.minutes + '分钟', completed ? 'success' : 'info');

@@ -202,14 +202,14 @@ def quick_todo():
             # No todo found, create as normal todo
             pass
 
-    # Handle @name → create paired help todos
-    helper_name = None
+    # Handle @name or @group → create todos for target(s)
+    at_target = None
     if title.startswith('@'):
         import re
         m = re.match(r'@(\S+)\s*(.*)', title)
         if m:
-            helper_name = m.group(1)
-            title = m.group(2).strip() or f'协助 {current_user.name}'
+            at_target = m.group(1)
+            title = m.group(2).strip() or f'来自 {current_user.name}'
 
     reqs = []
     if req_id:
@@ -217,32 +217,44 @@ def quick_todo():
         if req:
             reqs = [req]
 
-    if helper_name:
-        helper = User.query.filter(
-            db.or_(User.name == helper_name, User.pinyin.ilike(f'{helper_name}%'))
-        ).filter_by(is_active=True).first()
-        if not helper or helper.id == current_user.id:
-            helper = None
+    if at_target:
+        from app.models.user import Group
+        # Check if @target is a group name
+        group = Group.query.filter_by(name=at_target).first()
+        if group:
+            # Group broadcast: create todo for all active members in group
+            members = User.query.filter_by(group=at_target, is_active=True)\
+                .filter(User.id != current_user.id).all()
+            for member in members:
+                t = Todo(user_id=member.id, title=title, due_date=today,
+                         category=category, requirements=reqs)
+                t.items.append(TodoItem(title=title, sort_order=0))
+                db.session.add(t)
+            # Also create for self
+            my_todo = Todo(user_id=current_user.id, title=title, due_date=today,
+                           category=category, requirements=reqs)
+            my_todo.items.append(TodoItem(title=title, sort_order=0))
+            db.session.add(my_todo)
+            db.session.commit()
+            result = {'ok': True, 'title': title, 'todo_id': my_todo.id,
+                      'helper': f'{at_target}({len(members)+1}人)', 'is_help': False}
+            return jsonify(**result) if is_ajax else redirect(url_for('main.index'))
 
-        if helper:
-            # My todo (parent, cannot self-complete, tracks helper's progress)
-            my_todo = Todo(
-                user_id=current_user.id, title=title, due_date=today,
-                category=category, requirements=reqs,
-            )
+        # Single person help
+        helper = User.query.filter(
+            db.or_(User.name == at_target, User.pinyin.ilike(f'{at_target}%'))
+        ).filter_by(is_active=True).first()
+        if helper and helper.id != current_user.id:
+            my_todo = Todo(user_id=current_user.id, title=title, due_date=today,
+                           category=category, requirements=reqs)
             my_todo.items.append(TodoItem(title=title, sort_order=0))
             db.session.add(my_todo)
             db.session.flush()
-
-            # Helper's todo (child, linked to my todo)
-            helper_todo = Todo(
-                user_id=helper.id, title=title, due_date=today,
-                category=category, parent_id=my_todo.id, requirements=reqs,
-            )
+            helper_todo = Todo(user_id=helper.id, title=title, due_date=today,
+                               category=category, parent_id=my_todo.id, requirements=reqs)
             helper_todo.items.append(TodoItem(title=title, sort_order=0))
             db.session.add(helper_todo)
             db.session.commit()
-
             result = {'ok': True, 'title': title, 'todo_id': my_todo.id,
                       'helper': helper.name, 'is_help': True}
             return jsonify(**result) if is_ajax else redirect(url_for('main.index'))
