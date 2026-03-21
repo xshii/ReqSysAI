@@ -410,10 +410,10 @@ function aiDescribe(mode) {
 
     var nomineeIds = [];
     if (mode === 'generate') {
-        document.querySelectorAll('.nominee-opt input:checked').forEach(function(el) {
+        document.querySelectorAll('#selectedNominees input[name="nominee_ids"]').forEach(function(el) {
             nomineeIds.push(parseInt(el.value));
         });
-        if (!nomineeIds.length) { hint.textContent = '请先勾选推荐人物'; return; }
+        if (!nomineeIds.length) { hint.textContent = '请先选择推荐人员'; return; }
     } else if (!desc) {
         hint.textContent = '请先输入描述内容'; return;
     }
