@@ -23,6 +23,7 @@ roles:
   - { name: PL, desc: 项目负责人, hidden: true }
   - { name: XM, desc: Scrum Master, hidden: true }
   - { name: HR, desc: 人力资源, hidden: true }
+  - { name: LM, desc: 直线经理, hidden: true }
   - { name: Admin, desc: 系统管理员 }
 
 # 隐藏角色(hidden: true)：注册/个人设置不可选，仅管理员在团队管理中分配
