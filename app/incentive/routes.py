@@ -22,7 +22,11 @@ def index():
     status_filter = request.args.get('status', '')
     scope = request.args.get('scope', 'all' if is_reviewer else 'mine')
 
-    q = Incentive.query
+    period = request.args.get('period', '1m')
+    period_days = {'1m': 30, '3m': 90, '6m': 180, '1y': 365}.get(period, 30)
+    since = date.today() - timedelta(days=period_days)
+
+    q = Incentive.query.filter(Incentive.created_at >= str(since))
     if scope == 'mine':
         q = q.filter_by(submitted_by=current_user.id)
     if status_filter:
@@ -32,7 +36,8 @@ def index():
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
     return render_template('incentive/index.html',
         items=items, users=users, is_reviewer=is_reviewer,
-        status_filter=status_filter, scope=scope)
+        status_filter=status_filter, scope=scope, period=period,
+        can_export=is_reviewer or current_user.is_admin)
 
 
 @incentive_bp.route('/submit', methods=['POST'])
@@ -89,6 +94,54 @@ def review(inc_id):
     db.session.commit()
     flash(f'已{"通过" if action == "approve" else "拒绝"}', 'success')
     return redirect(url_for('incentive.index'))
+
+
+@incentive_bp.route('/export-csv')
+@login_required
+def export_csv():
+    """Export approved incentives as CSV. Reviewer/admin only."""
+    if not (current_user.has_role('PL', 'XM', 'HR', 'LM') or current_user.is_admin):
+        flash('无权限', 'danger')
+        return redirect(url_for('incentive.index'))
+
+    import csv, io
+    from flask import Response
+
+    period = request.args.get('period', '1m')
+    period_days = {'1m': 30, '3m': 90, '6m': 180, '1y': 365}.get(period, 30)
+    since = date.today() - timedelta(days=period_days)
+
+    items = Incentive.query.filter(
+        Incentive.status == 'approved',
+        Incentive.created_at >= str(since),
+    ).order_by(Incentive.reviewed_at.desc()).all()
+
+    buf = io.StringIO()
+    buf.write('\ufeff')
+    writer = csv.writer(buf)
+    writer.writerow(['ID', '获奖名称', '成员', '工号', '小组', '类别', '金额', '获奖年月', '评语'])
+    for inc in items:
+        for u in inc.nominees:
+            writer.writerow([
+                inc.id, inc.title, u.name, u.employee_id, u.group or '',
+                inc.category_label, inc.amount or '',
+                inc.reviewed_at.strftime('%Y-%m') if inc.reviewed_at else '',
+                inc.review_comment or '',
+            ])
+        # External nominees
+        if inc.external_nominees:
+            for name in inc.external_nominees.split(','):
+                name = name.strip()
+                if name:
+                    writer.writerow([
+                        inc.id, inc.title, name, '', '',
+                        inc.category_label, inc.amount or '',
+                        inc.reviewed_at.strftime('%Y-%m') if inc.reviewed_at else '',
+                        inc.review_comment or '',
+                    ])
+
+    return Response(buf.getvalue(), mimetype='text/csv; charset=utf-8',
+                    headers={'Content-Disposition': 'attachment; filename=incentives.csv'})
 
 
 @incentive_bp.route('/<int:inc_id>/like', methods=['POST'])

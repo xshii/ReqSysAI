@@ -12,8 +12,8 @@
     </div>
 </div>
 
-{% if is_reviewer %}
-<div class="d-flex gap-2 mb-3 align-items-center">
+<div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
+    {% if is_reviewer %}
     <select class="form-select form-select-sm" style="width:auto;" onchange="applyFilter();" id="scopeFilter">
         <option value="all" {% if scope == 'all' %}selected{% endif %}>全部</option>
         <option value="mine" {% if scope == 'mine' %}selected{% endif %}>我的推荐</option>
@@ -24,9 +24,18 @@
         <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>已通过</option>
         <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>已拒绝</option>
     </select>
+    {% endif %}
+    <select class="form-select form-select-sm" style="width:auto;" onchange="applyFilter();" id="periodFilter">
+        <option value="1m" {% if period == '1m' %}selected{% endif %}>近1月</option>
+        <option value="3m" {% if period == '3m' %}selected{% endif %}>近3月</option>
+        <option value="6m" {% if period == '6m' %}selected{% endif %}>近6月</option>
+        <option value="1y" {% if period == '1y' %}selected{% endif %}>近1年</option>
+    </select>
     <span class="text-muted small">{{ items | length }} 条</span>
+    {% if can_export %}
+    <a href="{{ url_for('incentive.export_csv', period=period) }}" class="btn btn-sm btn-outline-success ms-auto"><i class="bi bi-download"></i> 导出CSV</a>
+    {% endif %}
 </div>
-{% endif %}
 
 {% if items %}
 {% for inc in items %}
@@ -232,9 +241,11 @@ function applyFilter() {
     var url = new URL(window.location);
     var scope = document.getElementById('scopeFilter');
     var status = document.getElementById('statusFilter');
+    var period = document.getElementById('periodFilter');
     if (scope) url.searchParams.set('scope', scope.value);
     if (status && status.value) url.searchParams.set('status', status.value);
     else url.searchParams.delete('status');
+    if (period) url.searchParams.set('period', period.value);
     window.location = url;
 }
 
