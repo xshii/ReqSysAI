@@ -249,15 +249,12 @@
 
 {% block extra_js %}
 <script>
-// AJAX quick-todo: no page reload, fallback to form submit on error
+// AJAX quick-todo for ALL forms (text input + quick buttons)
 document.querySelectorAll('form[action$="/quick-todo"]').forEach(function(form) {
-    // Skip quick-button forms (hidden title, no text input)
-    var textInput = form.querySelector('input[name="title"][type="text"]');
-    if (!textInput) return;
-
     form.addEventListener('submit', function(e) {
         e.preventDefault();
-        var title = textInput.value.trim();
+        var titleInput = form.querySelector('input[name="title"]');
+        var title = titleInput ? titleInput.value.trim() : '';
         if (!title) return;
         var data = {title: title};
         var reqId = form.querySelector('input[name="req_id"]');
@@ -266,21 +263,26 @@ document.querySelectorAll('form[action$="/quick-todo"]').forEach(function(form) 
         if (cat) data.category = cat.value;
         apiPost('{{ url_for("main.quick_todo") }}', data).then(function(d) {
             if (d && d.ok) {
-                var row = document.createElement('div');
-                row.className = 'd-flex align-items-start gap-2 mb-1 ps-2';
-                row.innerHTML = '<i class="bi bi-circle text-secondary"></i> <span class="small">' + title + '</span>';
-                form.parentElement.insertBefore(row, form);
-                textInput.value = '';
-                var badge = document.querySelector('.card-header .badge');
-                if (badge) {
-                    var parts = badge.textContent.split('/');
-                    badge.textContent = parts[0] + '/' + (parseInt(parts[1]) + 1);
+                // For text inputs: insert new line + clear
+                if (titleInput.type === 'text') {
+                    var row = document.createElement('div');
+                    row.className = 'd-flex align-items-start gap-2 mb-1 ps-2';
+                    row.innerHTML = '<i class="bi bi-circle text-secondary"></i> <span class="small">' + title + '</span>';
+                    form.parentElement.insertBefore(row, form);
+                    titleInput.value = '';
+                } else {
+                    // Quick button: insert line before the buttons row
+                    var row = document.createElement('div');
+                    row.className = 'd-flex align-items-start gap-2 mb-1 ps-2';
+                    row.innerHTML = '<i class="bi bi-circle text-secondary"></i> <span class="small">' + title + '</span>';
+                    var btnsRow = form.closest('.d-flex');
+                    if (btnsRow) btnsRow.parentElement.insertBefore(row, btnsRow);
                 }
-                showToast('已添加', 'success');
+                showToast(title + ' 已添加', 'success');
             } else {
-                form.submit(); // Fallback
+                form.submit();
             }
-        }).catch(function() { form.submit(); }); // Fallback on network error
+        }).catch(function() { form.submit(); });
     });
 });
 </script>
