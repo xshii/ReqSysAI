@@ -52,7 +52,7 @@
                 </div>
                 <div class="todo-list-for-req" data-req-id="{{ r.id }}">
                 {% for t in req_todos.get(r.id, []) %}
-                <div class="d-flex align-items-center gap-1 mb-1 ps-2 {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}">
+                <div class="d-flex align-items-center gap-1 mb-1 ps-2 todo-drag-item {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}" draggable="true" data-todo-id="{{ t.id }}" style="cursor:grab;">
                     <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="{{ '撤销完成' if t.status == 'done' else '标记完成' }}">
@@ -82,7 +82,7 @@
             <div class="card-body py-2">
                 <div class="small fw-bold text-secondary mb-1"><i class="bi bi-people"></i> 团队事务</div>
                 {% for t in team_todos %}
-                <div class="d-flex align-items-center gap-1 mb-1 ps-2 {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}">
+                <div class="d-flex align-items-center gap-1 mb-1 ps-2 todo-drag-item {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}" draggable="true" data-todo-id="{{ t.id }}" style="cursor:grab;">
                     <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent"><i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-secondary' }}"></i></button>
@@ -104,7 +104,7 @@
             <div class="card-body py-2">
                 <div class="small fw-bold text-secondary mb-1"><i class="bi bi-person-hearts"></i> 个人提升</div>
                 {% for t in personal_todos %}
-                <div class="d-flex align-items-center gap-1 mb-1 ps-2 {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}">
+                <div class="d-flex align-items-center gap-1 mb-1 ps-2 todo-drag-item {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}" draggable="true" data-todo-id="{{ t.id }}" style="cursor:grab;">
                     <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent"><i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-secondary' }}"></i></button>
@@ -530,6 +530,43 @@ document.querySelectorAll('.btn-delete-home').forEach(function(btn) {
 document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
     new bootstrap.Tooltip(el);
 });
+
+// Drag-sort todos
+(function() {
+    var dragEl = null;
+    document.querySelectorAll('.todo-drag-item').forEach(function(el) {
+        el.addEventListener('dragstart', function(e) {
+            dragEl = el;
+            el.style.opacity = '0.4';
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        el.addEventListener('dragend', function() {
+            el.style.opacity = '';
+            dragEl = null;
+            document.querySelectorAll('.todo-drag-item').forEach(function(e) { e.style.borderTop = ''; });
+        });
+        el.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            if (dragEl && dragEl !== el && el.parentElement === dragEl.parentElement) {
+                el.style.borderTop = '2px solid #0d6efd';
+            }
+        });
+        el.addEventListener('dragleave', function() { el.style.borderTop = ''; });
+        el.addEventListener('drop', function(e) {
+            e.preventDefault();
+            el.style.borderTop = '';
+            if (!dragEl || dragEl === el || el.parentElement !== dragEl.parentElement) return;
+            el.parentElement.insertBefore(dragEl, el);
+            // Save new order
+            var ids = [];
+            el.parentElement.querySelectorAll('.todo-drag-item').forEach(function(item) {
+                ids.push(parseInt(item.dataset.todoId));
+            });
+            apiPost('/todos/drag', {order: ids});
+        });
+    });
+})();
 
 // AJAX quick-todo for ALL forms (text input + quick buttons)
 document.querySelectorAll('form[action$="/quick-todo"]').forEach(function(form) {
