@@ -26,6 +26,8 @@ class Risk(db.Model):
     tracker = db.relationship('User', foreign_keys=[tracker_id], backref='tracked_risks')
     creator = db.relationship('User', foreign_keys=[created_by], backref='created_risks')
     requirement = db.relationship('Requirement', backref='risks')
+    comments = db.relationship('RiskComment', backref='risk', cascade='all, delete-orphan',
+                               order_by='RiskComment.created_at')
 
     _SEVERITY_META = {
         'high':   ('高', 'danger'),
@@ -65,3 +67,15 @@ class Risk(db.Model):
 
     def __repr__(self):
         return f'<Risk {self.title}>'
+
+
+class RiskComment(db.Model):
+    __tablename__ = 'risk_comments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    risk_id = db.Column(db.Integer, db.ForeignKey('risks.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    content = db.Column(db.String(500), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', lazy='joined')

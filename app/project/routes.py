@@ -247,6 +247,20 @@ def risk_reopen(risk_id):
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
 
 
+@project_bp.route('/risks/<int:risk_id>/comment', methods=['POST'])
+@login_required
+def risk_comment(risk_id):
+    """Add progress comment to a risk."""
+    from app.models.risk import RiskComment
+    risk = db.get_or_404(Risk, risk_id)
+    content = request.form.get('content', '').strip()[:500]
+    if content:
+        db.session.add(RiskComment(risk_id=risk.id, user_id=current_user.id, content=content))
+        db.session.commit()
+        flash('进展已记录', 'success')
+    return redirect(url_for('project.risk_list', project_id=risk.project_id))
+
+
 # ---- Meeting minutes ----
 
 @project_bp.route('/<int:project_id>/meetings')

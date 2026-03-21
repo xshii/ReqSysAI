@@ -40,6 +40,22 @@
                 <div>{{ r.title }}</div>
                 {% if r.description %}<div class="text-muted small">{{ r.description[:80] }}{% if r.description|length > 80 %}...{% endif %}</div>{% endif %}
                 {% if r.resolution %}<div class="text-success small"><i class="bi bi-check-circle"></i> {{ r.resolution }}</div>{% endif %}
+                {% if r.comments %}
+                <div class="mt-1 border-top pt-1">
+                    {% for c in r.comments %}
+                    <div class="small text-muted"><strong>{{ c.user.name }}</strong> <span style="font-size:.8em;">{{ c.created_at.strftime('%m-%d %H:%M') }}</span>：{{ c.content }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if r.status == 'open' %}
+                <form method="POST" action="{{ url_for('project.risk_comment', risk_id=r.id) }}" class="mt-1">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="input-group input-group-sm">
+                        <input type="text" name="content" class="form-control" placeholder="记录进展..." maxlength="500" required>
+                        <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-send"></i></button>
+                    </div>
+                </form>
+                {% endif %}
             </td>
             <td><span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span></td>
             <td>
