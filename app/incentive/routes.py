@@ -87,6 +87,18 @@ def review(inc_id):
     return redirect(url_for('incentive.index'))
 
 
+@incentive_bp.route('/<int:inc_id>/like', methods=['POST'])
+@login_required
+def like(inc_id):
+    inc = db.session.get(Incentive, inc_id)
+    if inc:
+        inc.likes = (inc.likes or 0) + 1
+        db.session.commit()
+        if request.is_json:
+            return jsonify(ok=True, likes=inc.likes)
+    return redirect(url_for('incentive.index'))
+
+
 @incentive_bp.route('/ai-polish', methods=['POST'])
 @login_required
 def ai_polish():

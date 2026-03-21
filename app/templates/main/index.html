@@ -266,6 +266,9 @@
                         </div>
                         <div class="text-muted text-truncate" title="{{ inc.title }}">{{ inc.title }}</div>
                         {% if inc.review_comment %}<div class="fst-italic text-secondary text-truncate" title="{{ inc.review_comment }}">"{{ inc.review_comment[:80] }}{% if inc.review_comment | length > 80 %}...{% endif %}"</div>{% endif %}
+                        <button class="btn btn-sm py-0 px-1 {% if inc.likes %}btn-outline-danger{% else %}btn-outline-secondary{% endif %} inc-like" data-id="{{ inc.id }}" style="font-size:.75em;">
+                            <i class="bi bi-heart{% if inc.likes %}-fill{% endif %}"></i> <span>{{ inc.likes or '' }}</span>
+                        </button>
                     </div>
                 </div>
                 {% endfor %}
@@ -473,6 +476,19 @@ document.querySelectorAll('.quick-todo-form input[name="title"]').forEach(functi
         });
     });
     inp.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; }, 200); });
+});
+
+// Incentive like (AJAX)
+document.querySelectorAll('.inc-like').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        apiPost('/incentive/' + btn.dataset.id + '/like', {}).then(function(d) {
+            if (d && d.ok) {
+                btn.querySelector('span').textContent = d.likes;
+                btn.querySelector('i').className = 'bi bi-heart-fill';
+                btn.className = 'btn btn-sm py-0 px-1 btn-outline-danger inc-like';
+            }
+        });
+    });
 });
 
 // Rant alias cache

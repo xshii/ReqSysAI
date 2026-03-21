@@ -40,6 +40,7 @@ class Incentive(db.Model):
     reviewed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     reviewed_at = db.Column(db.DateTime, nullable=True)
 
+    likes = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     submitter = db.relationship('User', foreign_keys=[submitted_by], backref='submitted_incentives')
