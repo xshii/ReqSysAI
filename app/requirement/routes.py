@@ -19,6 +19,16 @@ from app.models.user import User
 PER_PAGE = 20
 
 
+def _resolve_assignee(name_str):
+    """Resolve assignee from text. Returns (user_id, assignee_name)."""
+    if not name_str:
+        return None, None
+    user = User.query.filter_by(name=name_str.strip(), is_active=True).first()
+    if user:
+        return user.id, None
+    return None, name_str.strip()
+
+
 def _log_activity(req, action, detail=None):
     db.session.add(Activity(
         requirement_id=req.id, user_id=current_user.id,
@@ -96,13 +106,16 @@ def requirement_list():
 def requirement_create():
     form = _build_requirement_form()
     if form.validate_on_submit():
+        a_id, a_name = _resolve_assignee(request.form.get('assignee_name', ''))
         req = Requirement(
             number=Requirement.generate_number(),
             title=form.title.data,
             description=form.description.data,
             project_id=form.project_id.data,
             priority=form.priority.data,
-            assignee_id=form.assignee_id.data or None,
+            assignee_id=a_id,
+            assignee_name=a_name,
+            start_date=form.start_date.data,
             due_date=form.due_date.data,
             estimate_days=form.estimate_days.data,
             source='manual',
@@ -166,7 +179,10 @@ def requirement_edit(req_id):
         req.description = form.description.data
         req.project_id = form.project_id.data
         req.priority = form.priority.data
-        req.assignee_id = form.assignee_id.data or None
+        a_id, a_name = _resolve_assignee(request.form.get('assignee_name', ''))
+        req.assignee_id = a_id
+        req.assignee_name = a_name
+        req.start_date = form.start_date.data
         req.due_date = form.due_date.data
         req.estimate_days = form.estimate_days.data
         _log_activity(req, 'edited', '编辑了需求')

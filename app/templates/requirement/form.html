@@ -39,12 +39,11 @@
                             {{ form.priority(class="form-select", id="reqPriority") }}
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label class="form-label">{{ form.assignee_id.label.text }}</label>
+                            <label class="form-label">负责人</label>
                             {% from "_user_picker.html" import user_picker %}
-                            {% set cur_assignee = form.assignee_id.data %}
-                            {% set cur_assignee_name = '' %}
-                            {% for u in users %}{% if u.id == cur_assignee %}{% set cur_assignee_name = u.name %}{% endif %}{% endfor %}
-                            {{ user_picker('assignee_id', users, value=cur_assignee or '', value_name=cur_assignee_name, mode='id') }}
+                            {% set cur_name = '' %}
+                            {% if form.assignee_id.data %}{% for u in users %}{% if u.id == form.assignee_id.data %}{% set cur_name = u.name %}{% endif %}{% endfor %}{% endif %}
+                            {{ user_picker('assignee_name', users, value=cur_name, value_name=cur_name, mode='text', placeholder='搜索或输入外部人员') }}
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">{{ form.due_date.label.text }} <span class="text-danger">*</span></label>

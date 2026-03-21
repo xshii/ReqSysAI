@@ -15,6 +15,7 @@ class Requirement(db.Model):
     priority = db.Column(db.String(20), default='medium')
     status = db.Column(db.String(30), default='pending_review')
     assignee_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    assignee_name = db.Column(db.String(100), nullable=True)  # 外部责任人（无系统账号时）
     estimate_days = db.Column(db.Float, nullable=True)
     start_date = db.Column(db.Date, nullable=True)
     due_date = db.Column(db.Date, nullable=True)
@@ -28,6 +29,12 @@ class Requirement(db.Model):
     project = db.relationship('Project', back_populates='requirements')
     assignee = db.relationship('User', foreign_keys=[assignee_id], backref='assigned_requirements')
     creator = db.relationship('User', foreign_keys=[created_by], backref='created_requirements')
+
+    @property
+    def assignee_display(self):
+        if self.assignee:
+            return self.assignee.name
+        return self.assignee_name or '未分配'
     comments = db.relationship('Comment', back_populates='requirement', cascade='all, delete-orphan',
                                order_by='Comment.created_at')
     activities = db.relationship('Activity', back_populates='requirement', cascade='all, delete-orphan',
