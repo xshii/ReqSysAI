@@ -76,7 +76,7 @@
                 <tr>
                     <td colspan="2" class="fw-bold">合计</td>
                     {% for pid in project_ids %}
-                    <td class="text-center fw-bold small">{{ person_rows | map(attribute='proj_days') | map('get', pid, 0) | sum | round(1) }}</td>
+                    <td class="text-center fw-bold small">{% set col_total = namespace(v=0) %}{% for pr in person_rows %}{% set col_total.v = col_total.v + pr.proj_days.get(pid, 0) %}{% endfor %}{{ col_total.v | round(1) }}</td>
                     {% endfor %}
                     <td class="text-center fw-bold">{{ person_rows | sum(attribute='total') | round(1) }}</td>
                     <td></td>
