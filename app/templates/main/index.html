@@ -117,11 +117,11 @@
                     {% if is_help_request %}<span class="badge bg-warning text-dark" style="font-size:.55em;">@{{ t.children[0].user.name }}</span>{% endif %}
                     {% if t.status != 'done' %}
                     <button class="btn btn-sm py-0 px-0 {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer-home" data-id="{{ t.id }}"
-                            title="{{ '暂停番茄钟' if t.timer_running else '启动一个番茄钟' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;">
-                        <i class="bi bi-{{ 'pause-fill' if t.timer_running else 'play-fill' }}"></i>
+                            title="{{ '停止计时' if t.timer_running else '开始计时' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;">
+                        <i class="bi bi-{{ 'clock-fill' if t.timer_running else 'clock' }}"></i>
                     </button>
                     <button class="btn btn-sm py-0 px-0 {% if t.need_help %}text-danger{% else %}text-muted{% endif %} btn-block-home" data-id="{{ t.id }}" title="{{ '解除阻塞' if t.need_help else '标记阻塞' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;">
-                        <i class="bi bi-{% if t.need_help %}unlock{% else %}lock{% endif %}"></i>
+                        <i class="bi bi-{% if t.need_help %}play-circle{% else %}pause-circle{% endif %}"></i>
                     </button>
                     {% endif %}
                     {{ pomodoro_icons(t.actual_minutes, current_user.pomodoro_minutes) }}
@@ -585,7 +585,7 @@ function createTodoRow(todoId, title, opts) {
     if (opts.helper) badge += ' <span class="badge bg-warning text-dark" style="font-size:.6em;">@' + opts.helper + '</span>';
     row.innerHTML = '<i class="bi bi-circle text-secondary"></i>'
         + ' <span class="small">' + title + '</span>' + badge
-        + ' <button class="btn btn-sm py-0 px-0 btn-outline-secondary btn-timer-r" data-id="' + todoId + '" style="font-size:.7em;line-height:1;" title="启动一个番茄钟"><i class="bi bi-play-fill"></i></button>'
+        + ' <button class="btn btn-sm py-0 px-0 btn-outline-secondary btn-timer-r" data-id="' + todoId + '" style="font-size:.7em;line-height:1;" title="开始计时"><i class="bi bi-clock"></i></button>'
         + ' <button class="btn btn-sm py-0 px-0 text-muted btn-del-r" data-id="' + todoId + '" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>';
     // Bind timer
     row.querySelector('.btn-timer-r').addEventListener('click', function() {
@@ -593,7 +593,7 @@ function createTodoRow(todoId, title, opts) {
         apiPost('/todos/' + todoId + '/timer', {}).then(function(x) {
             if (x && x.ok && x.running) {
                 b.className = b.className.replace('btn-outline-secondary', 'btn-success');
-                b.querySelector('i').className = 'bi bi-pause-fill';
+                b.querySelector('i').className = 'bi bi-clock-fill';
                 enterFocusMode(todoId, title);
             }
         });
@@ -682,7 +682,7 @@ function exitFocusMode() {
             var btn = document.querySelector('.btn-timer-home[data-id="' + focusTodoId + '"]');
             if (btn) {
                 btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
-                btn.querySelector('i').className = 'bi bi-play-fill';
+                btn.querySelector('i').className = 'bi bi-clock';
                 if (d.minutes > 0) addTomatoIcon(btn, d.minutes);
             }
             showToast(completed ? '● 番茄完成！' : '◐ 打断，' + d.minutes + '分钟', completed ? 'success' : 'info');
@@ -716,11 +716,11 @@ document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
             if (d && d.ok) {
                 if (d.running) {
                     btn.className = btn.className.replace('btn-outline-secondary', 'btn-success');
-                    btn.querySelector('i').className = 'bi bi-pause-fill';
+                    btn.querySelector('i').className = 'bi bi-clock-fill';
                     enterFocusMode(todoId, title);
                 } else {
                     btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
-                    btn.querySelector('i').className = 'bi bi-play-fill';
+                    btn.querySelector('i').className = 'bi bi-clock';
                     if (d.minutes > 0) addTomatoIcon(btn, d.minutes);
                     showToast('◐ 打断，' + d.minutes + '分钟', 'info');
                 }
