@@ -182,23 +182,6 @@ def quick_todo():
         category = 'work'
     today = date.today()
 
-    # If same requirement already has a todo today, add as sub-item
-    if req_id:
-        from app.models.todo import todo_requirements
-        existing = Todo.query.filter(
-            Todo.user_id == current_user.id,
-            Todo.created_date == today,
-            Todo.status == TODO_STATUS_TODO,
-        ).join(todo_requirements, Todo.id == todo_requirements.c.todo_id)\
-         .filter(todo_requirements.c.requirement_id == req_id).first()
-        if existing:
-            existing.items.append(TodoItem(title=title, sort_order=len(existing.items)))
-            if existing.status == TODO_STATUS_DONE:
-                existing.status = TODO_STATUS_TODO
-                existing.done_date = None
-            db.session.commit()
-            return jsonify(ok=True, title=title, todo_id=existing.id, merged=True) if is_ajax else redirect(url_for('main.index'))
-
     reqs = []
     if req_id:
         req = db.session.get(Requirement, req_id)
@@ -211,10 +194,9 @@ def quick_todo():
         category=category,
         requirements=reqs,
     )
-    todo.items.append(TodoItem(title=title, sort_order=0))
     db.session.add(todo)
     db.session.commit()
-    return jsonify(ok=True, title=title, todo_id=todo.id, merged=False) if is_ajax else redirect(url_for('main.index'))
+    return jsonify(ok=True, title=title, todo_id=todo.id) if is_ajax else redirect(url_for('main.index'))
 
 
 @main_bp.route('/api/search')
