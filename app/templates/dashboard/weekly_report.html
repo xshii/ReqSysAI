@@ -218,7 +218,7 @@
             <td>{{ r.title }}{% if r.children %} <span class="text-muted small">({{ r.children | selectattr('status', 'in', ['done','closed']) | list | length }}/{{ r.children | length }})</span>{% endif %}</td>
             <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
                 {% if r.due_date and r.due_date < report_data.today and r.status not in ('done','closed') %}<span class="badge bg-danger">超期</span>{% endif %}</td>
-            <td>{{ r.assignee.name if r.assignee else '-' }}</td>
+            <td>{{ r.assignee_display }}</td>
             <td>{{ r.estimate_days or '-' }}</td>
             <td>{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
             <td>{% if inv %}{{ inv.people | length }}人·{{ inv.days }}天{% else %}-{% endif %}</td>

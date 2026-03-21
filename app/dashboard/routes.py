@@ -276,7 +276,7 @@ def weekly_report():
                 if r.children:
                     done_children = sum(1 for c in r.children if c.status in REQ_INACTIVE_STATUSES)
                     children_str = f'，子需求 {done_children}/{len(r.children)} 完成'
-                assignee = r.assignee.name if r.assignee else '未分配'
+                assignee = r.assignee_display
                 lines.append(f'- [{r.number}] {r.title}（{r.status_label}，{assignee}{days_str}{due_str}{children_str}）{overdue}')
 
         if todos_done:
@@ -743,7 +743,7 @@ def weekly_report_export():
                 r.number,
                 r.title + children_str,
                 r.status_label + overdue,
-                r.assignee.name if r.assignee else '-',
+                r.assignee_display,
                 r.estimate_days or '-',
                 r.due_date.strftime('%m-%d') if r.due_date else '-',
                 invest_str,

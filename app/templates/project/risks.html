@@ -152,8 +152,8 @@
                             {% for r in reqs %}
                             <a href="#" class="list-group-item list-group-item-action py-1 small req-search-opt"
                                data-id="{{ r.id }}" data-assignee="{{ r.assignee_id or '' }}"
-                               data-text="{{ r.number }} {{ r.title[:30] }}{% if r.assignee %} ({{ r.assignee.name }}){% endif %}">
-                                {{ r.number }} {{ r.title[:30] }}{% if r.assignee %} <span class="text-muted">({{ r.assignee.name }})</span>{% endif %}
+                               data-text="{{ r.number }} {{ r.title[:30] }}{% if r.assignee_display != '未分配' %} ({{ r.assignee_display }}){% endif %}">
+                                {{ r.number }} {{ r.title[:30] }}{% if r.assignee_display != '未分配' %} <span class="text-muted">({{ r.assignee_display }})</span>{% endif %}
                             </a>
                             {% endfor %}
                         </div>

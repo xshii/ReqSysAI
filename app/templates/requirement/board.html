@@ -49,7 +49,7 @@
                     <div class="d-flex justify-content-between align-items-center mt-1">
                         <span class="text-muted" style="font-size:.75em;">{{ r.number }}</span>
                         <span class="text-muted" style="font-size:.75em;">
-                            {% if r.assignee %}{{ r.assignee.name }}{% else %}未分配{% endif %}
+                            {{ r.assignee_display }}
                         </span>
                     </div>
                     {% if r.due_date %}
