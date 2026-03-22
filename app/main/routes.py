@@ -417,8 +417,8 @@ def ai_recommend_todos():
     from app.models.recurring_todo import RecurringTodo
     due_recurring = [r for r in RecurringTodo.query.filter_by(
         user_id=current_user.id, is_active=True).all() if r.is_due_today()]
-    # Filter out already adopted
-    recurring_map = {}  # title → [recurring_ids]
+    # Filter out already adopted, group by title
+    recurring_groups = {}  # title → [recurring_ids]
     if due_recurring:
         adopted_ids = set(t.recurring_id for t in Todo.query.filter(
             Todo.user_id == current_user.id,
@@ -426,10 +426,13 @@ def ai_recommend_todos():
             Todo.created_date == today).all())
         not_adopted = [r for r in due_recurring if r.id not in adopted_ids]
         if not_adopted:
-            lines.append('\n今日到期的周期任务（未完成）：')
+            lines.append('\n今日到期的周期任务（未完成，req_number填"RECURRING-序号"）：')
+            idx = 0
             for r in not_adopted:
-                lines.append(f'  - {r.title}（{r.schedule_desc}），req_number填"RECURRING"')
-                recurring_map.setdefault(r.title, []).append(r.id)
+                recurring_groups.setdefault(r.title, []).append(r.id)
+            for title, ids in recurring_groups.items():
+                lines.append(f'  - {title}（req_number填"RECURRING-{idx}"）')
+                idx += 1
 
     prompt = get_prompt('todo_recommend') + '\n\n' + '\n'.join(lines)
     result, _ = call_ollama(prompt)
@@ -439,6 +442,9 @@ def ai_recommend_todos():
         result = [result]
     if not isinstance(result, list):
         return jsonify(ok=False, msg='AI 返回格式异常')
+
+    # Build index for RECURRING-N mapping
+    recurring_idx = list(recurring_groups.values()) if recurring_groups else []
 
     todos = []
     for item in result:
@@ -451,9 +457,21 @@ def ai_recommend_todos():
                 'reason': item.get('reason', ''),
                 'est_min': item.get('est_min', 0),
             }
-            # Match recurring by title
-            if req_num == 'RECURRING' and item['title'] in recurring_map:
-                t['recurring_ids'] = recurring_map[item['title']]
+            # Match recurring by RECURRING-N or plain RECURRING
+            if req_num and req_num.startswith('RECURRING'):
+                parts = req_num.split('-')
+                if len(parts) == 2 and parts[1].isdigit():
+                    idx = int(parts[1])
+                    if idx < len(recurring_idx):
+                        t['recurring_ids'] = recurring_idx[idx]
+                elif recurring_idx:
+                    # Fallback: try match by title
+                    for title, ids in recurring_groups.items():
+                        if title in item['title'] or item['title'] in title:
+                            t['recurring_ids'] = ids
+                            break
+                    if 'recurring_ids' not in t and len(recurring_idx) == 1:
+                        t['recurring_ids'] = recurring_idx[0]
             todos.append(t)
     return jsonify(ok=True, todos=todos)
 
