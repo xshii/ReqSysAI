@@ -221,39 +221,26 @@
                     <a href="{{ url_for('main.recurring_list') }}" class="ms-auto small text-muted">编辑</a>
                 </div>
                 {% if all_recurring %}
-                {% for r in all_recurring %}
-                {% set is_due = r.is_due_today() %}
-                {% set r_status = recurring_status.get(r.id) %}
-                <div class="d-flex align-items-center gap-1 mb-1 ps-2">
-                    {% if r_status == 'done' %}
-                    <button class="btn btn-sm p-0 border-0 bg-transparent btn-toggle-recurring" data-rid="{{ r.id }}" title="取消完成" style="font-size:.85em;">
-                        <i class="bi bi-check-circle-fill text-success"></i>
-                    </button>
-                    {% elif r_status == 'todo' %}
-                    <button class="btn btn-sm p-0 border-0 bg-transparent btn-toggle-recurring" data-rid="{{ r.id }}" title="标记完成" style="font-size:.85em;">
-                        <i class="bi bi-circle text-muted"></i>
-                    </button>
-                    {% else %}
-                    <button class="btn btn-sm p-0 border-0 bg-transparent btn-adopt-recurring" data-rid="{{ r.id }}" title="添加到今日" style="font-size:.85em;">
-                        <i class="bi bi-plus-circle {{ 'text-info' if is_due else 'text-muted' }}"></i>
-                    </button>
-                    {% endif %}
-                    <span class="small {% if r_status == 'done' %}text-muted text-decoration-line-through{% elif not is_due and not r_status %}text-muted{% endif %}">{{ r.title }}</span>
+                {% for title, group_items in all_recurring|groupby('title') %}
+                {% set items = group_items|list %}
+                <div class="d-flex align-items-center gap-1 mb-1 ps-2 flex-wrap">
+                    <span class="small {% if items|selectattr('id', 'in', recurring_status.keys())|list|length == items|length %}text-muted text-decoration-line-through{% endif %}">{{ title }}</span>
+                    {% for r in items %}
+                    {% set is_due = r.is_due_today() %}
+                    {% set r_status = recurring_status.get(r.id) %}
                     {% set is_overdue = not is_due and r.days_since_last() is not none and r.days_since_last() > 0 %}
-                    {% if r_status == 'done' and is_due %}
+                    {% if r_status == 'done' and (is_due or not is_overdue) %}
                     <span class="badge bg-success btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
                     {% elif r_status == 'done' and is_overdue %}
                     <span class="badge bg-warning text-dark btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
-                    {% elif r_status == 'done' %}
-                    <span class="badge bg-success btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
                     {% elif is_due %}
                     <span class="badge bg-primary btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
                     {% elif is_overdue %}
                     <span class="badge bg-danger bg-opacity-75 btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
                     {% else %}
-                    <span class="badge bg-light text-muted border btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}{% if r.days_until_next() > 0 %} · {{ r.days_until_next() }}天后{% endif %}</span>
+                    <span class="badge bg-light text-muted border btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
                     {% endif %}
-                    <button class="btn btn-sm p-0 border-0 bg-transparent text-muted btn-del-recurring ms-auto" data-rid="{{ r.id }}" title="删除" style="font-size:.7em;"><i class="bi bi-x"></i></button>
+                    {% endfor %}
                 </div>
                 {% endfor %}
                 {% else %}
