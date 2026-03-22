@@ -413,6 +413,24 @@ def ai_recommend_todos():
         for title in today_titles:
             lines.append(f'  - {title}')
 
+    # Recurring todos due today
+    from app.models.recurring_todo import RecurringTodo
+    due_recurring = [r for r in RecurringTodo.query.filter_by(
+        user_id=current_user.id, is_active=True).all() if r.is_due_today()]
+    # Filter out already adopted
+    recurring_map = {}  # title → [recurring_ids]
+    if due_recurring:
+        adopted_ids = set(t.recurring_id for t in Todo.query.filter(
+            Todo.user_id == current_user.id,
+            Todo.recurring_id.in_([r.id for r in due_recurring]),
+            Todo.created_date == today).all())
+        not_adopted = [r for r in due_recurring if r.id not in adopted_ids]
+        if not_adopted:
+            lines.append('\n今日到期的周期任务（未完成）：')
+            for r in not_adopted:
+                lines.append(f'  - {r.title}（{r.schedule_desc}），req_number填"RECURRING"')
+                recurring_map.setdefault(r.title, []).append(r.id)
+
     prompt = get_prompt('todo_recommend') + '\n\n' + '\n'.join(lines)
     result, _ = call_ollama(prompt)
     if not result:
@@ -426,13 +444,17 @@ def ai_recommend_todos():
     for item in result:
         if isinstance(item, dict) and item.get('title'):
             req_num = item.get('req_number', '')
-            todos.append({
+            t = {
                 'title': item['title'],
                 'req_number': req_num,
                 'req_id': req_map.get(req_num, 0),
                 'reason': item.get('reason', ''),
                 'est_min': item.get('est_min', 0),
-            })
+            }
+            # Match recurring by title
+            if req_num == 'RECURRING' and item['title'] in recurring_map:
+                t['recurring_ids'] = recurring_map[item['title']]
+            todos.append(t)
     return jsonify(ok=True, todos=todos)
 
 
