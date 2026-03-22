@@ -54,6 +54,14 @@
                         <label class="form-label">番茄钟时长（分钟）</label>
                         <input type="number" name="pomodoro_minutes" class="form-control" value="{{ current_user.pomodoro_minutes or 45 }}" min="5" max="120" step="5">
                     </div>
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="only_my_group" value="1" id="onlyMyGroup"
+                                   {% if current_user.only_my_group %}checked{% endif %}>
+                            <label class="form-check-label" for="onlyMyGroup">团队 Todo 只显示本组</label>
+                        </div>
+                        <div class="form-text">关闭后可查看所有组的 Todo</div>
+                    </div>
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-check-lg"></i> 保存
                     </button>

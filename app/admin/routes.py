@@ -35,7 +35,8 @@ def user_list():
         q = q.filter_by(group=filter_group)
     users = q.order_by(User.group, User.name).all()
 
-    all_groups = [g.name for g in Group.query.order_by(Group.name).all()]
+    all_group_objs = Group.query.order_by(Group.name).all()
+    all_groups = [g.name for g in all_group_objs]
     group_counts = {}
     for g in all_groups:
         group_counts[g] = User.query.filter_by(group=g, is_active=True).count()
@@ -47,7 +48,8 @@ def user_list():
         .order_by(IPChangeRequest.created_at.desc()).all()
 
     return render_template('admin/users.html', users=users, visible_roles=visible_roles,
-                           all_groups=all_groups, group_counts=group_counts,
+                           all_groups=all_groups, all_group_objs=all_group_objs,
+                           group_counts=group_counts,
                            filter_group=filter_group, ip_requests=ip_requests)
 
 
@@ -309,6 +311,13 @@ def group_action():
             User.query.filter_by(group=name).update({'group': None})
             db.session.commit()
             flash(f'团队 {name} 已解散', 'success')
+    elif action == 'toggle_hidden':
+        name = request.form.get('group_name', '').strip()
+        g = Group.query.filter_by(name=name).first()
+        if g:
+            g.is_hidden = not g.is_hidden
+            db.session.commit()
+            flash(f'团队 {name} 已{"隐藏" if g.is_hidden else "显示"}', 'success')
     return redirect(url_for('admin.user_list'))
 
 
@@ -646,7 +655,6 @@ def ai_set_system_prompt():
 @admin_required
 def ai_test():
     """One-click test for current AI provider."""
-    from flask import jsonify
     from app.services.ai import call_ollama
     test_prompt = '请用一句话回答：1+1等于几？'
     try:
@@ -657,3 +665,69 @@ def ai_test():
             return jsonify(ok=False, error='AI 返回为空')
     except Exception as e:
         return jsonify(ok=False, error=str(e)[:200])
+
+
+@admin_bp.route('/ai-models/test-all', methods=['POST'])
+@admin_required
+def ai_test_all():
+    """Fetch all available models from Ollama + OpenAI and test each."""
+    import time
+    results = []
+
+    # 1. Ollama models
+    ollama_url = current_app.config.get('OLLAMA_BASE_URL', '').rstrip('/')
+    if ollama_url:
+        try:
+            resp = requests.get(f'{ollama_url}/api/tags', timeout=10,
+                                proxies={'http': '', 'https': ''})
+            resp.raise_for_status()
+            for m in resp.json().get('models', []):
+                name = m['name']
+                size_gb = m.get('size', 0) / 1e9
+                size_str = f'{size_gb:.1f}GB' if size_gb >= 1 else f'{m.get("size", 0) / 1e6:.0f}MB'
+                # Quick test
+                t0 = time.time()
+                try:
+                    r = requests.post(f'{ollama_url}/api/chat', timeout=30,
+                                      proxies={'http': '', 'https': ''},
+                                      json={'model': name, 'messages': [{'role': 'user', 'content': 'hi'}], 'stream': False})
+                    r.raise_for_status()
+                    reply = r.json().get('message', {}).get('content', '')[:50]
+                    elapsed = round(time.time() - t0, 1)
+                    results.append({'provider': 'Ollama', 'model': name, 'size': size_str,
+                                    'status': 'ok', 'reply': reply, 'time': f'{elapsed}s'})
+                except Exception as e:
+                    results.append({'provider': 'Ollama', 'model': name, 'size': size_str,
+                                    'status': 'fail', 'reply': str(e)[:80], 'time': '-'})
+        except Exception as e:
+            results.append({'provider': 'Ollama', 'model': '-', 'size': '-',
+                            'status': 'fail', 'reply': f'连接失败: {e}', 'time': '-'})
+
+    # 2. OpenAI compatible models
+    openai_url = current_app.config.get('OPENAI_BASE_URL', '').rstrip('/')
+    openai_key = current_app.config.get('OPENAI_API_KEY', '')
+    if openai_url:
+        try:
+            headers = {'Authorization': f'Bearer {openai_key}'} if openai_key else {}
+            resp = requests.get(f'{openai_url}/models', headers=headers, timeout=10)
+            resp.raise_for_status()
+            models = resp.json().get('data', [])
+            for m in models:
+                mid = m.get('id', m.get('name', '?'))
+                t0 = time.time()
+                try:
+                    r = requests.post(f'{openai_url}/chat/completions', headers=headers, timeout=30,
+                                      json={'model': mid, 'messages': [{'role': 'user', 'content': 'hi'}], 'temperature': 0.1})
+                    r.raise_for_status()
+                    reply = r.json()['choices'][0]['message']['content'][:50]
+                    elapsed = round(time.time() - t0, 1)
+                    results.append({'provider': 'OpenAI', 'model': mid, 'size': '-',
+                                    'status': 'ok', 'reply': reply, 'time': f'{elapsed}s'})
+                except Exception as e:
+                    results.append({'provider': 'OpenAI', 'model': mid, 'size': '-',
+                                    'status': 'fail', 'reply': str(e)[:80], 'time': '-'})
+        except Exception as e:
+            results.append({'provider': 'OpenAI', 'model': '-', 'size': '-',
+                            'status': 'fail', 'reply': f'连接失败: {e}', 'time': '-'})
+
+    return jsonify(ok=True, results=results)

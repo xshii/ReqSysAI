@@ -33,6 +33,7 @@ class Group(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
+    is_hidden = db.Column(db.Boolean, default=False)  # 隐藏组（后台设置）
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def __repr__(self):
@@ -51,6 +52,7 @@ class User(UserMixin, db.Model):
     group = db.Column(db.String(50), nullable=True)
     is_active = db.Column(db.Boolean, default=True)
     pomodoro_minutes = db.Column(db.Integer, default=45)
+    only_my_group = db.Column(db.Boolean, default=True)  # 默认只看本组
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

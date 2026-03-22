@@ -174,6 +174,7 @@ def profile():
         current_user.roles = kept_roles + selected_roles
         current_user.group = form.group.data or None
         current_user.pomodoro_minutes = request.form.get('pomodoro_minutes', type=int) or 45
+        current_user.only_my_group = request.form.get('only_my_group') == '1'
         # Handle avatar upload
         from app.utils.upload import save_photo
         new_avatar = save_photo(request.files.get('avatar'), folder='avatar')

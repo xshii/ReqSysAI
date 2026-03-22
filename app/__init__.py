@@ -65,7 +65,14 @@ def create_app(config_name=None):
         if current_user.is_authenticated:
             from app.models.user import User, Group
             from app.models.project import Project
-            groups = [g.name for g in Group.query.order_by(Group.name).all()]
+            all_groups = Group.query.order_by(Group.name).all()
+            # Default: only own group. User can toggle only_my_group=False in profile to see all.
+            if current_user.only_my_group:
+                # Explicitly opted to see only own group
+                groups = [g.name for g in all_groups if g.name == current_user.group]
+            else:
+                # Show all non-hidden groups
+                groups = [g.name for g in all_groups if not g.is_hidden]
             cur_group = req.args.get('group', current_user.group or '')
             if not cur_group and groups:
                 cur_group = groups[0]

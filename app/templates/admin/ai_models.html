@@ -18,9 +18,6 @@
                 <input class="form-check-input" type="radio" name="provider" value="openai" id="provOpenai" {% if ai_provider == 'openai' %}checked{% endif %} onchange="this.form.submit()">
                 <label class="form-check-label small" for="provOpenai">OpenAI API（公司）</label>
             </div>
-            {% if ai_provider == 'openai' %}
-            <span class="text-muted small">{{ openai_model }} @ {{ openai_base_url[:30] }}...</span>
-            {% endif %}
         </form>
     </div>
 </div>
@@ -51,7 +48,7 @@
             <div class="row g-2 align-items-center">
                 <div class="col-md-4">
                     <label class="form-label small mb-0">API 地址</label>
-                    <input type="text" name="base_url" class="form-control form-control-sm" placeholder="http://127.0.0.1:11434" value="{{ ollama_base_url }}">
+                    <input type="text" name="base_url" class="form-control form-control-sm" placeholder="如 http://127.0.0.1:11434（不带 /api）" value="{{ ollama_base_url }}">
                 </div>
                 <div class="col-md-1">
                     <label class="form-label small mb-0">SSH</label>
@@ -85,7 +82,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="row g-2">
                 <div class="col-md-5">
-                    <input type="text" name="base_url" class="form-control form-control-sm" placeholder="API Base URL" value="{{ openai_base_url }}" required>
+                    <input type="text" name="base_url" class="form-control form-control-sm" placeholder="如 http://127.0.0.1:11434/v1（不带 /models）" value="{{ openai_base_url }}" required>
                 </div>
                 <div class="col-md-3">
                     <input type="password" name="api_key" class="form-control form-control-sm" placeholder="API Key" value="{{ openai_api_key }}" required>
@@ -102,13 +99,25 @@
 </div>
 {% endif %}
 
-<!-- 一键测试 -->
+<!-- 测试 -->
 <div class="card mb-3 border-0 shadow-sm">
-    <div class="card-body py-2 d-flex align-items-center gap-3">
-        <button class="btn btn-sm btn-outline-success" id="testBtn" onclick="testAI()">
-            <i class="bi bi-lightning"></i> 一键测试 AI（{{ 'OpenAI' if ai_provider == 'openai' else 'Ollama' }}）
-        </button>
-        <span id="testResult" class="small"></span>
+    <div class="card-body py-2">
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <button class="btn btn-sm btn-outline-success" id="testBtn" onclick="testAI()">
+                <i class="bi bi-lightning"></i> 快速测试（当前模型）
+            </button>
+            <button class="btn btn-sm btn-outline-primary" id="testAllBtn" onclick="testAllModels()">
+                <i class="bi bi-list-check"></i> 测试所有模型
+            </button>
+            <span id="testResult" class="small"></span>
+        </div>
+        <!-- All models result table -->
+        <div id="allModelsPanel" class="d-none">
+            <table class="table table-sm small mb-0">
+                <thead class="table-light"><tr><th>来源</th><th>模型</th><th>大小</th><th>状态</th><th>响应</th><th>耗时</th></tr></thead>
+                <tbody id="allModelsBody"></tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -298,22 +307,53 @@ function testAI() {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 测试中...';
     result.textContent = '';
-    var csrf = document.querySelector('meta[name="csrf-token"]');
-    fetch('{{ url_for("admin.ai_test") }}', {
-        method: 'POST',
-        headers: {'X-CSRFToken': csrf ? csrf.content : '', 'Content-Type': 'application/x-www-form-urlencoded'},
-    }).then(r => r.json()).then(data => {
+    fetch('{{ url_for("admin.ai_test") }}', {method: 'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-lightning"></i> 一键测试 AI';
+        btn.innerHTML = '<i class="bi bi-lightning"></i> 快速测试';
         if (data.ok) {
-            result.innerHTML = '<span class="text-success"><i class="bi bi-check-circle"></i> 成功：' + data.response + '</span>';
+            result.innerHTML = '<span class="text-success">通过：' + data.response + '</span>';
         } else {
-            result.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle"></i> 失败：' + data.error + '</span>';
+            result.innerHTML = '<span class="text-danger">失败：' + data.error + '</span>';
         }
-    }).catch(e => {
+    }).catch(function() {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-lightning"></i> 一键测试 AI';
-        result.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle"></i> 请求失败</span>';
+        btn.innerHTML = '<i class="bi bi-lightning"></i> 快速测试';
+        result.innerHTML = '<span class="text-danger">请求失败</span>';
+    });
+}
+
+function testAllModels() {
+    var btn = document.getElementById('testAllBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 拉取并测试中...';
+    fetch('{{ url_for("admin.ai_test_all") }}', {method: 'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-list-check"></i> 测试所有模型';
+        if (!data.ok) { alert('拉取失败'); return; }
+        var tbody = document.getElementById('allModelsBody');
+        tbody.innerHTML = '';
+        data.results.forEach(function(r) {
+            var statusBadge = r.status === 'ok'
+                ? '<span class="badge bg-success">可用</span>'
+                : '<span class="badge bg-danger">不可用</span>';
+            tbody.innerHTML += '<tr>'
+                + '<td>' + r.provider + '</td>'
+                + '<td><strong>' + r.model + '</strong></td>'
+                + '<td>' + r.size + '</td>'
+                + '<td>' + statusBadge + '</td>'
+                + '<td class="small text-muted">' + (r.reply || '') + '</td>'
+                + '<td>' + r.time + '</td>'
+                + '</tr>';
+        });
+        document.getElementById('allModelsPanel').classList.remove('d-none');
+    }).catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-list-check"></i> 测试所有模型';
+        alert('请求失败');
     });
 }
 

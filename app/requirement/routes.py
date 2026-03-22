@@ -132,8 +132,14 @@ def requirement_create():
         for i, st in enumerate(sub_titles):
             st = st.strip()
             if st:
-                assignee = int(sub_assignees[i]) if i < len(sub_assignees) and sub_assignees[i] else None
-                days = float(sub_days[i]) if i < len(sub_days) and sub_days[i] else None
+                try:
+                    assignee = int(sub_assignees[i]) if i < len(sub_assignees) and sub_assignees[i] else None
+                except (ValueError, IndexError):
+                    assignee = None
+                try:
+                    days = float(sub_days[i]) if i < len(sub_days) and sub_days[i] else None
+                except (ValueError, IndexError):
+                    days = None
                 sub = Requirement(
                     number=Requirement.generate_number(),
                     title=st,
