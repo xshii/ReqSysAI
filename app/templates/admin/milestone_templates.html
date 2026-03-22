@@ -71,8 +71,7 @@ function addTplItem(name, offset) {
     var div = document.getElementById('tplItems');
     var row = document.createElement('div');
     row.className = 'input-group input-group-sm mb-1 tpl-drag-row';
-    row.draggable = true;
-    row.innerHTML = '<span class="input-group-text" style="cursor:grab;"><i class="bi bi-grip-vertical"></i></span>'
+    row.innerHTML = '<span class="input-group-text tpl-drag-handle" style="cursor:grab;" draggable="true"><i class="bi bi-grip-vertical"></i></span>'
         + '<input type="text" name="item_name" class="form-control" placeholder="里程碑名称" value="' + (name || '') + '">'
         + '<input type="number" name="item_offset" class="form-control" style="max-width:80px;" placeholder="天数" value="' + (offset || 0) + '" min="0">'
         + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>';
@@ -82,12 +81,14 @@ function addTplItem(name, offset) {
 
 var tplDragItem = null;
 function initTplDrag(row) {
-    row.addEventListener('dragstart', function(e) {
+    var handle = row.querySelector('.tpl-drag-handle');
+    if (!handle) return;
+    handle.addEventListener('dragstart', function(e) {
         tplDragItem = row;
         row.classList.add('opacity-50');
         e.dataTransfer.effectAllowed = 'move';
     });
-    row.addEventListener('dragend', function() {
+    handle.addEventListener('dragend', function() {
         row.classList.remove('opacity-50');
         tplDragItem = null;
     });

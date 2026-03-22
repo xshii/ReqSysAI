@@ -66,8 +66,7 @@ function addMs(name, dateVal) {
     var div = document.getElementById('msItems');
     var row = document.createElement('div');
     row.className = 'input-group input-group-sm mb-1 ms-drag-row';
-    row.draggable = true;
-    row.innerHTML = '<span class="input-group-text" style="cursor:grab;"><i class="bi bi-grip-vertical"></i></span>'
+    row.innerHTML = '<span class="input-group-text ms-drag-handle" style="cursor:grab;" draggable="true"><i class="bi bi-grip-vertical"></i></span>'
         + '<input type="text" name="ms_name" class="form-control" placeholder="里程碑名称" value="' + (name || '').replace(/"/g, '&quot;') + '">'
         + '<input type="date" name="ms_date" class="form-control" style="max-width:160px;" value="' + (dateVal || '') + '">'
         + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>';
@@ -77,12 +76,13 @@ function addMs(name, dateVal) {
 
 var msDragItem = null;
 function initMsDrag(row) {
-    row.addEventListener('dragstart', function(e) {
+    var handle = row.querySelector('.ms-drag-handle');
+    handle.addEventListener('dragstart', function(e) {
         msDragItem = row;
         row.classList.add('opacity-50');
         e.dataTransfer.effectAllowed = 'move';
     });
-    row.addEventListener('dragend', function() {
+    handle.addEventListener('dragend', function() {
         row.classList.remove('opacity-50');
         msDragItem = null;
     });

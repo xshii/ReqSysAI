@@ -600,10 +600,11 @@ def weekly_report_save():
     import json as json_lib
 
     cur_project_id = request.form.get('project_id', type=int)
-    week_start = request.form.get('week_start')
-    if not cur_project_id or not week_start:
+    week_start_str = request.form.get('week_start', '')
+    if not cur_project_id or not week_start_str:
         flash('参数缺失', 'danger')
         return redirect(request.referrer or url_for('dashboard.weekly_report'))
+    week_start = date.fromisoformat(week_start_str)
 
     saved = WeeklyReport.query.filter_by(project_id=cur_project_id, week_start=week_start).first()
     if not saved:
@@ -634,8 +635,9 @@ def weekly_report_freeze():
     """Freeze/unfreeze weekly report. Only project PM (owner) can freeze."""
 
     cur_project_id = request.form.get('project_id', type=int)
-    week_start = request.form.get('week_start')
+    week_start_str = request.form.get('week_start', '')
     action = request.form.get('action', 'freeze')
+    week_start = date.fromisoformat(week_start_str) if week_start_str else None
 
     saved = WeeklyReport.query.filter_by(project_id=cur_project_id, week_start=week_start).first()
     if not saved:

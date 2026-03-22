@@ -54,7 +54,8 @@ def project_create():
         for i, name in enumerate(ms_names):
             name = name.strip()
             if name:
-                due = ms_dates[i] if i < len(ms_dates) and ms_dates[i] else None
+                due_str = ms_dates[i] if i < len(ms_dates) and ms_dates[i] else ''
+                due = date.fromisoformat(due_str) if due_str else None
                 project.milestones.append(Milestone(name=name, due_date=due))
 
         db.session.commit()
@@ -261,7 +262,7 @@ def risk_add(project_id):
         owner=request.form.get('owner', '').strip() or None,
         tracker_id=request.form.get('tracker_id', type=int) or None,
         requirement_id=request.form.get('requirement_id', type=int) or None,
-        due_date=request.form.get('due_date') or None,
+        due_date=date.fromisoformat(request.form.get('due_date')) if request.form.get('due_date') else None,
         created_by=current_user.id,
     )
     db.session.add(risk)

@@ -25,7 +25,8 @@ def add():
             flash('请至少选择一个关联需求', 'danger')
             return redirect(url_for('todo.team'))
         reqs = Requirement.query.filter(Requirement.id.in_(req_ids)).all()
-        due = request.form.get('due_date')
+        due_str = request.form.get('due_date', '')
+        due = date.fromisoformat(due_str) if due_str else None
         assignee_id = request.form.get('assignee_id', type=int) or current_user.id
         # Validate assignee exists and is active
         assignee = db.session.get(User, assignee_id)
@@ -72,7 +73,7 @@ def edit(todo_id):
         return jsonify(ok=True, deleted=True)
     todo.title = title
     if 'due_date' in data:
-        todo.due_date = data['due_date'] or None
+        todo.due_date = date.fromisoformat(data['due_date']) if data['due_date'] else None
     db.session.commit()
     return jsonify(ok=True)
 
@@ -274,7 +275,8 @@ def ask_help(todo_id):
     helper = db.session.get(User, helper_id) if helper_id else None
     if not helper:
         return jsonify(ok=False, msg='请选择协助人'), 400
-    help_due = data.get('due_date') or None
+    help_due_str = data.get('due_date') or ''
+    help_due = date.fromisoformat(help_due_str) if help_due_str else None
     child = Todo(
         user_id=helper.id,
         title=help_title,
