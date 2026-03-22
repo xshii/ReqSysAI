@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}后台管理 - 提示词管理 - 研发协作平台{% endblock %}
+
+{% block content %}
+{% include "admin/_tabs.html" %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">提示词管理</h5>
+    <span class="text-muted small">修改后所有用户立即生效，保存在 prompts.yml</span>
+</div>
+
+<form method="POST" action="{{ url_for('admin.ai_model_save_prompts') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="accordion" id="promptAccordion">
+        {% for key, text in prompts.items() %}
+        <div class="accordion-item">
+            <h2 class="accordion-header">
+                <button class="accordion-button collapsed py-2 small" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#pc_{{ key }}">
+                    <strong>{{ prompt_labels.get(key, key) }}</strong>
+                    {% if text != prompt_defaults.get(key, '') %}
+                    <span class="badge bg-warning text-dark ms-2">已自定义</span>
+                    {% endif %}
+                </button>
+            </h2>
+            <div id="pc_{{ key }}" class="accordion-collapse collapse" data-bs-parent="#promptAccordion">
+                <div class="accordion-body py-2">
+                    <textarea name="prompt_{{ key }}" class="form-control form-control-sm" rows="8"
+                              style="font-size:0.85em;" id="pt_{{ key }}">{{ text }}</textarea>
+                    <div class="d-flex justify-content-between mt-1">
+                        <button type="button" class="btn btn-sm btn-link py-0 px-0"
+                                onclick="resetPrompt('{{ key }}')">恢复默认</button>
+                        <span class="text-muted small">
+                            {% if key == 'system_prompt' %}每次 AI 调用自动注入
+                            {% elif key == 'weekly_report' %}变量：<code>{project_name}</code>
+                            {% elif key == 'incentive_generate' %}变量：<code>{{ '{{' }}context{{ '}}' }}</code> <code>{{ '{{' }}category{{ '}}' }}</code>
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <button type="submit" class="btn btn-primary btn-sm mt-3">
+        <i class="bi bi-check-lg"></i> 保存全部提示词
+    </button>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var promptDefaults = {{ prompt_defaults | tojson }};
+function resetPrompt(key) {
+    var el = document.getElementById('pt_' + key);
+    if (el && promptDefaults[key]) el.value = promptDefaults[key];
+}
+</script>
+{% endblock %}

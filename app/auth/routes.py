@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 
-from flask import redirect, url_for, flash, request, session, render_template, current_app
+from flask import redirect, url_for, flash, request, session, render_template, current_app, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 
 from app.auth import auth_bp
@@ -174,7 +174,6 @@ def profile():
         current_user.roles = kept_roles + selected_roles
         current_user.group = form.group.data or None
         current_user.pomodoro_minutes = request.form.get('pomodoro_minutes', type=int) or 45
-        current_user.only_my_group = request.form.get('only_my_group') == '1'
         # Handle avatar upload
         from app.utils.upload import save_photo
         new_avatar = save_photo(request.files.get('avatar'), folder='avatar')
@@ -191,6 +190,14 @@ def profile():
         return redirect(url_for('auth.profile'))
 
     return render_template('auth/profile.html', form=form)
+
+
+@auth_bp.route('/profile/toggle-my-group', methods=['POST'])
+@login_required
+def toggle_my_group():
+    current_user.only_my_group = not current_user.only_my_group
+    db.session.commit()
+    return jsonify(ok=True, only_my_group=current_user.only_my_group)
 
 
 @auth_bp.route('/profile/stats')
@@ -258,6 +265,76 @@ def profile_stats():
         total_focus_hours=round(total_focus / 60, 1),
         timedelta=timedelta,
     )
+
+
+@auth_bp.route('/profile/ai-efficiency', methods=['POST'])
+@login_required
+def ai_efficiency():
+    """AI analyzes personal work efficiency."""
+    from datetime import date, timedelta
+    from app.models.todo import Todo
+    from app.models.requirement import Requirement
+    from app.services.ai import call_ollama
+    from app.services.prompts import get_prompt
+    import markdown as md_lib
+
+    today = date.today()
+    uid = current_user.id
+    d30 = today - timedelta(days=30)
+    d7 = today - timedelta(days=7)
+
+    # 30-day stats
+    done_30d = Todo.query.filter(Todo.user_id == uid, Todo.status == 'done',
+                                  Todo.created_date >= d30).count()
+    done_7d = Todo.query.filter(Todo.user_id == uid, Todo.status == 'done',
+                                 Todo.created_date >= d7).count()
+    active = Todo.query.filter_by(user_id=uid, status='todo').count()
+    blocked = Todo.query.filter(Todo.user_id == uid, Todo.status == 'todo',
+                                 Todo.need_help == True).count()
+    help_given = Todo.query.filter(Todo.user_id == uid, Todo.source == 'help',
+                                    Todo.created_date >= d30).count()
+    focus_30d = db.session.query(db.func.sum(Todo.actual_minutes)).filter(
+        Todo.user_id == uid, Todo.created_date >= d30).scalar() or 0
+    # Requirements
+    req_total = Requirement.query.filter_by(assignee_id=uid).count()
+    req_done = Requirement.query.filter_by(assignee_id=uid, status='done').count()
+    req_overdue = Requirement.query.filter(
+        Requirement.assignee_id == uid,
+        Requirement.status.notin_(('done', 'closed')),
+        Requirement.due_date < today).count()
+
+    # Code stats
+    total_code = db.session.query(db.func.sum(Requirement.code_lines)).filter(
+        Requirement.assignee_id == uid, Requirement.code_lines.isnot(None)).scalar() or 0
+    total_tests = db.session.query(db.func.sum(Requirement.test_cases)).filter(
+        Requirement.assignee_id == uid, Requirement.test_cases.isnot(None)).scalar() or 0
+
+    lines = [
+        f'{current_user.name}（{current_user.role_names}，{current_user.group or ""}）的工作数据：',
+        f'',
+        f'近30天：完成 {done_30d} 个任务（日均 {round(done_30d/30,1)}），专注 {focus_30d} 分钟（日均 {round(focus_30d/30)}分钟）',
+        f'近7天：完成 {done_7d} 个任务（日均 {round(done_7d/7,1)}）',
+        f'当前进行中 {active} 个，阻塞 {blocked} 个',
+        f'协助他人 {help_given} 次（近30天）',
+        f'负责需求 {req_total} 个，已完成 {req_done} 个，延期 {req_overdue} 个',
+        f'累计代码量 {total_code} 行，测试用例 {total_tests} 个' if total_code or total_tests else '',
+    ]
+    # Recurring todo discipline
+    from app.models.recurring_todo import RecurringTodo
+    recurring_all = RecurringTodo.query.filter_by(user_id=uid, is_active=True).all()
+    if recurring_all:
+        recurring_total = Todo.query.filter(Todo.user_id == uid, Todo.recurring_id.isnot(None)).count()
+        recurring_done = Todo.query.filter(Todo.user_id == uid, Todo.recurring_id.isnot(None), Todo.status == 'done').count()
+        rate = round(recurring_done / recurring_total * 100) if recurring_total else 0
+        lines.append(f'周期任务 {len(recurring_all)} 个，历史执行 {recurring_total} 次，完成 {recurring_done} 次（{rate}%）')
+
+    prompt = get_prompt('personal_efficiency') + '\n\n' + '\n'.join(lines)
+    _, raw = call_ollama(prompt)
+
+    if raw:
+        html = md_lib.markdown(raw, extensions=['tables'])
+        return jsonify(ok=True, html=html)
+    return jsonify(ok=False, error='分析失败')
 
 
 @auth_bp.route('/logout')

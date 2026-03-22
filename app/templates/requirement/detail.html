@@ -83,6 +83,8 @@
                     <tr><td class="text-muted">里程碑</td><td>{{ req.milestone.name if req.milestone else '-' }}</td></tr>
                     <tr><td class="text-muted">负责人</td><td>{{ req.assignee_display }}</td></tr>
                     <tr><td class="text-muted">预估</td><td>{{ req.estimate_days or '-' }} 人天</td></tr>
+                    <tr><td class="text-muted">代码量</td><td>{{ req.code_lines or '-' }} 行</td></tr>
+                    <tr><td class="text-muted">测试用例</td><td>{{ req.test_cases or '-' }} 个</td></tr>
                     <tr><td class="text-muted">创建者</td><td>{{ req.creator.name }}</td></tr>
                     <tr><td class="text-muted">创建日期</td><td>{{ req.created_at.strftime('%Y-%m-%d') }}</td></tr>
                 </table>

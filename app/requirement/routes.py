@@ -118,6 +118,8 @@ def requirement_create():
             start_date=form.start_date.data,
             due_date=form.due_date.data,
             estimate_days=form.estimate_days.data,
+            code_lines=form.code_lines.data,
+            test_cases=form.test_cases.data,
             source='manual',
             created_by=current_user.id,
         )
@@ -127,11 +129,15 @@ def requirement_create():
 
         # Create sub-requirements
         sub_titles = request.form.getlist('sub_title')
+        sub_types = request.form.getlist('sub_type')
         sub_assignees = request.form.getlist('sub_assignee')
         sub_days = request.form.getlist('sub_days')
+        sub_est_lines = request.form.getlist('sub_est_lines')
+        sub_est_cases = request.form.getlist('sub_est_cases')
         for i, st in enumerate(sub_titles):
             st = st.strip()
             if st:
+                sub_type = sub_types[i] if i < len(sub_types) else 'analysis'
                 try:
                     assignee = int(sub_assignees[i]) if i < len(sub_assignees) and sub_assignees[i] else None
                 except (ValueError, IndexError):
@@ -140,16 +146,25 @@ def requirement_create():
                     days = float(sub_days[i]) if i < len(sub_days) and sub_days[i] else None
                 except (ValueError, IndexError):
                     days = None
+                try:
+                    est_lines = int(sub_est_lines[i]) if i < len(sub_est_lines) and sub_est_lines[i] else None
+                except (ValueError, IndexError):
+                    est_lines = None
+                try:
+                    est_cases = int(sub_est_cases[i]) if i < len(sub_est_cases) and sub_est_cases[i] else None
+                except (ValueError, IndexError):
+                    est_cases = None
                 sub = Requirement(
                     number=Requirement.generate_number(),
                     title=st,
                     project_id=req.project_id,
-                    milestone_id=req.milestone_id,
                     priority=req.priority,
                     assignee_id=assignee,
                     estimate_days=days,
+                    code_lines=est_lines if sub_type == 'coding' else None,
+                    test_cases=est_cases if sub_type == 'testing' else None,
                     parent_id=req.id,
-                    source='manual',
+                    source=sub_type,
                     created_by=current_user.id,
                 )
                 db.session.add(sub)
@@ -191,6 +206,8 @@ def requirement_edit(req_id):
         req.start_date = form.start_date.data
         req.due_date = form.due_date.data
         req.estimate_days = form.estimate_days.data
+        req.code_lines = form.code_lines.data
+        req.test_cases = form.test_cases.data
         _log_activity(req, 'edited', '编辑了需求')
         db.session.commit()
         flash('需求更新成功', 'success')

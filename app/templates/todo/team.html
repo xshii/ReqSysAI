@@ -4,22 +4,29 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h4>团队 Todo <span class="text-muted small">{{ today.strftime('%Y-%m-%d') }}</span></h4>
-    <div class="d-flex gap-2">
-        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newModal">
-            <i class="bi bi-plus-lg"></i> 新建
-        </button>
-    </div>
+    {% if ai_enabled %}
+    <button class="btn btn-sm btn-outline-info" id="btnStandup" onclick="genStandup()">
+        <i class="bi bi-megaphone"></i> 站会摘要
+    </button>
+    {% endif %}
 </div>
 
+<!-- Standup panel -->
+<div id="standupPanel" class="card border-info mb-3 d-none">
+    <div class="card-header py-1 bg-info bg-opacity-10 d-flex justify-content-between">
+        <span class="small fw-bold">每日站会摘要</span>
+        <button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="document.getElementById('standupPanel').classList.add('d-none')"><i class="bi bi-x"></i></button>
+    </div>
+    <div class="card-body py-2 small" id="standupContent"></div>
+</div>
 
 <div class="row">
     <!-- Left: today active -->
     <div class="col-md-7">
-        <h6 class="text-muted mb-3"><i class="bi bi-circle"></i> 今日 Todo</h6>
+        <h6 class="text-muted mb-3">近两日进展</h6>
         {% for u in users %}
         {% set todos = user_active.get(u.id, []) %}
         {% if todos %}
-        {% set mine = u.id == current_user.id %}
         <div class="card mb-3">
             <div class="card-header py-2 d-flex justify-content-between align-items-center">
                 <span class="fw-bold small">{{ u.name }} <span class="text-muted">{{ u.group or '' }}</span></span>
@@ -36,26 +43,45 @@
                     {% set _ = seen_reqs.ids.append(rid) %}
                 {% elif not rid and 0 not in seen_reqs.ids %}
                     {% if seen_reqs.ids %}<div class="mt-2"></div>{% endif %}
-                    <div class="small fw-bold text-secondary mb-1"><i class="bi bi-people"></i> 团队事务</div>
+                    <div class="small fw-bold text-secondary mb-1">团队事务</div>
                     {% set _ = seen_reqs.ids.append(0) %}
                 {% endif %}
-                {# Overdue highlight: created before today = yesterday's carryover #}
-                {% set is_carryover = t.created_date and t.created_date < today %}
-                <div class="d-flex align-items-center mb-1 ps-2 todo-card {% if t.need_help %}bg-danger bg-opacity-10 border-start border-3 border-danger{% elif is_carryover %}bg-warning bg-opacity-10 border-start border-3 border-warning{% endif %}" data-id="{{ t.id }}">
-                    {% if t.items %}
-                        {% for item in t.items %}
-                        <input class="form-check-input me-1 item-cb" type="checkbox" data-item-id="{{ item.id }}" style="font-size:.85em;"
-                               {% if item.is_done %}checked{% endif %} {% if not mine %}disabled{% endif %}>
-                        <span class="small {% if item.is_done %}text-decoration-line-through text-muted{% endif %}">{{ item.title }}{% if is_carryover and loop.first %} <span class="text-warning" style="font-size:.8em;">结转</span>{% endif %}</span>
+                {% set is_done = t.status == 'done' %}
+                {% set is_carryover = not is_done and t.created_date and t.created_date < today and not before_10am %}
+                <div class="mb-1 ps-2 {% if t.need_help %}bg-danger bg-opacity-10 border-start border-3 border-danger{% elif is_done %}border-start border-3 border-success{% elif is_carryover %}bg-warning bg-opacity-10 border-start border-3 border-warning{% endif %}">
+                    <div class="d-flex align-items-center">
+                        {% if not is_done %}
+                        <button class="btn btn-sm p-0 border-0 bg-transparent me-1 btn-toggle-done" data-id="{{ t.id }}" title="标记完成" style="font-size:.8em;"><i class="bi bi-circle text-muted"></i></button>
+                        {% else %}
+                        <span class="text-success me-1" style="font-size:.75em;">&#10003;</span>
+                        {% endif %}
+                        {% if t.items %}
+                            {% for item in t.items %}
+                            <span class="small {% if item.is_done %}text-decoration-line-through text-muted{% endif %}">{{ item.title }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="small {% if is_done %}text-muted{% endif %}">{{ t.title }}</span>
+                        {% endif %}
+                        {% if t.actual_minutes %}<span class="text-muted ms-1" style="font-size:.7em;">{{ t.actual_minutes }}m</span>{% endif %}
+                        {% if is_carryover %}<span class="text-warning ms-1" style="font-size:.7em;">结转</span>{% endif %}
+                        {% if t.need_help %}<span class="badge bg-danger ms-1" style="font-size:.6em;">阻塞{% if t.blocked_reason %}：{{ t.blocked_reason }}{% endif %}</span>{% endif %}
+                        {% if is_done and t.done_date %}<span class="text-muted ms-1" style="font-size:.7em;">{{ t.done_date.strftime('%m-%d') }}</span>{% endif %}
+                    </div>
+                    <!-- Comments -->
+                    {% if t.comments %}
+                    <div class="ps-2 mt-1">
+                        {% for c in t.comments %}
+                        <div class="text-muted" style="font-size:.78em;">
+                            <strong>{{ c.user.name }}</strong> {{ c.created_at.strftime('%m-%d %H:%M') }}：{{ c.content }}
+                        </div>
                         {% endfor %}
-                    {% else %}
-                        <span class="small">{{ t.title }}{% if is_carryover %} <span class="text-warning" style="font-size:.8em;">结转</span>{% endif %}</span>
+                    </div>
                     {% endif %}
-                    {% if t.need_help %}<span class="badge bg-danger" style="font-size:.6em;">阻塞{% if t.blocked_reason %}：{{ t.blocked_reason }}{% endif %}</span>{% endif %}
-                    {% if mine %}
-                    <button class="btn btn-sm py-0 px-0 {% if t.need_help %}text-danger{% else %}text-muted{% endif %} btn-block ms-1" data-id="{{ t.id }}" title="{{ '解除阻塞' if t.need_help else '标记阻塞' }}" style="font-size:.7em;"><i class="bi bi-{% if t.need_help %}unlock{% else %}lock{% endif %}"></i></button>
-                    <button class="btn btn-sm py-0 px-0 text-muted btn-delete ms-1" data-id="{{ t.id }}" style="font-size:.7em;"><i class="bi bi-x"></i></button>
-                    {% endif %}
+                    <!-- Comment input -->
+                    <div class="d-flex gap-1 mt-1" style="max-width:400px;">
+                        <input type="text" class="form-control form-control-sm py-0 comment-input" data-todo-id="{{ t.id }}" placeholder="评论 或 @姓名 求助" style="font-size:.78em;">
+                        <button class="btn btn-sm btn-outline-secondary py-0 comment-submit" data-todo-id="{{ t.id }}" style="font-size:.75em;">发</button>
+                    </div>
                 </div>
             {% endfor %}
             </div>
@@ -64,20 +90,19 @@
         {% endfor %}
         {% if not user_active %}
         <div class="text-center text-muted py-4">
-            <i class="bi bi-check-circle" style="font-size:2em;"></i>
-            <p class="small mt-1">全部完成！</p>
+            <p class="small mt-1">全部完成</p>
         </div>
         {% endif %}
     </div>
 
     <!-- Right: done this week -->
     <div class="col-md-5">
-        <h6 class="text-muted mb-3"><i class="bi bi-check-circle"></i> 近一周已完成</h6>
+        <h6 class="text-muted mb-3">更早完成</h6>
         {% for u in users %}
         {% set todos = user_done.get(u.id, []) %}
         {% if todos %}
-        <div class="card mb-3 border-success bg-success bg-opacity-10">
-            <div class="card-header py-2 d-flex justify-content-between align-items-center bg-transparent">
+        <div class="card mb-3">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
                 <span class="fw-bold small">{{ u.name }}</span>
                 <span class="badge bg-success">{{ todos | length }}</span>
             </div>
@@ -97,258 +122,51 @@
         {% endif %}
     </div>
 </div>
-
-<!-- 新建弹窗 -->
-<div class="modal fade" id="newModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="{{ url_for('todo.add') }}">
-                {{ form.hidden_tag() }}
-                <div class="modal-header py-2">
-                    <h6 class="modal-title">新建任务</h6>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">任务标题</label>
-                        <input type="text" name="title" class="form-control" placeholder="输入任务标题" required>
-                    </div>
-                    <div class="mb-3 position-relative">
-                        <label class="form-label">执行人</label>
-                        <input type="hidden" name="assignee_id" id="assigneeId" value="{{ current_user.id }}">
-                        <input type="text" class="form-control form-control-sm" id="assigneeInput"
-                               value="{{ current_user.name }}（我）" autocomplete="off" placeholder="输入姓名搜索">
-                        <div class="list-group position-absolute shadow-sm d-none" id="assigneeList" style="z-index:1050;max-height:160px;overflow-y:auto;width:100%;">
-                            <a href="#" class="list-group-item list-group-item-action py-1 small assignee-opt"
-                               data-id="{{ current_user.id }}" data-name="{{ current_user.name }}（我）"
-                               data-pinyin="{{ current_user.pinyin or '' }}" data-eid="{{ current_user.employee_id }}">{{ current_user.name }}（我） <span class="text-muted">{{ current_user.employee_id }}</span></a>
-                            {% for au in all_users %}
-                            <a href="#" class="list-group-item list-group-item-action py-1 small assignee-opt"
-                               data-id="{{ au.id }}" data-name="{{ au.name }}"
-                               data-pinyin="{{ au.pinyin or '' }}" data-eid="{{ au.employee_id }}">{{ au.name }} <span class="text-muted">{{ au.employee_id }}{% if au.group %} · {{ au.group }}{% endif %}</span></a>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">预期闭环</label>
-                        <select name="due_date" class="form-select form-select-sm">
-                            {% for d, label in due_options %}
-                            <option value="{{ d.strftime('%Y-%m-%d') }}" {% if loop.first %}selected{% endif %}>{{ label }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">关联需求 <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control form-control-sm mb-1 req-search" placeholder="搜索需求..." oninput="filterReqs(this)">
-                        <div class="border rounded p-2 req-list-box" style="max-height:160px;overflow-y:auto;">
-                            {% for r in reqs %}
-                            <div class="form-check req-option">
-                                <input class="form-check-input" type="checkbox" name="req_ids" value="{{ r.id }}" id="req_{{ r.id }}"
-                                       {% if r.id in default_req_ids %}checked{% endif %}>
-                                <label class="form-check-label small" for="req_{{ r.id }}">{{ r.number }} {{ r.title }}</label>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    <div>
-                        <label class="form-label">子项</label>
-                        <div id="newItems">
-                            <div class="input-group input-group-sm mb-1">
-                                <input type="text" name="item_title" class="form-control" placeholder="子项内容">
-                                <button type="button" class="btn btn-outline-secondary btn-add-new-item">+</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer py-1">
-                    <button type="submit" class="btn btn-sm btn-primary">创建</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- 求助弹窗 -->
-<div class="modal fade" id="helpModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header py-2">
-                <h6 class="modal-title">求助</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label">协助人</label>
-                    <select id="helpUserId" class="form-select form-select-sm">
-                        <option value="">选择协助人</option>
-                        {% for au in all_users %}
-                        <option value="{{ au.id }}">{{ au.name }}{% if au.group %} ({{ au.group }}){% endif %}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">任务描述</label>
-                    <input type="text" id="helpTitle" class="form-control form-control-sm">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">预期闭环（3个工作日内）</label>
-                    <select id="helpDueDate" class="form-select form-select-sm">
-                        {% for d, label in help_due_options %}
-                        <option value="{{ d.strftime('%Y-%m-%d') }}">{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-            <div class="modal-footer py-1">
-                <button type="button" class="btn btn-sm btn-primary" id="helpConfirm">发起求助</button>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-var csrfToken = '{{ csrf_token() }}';
-function api(url, data) {
-    return fetch(url, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-        body: JSON.stringify(data || {})
-    });
-}
-
-/* Sub-item toggle */
-document.querySelectorAll('.item-cb:not(:disabled)').forEach(function(cb) {
-    cb.addEventListener('change', function() {
-        api('/todos/items/' + cb.dataset.itemId + '/toggle').then(function(r) { if (r.ok) location.reload(); });
-    });
-});
-
-/* Sub-item delete */
-document.querySelectorAll('.item-delete').forEach(function(btn) {
+/* Toggle done */
+document.querySelectorAll('.btn-toggle-done').forEach(function(btn) {
     btn.addEventListener('click', function() {
-        api('/todos/items/' + btn.dataset.itemId + '/delete').then(function(r) { if (r.ok) location.reload(); });
+        fetch('/todos/' + btn.dataset.id + '/toggle', {method: 'POST'})
+        .then(function(r) { return r.json(); })
+        .then(function(d) { if (d.ok) location.reload(); });
     });
 });
 
-/* Add sub-item */
-document.querySelectorAll('.add-item-input').forEach(function(inp) {
-    inp.addEventListener('keydown', function(e) {
-        if (e.key !== 'Enter') return;
-        e.preventDefault();
-        var title = inp.value.trim();
-        if (!title) return;
-        api('/todos/' + inp.dataset.todoId + '/items/add', {title: title}).then(function(r) { if (r.ok) location.reload(); });
+/* @mention autocomplete */
+var _allUsers = [{% for u in all_users %}{name:'{{ u.name }}',py:'{{ u.pinyin or "" }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+document.querySelectorAll('.comment-input').forEach(function(inp) {
+    var dropdown = document.createElement('div');
+    dropdown.className = 'list-group position-absolute shadow-sm';
+    dropdown.style.cssText = 'z-index:1050;max-height:120px;overflow-y:auto;display:none;font-size:.8em;';
+    inp.parentElement.style.position = 'relative';
+    inp.parentElement.appendChild(dropdown);
+    inp.addEventListener('input', function() {
+        var val = inp.value;
+        var atIdx = val.lastIndexOf('@');
+        if (atIdx < 0 || atIdx === val.length - 1) { dropdown.style.display = 'none'; return; }
+        var q = val.substring(atIdx + 1).toLowerCase();
+        if (!q) { dropdown.style.display = 'none'; return; }
+        var html = '';
+        _allUsers.forEach(function(u) {
+            if (u.name.toLowerCase().includes(q) || u.py.toLowerCase().includes(q)) {
+                html += '<a href="#" class="list-group-item list-group-item-action py-1 small" data-name="' + u.name + '">' + u.name + '</a>';
+            }
+        });
+        dropdown.innerHTML = html;
+        dropdown.style.display = html ? '' : 'none';
+        dropdown.querySelectorAll('a').forEach(function(a) {
+            a.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                inp.value = val.substring(0, atIdx + 1) + a.dataset.name + ' ';
+                dropdown.style.display = 'none';
+                inp.focus();
+            });
+        });
     });
-});
-
-/* Block toggle */
-document.querySelectorAll('.btn-block').forEach(function(b) {
-    b.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var isBlocked = b.querySelector('i').classList.contains('bi-unlock');
-        if (isBlocked) {
-            // Unblock
-            api('/todos/' + b.dataset.id + '/block', {}).then(function(r) { if (r.ok) location.reload(); });
-        } else {
-            // Block - ask reason
-            var reason = prompt('阻塞原因（可选）：');
-            if (reason === null) return; // cancelled
-            api('/todos/' + b.dataset.id + '/block', {reason: reason}).then(function(r) { if (r.ok) location.reload(); });
-        }
-    });
-});
-
-/* Reopen / Delete */
-document.querySelectorAll('.btn-reopen').forEach(function(b) {
-    b.addEventListener('click', function(e) { e.stopPropagation(); api('/todos/' + b.dataset.id + '/reopen').then(function(r) { if (r.ok) location.reload(); }); });
-});
-document.querySelectorAll('.btn-delete').forEach(function(b) {
-    b.addEventListener('click', function(e) { e.stopPropagation(); if (!confirm('确定删除？')) return; api('/todos/' + b.dataset.id + '/edit', {title: ''}).then(function(r) { if (r.ok) location.reload(); }); });
-});
-
-/* Help */
-var helpTodoId = null;
-var helpModal = new bootstrap.Modal(document.getElementById('helpModal'));
-document.querySelectorAll('.btn-help').forEach(function(b) {
-    b.addEventListener('click', function(e) { e.stopPropagation(); helpTodoId = b.dataset.id; document.getElementById('helpTitle').value = '协助: ' + b.dataset.title; helpModal.show(); });
-});
-document.getElementById('helpConfirm').addEventListener('click', function() {
-    var hid = document.getElementById('helpUserId').value;
-    if (!hid || !helpTodoId) return;
-    api('/todos/' + helpTodoId + '/help', {helper_id: parseInt(hid), title: document.getElementById('helpTitle').value.trim(), due_date: document.getElementById('helpDueDate').value || null}).then(function(r) { return r.json(); }).then(function(d) {
-        helpModal.hide();
-        if (d.ok) { alert('已向 ' + d.helper_name + ' 发起求助'); location.reload(); } else alert(d.msg || '失败');
-    });
-});
-
-/* Drag reorder */
-var dragId = null;
-document.querySelectorAll('.todo-card[draggable]').forEach(function(card) {
-    card.addEventListener('dragstart', function(e) { dragId = card.dataset.id; e.dataTransfer.effectAllowed = 'move'; card.classList.add('opacity-50'); });
-    card.addEventListener('dragend', function() { card.classList.remove('opacity-50'); });
-});
-
-/* New modal: add sub-item rows */
-document.querySelector('.btn-add-new-item').addEventListener('click', function() {
-    var div = document.getElementById('newItems');
-    var row = document.createElement('div');
-    row.className = 'input-group input-group-sm mb-1';
-    row.innerHTML = '<input type="text" name="item_title" class="form-control" placeholder="子项内容"><button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>';
-    div.appendChild(row);
-});
-
-/* Requirement search filter */
-function filterReqs(input) {
-    var q = input.value.toLowerCase();
-    var box = input.nextElementSibling;
-    box.querySelectorAll('.req-option').forEach(function(opt) {
-        var text = opt.querySelector('label').textContent.toLowerCase();
-        opt.style.display = text.includes(q) ? '' : 'none';
-    });
-}
-
-/* Assignee search */
-var assigneeInput = document.getElementById('assigneeInput');
-var assigneeList = document.getElementById('assigneeList');
-var assigneeId = document.getElementById('assigneeId');
-assigneeInput.addEventListener('focus', function() { assigneeList.classList.remove('d-none'); filterAssignee(); });
-assigneeInput.addEventListener('input', filterAssignee);
-function filterAssignee() {
-    var q = assigneeInput.value.toLowerCase();
-    var opts = assigneeList.querySelectorAll('.assignee-opt');
-    opts.forEach(function(o) {
-        var name = o.dataset.name.toLowerCase();
-        var py = (o.dataset.pinyin || '').toLowerCase();
-        var eid = (o.dataset.eid || '').toLowerCase();
-        o.style.display = (name.includes(q) || py.includes(q) || eid.includes(q)) ? '' : 'none';
-    });
-    assigneeList.classList.remove('d-none');
-}
-var assigneeSelectedName = assigneeInput.value;
-assigneeList.querySelectorAll('.assignee-opt').forEach(function(o) {
-    o.addEventListener('click', function(e) {
-        e.preventDefault();
-        assigneeId.value = o.dataset.id;
-        assigneeInput.value = o.dataset.name;
-        assigneeSelectedName = o.dataset.name;
-        assigneeList.classList.add('d-none');
-    });
-});
-document.addEventListener('click', function(e) {
-    if (!assigneeInput.contains(e.target) && !assigneeList.contains(e.target)) {
-        assigneeList.classList.add('d-none');
-        assigneeInput.value = assigneeSelectedName;  // revert to last valid selection
-    }
-});
-
-/* Timer */
-document.querySelectorAll('.btn-timer').forEach(function(b) {
-    b.addEventListener('click', function(e) {
-        e.stopPropagation();
-        api('/todos/' + b.dataset.id + '/timer').then(function(r) { if (r.ok) location.reload(); });
-    });
+    inp.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; }, 200); });
 });
 
 /* Comment submit */
@@ -357,9 +175,12 @@ document.querySelectorAll('.comment-submit').forEach(function(b) {
         var inp = b.parentElement.querySelector('.comment-input');
         var content = inp.value.trim();
         if (!content) return;
-        api('/todos/' + b.dataset.todoId + '/comments', {content: content})
-            .then(function(r) { return r.json(); })
-            .then(function(d) { if (d.ok) location.reload(); });
+        fetch('/todos/' + b.dataset.todoId + '/comments', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({content: content})
+        }).then(function(r) { return r.json(); })
+        .then(function(d) { if (d.ok) location.reload(); });
     });
 });
 document.querySelectorAll('.comment-input').forEach(function(inp) {
@@ -368,6 +189,26 @@ document.querySelectorAll('.comment-input').forEach(function(inp) {
     });
 });
 
-/* AI spinner */
+/* Standup */
+function genStandup() {
+    var btn = document.getElementById('btnStandup');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 生成中...';
+    fetch('/api/daily-standup', {method: 'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-megaphone"></i> 站会摘要';
+        if (d && d.ok) {
+            document.getElementById('standupContent').innerHTML = d.html;
+            document.getElementById('standupPanel').classList.remove('d-none');
+        } else {
+            alert(d && d.error ? d.error : '生成失败');
+        }
+    }).catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-megaphone"></i> 站会摘要';
+    });
+}
 </script>
 {% endblock %}

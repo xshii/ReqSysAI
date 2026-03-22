@@ -106,13 +106,13 @@
                 <table class="table table-hover mb-0 small">
                     <thead class="table-light">
                         <tr>
-                            <th>工号</th>
-                            <th>姓名</th>
+                            <th class="sortable" data-col="0" style="cursor:pointer;">工号 <i class="bi bi-chevron-expand" style="font-size:.7em;"></i></th>
+                            <th class="sortable" data-col="1" style="cursor:pointer;">姓名 <i class="bi bi-chevron-expand" style="font-size:.7em;"></i></th>
                             <th>IP 地址</th>
-                            <th>小组</th>
+                            <th class="sortable" data-col="3" style="cursor:pointer;">小组 <i class="bi bi-chevron-expand" style="font-size:.7em;"></i></th>
                             <th>角色</th>
-                            <th>状态</th>
-                            <th>最后登录</th>
+                            <th class="sortable" data-col="5" style="cursor:pointer;">状态 <i class="bi bi-chevron-expand" style="font-size:.7em;"></i></th>
+                            <th class="sortable" data-col="6" style="cursor:pointer;">最后登录 <i class="bi bi-chevron-expand" style="font-size:.7em;"></i></th>
                             <th>操作</th>
                         </tr>
                     </thead>
@@ -153,6 +153,14 @@
                                         <i class="bi bi-{{ 'person-x' if user.is_active else 'person-check' }}"></i>
                                     </button>
                                 </form>
+                                {% if not user.is_admin %}
+                                <form method="POST" action="{{ url_for('admin.user_delete', user_id=user.id) }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('确定删除用户 {{ user.name }}？此操作不可撤销！')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -216,5 +224,23 @@ function filterByGroup(val) {
     if (val) { url.searchParams.set('group', val); } else { url.searchParams.delete('group'); }
     window.location = url;
 }
+
+/* Sortable table columns */
+var sortDir = {};
+document.querySelectorAll('.sortable').forEach(function(th) {
+    th.addEventListener('click', function() {
+        var col = parseInt(th.dataset.col);
+        var table = th.closest('table');
+        var tbody = table.querySelector('tbody');
+        var rows = Array.from(tbody.querySelectorAll('tr'));
+        var asc = sortDir[col] = !sortDir[col];
+        rows.sort(function(a, b) {
+            var at = (a.cells[col] || {}).textContent || '';
+            var bt = (b.cells[col] || {}).textContent || '';
+            return asc ? at.localeCompare(bt, 'zh') : bt.localeCompare(at, 'zh');
+        });
+        rows.forEach(function(r) { tbody.appendChild(r); });
+    });
+});
 </script>
 {% endblock %}

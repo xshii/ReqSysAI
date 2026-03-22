@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}周期 Todo - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>周期 Todo</h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg"></i> 添加</button>
+    </div>
+</div>
+
+
+{% if items %}
+<div class="row g-3">
+    {% for r in items %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="fw-bold small">{{ r.title }}</div>
+                        <div class="text-muted" style="font-size:.78em;">
+                            <span class="badge bg-light text-dark border">{{ r.schedule_desc }}</span>
+                            {% set days = r.days_until_next() %}
+                            {% if r.is_due_today() %}
+                            <span class="badge bg-primary">今天</span>
+                            {% elif days == 1 %}
+                            <span class="text-warning">明天</span>
+                            {% else %}
+                            <span>{{ days }}天后</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="d-flex gap-1">
+                        {% if r.is_due_today() %}
+                        <button class="btn btn-sm btn-success py-0 btn-adopt" data-rid="{{ r.id }}" title="添加到今日">
+                            <i class="bi bi-plus-circle"></i>
+                        </button>
+                        {% endif %}
+                        <form method="POST" action="{{ url_for('main.recurring_delete', rid=r.id) }}" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('删除？')"><i class="bi bi-x"></i></button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+    <p>暂无周期 Todo，点击右上角添加</p>
+</div>
+{% endif %}
+
+<!-- Add Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('main.recurring_add') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header py-2"><h6 class="modal-title">添加周期 Todo</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">标题 *</label>
+                        <input type="text" name="title" class="form-control form-control-sm" required placeholder="如：整理本周工作日志">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">周期</label>
+                        <select name="cycle" class="form-select form-select-sm" id="cycleSelect" onchange="toggleCycleFields()">
+                            <option value="weekly">每周（周一触发）</option>
+                            <option value="monthly">每月（指定日期）</option>
+                            <option value="weekdays">指定星期（多选）</option>
+                        </select>
+                    </div>
+                    <div class="mb-3 d-none" id="monthlyField">
+                        <label class="form-label">选择时段</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="monthly_periods" value="start" id="mpStart">
+                                <label class="form-check-label small" for="mpStart">月初(1日)</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="monthly_periods" value="mid" id="mpMid">
+                                <label class="form-check-label small" for="mpMid">月中(15日)</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="monthly_periods" value="end" id="mpEnd">
+                                <label class="form-check-label small" for="mpEnd">月末</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3 d-none" id="weekdaysField">
+                        <label class="form-label">选择星期</label>
+                        <div class="d-flex gap-2 flex-wrap">
+                            {% for i, name in [(0,'一'),(1,'二'),(2,'三'),(3,'四'),(4,'五'),(5,'六'),(6,'日')] %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="weekdays" value="{{ i }}" id="wd{{ i }}">
+                                <label class="form-check-label small" for="wd{{ i }}">周{{ name }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">添加</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleCycleFields() {
+    var v = document.getElementById('cycleSelect').value;
+    document.getElementById('monthlyField').classList.toggle('d-none', v !== 'monthly');
+    document.getElementById('weekdaysField').classList.toggle('d-none', v !== 'weekdays');
+}
+
+/* Adopt to today */
+document.querySelectorAll('.btn-adopt').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        fetch('/recurring-todos/' + btn.dataset.rid + '/adopt', {method: 'POST'})
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.ok) { btn.innerHTML = '<i class="bi bi-check"></i>'; btn.disabled = true; }
+        });
+    });
+});
+
+</script>
+{% endblock %}

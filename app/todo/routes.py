@@ -173,20 +173,44 @@ def get_comments(todo_id):
 @todo_bp.route('/<int:todo_id>/comments', methods=['POST'])
 @login_required
 def add_comment(todo_id):
-    """Add a comment/progress update to a todo."""
+    """Add a comment/progress update to a todo. Supports @name to create help todo."""
+    import re
 
     data = request.get_json() or {}
     content = (data.get('content') or '').strip()
     if not content:
         return jsonify(ok=False, msg='内容不能为空')
-    db.session.get(Todo, todo_id)  # Ensure exists
+    todo = db.get_or_404(Todo, todo_id)
     c = TodoComment(todo_id=todo_id, user_id=current_user.id, content=content[:500])
     db.session.add(c)
+
+    # Parse @mention — create a help todo for the mentioned person
+    helper_name = None
+    at_match = re.search(r'@(\S+)', content)
+    if at_match:
+        target = at_match.group(1)
+        helper = User.query.filter(
+            db.or_(User.name == target, User.pinyin.ilike(f'{target}%'))
+        ).filter_by(is_active=True).first()
+        if helper and helper.id != current_user.id:
+            clean = re.sub(r'@\S+', '', content).strip()
+            help_title = clean or todo.title
+            help_todo = Todo(
+                user_id=helper.id, title=help_title,
+                due_date=date.today(), category='team', source='help',
+                parent_id=todo.id, requirements=list(todo.requirements))
+            help_todo.items.append(TodoItem(title=help_title, sort_order=0))
+            db.session.add(help_todo)
+            helper_name = helper.name
+
     db.session.commit()
-    return jsonify(ok=True, comment={
+    result = {
         'id': c.id, 'user': c.user.name, 'content': c.content,
         'time': c.created_at.strftime('%m-%d %H:%M'),
-    })
+    }
+    if helper_name:
+        result['helper'] = helper_name
+    return jsonify(ok=True, comment=result)
 
 
 # ---- Sub-items ----
@@ -437,39 +461,51 @@ def team():
     users = user_query.order_by(User.group, User.name).all()
 
     user_ids = [u.id for u in users]
+
+    # Recent 2 working days (today + yesterday, or Friday if Monday)
+    yesterday = today - timedelta(days=1)
+    if today.weekday() == 0:  # Monday → look back to Friday
+        yesterday = today - timedelta(days=3)
+
     all_todos = Todo.query.filter(
         Todo.user_id.in_(user_ids),
-        Todo.category != 'personal',  # Exclude personal todos from team view
+        Todo.category != 'personal',
         db.or_(
             Todo.status == TODO_STATUS_TODO,
             db.and_(Todo.status == TODO_STATUS_DONE, Todo.done_date >= week_ago),
+            db.and_(Todo.created_date >= yesterday),
         )
     ).options(
         joinedload(Todo.requirements), joinedload(Todo.parent),
         joinedload(Todo.children), joinedload(Todo.items),
         joinedload(Todo.comments),
     ).order_by(
-        db.case((Todo.status == TODO_STATUS_TODO, 0), else_=1),  # 未完成在前
+        db.case((Todo.status == TODO_STATUS_TODO, 0), else_=1),
         Todo.sort_order,
-        Todo.done_date.desc(),  # 已完成按完成时间倒序
+        Todo.done_date.desc(),
     ).all() if user_ids else []
 
-    # Split into active (left) and done (right) per user
-    user_active = {}  # uid → [active todos]
-    user_done = {}    # uid → [done todos]
+    # Left: recent (last 2 working days) — all todos (active + recently done)
+    # Right: older completed todos
+    user_active = {}  # uid → [recent todos, including done today/yesterday]
+    user_done = {}    # uid → [older done todos]
     for t in all_todos:
-        if t.status == TODO_STATUS_DONE:
-            user_done.setdefault(t.user_id, []).append(t)
-        else:
+        work_date = t.done_date or t.created_date or today
+        if t.status == TODO_STATUS_TODO or work_date >= yesterday:
             user_active.setdefault(t.user_id, []).append(t)
-    # Sort active: req-linked first (grouped by req_id), then unlinked
+        elif t.status == TODO_STATUS_DONE:
+            user_done.setdefault(t.user_id, []).append(t)
+    # Sort: blocked first, then overdue (carryover, only after 10am), then active, then done
+    from datetime import datetime as dt_
+    _before_10am = dt_.now().hour < 10
     for uid in user_active:
         user_active[uid].sort(key=lambda t: (
-            0 if t.need_help else 1,  # Blocked first
+            0 if t.need_help else 1,  # blocked first
+            0 if not _before_10am and t.status == TODO_STATUS_TODO and t.created_date and t.created_date < today else 1,  # overdue (after 10am only)
+            0 if t.status == TODO_STATUS_TODO else 1,  # active before done
             0 if t.requirements else 1,
             t.requirements[0].id if t.requirements else 999999,
         ))
-    # Sort done: newest first
     for uid in user_done:
         user_done[uid].sort(key=lambda t: t.done_date or t.created_date, reverse=True)
 
@@ -517,10 +553,13 @@ def team():
         Todo.user_id.in_(user_ids),
     ).options(joinedload(Todo.requirements)).order_by(Todo.created_at.desc()).all()
 
+    from datetime import datetime as dt_
+    before_10am = dt_.now().hour < 10
+
     return render_template('todo/team.html',
         users=users, user_active=user_active, user_done=user_done, groups=groups,
         cur_group=cur_group, today=today, form=form,
         reqs=reqs, default_req_ids=default_req_ids, all_users=all_users_list,
         due_options=due_options, help_due_options=help_due_options,
-        help_todos=help_todos,
+        help_todos=help_todos, before_10am=before_10am,
     )

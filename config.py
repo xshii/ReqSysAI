@@ -41,6 +41,7 @@ class Config:
     DEFAULT_ROLE = _yml.get('auth', {}).get('default_role', 'DE')
 
     # AI provider
+    AI_ENABLED = _yml.get('ai', {}).get('enabled', True)  # 关闭后隐藏所有 AI 按钮
     AI_PROVIDER = _yml.get('ai', {}).get('provider', 'ollama')  # ollama or openai
 
     # Ollama
@@ -54,9 +55,6 @@ class Config:
     OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', _yml.get('openai', {}).get('base_url', ''))
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', _yml.get('openai', {}).get('api_key', ''))
     OPENAI_MODEL = os.getenv('OPENAI_MODEL', _yml.get('openai', {}).get('model', 'gpt-4o-mini'))
-
-    # AI global system prompt (used for OpenAI and Ollama when no custom model)
-    AI_SYSTEM_PROMPT = _yml.get('ai', {}).get('system_prompt', '')
 
     # App tuning
     TODO_KEEP_DAYS = _yml.get('app', {}).get('todo_keep_days', 7)

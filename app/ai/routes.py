@@ -60,9 +60,10 @@ def api_parse():
     """JSON API: parse text and return structured result."""
     data = request.get_json()
     text = (data.get('text') or '').strip() if data else ''
+    project_id = data.get('project_id') if data else None
     if not text:
         return jsonify(ok=False, msg='请输入内容')
-    result, raw_output = parse_requirement(text)
+    result, raw_output = parse_requirement(text, project_id=project_id)
     if not result:
         msg = raw_output if raw_output else 'AI 解析失败，请重试'
         return jsonify(ok=False, msg=msg)

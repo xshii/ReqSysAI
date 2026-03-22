@@ -26,22 +26,40 @@ _SMART_FOOTER = (
 # ---- Default prompts ----
 
 DEFAULTS = {
+    'system_prompt': (
+        '你是一个研发项目管理助手，服务于约50人的内部研发团队。\n'
+        '核心原则：\n'
+        '1. 简洁专业：用最少的字表达清楚，不说废话\n'
+        '2. 数据驱动：所有结论必须基于提供的实际数据，严禁编造数字、百分比、日期\n'
+        '3. 量化表达：涉及进度用"完成N项/共M项"，涉及时间用具体日期，涉及人员用真实姓名\n'
+        '4. 务实建议：给出可执行的建议，包含负责人和时间节点，不说"加强管理"等空话\n'
+        '5. 风险敏感：延期、阻塞、资源不足等风险要主动识别并量化影响'
+    ),
     'requirement_parse': (
         '你是一个需求分析助手。用户会给你聊天记录、会议纪要或需求文档，'
         '你需要从中提取软件需求信息，并推荐负责人。\n'
         '请严格按以下 JSON 格式返回，不要返回任何其他内容：\n'
         '{"title":"需求标题(20字以内)","description":"需求详细描述",'
         '"priority":"high或medium或low","estimate_days":预估总工期(人天,数字),'
-        '"subtasks":[{"title":"子需求标题","estimate_days":预估人天}],'
-        '"recommended_assignee":"推荐负责人姓名","assign_reason":"推荐理由"}\n'
+        '"subtasks":[{"title":"子需求标题","type":"analysis或coding或testing","estimate_days":预估人天,"est_lines":预估代码行数(仅coding),"est_cases":预估用例数(仅testing)}],'
+        '"code_lines":预估总代码行数(数字,无法判断则null),"test_cases":预估总测试用例数(数字,无法判断则null),'
+        '"recommended_assignee":"推荐负责人姓名","assign_reason":"推荐理由",'
+        '"need_cross_project":true或false}\n'
         '规则：\n'
         '1. 提取最主要的一个需求作为父需求\n'
         '2. priority 根据紧急程度和业务影响判断\n'
-        '3. subtasks 拆分为可独立交付的子需求（不是开发任务），每个子需求预估人天\n'
-        '4. estimate_days 为所有子需求人天之和\n'
+        '3. subtasks 拆分为可独立交付的子需求，每个标注 type：\n'
+        '   - analysis（分析类）：方案设计、调研、评审，填 estimate_days（人天）\n'
+        '   - coding（编码类）：功能开发，填 estimate_days（人天）+ est_lines（预估代码行数）\n'
+        '   - testing（测试类）：测试用例，填 estimate_days（人天）+ est_cases（预估用例数）\n'
+        '4. estimate_days 为所有子需求人天之和（每个子需求都有人天）\n'
         '5. 如果内容简单无需拆分，subtasks 可以为空数组\n'
         '6. 预估人天必须基于子需求复杂度合理推算\n'
-        '7. recommended_assignee 只推荐一个人（最合适的），从"团队成员"中选择（考虑工作量和经验），没有团队数据时留空'
+        '7. recommended_assignee 只推荐一个人（最合适的），从"项目成员"中选择\n'
+        '8. 判断成员是否繁忙要看：负责的需求数+进行中todo数+近期经验是否匹配。如果都不合适，recommended_assignee 写"暂无空余人力"，need_cross_project 设为 true\n'
+        '9. need_cross_project=true 表示需要从其他项目借调人力，false 表示项目内可消化\n'
+        '10. recommended_assignee 必须是项目成员列表中真实存在的人名，严禁编造不存在的人员\n'
+        '11. 如果没有项目成员数据，直接设 recommended_assignee="暂无空余人力"，need_cross_project=true'
     ),
     'todo_recommend': (
         '你是一个研发任务规划助手。根据以下需求进度和近期工作情况，推荐今天应该做的具体任务。\n'
@@ -94,6 +112,7 @@ DEFAULTS = {
         '1. **本周进展**：一句话概括本周主要完成和推进的工作，包含关键量化指标（完成N项等，不要编造百分比）\n'
         '2. **问题与阻塞**：列出遇到的问题或阻塞项，包含具体影响（如"因X阻塞导致Y延期N天"）；若无则写"无"\n'
         '3. **下周计划**：一句话概括下周重点，必须具体可衡量（如"完成XX的联调并提测"而非"继续推进"）\n'
+        '如果有周期任务数据，在问题与阻塞中提及完成率（低于80%需指出），在下周计划中建议改进。\n'
         '每段一句话，简洁直接，不要分项罗列。所有描述基于实际数据，不要编造。\n'
         '注意：直接输出纯文本，不要返回 JSON 格式。'
         + _SMART_FOOTER
@@ -222,6 +241,26 @@ DEFAULTS = {
         '- 数据不足时写"数据样本不足，建议积累更多数据后再评估"'
         + _SMART_FOOTER
     ),
+    'recurring_recommend': (
+        '你是一个研发任务规划助手。用户有一组周期性任务今天到期，请根据当前工作量判断哪些应该执行。\n'
+        '严格返回 JSON 数组，不要返回其他内容：\n'
+        '[{"title":"任务标题（原样）","category":"team或personal","reason":"简要理由"}]\n'
+        '规则：\n'
+        '1. 从今日到期的周期任务中选择应该执行的，不要添加不在列表中的任务\n'
+        '2. category：团队协作相关的选 team（如代码审查、技术分享、需求评审），个人事务选 personal\n'
+        '3. 如果今日工作量已经很重（进行中任务多），可以建议跳过非紧急的周期任务\n'
+        '4. reason 简短说明为什么今天应该做或可以跳过\n'
+        '5. 返回空数组 [] 表示今天都可以跳过'
+    ),
+    'personal_efficiency': (
+        '你是一个研发效能分析师。根据以下个人工作数据，分析效率并给出改进建议。\n'
+        '用中文返回三段，直接输出纯文本，不要 JSON：\n'
+        '1. **效率评估**：基于数据量化评估工作效率（如日均产出、专注时长、完成率等）\n'
+        '2. **优点**：2~3 个突出的优点，必须基于数据（如"协助他人N次体现团队意识"）\n'
+        '3. **改进建议**：2~3 个具体可执行的改进点（如"建议增加番茄钟使用，当前专注时长偏低"）\n'
+        '简洁直接，每段 2~3 句话。不要编造数据中没有的事实。'
+        + _SMART_FOOTER
+    ),
     'req_quality_check': (
         '你是一个需求质量审核助手。审核以下需求描述，检查是否符合质量标准。\n'
         '严格返回 JSON，不要返回其他内容：\n'
@@ -241,6 +280,7 @@ DEFAULTS = {
 
 # Human-readable labels for admin UI
 LABELS = {
+    'system_prompt': '全局系统提示词',
     'requirement_parse': '需求解析',
     'todo_recommend': 'Todo 智能推荐',
     'weekly_report': '项目周报分析',
@@ -252,6 +292,8 @@ LABELS = {
     'smart_assign': '智能指派',
     'daily_standup': '每日站会摘要',
     'emotion_predict': '情绪预测',
+    'personal_efficiency': '个人效率分析',
+    'recurring_recommend': '周期任务推荐',
     'incentive_recommend': 'AI 激励推荐',
     'req_quality_check': '需求质量检查',
     'meeting_extract': '会议纪要提取',

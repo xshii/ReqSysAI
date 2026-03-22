@@ -167,6 +167,21 @@ def index():
             Milestone.status == 'active',
         ).order_by(Milestone.due_date.asc().nullslast()).all()
 
+    # Recurring todos due today + completion status
+    from app.models.recurring_todo import RecurringTodo
+    all_recurring = RecurringTodo.query.filter_by(user_id=current_user.id, is_active=True).all()
+    recurring_due = [r for r in all_recurring if r.is_due_today()]
+    # Simple: each recurring has its own ID, check today's todo
+    recurring_status = {}
+    if all_recurring:
+        today_todos = Todo.query.filter(
+            Todo.user_id == current_user.id,
+            Todo.recurring_id.in_([r.id for r in all_recurring]),
+            Todo.created_date == today,
+        ).all()
+        for t in today_todos:
+            recurring_status[t.recurring_id] = t.status
+
     return render_template('main/index.html',
         my_todos=my_todos, todo_total=todo_total, todo_done=todo_done,
         my_reqs=my_reqs, my_risks=my_risks, today=today,
@@ -175,7 +190,8 @@ def index():
         approved_incentives=approved_incentives, rants=rants,
         ai_ranking=ai_ranking, alerts=alerts,
         heatmap=heatmap, heatmap_start=heatmap_start, timedelta=timedelta,
-        milestones=milestones,
+        milestones=milestones, all_recurring=all_recurring, recurring_due=recurring_due,
+        recurring_status=recurring_status,
     )
 
 
@@ -587,6 +603,157 @@ def daily_standup():
         html = md_lib.markdown(raw, extensions=['tables'])
         return jsonify(ok=True, html=html)
     return jsonify(ok=False, error='生成失败')
+
+
+# ---- Recurring Todos ----
+
+@main_bp.route('/recurring-todos')
+@login_required
+def recurring_list():
+    from app.models.recurring_todo import RecurringTodo
+    items = RecurringTodo.query.filter_by(user_id=current_user.id, is_active=True)\
+        .order_by(RecurringTodo.cycle, RecurringTodo.title).all()
+    return render_template('main/recurring.html', items=items, today=date.today())
+
+
+@main_bp.route('/recurring-todos/add', methods=['POST'])
+@login_required
+def recurring_add():
+    from app.models.recurring_todo import RecurringTodo
+    title = request.form.get('title', '').strip()
+    cycle = request.form.get('cycle', 'weekly')
+    weekday_list = request.form.getlist('weekdays')
+    period_list = request.form.getlist('monthly_periods')
+    if title:
+        if cycle == 'weekdays' and weekday_list:
+            # Each weekday gets its own record
+            for wd in weekday_list:
+                db.session.add(RecurringTodo(
+                    user_id=current_user.id, title=title, cycle='weekdays',
+                    weekdays=wd))
+        elif cycle == 'monthly' and period_list:
+            # Each period gets its own record
+            for p in period_list:
+                db.session.add(RecurringTodo(
+                    user_id=current_user.id, title=title, cycle='monthly',
+                    monthly_days=p))
+        else:
+            db.session.add(RecurringTodo(
+                user_id=current_user.id, title=title, cycle=cycle))
+        db.session.commit()
+    return redirect(url_for('main.recurring_list'))
+
+
+@main_bp.route('/recurring-todos/<int:rid>/delete', methods=['POST'])
+@login_required
+def recurring_delete(rid):
+    from app.models.recurring_todo import RecurringTodo
+    r = db.get_or_404(RecurringTodo, rid)
+    if r.user_id == current_user.id:
+        # Clear recurring_id on spawned todos (keep the todos, just unlink)
+        Todo.query.filter_by(recurring_id=r.id).update({'recurring_id': None})
+        db.session.delete(r)
+        db.session.commit()
+    if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify(ok=True)
+    return redirect(url_for('main.recurring_list'))
+
+
+@main_bp.route('/recurring-todos/ai-recommend', methods=['POST'])
+@login_required
+def recurring_ai_recommend():
+    """AI recommends which due recurring todos to import into today's todo."""
+    from app.services.ai import call_ollama
+    from app.services.prompts import get_prompt
+    from app.models.recurring_todo import RecurringTodo
+
+    # Get today's due recurring todos
+    all_recurring = RecurringTodo.query.filter_by(user_id=current_user.id, is_active=True).all()
+    due_today = [r for r in all_recurring if r.is_due_today()]
+
+    if not due_today:
+        return jsonify(ok=True, items=[], msg='今天没有到期的周期任务')
+
+    # Current workload
+    active_count = Todo.query.filter_by(user_id=current_user.id, status='todo').count()
+
+    lines = [
+        f'用户：{current_user.name}，角色：{current_user.role_names or "开发"}',
+        f'当前进行中 {active_count} 个任务',
+        '',
+        '今日到期的周期任务：',
+    ]
+    for r in due_today:
+        lines.append(f'- {r.title}（{r.schedule_desc}）')
+
+    prompt = get_prompt('recurring_recommend') + '\n\n' + '\n'.join(lines)
+    result, raw = call_ollama(prompt)
+
+    if isinstance(result, list):
+        return jsonify(ok=True, items=result)
+    return jsonify(ok=False, raw=raw or '生成失败')
+
+
+@main_bp.route('/recurring-todos/<int:rid>/toggle', methods=['POST'])
+@login_required
+def recurring_toggle(rid):
+    """Toggle done status of today's todo spawned from a recurring template."""
+    todo = Todo.query.filter_by(
+        user_id=current_user.id, recurring_id=rid, created_date=date.today()).first()
+    if not todo:
+        return jsonify(ok=False, msg='未找到任务')
+    if todo.status == 'done':
+        todo.status = 'todo'
+        todo.done_date = None
+    else:
+        todo.status = 'done'
+        todo.done_date = date.today()
+    db.session.commit()
+    return jsonify(ok=True, done=todo.status == 'done')
+
+
+@main_bp.route('/recurring-todos/<int:rid>/adopt', methods=['POST'])
+@login_required
+def recurring_adopt(rid):
+    """Create a real todo from a recurring template for today."""
+    from app.models.recurring_todo import RecurringTodo
+    r = db.get_or_404(RecurringTodo, rid)
+    if r.user_id != current_user.id:
+        return jsonify(ok=False), 403
+    auto_done = request.args.get('done') == '1' or (request.get_json() or {}).get('done')
+    # Prevent duplicate
+    existing = Todo.query.filter_by(
+        user_id=current_user.id, recurring_id=rid, created_date=date.today()).first()
+    if existing:
+        return jsonify(ok=True, todo_id=existing.id, duplicate=True)
+    todo = Todo(user_id=current_user.id, title=r.title,
+                due_date=date.today(), category='work', source='manual',
+                recurring_id=r.id,
+                status='done' if auto_done else 'todo',
+                done_date=date.today() if auto_done else None)
+    todo.items.append(TodoItem(title=r.title, sort_order=0, is_done=auto_done))
+    db.session.add(todo)
+    db.session.commit()
+    return jsonify(ok=True, todo_id=todo.id)
+
+
+@main_bp.route('/recurring-todos/adopt-ai', methods=['POST'])
+@login_required
+def recurring_adopt_ai():
+    """Import an AI-recommended recurring todo into today's todo list."""
+    data = request.get_json() or {}
+    title = data.get('title', '').strip()
+    category = data.get('category', 'team')  # team or personal
+
+    if not title:
+        return jsonify(ok=False, msg='标题不能为空')
+
+    todo = Todo(user_id=current_user.id, title=title,
+                due_date=date.today(), category=category, source='ai')
+    todo.items.append(TodoItem(title=title, sort_order=0))
+    db.session.add(todo)
+    db.session.commit()
+    return jsonify(ok=True, todo_id=todo.id)
 
 
 @main_bp.route('/rant', methods=['POST'])

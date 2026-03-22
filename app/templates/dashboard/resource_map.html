@@ -27,6 +27,8 @@
     <!-- Mode toggle -->
     <a href="?period={{ period }}&week={{ offset }}&mode=by_person" class="btn btn-sm {{ 'btn-dark' if mode == 'by_person' else 'btn-outline-dark' }}"><i class="bi bi-person"></i> 按人员</a>
     <a href="?period={{ period }}&week={{ offset }}&mode=by_project" class="btn btn-sm {{ 'btn-dark' if mode == 'by_project' else 'btn-outline-dark' }}"><i class="bi bi-folder"></i> 按项目</a>
+    <span class="border-start ms-1 ps-2"></span>
+    <a href="{{ url_for('dashboard.resource_map_export', period=period, week=offset, mode=mode) }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出</a>
 </div>
 
 {% if mode == 'by_person' %}

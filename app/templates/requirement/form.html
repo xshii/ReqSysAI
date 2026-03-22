@@ -14,48 +14,44 @@
             <div class="card-body">
                 <form method="POST" id="reqForm">
                     {{ form.hidden_tag() }}
-                    <div class="mb-3">
-                        <label class="form-label">{{ form.title.label.text }}</label>
-                        {{ form.title(class="form-control", id="reqTitle") }}
-                        {% for e in form.title.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ form.description.label.text }}</label>
-                        {{ form.description(class="form-control", rows=4, id="reqDesc") }}
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">{{ form.project_id.label.text }}</label>
-                            {{ form.project_id(class="form-select", id="reqProject") }}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">{{ form.milestone_id.label.text }}</label>
-                            {{ form.milestone_id(class="form-select") }}
+                    <div class="row mb-2">
+                        <label class="col-2 col-form-label col-form-label-sm">标题 *</label>
+                        <div class="col-10">
+                            {{ form.title(class="form-control form-control-sm", id="reqTitle") }}
+                            {% for e in form.title.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">{{ form.priority.label.text }}</label>
-                            {{ form.priority(class="form-select", id="reqPriority") }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">负责人</label>
+                    <div class="row mb-2">
+                        <label class="col-2 col-form-label col-form-label-sm">描述</label>
+                        <div class="col-10">{{ form.description(class="form-control form-control-sm", rows=3, id="reqDesc") }}</div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-2 col-form-label col-form-label-sm">项目</label>
+                        <div class="col-4">{{ form.project_id(class="form-select form-select-sm", id="reqProject") }}</div>
+                        <label class="col-2 col-form-label col-form-label-sm">优先级</label>
+                        <div class="col-4">{{ form.priority(class="form-select form-select-sm", id="reqPriority") }}</div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-2 col-form-label col-form-label-sm">负责人</label>
+                        <div class="col-4">
                             {% from "_user_picker.html" import user_picker %}
                             {% set cur_name = '' %}
                             {% if form.assignee_id.data %}{% for u in users %}{% if u.id == form.assignee_id.data %}{% set cur_name = u.name %}{% endif %}{% endfor %}{% endif %}
-                            {{ user_picker('assignee_name', users, value=cur_name, value_name=cur_name, mode='text', placeholder='搜索或输入外部人员') }}
+                            {{ user_picker('assignee_name', users, value=cur_name, value_name=cur_name, mode='text', placeholder='搜索或输入') }}
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">{{ form.due_date.label.text }} <span class="text-danger">*</span></label>
-                            {{ form.due_date(class="form-control", type="date", id="reqDueDate") }}
+                        <label class="col-2 col-form-label col-form-label-sm">截止 *</label>
+                        <div class="col-4">
+                            {{ form.due_date(class="form-control form-control-sm", type="date", id="reqDueDate") }}
                             {% for e in form.due_date.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">{{ form.estimate_days.label.text }}</label>
-                            {{ form.estimate_days(class="form-control", id="reqDays") }}
-                        </div>
+                    <div class="row mb-2">
+                        <label class="col-2 col-form-label col-form-label-sm">预估工期</label>
+                        <div class="col-2">{{ form.estimate_days(class="form-control form-control-sm", id="reqDays", placeholder="人天") }}</div>
+                        <label class="col-2 col-form-label col-form-label-sm">代码量</label>
+                        <div class="col-2">{{ form.code_lines(class="form-control form-control-sm", placeholder="行") }}</div>
+                        <label class="col-2 col-form-label col-form-label-sm">测试用例</label>
+                        <div class="col-2">{{ form.test_cases(class="form-control form-control-sm", placeholder="个") }}</div>
                     </div>
                     <div class="mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-1">
@@ -66,7 +62,7 @@
                     </div>
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {{ form.submit.label.text }}</button>
-                        <button type="button" class="btn btn-outline-info" id="btnQualityCheck" onclick="qualityCheck()"><i class="bi bi-shield-check"></i> AI 质量检查</button>
+                        {% if ai_enabled %}<button type="button" class="btn btn-outline-info" id="btnQualityCheck" onclick="qualityCheck()"><i class="bi bi-shield-check"></i> AI 质量检查</button>{% endif %}
                     </div>
                     <div id="qualityResult" class="mt-2 d-none"></div>
                 </form>
@@ -126,15 +122,30 @@ function checkAI() {
 }
 
 var userOptsTpl = '<option value="">负责人</option>{% for u in users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}';
-function addSubReq(title, days) {
+function addSubReq(title, days, type, estLines, estCases) {
     var div = document.getElementById('subReqs');
     var row = document.createElement('div');
     row.className = 'input-group input-group-sm mb-1';
+    var t = type || 'analysis';
+    var d = days || '';
     row.innerHTML = '<input type="text" name="sub_title" class="form-control" placeholder="子需求标题" value="' + (title || '').replace(/"/g, '&quot;') + '">'
-        + '<select name="sub_assignee" class="form-select" style="max-width:100px;">' + userOptsTpl + '</select>'
-        + '<input type="number" name="sub_days" class="form-control" style="max-width:70px;" placeholder="人天" step="0.5" min="0" value="' + (days || '') + '" oninput="sumSubDays()">'
+        + '<select name="sub_type" class="form-select" style="max-width:70px;" onchange="toggleSubFields(this)">'
+        + '<option value="analysis"' + (t==='analysis'?' selected':'') + '>分析</option>'
+        + '<option value="coding"' + (t==='coding'?' selected':'') + '>编码</option>'
+        + '<option value="testing"' + (t==='testing'?' selected':'') + '>测试</option></select>'
+        + '<select name="sub_assignee" class="form-select" style="max-width:90px;">' + userOptsTpl + '</select>'
+        + '<input type="number" name="sub_days" class="form-control" style="max-width:65px;" placeholder="人天" step="0.5" min="0" value="' + d + '" oninput="sumSubDays()">'
+        + '<input type="number" name="sub_est_lines" class="form-control sub-lines" style="max-width:65px;' + (t==='coding'?'':'display:none;') + '" placeholder="预估行" min="0" value="' + (estLines||'') + '">'
+        + '<input type="number" name="sub_est_cases" class="form-control sub-cases" style="max-width:65px;' + (t==='testing'?'':'display:none;') + '" placeholder="预估例" min="0" value="' + (estCases||'') + '">'
         + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove();sumSubDays()">-</button>';
     div.appendChild(row);
+}
+function toggleSubFields(sel) {
+    var row = sel.parentElement;
+    var lines = row.querySelector('.sub-lines');
+    var cases = row.querySelector('.sub-cases');
+    if (lines) lines.style.display = sel.value === 'coding' ? '' : 'none';
+    if (cases) cases.style.display = sel.value === 'testing' ? '' : 'none';
 }
 
 function sumSubDays() {
@@ -187,7 +198,7 @@ document.getElementById('btnAiParse').addEventListener('click', function() {
         return fetch('{{ url_for("ai.api_parse") }}', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-            body: JSON.stringify({text: text})
+            body: JSON.stringify({text: text, project_id: document.getElementById('reqProject').value || null})
         });
     }).then(function(r) { return r.json(); }).then(function(d) {
         if (d.ok) { aiData = d.result; showAiResult(); }
@@ -215,10 +226,15 @@ document.getElementById('aiDocx').addEventListener('change', function() {
 });
 
 function getSubTitle(st) {
-    // Support both string and {title, estimate_days} format
     if (typeof st === 'string') return st;
     var t = st.title || '';
-    if (st.estimate_days) t += '（' + st.estimate_days + '人天）';
+    var typeLabel = {analysis: '分析', coding: '编码', testing: '测试'};
+    var tp = st.type || 'analysis';
+    var parts = [typeLabel[tp] || '分析'];
+    if (st.estimate_days) parts.push(st.estimate_days + '人天');
+    if (st.est_lines) parts.push('~' + st.est_lines + '行');
+    if (st.est_cases) parts.push('~' + st.est_cases + '例');
+    t += '（' + parts.join(' ') + '）';
     return t;
 }
 
@@ -227,6 +243,8 @@ function showAiResult() {
     var html = '<strong>' + (aiData.title || '') + '</strong><br>';
     html += '<span class="text-muted">' + (aiData.description || '').substring(0, 200) + '</span><br>';
     html += '优先级: ' + (aiData.priority || '-') + ' · 预估: ' + (aiData.estimate_days || '-') + '天';
+    if (aiData.code_lines) html += ' · 代码: ~' + aiData.code_lines + '行';
+    if (aiData.test_cases) html += ' · 测试: ~' + aiData.test_cases + '例';
     if (aiData.subtasks && aiData.subtasks.length) {
         html += '<br>子需求:';
         aiData.subtasks.forEach(function(st) { html += '<br>  · ' + getSubTitle(st); });
@@ -234,6 +252,11 @@ function showAiResult() {
     if (aiData.recommended_assignee) {
         html += '<br><span class="text-success"><i class="bi bi-person-check"></i> 推荐负责人: <strong>' + aiData.recommended_assignee + '</strong></span>';
         if (aiData.assign_reason) html += '<br><span class="text-muted small">理由: ' + aiData.assign_reason + '</span>';
+    }
+    if (aiData.cross_project) {
+        var cp = aiData.cross_project;
+        html += '<br><span class="text-warning"><i class="bi bi-arrow-left-right"></i> 跨项目协调: <strong>' + (cp.recommended_assignee || '') + '</strong>（' + (cp.source_project || '') + '）</span>';
+        if (cp.assign_reason) html += '<br><span class="text-muted small">' + cp.assign_reason + '</span>';
     }
     document.getElementById('aiPreview').innerHTML = html;
 }
@@ -244,6 +267,8 @@ document.getElementById('btnAiFill').addEventListener('click', function() {
     if (aiData.description) document.getElementById('reqDesc').value = aiData.description;
     if (aiData.priority) document.getElementById('reqPriority').value = aiData.priority;
     if (aiData.estimate_days) document.getElementById('reqDays').value = aiData.estimate_days;
+    if (aiData.code_lines) { var cl = document.querySelector('[name="code_lines"]'); if (cl) cl.value = aiData.code_lines; }
+    if (aiData.test_cases) { var tc = document.querySelector('[name="test_cases"]'); if (tc) tc.value = aiData.test_cases; }
     // Fill assignee from AI recommendation
     if (aiData.recommended_assignee) {
         var assigneeSelect = document.getElementById('reqAssignee') || document.querySelector('[name="assignee_id"]');
@@ -266,8 +291,11 @@ document.getElementById('btnAiFill').addEventListener('click', function() {
         div.innerHTML = '';
         aiData.subtasks.forEach(function(st) {
             var title = typeof st === 'string' ? st : (st.title || '');
+            var type = (typeof st === 'object' && st.type) ? st.type : 'analysis';
             var days = (typeof st === 'object' && st.estimate_days) ? st.estimate_days : '';
-            addSubReq(title, days);
+            var lines = (typeof st === 'object' && st.est_lines) ? st.est_lines : '';
+            var cases = (typeof st === 'object' && st.est_cases) ? st.est_cases : '';
+            addSubReq(title, days, type, lines, cases);
         });
         addSubReq();
     }

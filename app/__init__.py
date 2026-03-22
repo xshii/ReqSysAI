@@ -116,7 +116,8 @@ def create_app(config_name=None):
 
             return dict(sidebar_groups=groups, sidebar_cur_group=cur_group,
                         sidebar_projects=projects, sidebar_followed_ids=followed_ids,
-                        notif_count=notif_count)
+                        notif_count=notif_count,
+                        ai_enabled=app.config.get('AI_ENABLED', True))
         return dict(sidebar_groups=[], sidebar_cur_group='', sidebar_projects=[],
                     sidebar_followed_ids=set(), notif_count=0)
 

@@ -7,33 +7,21 @@
 <!-- Provider Switch -->
 <div class="card mb-3 border-0 shadow-sm">
     <div class="card-body py-2">
-        <form method="POST" action="{{ url_for('admin.ai_set_provider') }}" class="d-flex align-items-center gap-3">
+        <form method="POST" action="{{ url_for('admin.ai_set_provider') }}" class="d-flex align-items-center gap-3 flex-wrap">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <span class="small fw-bold">AI 服务：</span>
+            <div class="form-check form-switch me-3">
+                <input class="form-check-input" type="checkbox" name="ai_enabled" value="1" id="aiEnabledToggle"
+                       {% if ai_enabled %}checked{% endif %} onchange="this.form.submit()">
+                <label class="form-check-label small fw-bold" for="aiEnabledToggle">AI 服务{{ '已开启' if ai_enabled else '已关闭' }}</label>
+            </div>
             <div class="form-check form-check-inline">
                 <input class="form-check-input" type="radio" name="provider" value="ollama" id="provOllama" {% if ai_provider == 'ollama' %}checked{% endif %} onchange="this.form.submit()">
-                <label class="form-check-label small" for="provOllama">Ollama（本地）</label>
+                <label class="form-check-label small" for="provOllama">Ollama</label>
             </div>
             <div class="form-check form-check-inline">
                 <input class="form-check-input" type="radio" name="provider" value="openai" id="provOpenai" {% if ai_provider == 'openai' %}checked{% endif %} onchange="this.form.submit()">
-                <label class="form-check-label small" for="provOpenai">OpenAI API（公司）</label>
+                <label class="form-check-label small" for="provOpenai">OpenAI API</label>
             </div>
-        </form>
-    </div>
-</div>
-
-<!-- 全局系统提示词 -->
-<div class="card mb-3 border-0 shadow-sm">
-    <div class="card-header py-2 bg-white d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-chat-square-text"></i> 全局系统提示词 (System Prompt)</span>
-        <span class="text-muted small">每次 AI 调用自动注入，对 Ollama 和 OpenAI 均生效</span>
-    </div>
-    <div class="card-body py-2">
-        <form method="POST" action="{{ url_for('admin.ai_set_system_prompt') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <textarea name="system_prompt" class="form-control form-control-sm mb-2" rows="4"
-                      placeholder="定义 AI 的角色和行为规范，如：你是一个研发项目管理助手，回答要简洁专业...">{{ ai_system_prompt }}</textarea>
-            <button type="submit" class="btn btn-sm btn-primary">保存系统提示词</button>
         </form>
     </div>
 </div>
@@ -121,11 +109,48 @@
     </div>
 </div>
 
-{% if ai_provider == 'ollama' %}
-{% if err %}
-<div class="alert alert-danger"><i class="bi bi-exclamation-triangle"></i> AI 服务不可用：{{ err }}</div>
+{% if ai_provider == 'openai' %}
+{% if openai_err %}
+<div class="alert alert-danger small">OpenAI 不可用：{{ openai_err }}</div>
+{% endif %}
+{% if openai_models %}
+<div class="card mb-3">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span>OpenAI 可用模型</span>
+        <span class="badge bg-secondary">{{ openai_models|length }}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0 small">
+            <thead class="table-light"><tr><th>模型</th><th>提供方</th><th>操作</th></tr></thead>
+            <tbody>
+            {% for m in openai_models %}
+            <tr class="{{ 'table-primary' if m.name == current_model else '' }}">
+                <td>{{ m.name }} {% if m.name == current_model %}<span class="badge bg-primary">当前</span>{% endif %}</td>
+                <td class="text-muted">{{ m.family or '-' }}</td>
+                <td>
+                    {% if m.name != current_model %}
+                    <form method="POST" action="{{ url_for('admin.ai_set_openai') }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="base_url" value="{{ openai_base_url }}">
+                        <input type="hidden" name="api_key" value="{{ openai_api_key }}">
+                        <input type="hidden" name="model" value="{{ m.name }}">
+                        <button type="submit" class="btn btn-sm btn-outline-primary py-0">启用</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 {% endif %}
 
+{% if ai_provider == 'ollama' %}
+{% if err %}
+<div class="alert alert-danger small">Ollama 不可用：{{ err }}</div>
+{% endif %}
 <div class="row">
     <div class="col-md-7">
         <div class="card mb-3">
@@ -238,67 +263,14 @@
 
 {% endif %}{# end ollama provider block #}
 
-<!-- AI Prompt Management -->
-<div class="card mt-4">
-    <div class="card-header py-2 d-flex justify-content-between align-items-center">
-        <span><i class="bi bi-chat-left-text"></i> 各功能 AI 提示词</span>
-        <span class="text-muted small">修改后所有用户立即生效，保存在 prompts.yml</span>
-    </div>
-    <div class="card-body">
-        <form method="POST" action="{{ url_for('admin.ai_model_save_prompts') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="accordion" id="promptAccordion">
-                {% for key, text in prompts.items() %}
-                <div class="accordion-item">
-                    <h2 class="accordion-header">
-                        <button class="accordion-button collapsed py-2 small" type="button"
-                                data-bs-toggle="collapse" data-bs-target="#pc_{{ key }}">
-                            <strong>{{ prompt_labels.get(key, key) }}</strong>
-                            {% if text != prompt_defaults.get(key, '') %}
-                            <span class="badge bg-warning text-dark ms-2">已自定义</span>
-                            {% endif %}
-                        </button>
-                    </h2>
-                    <div id="pc_{{ key }}" class="accordion-collapse collapse" data-bs-parent="#promptAccordion">
-                        <div class="accordion-body py-2">
-                            <textarea name="prompt_{{ key }}" class="form-control form-control-sm" rows="6"
-                                      style="font-size:0.85em;" id="pt_{{ key }}">{{ text }}</textarea>
-                            <div class="d-flex justify-content-between mt-1">
-                                <button type="button" class="btn btn-sm btn-link py-0 px-0"
-                                        onclick="resetPrompt('{{ key }}')">恢复默认</button>
-                                <span class="text-muted small">
-                                    {% if key == 'weekly_report' %}变量：<code>{project_name}</code>
-                                    {% elif key == 'incentive_generate' %}变量：<code>{{ '{{' }}context{{ '}}' }}</code> <code>{{ '{{' }}category{{ '}}' }}</code>
-                                    {% endif %}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-            <button type="submit" class="btn btn-primary btn-sm mt-3">
-                <i class="bi bi-check-lg"></i> 保存全部提示词
-            </button>
-        </form>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 var defaultPrompt = {{ default_prompt | tojson }};
-var promptDefaults = {{ prompt_defaults | tojson }};
 
 function fillDefault() {
     document.getElementById('sysPrompt').value = defaultPrompt;
-}
-
-function resetPrompt(key) {
-    var el = document.getElementById('pt_' + key);
-    if (el && promptDefaults[key]) {
-        el.value = promptDefaults[key];
-    }
 }
 
 function testAI() {
@@ -329,7 +301,7 @@ function testAllModels() {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 拉取并测试中...';
     fetch('{{ url_for("admin.ai_test_all") }}', {method: 'POST'})
-    .then(function(r) { return r.json(); })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(data) {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-list-check"></i> 测试所有模型';
@@ -350,10 +322,10 @@ function testAllModels() {
                 + '</tr>';
         });
         document.getElementById('allModelsPanel').classList.remove('d-none');
-    }).catch(function() {
+    }).catch(function(err) {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-list-check"></i> 测试所有模型';
-        alert('请求失败');
+        alert('请求失败：' + err.message);
     });
 }
 

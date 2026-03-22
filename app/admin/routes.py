@@ -101,7 +101,7 @@ def user_edit(user_id):
         user.employee_id = form.employee_id.data
         user.name = form.name.data
         user.pinyin = to_pinyin(form.name.data)
-        user.ip_address = form.ip_address.data
+        user.ip_address = form.ip_address.data or f'pending-{user.employee_id}'
         user.group = form.group.data or None
         user.roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
         user.is_active = form.is_active.data
@@ -110,6 +110,20 @@ def user_edit(user_id):
         return redirect(url_for('admin.user_list'))
 
     return render_template('admin/user_form.html', form=form, title=f'编辑用户 - {user.name}', user=user)
+
+
+@admin_bp.route('/users/<int:user_id>/delete', methods=['POST'])
+@admin_required
+def user_delete(user_id):
+    user = db.get_or_404(User, user_id)
+    if user.is_admin:
+        flash('不能删除管理员', 'danger')
+        return redirect(url_for('admin.user_list'))
+    name = user.name
+    db.session.delete(user)
+    db.session.commit()
+    flash(f'用户 {name} 已删除', 'success')
+    return redirect(url_for('admin.user_list'))
 
 
 @admin_bp.route('/ip-request/<int:req_id>/approve', methods=['POST'])
@@ -409,6 +423,7 @@ def _ollama_request(method, path, **kwargs):
 @admin_bp.route('/ai-models')
 @admin_required
 def ai_model_list():
+    ai_provider = current_app.config.get('AI_PROVIDER', 'ollama')
     data, err = _ollama_request('get', '/api/tags')
     models = []
     if data:
@@ -420,8 +435,30 @@ def ai_model_list():
                 'modified': m.get('modified_at', '')[:19].replace('T', ' '),
                 'family': m.get('details', {}).get('family', ''),
                 'params': m.get('details', {}).get('parameter_size', ''),
+                'provider': 'ollama',
             })
-    current_model = current_app.config['OLLAMA_MODEL']
+    # Also fetch OpenAI models
+    openai_url = current_app.config.get('OPENAI_BASE_URL', '').rstrip('/')
+    openai_key = current_app.config.get('OPENAI_API_KEY', '')
+    openai_models = []
+    openai_err = None
+    if openai_url:
+        try:
+            headers = {'Authorization': f'Bearer {openai_key}'} if openai_key else {}
+            resp = requests.get(f'{openai_url}/models', headers=headers, timeout=10)
+            resp.raise_for_status()
+            for m in resp.json().get('data', []):
+                openai_models.append({
+                    'name': m.get('id', m.get('name', '?')),
+                    'size': '-',
+                    'modified': '',
+                    'family': m.get('owned_by', ''),
+                    'params': '',
+                    'provider': 'openai',
+                })
+        except Exception as e:
+            openai_err = str(e)[:100]
+    current_model = current_app.config.get('OLLAMA_MODEL', '') if ai_provider == 'ollama' else current_app.config.get('OPENAI_MODEL', '')
 
     # Read default system prompt from Modelfile
     modelfile_path = os.path.join(current_app.root_path, '..', 'scripts', 'Modelfile.reqsys')
@@ -440,9 +477,9 @@ def ai_model_list():
 
     prompts = get_all_prompts()
 
-    ai_provider = current_app.config.get('AI_PROVIDER', 'ollama')
     return render_template('admin/ai_models.html',
                            models=models, err=err, current_model=current_model,
+                           openai_models=openai_models, openai_err=openai_err,
                            default_prompt=default_prompt,
                            prompts=prompts, prompt_labels=PROMPT_LABELS,
                            prompt_defaults=PROMPT_DEFAULTS,
@@ -453,8 +490,7 @@ def ai_model_list():
                            ollama_ssh_local_port=current_app.config.get('OLLAMA_SSH_LOCAL_PORT', 11434),
                            openai_base_url=current_app.config.get('OPENAI_BASE_URL', ''),
                            openai_api_key=current_app.config.get('OPENAI_API_KEY', ''),
-                           openai_model=current_app.config.get('OPENAI_MODEL', 'gpt-4o-mini'),
-                           ai_system_prompt=current_app.config.get('AI_SYSTEM_PROMPT', ''))
+                           openai_model=current_app.config.get('OPENAI_MODEL', 'gpt-4o-mini'))
 
 
 @admin_bp.route('/ai-models/create', methods=['POST'])
@@ -551,18 +587,25 @@ def ai_model_delete():
 @admin_bp.route('/ai-models/set-provider', methods=['POST'])
 @admin_required
 def ai_set_provider():
-    """Switch AI provider (ollama/openai)."""
+    """Switch AI provider (ollama/openai) and enable/disable."""
     provider = request.form.get('provider', 'ollama')
+    ai_enabled = request.form.get('ai_enabled') == '1'
     local_path = os.path.join(current_app.root_path, '..', 'config.local.yml')
     local_cfg = {}
     if os.path.exists(local_path):
         with open(local_path, encoding='utf-8') as f:
             local_cfg = yaml.safe_load(f) or {}
-    local_cfg.setdefault('ai', {})['provider'] = provider
+    ai_cfg = local_cfg.setdefault('ai', {})
+    ai_cfg['provider'] = provider
+    ai_cfg['enabled'] = ai_enabled
     with open(local_path, 'w', encoding='utf-8') as f:
         yaml.dump(local_cfg, f, allow_unicode=True, default_flow_style=False)
     current_app.config['AI_PROVIDER'] = provider
-    flash(f'AI 服务已切换为 {"OpenAI API" if provider == "openai" else "Ollama"}', 'success')
+    current_app.config['AI_ENABLED'] = ai_enabled
+    if ai_enabled:
+        flash(f'AI 服务已开启（{provider}）', 'success')
+    else:
+        flash('AI 服务已关闭', 'warning')
     return redirect(url_for('admin.ai_model_list'))
 
 
@@ -588,6 +631,15 @@ def ai_set_openai():
     return redirect(url_for('admin.ai_model_list'))
 
 
+@admin_bp.route('/ai-prompts')
+@admin_required
+def ai_prompt_list():
+    prompts = get_all_prompts()
+    return render_template('admin/ai_prompts.html',
+                           prompts=prompts, prompt_labels=PROMPT_LABELS,
+                           prompt_defaults=PROMPT_DEFAULTS)
+
+
 @admin_bp.route('/ai-models/save-prompts', methods=['POST'])
 @admin_required
 def ai_model_save_prompts():
@@ -599,7 +651,7 @@ def ai_model_save_prompts():
             prompts[key] = val
     save_all_prompts(prompts)
     flash('AI 提示词已保存', 'success')
-    return redirect(url_for('admin.ai_model_list'))
+    return redirect(url_for('admin.ai_prompt_list'))
 
 
 @admin_bp.route('/ai-models/set-ollama', methods=['POST'])

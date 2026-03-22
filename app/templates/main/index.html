@@ -7,11 +7,10 @@
 {% set pomo = pomo_min or 45 %}
 {% set full = (minutes // pomo) | int %}
 {% set remainder_pct = ((minutes % pomo) / pomo * 100) | int %}
-{% for i in range(full) %}<i class="bi bi-circle-fill text-success" style="font-size:.5em;" title="番茄 #{{ i+1 }}"></i>{% endfor %}
-{% if remainder_pct >= 80 %}<i class="bi bi-circle-fill text-success" style="font-size:.5em;" title="{{ remainder_pct }}%"></i>
-{% elif remainder_pct >= 40 %}<i class="bi bi-circle-half text-warning" style="font-size:.5em;" title="{{ remainder_pct }}%"></i>
-{% elif remainder_pct > 0 %}<i class="bi bi-circle-half text-secondary" style="font-size:.5em;" title="{{ remainder_pct }}%"></i>
-{% endif %}
+<span class="text-muted ms-1" style="font-size:.7em;" title="专注 {{ minutes }} 分钟">
+{% for i in range(full) %}<i class="bi bi-circle-fill text-success" style="font-size:.7em;"></i>{% endfor %}
+{% if remainder_pct > 0 %}<i class="bi bi-x-circle text-warning" style="font-size:.7em;" title="打断({{ remainder_pct }}%)"></i>{% endif %}
+{{ minutes }}m</span>
 {% endif %}
 {% endmacro %}
 
@@ -25,21 +24,12 @@
 {% endif %}
 
 <h4 class="mb-3">{{ current_user.name }}，{{ today.strftime('%Y-%m-%d') }}
+    {% if ai_enabled %}
     <button class="btn btn-sm btn-outline-primary ms-2" id="btnAiRecommend" title="AI 根据需求进度和截止日期推荐今日任务" style="vertical-align:middle;">
         <i class="bi bi-robot"></i> AI 推荐
     </button>
-    <button class="btn btn-sm btn-outline-info ms-1" id="btnStandup" style="vertical-align:middle;" onclick="genStandup()">
-        <i class="bi bi-megaphone"></i> 站会摘要
-    </button>
+    {% endif %}
 </h4>
-<div id="standupPanel" class="card border-info mb-3 d-none">
-    <div class="card-header py-1 bg-info bg-opacity-10 d-flex justify-content-between">
-        <span class="small fw-bold"><i class="bi bi-megaphone"></i> 每日站会摘要</span>
-        <button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="document.getElementById('standupPanel').classList.add('d-none')"><i class="bi bi-x"></i></button>
-    </div>
-    <div class="card-body py-2 small" id="standupContent"></div>
-</div>
-
 <div class="row">
     <!-- Left: Todo + Requirements -->
     <div class="col-md-7">
@@ -83,7 +73,7 @@
                     </form>
                     <span class="small">{{ t.title }}</span>
                     {% if t.need_help %}<span class="badge bg-danger" style="font-size:.55em;">阻塞{% if t.blocked_reason %}：{{ t.blocked_reason }}{% endif %}</span>{% endif %}
-                    {% if t.source == 'ai' %}<span class="badge bg-info" style="font-size:.55em;">AI</span>{% endif %}
+                    {% if t.source == "ai" %}<span class="badge bg-info" style="font-size:.55em;">AI</span>{% endif %}{% if t.recurring %}<span class="badge bg-{{ "success" if t.status == "done" else "danger" }}" style="font-size:.55em;">{{ t.recurring.schedule_desc }}</span>{% endif %}
                     {% if t.status != 'done' %}
                     <button class="btn btn-sm py-0 px-0 {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer-home" data-id="{{ t.id }}" title="{{ '暂停番茄钟' if t.timer_running else '启动番茄钟' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;">
                         <i class="bi bi-{{ 'clock-fill' if t.timer_running else 'clock' }}"></i>
@@ -132,7 +122,7 @@
                     {% endif %}
                     <span class="small">{{ t.title }}</span>
                     {% if t.need_help %}<span class="badge bg-danger" style="font-size:.55em;">阻塞{% if t.blocked_reason %}：{{ t.blocked_reason }}{% endif %}</span>{% endif %}
-                    {% if t.source == 'ai' %}<span class="badge bg-info" style="font-size:.55em;">AI</span>{% endif %}
+                    {% if t.source == "ai" %}<span class="badge bg-info" style="font-size:.55em;">AI</span>{% endif %}{% if t.recurring %}<span class="badge bg-{{ "success" if t.status == "done" else "danger" }}" style="font-size:.55em;">{{ t.recurring.schedule_desc }}</span>{% endif %}
                     {% if is_help_request %}<span class="badge bg-warning text-dark" style="font-size:.55em;">@{{ t.children[0].user.name }}</span>{% endif %}
                     {% if t.status != 'done' %}
                     <button class="btn btn-sm py-0 px-0 {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer-home" data-id="{{ t.id }}"
@@ -222,6 +212,56 @@
             </div>
         </div>
 
+        <!-- Recurring todos -->
+        <div class="card mb-2">
+            <div class="card-body py-2">
+                <div class="d-flex align-items-center gap-1 mb-1">
+                    <span class="badge bg-light text-dark border" style="font-size:.65em;">周期</span>
+                    <span class="small fw-bold text-secondary">周期任务</span>
+                    <a href="{{ url_for('main.recurring_list') }}" class="ms-auto small text-muted">编辑</a>
+                </div>
+                {% if all_recurring %}
+                {% for r in all_recurring %}
+                {% set is_due = r.is_due_today() %}
+                {% set r_status = recurring_status.get(r.id) %}
+                <div class="d-flex align-items-center gap-1 mb-1 ps-2">
+                    {% if r_status == 'done' %}
+                    <button class="btn btn-sm p-0 border-0 bg-transparent btn-toggle-recurring" data-rid="{{ r.id }}" title="取消完成" style="font-size:.85em;">
+                        <i class="bi bi-check-circle-fill text-success"></i>
+                    </button>
+                    {% elif r_status == 'todo' %}
+                    <button class="btn btn-sm p-0 border-0 bg-transparent btn-toggle-recurring" data-rid="{{ r.id }}" title="标记完成" style="font-size:.85em;">
+                        <i class="bi bi-circle text-muted"></i>
+                    </button>
+                    {% else %}
+                    <button class="btn btn-sm p-0 border-0 bg-transparent btn-adopt-recurring" data-rid="{{ r.id }}" title="添加到今日" style="font-size:.85em;">
+                        <i class="bi bi-plus-circle {{ 'text-info' if is_due else 'text-muted' }}"></i>
+                    </button>
+                    {% endif %}
+                    <span class="small {% if r_status == 'done' %}text-muted text-decoration-line-through{% elif not is_due and not r_status %}text-muted{% endif %}">{{ r.title }}</span>
+                    {% set is_overdue = not is_due and r.days_since_last() is not none and r.days_since_last() > 0 %}
+                    {% if r_status == 'done' and is_due %}
+                    <span class="badge bg-success btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
+                    {% elif r_status == 'done' and is_overdue %}
+                    <span class="badge bg-warning text-dark btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
+                    {% elif r_status == 'done' %}
+                    <span class="badge bg-success btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
+                    {% elif is_due %}
+                    <span class="badge bg-primary btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
+                    {% elif is_overdue %}
+                    <span class="badge bg-danger bg-opacity-75 btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
+                    {% else %}
+                    <span class="badge bg-light text-muted border btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}{% if r.days_until_next() > 0 %} · {{ r.days_until_next() }}天后{% endif %}</span>
+                    {% endif %}
+                    <button class="btn btn-sm p-0 border-0 bg-transparent text-muted btn-del-recurring ms-auto" data-rid="{{ r.id }}" title="删除" style="font-size:.7em;"><i class="bi bi-x"></i></button>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="text-muted small ps-2"><a href="{{ url_for('main.recurring_list') }}">添加周期任务</a></div>
+                {% endif %}
+            </div>
+        </div>
+
         {% if not display_reqs and not team_todos and not personal_todos %}
         <div class="text-center text-muted py-4">
             <i class="bi bi-inbox" style="font-size:2em;"></i>
@@ -236,8 +276,8 @@
 
         <!-- Contribution Heatmap -->
         <div class="card mb-3 border-0 shadow-sm">
-            <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#heatmapBody" style="cursor:pointer;">
-                <i class="bi bi-calendar-check"></i> 完成热力图 <span class="text-muted small">近90天</span> <i class="bi bi-chevron-down float-end mt-1" style="font-size:.7em;"></i>
+            <div class="card-header py-2 bg-white small" role="button" data-bs-toggle="collapse" data-bs-target="#heatmapBody" style="cursor:pointer;">
+                <i class="bi bi-calendar-check"></i> 完成热力图 <span class="text-muted">近90天</span> <i class="bi bi-chevron-down float-end mt-1" style="font-size:.7em;"></i>
             </div>
             <div class="collapse show" id="heatmapBody">
             <div class="card-body py-2 px-3">
@@ -392,33 +432,81 @@
         </div>
     </div>
 </div>
+
+<!-- Block Reason Modal -->
+<div class="modal fade" id="blockModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header py-2"><h6 class="modal-title">标记阻塞</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body">
+                <input type="hidden" id="blockTodoId">
+                <input type="text" id="blockReason" class="form-control form-control-sm" placeholder="阻塞原因（可选），@姓名 求助">
+            </div>
+            <div class="modal-footer py-1"><button type="button" class="btn btn-sm btn-danger" id="blockConfirm">确认阻塞</button></div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Daily Standup
-function genStandup() {
-    var btn = document.getElementById('btnStandup');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 生成中...';
-    apiPost('{{ url_for("main.daily_standup") }}', {}).then(function(d) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-megaphone"></i> 站会摘要';
-        if (d && d.ok) {
-            document.getElementById('standupContent').innerHTML = d.html;
-            document.getElementById('standupPanel').classList.remove('d-none');
-        } else {
-            showToast(d && d.error ? d.error : '生成失败', 'danger');
-        }
-    }).catch(function() {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-megaphone"></i> 站会摘要';
-        showToast('AI 服务不可用', 'danger');
+// Unified recurring click: adopt+done if not adopted, toggle if adopted
+var _recurringBusy = false;
+function recurringClick(rid, el) {
+    if (_recurringBusy) return;
+    _recurringBusy = true;
+    // Immediate visual feedback
+    if (el) { el.style.opacity = '0.5'; el.style.pointerEvents = 'none'; }
+    fetch('/recurring-todos/' + rid + '/toggle', {method: 'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.ok) { window.location.reload(); return; }
+        // Not adopted yet → adopt + auto done
+        return fetch('/recurring-todos/' + rid + '/adopt', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({done: true})
+        }).then(function() { window.location.reload(); });
+    })
+    .catch(function() { window.location.reload(); });
+}
+document.querySelectorAll('.btn-adopt-recurring, .btn-click-recurring, .btn-toggle-recurring').forEach(function(el) {
+    el.addEventListener('click', function(e) { e.stopPropagation(); recurringClick(el.dataset.rid, el); });
+});
+// Recurring todo delete
+document.querySelectorAll('.btn-del-recurring').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        if (!confirm('删除此周期任务？')) return;
+        fetch('/recurring-todos/' + btn.dataset.rid + '/delete', {method: 'POST'})
+        .then(function() { location.reload(); });
     });
+});
+// AI import recurring
+function aiImportRecurring() {
+    var btn = event.target.closest('button');
+    btn.disabled = true;
+    btn.textContent = '导入中...';
+    apiPost('{{ url_for("main.recurring_ai_recommend") }}', {}).then(function(d) {
+        btn.disabled = false;
+        btn.textContent = 'AI 导入';
+        if (!d || !d.ok) { showToast(d && d.raw ? d.raw : (d && d.msg ? d.msg : '失败'), 'danger'); return; }
+        if (!d.items || !d.items.length) { showToast('今天没有需要导入的周期任务', 'info'); return; }
+        // Auto import all recommended
+        var count = 0;
+        var promises = d.items.map(function(item) {
+            return apiPost('{{ url_for("main.recurring_adopt_ai") }}', {title: item.title, category: item.category || 'team'})
+                .then(function(r) { if (r && r.ok) count++; });
+        });
+        Promise.all(promises).then(function() {
+            showToast('已导入 ' + count + ' 个周期任务', 'success');
+            setTimeout(function() { location.reload(); }, 500);
+        });
+    }).catch(function() { btn.disabled = false; btn.textContent = 'AI 导入'; });
 }
 
 // AI Recommend
-document.getElementById('btnAiRecommend').addEventListener('click', function() {
+var _aiBtn = document.getElementById('btnAiRecommend');
+if (_aiBtn) _aiBtn.addEventListener('click', function() {
     var btn = this;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 推荐中...';
@@ -642,9 +730,9 @@ function createTodoRow(todoId, title, opts) {
     });
     // Bind blocker
     row.querySelector('.btn-block-r').addEventListener('click', function() {
-        var reason = prompt('阻塞原因（可选）：');
-        if (reason === null) return;
-        apiPost('/todos/' + todoId + '/block', {reason: reason}).then(function(x) { if (x && x.ok) location.reload(); });
+        document.getElementById('blockTodoId').value = todoId;
+        document.getElementById('blockReason').value = '';
+        _blockModal.show();
     });
     // Bind delete
     row.querySelector('.btn-del-r').addEventListener('click', function() {
@@ -778,6 +866,15 @@ document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
 });
 
 // Block toggle (homepage)
+var _blockModal = new bootstrap.Modal(document.getElementById('blockModal'));
+document.getElementById('blockConfirm').addEventListener('click', function() {
+    var tid = document.getElementById('blockTodoId').value;
+    var reason = document.getElementById('blockReason').value.trim();
+    apiPost('/todos/' + tid + '/block', {reason: reason}).then(function(d) {
+        _blockModal.hide();
+        if (d && d.ok) location.reload();
+    });
+});
 document.querySelectorAll('.btn-block-home').forEach(function(btn) {
     btn.addEventListener('click', function() {
         var isBlocked = btn.querySelector('i').classList.contains('bi-unlock');
@@ -786,11 +883,9 @@ document.querySelectorAll('.btn-block-home').forEach(function(btn) {
                 if (d && d.ok) location.reload();
             });
         } else {
-            var reason = prompt('阻塞原因（可选）：');
-            if (reason === null) return;
-            apiPost('/todos/' + btn.dataset.id + '/block', {reason: reason}).then(function(d) {
-                if (d && d.ok) location.reload();
-            });
+            document.getElementById('blockTodoId').value = btn.dataset.id;
+            document.getElementById('blockReason').value = '';
+            _blockModal.show();
         }
     });
 });

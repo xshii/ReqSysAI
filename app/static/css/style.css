@@ -56,6 +56,14 @@ body {
     z-index: 10;
 }
 
+/* Homepage section headers */
+.card-header {
+    font-size: 0.88rem;
+}
+.card-header .bi {
+    color: #1e3a5f;
+}
+
 /* Text truncation utility */
 .text-clamp-1 {
     overflow: hidden;

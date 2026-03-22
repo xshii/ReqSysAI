@@ -9,7 +9,7 @@
         <button class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#adminModal"><i class="bi bi-plus-circle"></i> 管理员录入</button>
         {% endif %}
         {% if current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR') %}
-        <button class="btn btn-outline-warning btn-sm" id="btnAiIncentive" onclick="aiRecommendCandidates()"><i class="bi bi-robot"></i> AI 推荐候选</button>
+        {% if ai_enabled %}<button class="btn btn-outline-warning btn-sm" id="btnAiIncentive" onclick="aiRecommendCandidates()"><i class="bi bi-robot"></i> AI 推荐候选</button>{% endif %}
         {% endif %}
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#submitModal"><i class="bi bi-star"></i> 推荐激励</button>
     </div>

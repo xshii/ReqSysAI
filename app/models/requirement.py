@@ -17,6 +17,8 @@ class Requirement(db.Model):
     assignee_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     assignee_name = db.Column(db.String(100), nullable=True)  # 外部责任人（无系统账号时）
     estimate_days = db.Column(db.Float, nullable=True)
+    code_lines = db.Column(db.Integer, nullable=True)  # 代码行数
+    test_cases = db.Column(db.Integer, nullable=True)  # 测试用例数
     start_date = db.Column(db.Date, nullable=True)
     due_date = db.Column(db.Date, nullable=True)
     parent_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=True)

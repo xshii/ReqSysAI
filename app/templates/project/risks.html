@@ -5,7 +5,7 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4>风险管理 · {{ project.name }}</h4>
     <div class="d-flex gap-2">
-        <button class="btn btn-outline-warning btn-sm" id="aiScanBtn" onclick="aiRiskScan()"><i class="bi bi-robot"></i> AI 风险识别</button>
+        {% if ai_enabled %}<button class="btn btn-outline-warning btn-sm" id="aiScanBtn" onclick="aiRiskScan()"><i class="bi bi-robot"></i> AI 风险识别</button>{% endif %}
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg"></i> 登记风险</button>
     </div>
 </div>

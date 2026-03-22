@@ -874,8 +874,12 @@ def my_weekly():
     offset = request.args.get('week', 0, type=int)
     monday, sunday = week_range(offset)
 
-    my_done = Todo.query.filter_by(user_id=current_user.id)\
-        .filter(Todo.done_date >= monday, Todo.done_date <= sunday)\
+    # Completed todos: prefer done_date, fall back to created_date for those without done_date
+    my_done = Todo.query.filter_by(user_id=current_user.id, status='done')\
+        .filter(db.or_(
+            db.and_(Todo.done_date >= monday, Todo.done_date <= sunday),
+            db.and_(Todo.done_date.is_(None), Todo.created_date >= monday, Todo.created_date <= sunday),
+        ))\
         .options(joinedload(Todo.requirements), joinedload(Todo.items)).all()
     my_active = Todo.query.filter_by(user_id=current_user.id)\
         .filter(Todo.status == 'todo', Todo.created_date <= sunday)\
@@ -906,60 +910,113 @@ def my_weekly():
     if request.method == 'POST':
         import markdown as md_lib
 
-        lines = [f'本周（{monday} ~ {sunday}）{current_user.name} 的工作数据：\n']
-        normal_active = [t for t in my_active if t not in overdue_todos and t not in blocked_todos]
-
-        if my_done:
-            lines.append('本周已完成：')
-            for t in my_done:
-                reqs = ', '.join(r.number for r in t.requirements)
-                time_str = f'，用时{t.actual_minutes}分钟' if t.actual_minutes else ''
-                lines.append(f'- ✓ {t.title}（{reqs}{time_str}）')
-
-        if normal_active:
-            lines.append('\n进行中：')
-            for t in normal_active:
-                reqs = ', '.join(r.number for r in t.requirements)
-                lines.append(f'- ○ {t.title}（{reqs}）')
-
-        if overdue_todos:
-            lines.append('\n延期未完成（上周遗留）：')
-            for t in overdue_todos:
-                reqs = ', '.join(r.number for r in t.requirements)
-                days = (date.today() - t.created_date).days
-                lines.append(f'- ⚠️ {t.title}（{reqs}，已延期{days}天）')
-
-        if blocked_todos:
-            lines.append('\n阻塞中：')
-            for t in blocked_todos:
-                reqs = ', '.join(r.number for r in t.requirements)
-                reason = f'，原因：{t.blocked_reason}' if t.blocked_reason else ''
-                lines.append(f'- 🔴 {t.title}（{reqs}{reason}）')
-
-        if my_reqs:
-            lines.append('\n参与的需求及状态：')
-            for r in my_reqs:
-                due_info = ''
-                if r.due_date:
-                    days_left = (r.due_date - date.today()).days
-                    due_info = f'，已延期{-days_left}天' if days_left < 0 else f'，剩{days_left}天'
-                lines.append(f'- [{r.number}] {r.title}（{r.status_label}{due_info}）')
-
-        prompt = get_prompt('personal_weekly') + '\n\n' + '\n'.join(lines)
-        _, raw = call_ollama(prompt)
-        ai_report = raw or '生成失败，请重试'
-        ai_report = md_lib.markdown(ai_report, extensions=['tables'])
-        report = True
-
-        # Auto-save
-        if saved:
-            saved.ai_html = ai_report
+        # If no data at all, skip AI and show hint
+        if not my_done and not my_active and not my_reqs:
+            ai_report = '<p>本周暂无工作数据（无已完成或进行中的任务），无法生成周报。</p>'
+            ai_report = md_lib.markdown(ai_report)
+            report = True
+            # Still save
+            if saved:
+                saved.ai_html = ai_report
+            else:
+                saved = PersonalWeekly(user_id=current_user.id, week_start=monday,
+                                       week_end=sunday, ai_html=ai_report)
+                db.session.add(saved)
+            db.session.commit()
         else:
-            saved = PersonalWeekly(
-                user_id=current_user.id, week_start=monday,
-                week_end=sunday, ai_html=ai_report)
-            db.session.add(saved)
-        db.session.commit()
+
+            lines = [f'本周（{monday} ~ {sunday}）{current_user.name} 的工作数据：\n']
+            normal_active = [t for t in my_active if t not in overdue_todos and t not in blocked_todos]
+
+            if my_done:
+                lines.append('本周已完成：')
+                for t in my_done:
+                    reqs = ', '.join(r.number for r in t.requirements)
+                    time_str = f'，用时{t.actual_minutes}分钟' if t.actual_minutes else ''
+                    lines.append(f'- ✓ {t.title}（{reqs}{time_str}）')
+
+            if normal_active:
+                lines.append('\n进行中：')
+                for t in normal_active:
+                    reqs = ', '.join(r.number for r in t.requirements)
+                    lines.append(f'- ○ {t.title}（{reqs}）')
+
+            if overdue_todos:
+                lines.append('\n延期未完成（上周遗留）：')
+                for t in overdue_todos:
+                    reqs = ', '.join(r.number for r in t.requirements)
+                    days = (date.today() - t.created_date).days
+                    lines.append(f'- ⚠️ {t.title}（{reqs}，已延期{days}天）')
+
+            if blocked_todos:
+                lines.append('\n阻塞中：')
+                for t in blocked_todos:
+                    reqs = ', '.join(r.number for r in t.requirements)
+                    reason = f'，原因：{t.blocked_reason}' if t.blocked_reason else ''
+                    lines.append(f'- 🔴 {t.title}（{reqs}{reason}）')
+
+            if my_reqs:
+                lines.append('\n参与的需求及状态：')
+                for r in my_reqs:
+                    due_info = ''
+                    if r.due_date:
+                        days_left = (r.due_date - date.today()).days
+                        due_info = f'，已延期{-days_left}天' if days_left < 0 else f'，剩{days_left}天'
+                    lines.append(f'- [{r.number}] {r.title}（{r.status_label}{due_info}）')
+
+            # Recurring todo stats this week
+            from app.models.recurring_todo import RecurringTodo
+            all_recurring = RecurringTodo.query.filter_by(user_id=current_user.id, is_active=True).all()
+            if all_recurring:
+                # Count how many times each recurring was due this week and how many were completed
+                recurring_due_count = 0
+                recurring_done_count = 0
+                recurring_late_count = 0
+                for d in range((sunday - monday).days + 1):
+                    check_date = monday + timedelta(days=d)
+                    if check_date > date.today():
+                        break
+                    for r in all_recurring:
+                        # Check if due on this date
+                        is_due = False
+                        if r.cycle == 'weekly' and check_date.weekday() == 0:
+                            is_due = True
+                        elif r.cycle == 'monthly' and check_date.day == (r.monthly_day or 1):
+                            is_due = True
+                        elif r.cycle == 'weekdays' and r.weekdays and str(check_date.weekday()) in r.weekdays.split(','):
+                            is_due = True
+                        if is_due:
+                            recurring_due_count += 1
+                            t = Todo.query.filter_by(user_id=current_user.id, recurring_id=r.id,
+                                                      created_date=check_date).first()
+                            if t and t.status == 'done':
+                                recurring_done_count += 1
+                                if t.done_date and t.done_date > check_date:
+                                    recurring_late_count += 1
+
+                if recurring_due_count > 0:
+                    rate = round(recurring_done_count / recurring_due_count * 100)
+                    lines.append(f'\n周期任务执行情况：')
+                    lines.append(f'- 本周到期 {recurring_due_count} 次，完成 {recurring_done_count} 次（完成率 {rate}%）')
+                    if recurring_late_count:
+                        lines.append(f'- 其中 {recurring_late_count} 次为补完成（非当天完成）')
+                    lines.append(f'- 周期任务共 {len(all_recurring)} 个：' + '、'.join(r.title for r in all_recurring))
+
+            prompt = get_prompt('personal_weekly') + '\n\n' + '\n'.join(lines)
+            _, raw = call_ollama(prompt)
+            ai_report = raw or '生成失败，请重试'
+            ai_report = md_lib.markdown(ai_report, extensions=['tables'])
+            report = True
+
+            # Auto-save
+            if saved:
+                saved.ai_html = ai_report
+            else:
+                saved = PersonalWeekly(
+                    user_id=current_user.id, week_start=monday,
+                    week_end=sunday, ai_html=ai_report)
+                db.session.add(saved)
+            db.session.commit()
 
     elif saved and saved.ai_html:
         # Load previously saved report
@@ -1099,6 +1156,102 @@ def resource_map():
         period=period, mode=mode, label=label, offset=week_offset,
         is_pm=is_pm,
     )
+
+
+@dashboard_bp.route('/resource-map/export')
+@login_required
+def resource_map_export():
+    """Export resource map as CSV."""
+    import csv
+    import io
+    period = request.args.get('period', 'week')
+    mode = request.args.get('mode', 'by_person')
+    week_offset = request.args.get('week', 0, type=int)
+
+    # Reuse the same logic — call resource_map internally
+    with current_app.test_request_context(f'/dashboard/resource-map?period={period}&week={week_offset}&mode={mode}'):
+        from flask_login import login_user
+        login_user(current_user)
+
+    # Simpler: just query directly
+    from collections import defaultdict
+    today = date.today()
+    if period == '3month':
+        start = today - timedelta(days=90)
+        end = today
+    elif period == 'month':
+        start = today.replace(day=1)
+        end = today
+    else:
+        start, end = week_range(week_offset)
+
+    users_q = User.query.filter_by(is_active=True).order_by(User.group, User.name).all()
+    user_ids = [u.id for u in users_q]
+    todos = Todo.query.filter(
+        Todo.user_id.in_(user_ids),
+        Todo.created_date >= start, Todo.created_date <= end,
+    ).options(joinedload(Todo.requirements)).all()
+
+    user_date_proj_count = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    for t in todos:
+        work_date = t.done_date or t.created_date
+        if not work_date:
+            continue
+        for r in t.requirements:
+            if r.project_id:
+                user_date_proj_count[t.user_id][work_date][r.project_id] += 1
+
+    user_project_days = defaultdict(float)
+    for uid, dates_data in user_date_proj_count.items():
+        for dt, proj_counts in dates_data.items():
+            day_total = sum(proj_counts.values())
+            if day_total <= 0:
+                continue
+            for pid, cnt in proj_counts.items():
+                user_project_days[(uid, pid)] += cnt / day_total
+
+    project_ids = sorted(set(pid for (_, pid) in user_project_days))
+    projects = {p.id: p for p in Project.query.filter(Project.id.in_(project_ids)).all()} if project_ids else {}
+    user_total = defaultdict(float)
+    for (uid, pid), d in user_project_days.items():
+        user_total[uid] += d
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    if mode == 'by_person':
+        writer.writerow(['姓名', '工号', '项目', '投入天数', '实际比例%', '预期比例%'])
+        for u in users_q:
+            t = user_total.get(u.id, 0)
+            if t <= 0:
+                continue
+            for pid in project_ids:
+                d = user_project_days.get((u.id, pid), 0)
+                if d <= 0:
+                    continue
+                ratio = round(d / t * 100) if t else 0
+                member = ProjectMember.query.filter_by(user_id=u.id, project_id=pid).first()
+                exp = member.expected_ratio if member and member.expected_ratio else ''
+                writer.writerow([u.name, u.employee_id, projects.get(pid, type('', (), {'name': '-'})).name,
+                                 round(d, 1), ratio, exp])
+    else:
+        writer.writerow(['项目', '项目合计', '姓名', '工号', '投入天数', '占比%'])
+        for pid in project_ids:
+            p = projects.get(pid)
+            if not p:
+                continue
+            proj_total = sum(user_project_days.get((u.id, pid), 0) for u in users_q)
+            if proj_total <= 0:
+                continue
+            for u in users_q:
+                d = user_project_days.get((u.id, pid), 0)
+                if d <= 0:
+                    continue
+                ratio = round(d / proj_total * 100)
+                writer.writerow([p.name, round(proj_total, 1), u.name, u.employee_id, round(d, 1), ratio])
+
+    output = buf.getvalue().encode('utf-8-sig')
+    return send_file(io.BytesIO(output), download_name=f'人力投入_{start}_{end}.csv',
+                     as_attachment=True, mimetype='text/csv')
 
 
 @dashboard_bp.route('/resource-map/expected-ratio', methods=['POST'])

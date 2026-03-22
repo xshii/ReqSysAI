@@ -11,4 +11,8 @@
         <a class="nav-link {% if request.endpoint and 'ai_model' in request.endpoint %}active{% endif %}"
            href="{{ url_for('admin.ai_model_list') }}">AI 模型</a>
     </li>
+    <li class="nav-item">
+        <a class="nav-link {% if request.endpoint == 'admin.ai_prompt_list' %}active{% endif %}"
+           href="{{ url_for('admin.ai_prompt_list') }}">提示词管理</a>
+    </li>
 </ul>

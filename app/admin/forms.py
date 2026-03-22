@@ -24,7 +24,7 @@ class UserEditForm(FlaskForm):
         Regexp(EMPLOYEE_ID_RE, message=EMPLOYEE_ID_MSG),
     ])
     name = StringField('姓名', validators=[DataRequired(), Length(min=2, max=80)])
-    ip_address = StringField('IP 地址', validators=[DataRequired(), Length(max=45)])
+    ip_address = StringField('IP 地址', validators=[Optional(), Length(max=45)])
     group = StringField('小组', validators=[Optional(), Length(max=50)])
     role_ids = SelectMultipleField('角色', coerce=int, validators=[DataRequired()])
     is_active = BooleanField('启用')

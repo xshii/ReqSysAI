@@ -123,8 +123,11 @@ def call_ollama(prompt, system_prompt=None, messages=None):
     """Call AI service (Ollama or OpenAI). Returns (parsed_json, raw_text) or (None, None)."""
     if messages is None:
         messages = []
-        # Use explicit system_prompt, or fall back to global config
-        sp = system_prompt or current_app.config.get('AI_SYSTEM_PROMPT', '')
+        # Use explicit system_prompt, or fall back to prompts.yml system_prompt
+        if not system_prompt:
+            from app.services.prompts import get_prompt
+            system_prompt = get_prompt('system_prompt')
+        sp = system_prompt
         if sp:
             messages.append({'role': 'system', 'content': sp})
         messages.append({'role': 'user', 'content': prompt})
@@ -160,22 +163,85 @@ def _log_ai_call(raw_input, ai_output):
         logger.debug('Failed to log AI call', exc_info=True)
 
 
-def parse_requirement(text):
-    """Parse requirement from text, with team context for smart assign."""
+def parse_requirement(text, project_id=None):
+    """Parse requirement from text, with project member context for smart assign."""
     from app.models.user import User
     from app.models.todo import Todo
     team_lines = []
     try:
-        users = User.query.filter_by(is_active=True).all()
+        if project_id:
+            from app.models.project_member import ProjectMember
+            members = ProjectMember.query.filter_by(project_id=project_id).all()
+            member_map = {m.user_id: m for m in members if m.user_id}
+            user_ids = list(member_map.keys())
+            users = User.query.filter(User.id.in_(user_ids), User.is_active == True).all() if user_ids else []
+        else:
+            users = User.query.filter_by(is_active=True).all()
+            member_map = {}
+        from app.models.requirement import Requirement
+        from app.models.todo import todo_requirements
         for u in users:
-            active = Todo.query.filter_by(user_id=u.id, status='todo').count()
-            team_lines.append(f'- {u.name}（{u.group or ""}）：当前 {active} 个进行中任务')
+            active_todos = Todo.query.filter_by(user_id=u.id, status='todo').count()
+            active_reqs = Requirement.query.filter(
+                Requirement.assignee_id == u.id,
+                Requirement.status.notin_(('done', 'closed', 'cancelled'))).count()
+            pm = member_map.get(u.id)
+            role = pm.role_label if pm else ''
+            recent = db.session.query(Requirement.title).join(
+                todo_requirements, Requirement.id == todo_requirements.c.requirement_id
+            ).join(Todo, Todo.id == todo_requirements.c.todo_id).filter(
+                Todo.user_id == u.id, Todo.status == 'done'
+            ).distinct().limit(3).all()
+            exp = '、'.join(r[0][:15] for r in recent) if recent else '无近期记录'
+            role_str = f'，角色：{role}' if role else ''
+            team_lines.append(f'- {u.name}（{u.group or ""}{role_str}）：负责 {active_reqs} 个需求，进行中 {active_todos} 个todo，经验：{exp}')
     except Exception:
         pass
     context = text
     if team_lines:
-        context = text + '\n\n团队成员：\n' + '\n'.join(team_lines)
-    return call_ollama(context, system_prompt=_get_requirement_prompt())
+        context = text + '\n\n项目成员：\n' + '\n'.join(team_lines)
+
+    result, raw = call_ollama(context, system_prompt=_get_requirement_prompt())
+
+    # If project has no members, force cross-project
+    if isinstance(result, dict) and project_id and not team_lines:
+        result['need_cross_project'] = True
+        result['recommended_assignee'] = '暂无空余人力'
+        result['assign_reason'] = '项目暂无成员'
+
+    # Second round: if need_cross_project, fetch all projects' members and re-recommend
+    if isinstance(result, dict) and result.get('need_cross_project') and project_id:
+        try:
+            from app.models.project import Project
+            from app.models.project_member import ProjectMember
+            all_projects = Project.query.filter(
+                Project.status == 'active', Project.id != project_id).all()
+            cross_lines = ['当前项目人力不足，以下是其他项目的可用人力：\n']
+            for p in all_projects:
+                p_members = ProjectMember.query.filter_by(project_id=p.id).all()
+                p_user_ids = [m.user_id for m in p_members if m.user_id]
+                if not p_user_ids:
+                    continue
+                p_users = User.query.filter(User.id.in_(p_user_ids), User.is_active == True).all()
+                for u in p_users:
+                    active = Todo.query.filter_by(user_id=u.id, status='todo').count()
+                    pm = next((m for m in p_members if m.user_id == u.id), None)
+                    role = pm.role_label if pm else ''
+                    cross_lines.append(f'- {u.name}（{p.name}，{role}）：进行中 {active} 个')
+            if len(cross_lines) > 1:
+                cross_prompt = (
+                    '项目内无空余人力。请从以下其他项目成员中推荐一位最合适的人选。\n'
+                    '严格返回 JSON：{"recommended_assignee":"姓名","assign_reason":"理由（含来源项目）","source_project":"来源项目名"}\n'
+                    f'需求：{result.get("title", "")}\n\n'
+                    + '\n'.join(cross_lines)
+                )
+                cross_result, _ = call_ollama(cross_prompt)
+                if isinstance(cross_result, dict):
+                    result['cross_project'] = cross_result
+        except Exception:
+            pass
+
+    return result, raw
 
 
 def refine_requirement(original_text, previous_result, feedback):

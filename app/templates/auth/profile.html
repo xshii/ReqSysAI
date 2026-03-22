@@ -56,8 +56,9 @@
                     </div>
                     <div class="mb-3">
                         <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" name="only_my_group" value="1" id="onlyMyGroup"
-                                   {% if current_user.only_my_group %}checked{% endif %}>
+                            <input class="form-check-input" type="checkbox" id="onlyMyGroup"
+                                   {% if current_user.only_my_group %}checked{% endif %}
+                                   onchange="fetch('/profile/toggle-my-group',{method:'POST'}).then(function(){location.reload();});">
                             <label class="form-check-label" for="onlyMyGroup">团队 Todo 只显示本组</label>
                         </div>
                         <div class="form-text">关闭后可查看所有组的 Todo</div>
