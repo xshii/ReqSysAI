@@ -89,15 +89,27 @@ def index():
     if is_reviewer and status_filter == 'funds':
         from app.constants import INCENTIVE_SOURCE_LABELS
         funds = IncentiveFund.query.order_by(IncentiveFund.expires_at.asc().nullslast()).all()
-        for f in funds:
-            s = source_stats.setdefault(f.source, {'label': f.source_label, 'total': 0, 'used': 0})
-            s['total'] += f.total_amount or 0
+        # All approved usage by source
         rows = db.session.query(
             Incentive.source, db.func.coalesce(db.func.sum(Incentive.amount), 0)
         ).filter(Incentive.status == 'approved').group_by(Incentive.source).all()
-        for src, used in rows:
-            if src in source_stats:
-                source_stats[src]['used'] = float(used)
+        used_map = {src: float(amt) for src, amt in rows}
+        # Build stats from all sources that have funds or usage
+        for f in funds:
+            s = source_stats.setdefault(f.source, {'label': f.source_label, 'total': 0, 'used': 0})
+            s['total'] += f.total_amount or 0
+        for src, used in used_map.items():
+            s = source_stats.setdefault(src, {'label': INCENTIVE_SOURCE_LABELS.get(src, src), 'total': 0, 'used': 0})
+            s['used'] = used
+        # Ensure all configured sources appear (even without funds or usage)
+        for src, label in INCENTIVE_SOURCE_LABELS.items():
+            source_stats.setdefault(src, {'label': label, 'total': 0, 'used': 0})
+        # Detect conflict: same source has both budgeted and unbudgeted funds
+        source_types = {}  # source → set of 'budget'/'pool'
+        for f in funds:
+            t = 'budget' if f.has_budget else 'pool'
+            source_types.setdefault(f.source, set()).add(t)
+        fund_conflicts = [source_stats[src]['label'] for src, types in source_types.items() if len(types) > 1]
 
     return render_template('incentive/index.html',
         items=items, users=users, is_reviewer=is_reviewer,
@@ -105,7 +117,7 @@ def index():
         month_filter=month_filter, search_q=search_q,
         can_export=is_reviewer or current_user.is_admin,
         today=date.today(),
-        funds=funds, source_stats=source_stats,
+        funds=funds, source_stats=source_stats, fund_conflicts=fund_conflicts if funds else [],
         source_labels=_get_source_labels(),
         inc_stats=inc_stats, stats_period=stats_period, saved_report=saved_report,
         all_funds=IncentiveFund.query.order_by(IncentiveFund.name).all() if is_reviewer else [])
