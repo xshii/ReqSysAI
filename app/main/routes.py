@@ -55,7 +55,7 @@ def index():
             Todo.status == TODO_STATUS_TODO,
             db.and_(Todo.status == TODO_STATUS_DONE, Todo.done_date == today),
         )
-    ).options(joinedload(Todo.items), joinedload(Todo.requirements), joinedload(Todo.children))\
+    ).options(joinedload(Todo.items), joinedload(Todo.requirements), joinedload(Todo.children), joinedload(Todo.comments))\
      .order_by(db.case((Todo.status == TODO_STATUS_TODO, 0), else_=1), Todo.sort_order).all()
     todo_total = len(my_todos)
     todo_done = sum(1 for t in my_todos if t.status == TODO_STATUS_DONE)
@@ -167,20 +167,29 @@ def index():
             Milestone.status == 'active',
         ).order_by(Milestone.due_date.asc().nullslast()).all()
 
-    # Recurring todos due today + completion status
+    # Recurring todos + completion status (independent of daily todos)
     from app.models.recurring_todo import RecurringTodo
+    from app.models.recurring_completion import RecurringCompletion
     all_recurring = RecurringTodo.query.filter_by(user_id=current_user.id, is_active=True).all()
     recurring_due = [r for r in all_recurring if r.is_due_today()]
-    # Simple: each recurring has its own ID, check today's todo
+    # Check completions from RecurringCompletion table
     recurring_status = {}
     if all_recurring:
-        today_todos = Todo.query.filter(
-            Todo.user_id == current_user.id,
-            Todo.recurring_id.in_([r.id for r in all_recurring]),
-            Todo.created_date == today,
+        completions = RecurringCompletion.query.filter(
+            RecurringCompletion.user_id == current_user.id,
+            RecurringCompletion.recurring_id.in_([r.id for r in all_recurring]),
+            RecurringCompletion.completed_date == today,
         ).all()
-        for t in today_todos:
-            recurring_status[t.recurring_id] = t.status
+        for c in completions:
+            recurring_status[c.recurring_id] = 'done'
+
+    # Weekly focus time (Pomodoro)
+    week_start = today - timedelta(days=today.weekday())
+    week_focus = db.session.query(db.func.coalesce(db.func.sum(Todo.actual_minutes), 0)).filter(
+        Todo.user_id == current_user.id,
+        Todo.done_date >= week_start,
+        Todo.actual_minutes > 0,
+    ).scalar() or 0
 
     return render_template('main/index.html',
         my_todos=my_todos, todo_total=todo_total, todo_done=todo_done,
@@ -191,7 +200,7 @@ def index():
         ai_ranking=ai_ranking, alerts=alerts,
         heatmap=heatmap, heatmap_start=heatmap_start, timedelta=timedelta,
         milestones=milestones, all_recurring=all_recurring, recurring_due=recurring_due,
-        recurring_status=recurring_status,
+        recurring_status=recurring_status, week_focus=week_focus,
     )
 
 
@@ -230,6 +239,15 @@ def quick_todo():
             if latest_todo:
                 db.session.add(TodoComment(
                     todo_id=latest_todo.id, user_id=current_user.id, content=comment_text,
+                ))
+                # Sync to requirement comment + activity
+                from app.models.requirement import Comment as ReqComment, Activity
+                db.session.add(ReqComment(
+                    requirement_id=req_id, user_id=current_user.id, content=comment_text,
+                ))
+                db.session.add(Activity(
+                    requirement_id=req_id, user_id=current_user.id,
+                    action='commented', detail=comment_text,
                 ))
                 db.session.commit()
                 return jsonify(ok=True, title=comment_text, todo_id=latest_todo.id, action='comment') if is_ajax else redirect(url_for('main.index'))
@@ -413,26 +431,24 @@ def ai_recommend_todos():
         for title in today_titles:
             lines.append(f'  - {title}')
 
-    # Recurring todos due today
+    # Recurring todos due today — tell AI about them, return IDs for frontend highlighting
     from app.models.recurring_todo import RecurringTodo
+    from app.models.recurring_completion import RecurringCompletion
     due_recurring = [r for r in RecurringTodo.query.filter_by(
         user_id=current_user.id, is_active=True).all() if r.is_due_today()]
-    # Filter out already adopted, group by title
-    recurring_groups = {}  # title → [recurring_ids]
+    # Filter out already completed today
+    recurring_highlight_ids = []
     if due_recurring:
-        adopted_ids = set(t.recurring_id for t in Todo.query.filter(
-            Todo.user_id == current_user.id,
-            Todo.recurring_id.in_([r.id for r in due_recurring]),
-            Todo.created_date == today).all())
-        not_adopted = [r for r in due_recurring if r.id not in adopted_ids]
-        if not_adopted:
-            lines.append('\n今日到期的周期任务（未完成，req_number填"RECURRING-序号"）：')
-            idx = 0
-            for r in not_adopted:
-                recurring_groups.setdefault(r.title, []).append(r.id)
-            for title, ids in recurring_groups.items():
-                lines.append(f'  - {title}（req_number填"RECURRING-{idx}"）')
-                idx += 1
+        done_ids = set(c.recurring_id for c in RecurringCompletion.query.filter(
+            RecurringCompletion.user_id == current_user.id,
+            RecurringCompletion.recurring_id.in_([r.id for r in due_recurring]),
+            RecurringCompletion.completed_date == today).all())
+        not_done = [r for r in due_recurring if r.id not in done_ids]
+        if not_done:
+            lines.append('\n今日到期的周期任务（仅供参考，不要作为推荐项输出）：')
+            for r in not_done:
+                lines.append(f'  - {r.title}')
+                recurring_highlight_ids.append(r.id)
 
     prompt = get_prompt('todo_recommend') + '\n\n' + '\n'.join(lines)
     result, _ = call_ollama(prompt)
@@ -442,9 +458,6 @@ def ai_recommend_todos():
         result = [result]
     if not isinstance(result, list):
         return jsonify(ok=False, msg='AI 返回格式异常')
-
-    # Build index for RECURRING-N mapping
-    recurring_idx = list(recurring_groups.values()) if recurring_groups else []
 
     todos = []
     for item in result:
@@ -457,23 +470,8 @@ def ai_recommend_todos():
                 'reason': item.get('reason', ''),
                 'est_min': item.get('est_min', 0),
             }
-            # Match recurring by RECURRING-N or plain RECURRING
-            if req_num and req_num.startswith('RECURRING'):
-                parts = req_num.split('-')
-                if len(parts) == 2 and parts[1].isdigit():
-                    idx = int(parts[1])
-                    if idx < len(recurring_idx):
-                        t['recurring_ids'] = recurring_idx[idx]
-                elif recurring_idx:
-                    # Fallback: try match by title
-                    for title, ids in recurring_groups.items():
-                        if title in item['title'] or item['title'] in title:
-                            t['recurring_ids'] = ids
-                            break
-                    if 'recurring_ids' not in t and len(recurring_idx) == 1:
-                        t['recurring_ids'] = recurring_idx[0]
             todos.append(t)
-    return jsonify(ok=True, todos=todos)
+    return jsonify(ok=True, todos=todos, recurring_highlight_ids=recurring_highlight_ids)
 
 
 @main_bp.route('/api/move-todo', methods=['POST'])
@@ -502,6 +500,31 @@ def move_todo():
         todo.category = 'personal'
     db.session.commit()
     return jsonify(ok=True)
+
+
+@main_bp.route('/api/reassign-todo', methods=['POST'])
+@login_required
+def reassign_todo():
+    """Reassign a todo to another user (team collaboration)."""
+    data = request.get_json() or {}
+    todo_id = data.get('todo_id')
+    target_user_id = data.get('target_user_id')
+    if not todo_id or not target_user_id:
+        return jsonify(ok=False, msg='参数缺失')
+    todo = db.session.get(Todo, todo_id)
+    target_user = db.session.get(User, target_user_id)
+    if not todo or not target_user:
+        return jsonify(ok=False, msg='数据不存在')
+    if todo.user_id == int(target_user_id):
+        return jsonify(ok=True, msg='无需转交')  # Same user, no-op
+    old_user = db.session.get(User, todo.user_id)
+    old_name = old_user.name if old_user else '未知'
+    # Reassign todo and its child help-request todos
+    todo.user_id = int(target_user_id)
+    for child in todo.children:
+        child.user_id = int(target_user_id)
+    db.session.commit()
+    return jsonify(ok=True, old_user=old_name, new_user=target_user.name, title=todo.title)
 
 
 @main_bp.route('/api/users')
@@ -541,7 +564,7 @@ def api_search():
 def toggle_todo(todo_id):
     """Toggle todo done/undone from homepage."""
     todo = db.session.get(Todo, todo_id)
-    if not todo or todo.user_id != current_user.id:
+    if not todo:
         return jsonify(ok=False) if request.is_json else redirect(url_for('main.index'))
     if todo.status == TODO_STATUS_DONE:
         todo.status = TODO_STATUS_TODO
@@ -645,6 +668,110 @@ def daily_standup():
     return jsonify(ok=False, error='生成失败')
 
 
+# ---- Daily Progress Report ----
+
+@main_bp.route('/api/daily-progress', methods=['POST'])
+@login_required
+def daily_progress():
+    """Generate formatted daily progress for current user."""
+    from app.models.risk import Risk
+    from app.models.requirement import Requirement
+
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    if today.weekday() == 0:
+        yesterday = today - timedelta(days=3)
+
+    # Only business todos (risk + requirement linked), not team/personal
+    all_biz = Todo.query.filter(
+        Todo.user_id == current_user.id,
+        Todo.category.in_(['work', 'risk']),
+    ).options(joinedload(Todo.requirements)).all()
+
+    done_today = [t for t in all_biz if t.done_date == today]
+    active = [t for t in all_biz if t.status == 'todo']
+    blocked = [t for t in active if t.need_help]
+
+    # Requirement progress (completion %)
+    my_reqs = Requirement.query.filter(
+        Requirement.assignee_id == current_user.id,
+        Requirement.status.notin_(('done', 'closed', 'cancelled')),
+    ).options(joinedload(Requirement.project)).all()
+
+    lines = [f'【{today.strftime("%Y-%m-%d")}】进展：']
+
+    if done_today:
+        for i, t in enumerate(done_today, 1):
+            reqs = '、'.join(r.number for r in t.requirements)
+            suffix = f'（{reqs}）' if reqs else ''
+            lines.append(f'{i}. {t.title}{suffix}')
+    else:
+        lines.append('（暂无完成项）')
+
+    if active:
+        lines.append('')
+        lines.append('进行中：')
+        for i, t in enumerate(active, 1):
+            reqs = '、'.join(r.number for r in t.requirements)
+            suffix = f'（{reqs}）' if reqs else ''
+            overdue = f'，延{t.workdays_overdue}天' if t.workdays_overdue else ''
+            lines.append(f'{i}. {t.title}{suffix}{overdue}')
+
+    # Requirement completion %
+    if my_reqs:
+        lines.append('')
+        lines.append('需求进度：')
+        for r in my_reqs:
+            total = Todo.query.filter(
+                Todo.user_id == current_user.id
+            ).join(todo_requirements, Todo.id == todo_requirements.c.todo_id)\
+             .filter(todo_requirements.c.requirement_id == r.id).count()
+            done = Todo.query.filter(
+                Todo.user_id == current_user.id, Todo.status == 'done'
+            ).join(todo_requirements, Todo.id == todo_requirements.c.todo_id)\
+             .filter(todo_requirements.c.requirement_id == r.id).count()
+            pct = round(done / total * 100) if total else 0
+            due_info = f'，截止{r.due_date.strftime("%m-%d")}' if r.due_date else ''
+            overdue_info = f'，已超期{(today - r.due_date).days}天' if r.due_date and r.due_date < today else ''
+            lines.append(f'- [{r.number}] {r.title}：完成{pct}%（{done}/{total}）{due_info}{overdue_info}')
+
+    if blocked:
+        lines.append('')
+        lines.append('当前问题：')
+        for i, t in enumerate(blocked, 1):
+            days = t.workdays_overdue or 0
+            reason = t.blocked_reason or '待解决'
+            lines.append(f'{i}. {t.title}——责任人：{current_user.name}，阻塞{days}天 / {reason}')
+
+    # Let AI format it nicely
+    from app.services.ai import call_ollama
+    raw_data = '\n'.join(lines)
+    prompt = (
+        '你是一个研发日报助手。根据以下数据，生成格式化的每日进展报告。\n'
+        '严格使用以下格式，不要添加多余内容，直接输出文本（不要 JSON）：\n\n'
+        f'【{today.strftime("%Y-%m-%d")}】进展：\n'
+        '1. 具体完成的事项\n'
+        '2. ...\n\n'
+        '进行中：\n'
+        '1. 当前正在做的事项\n\n'
+        '当前问题：\n'
+        '1. 问题描述——责任人：xxx，阻塞N天/预期解决时间x.x\n\n'
+        '规则：\n'
+        '- 合并相似的任务，不要逐条罗列\n'
+        '- 完成项用过去式描述成果\n'
+        '- 进行中项描述当前进度和下一步\n'
+        '- 问题项必须标注责任人和阻塞天数\n'
+        '- 如果没有问题就不输出"当前问题"部分\n'
+        '- 如果没有进行中就不输出"进行中"部分\n\n'
+        '原始数据：\n' + raw_data
+    )
+    _, ai_text = call_ollama(prompt)
+    if ai_text:
+        return jsonify(ok=True, text=ai_text)
+    # Fallback to raw data if AI fails
+    return jsonify(ok=True, text=raw_data)
+
+
 # ---- Recurring Todos ----
 
 @main_bp.route('/recurring-todos')
@@ -690,8 +817,8 @@ def recurring_delete(rid):
     from app.models.recurring_todo import RecurringTodo
     r = db.get_or_404(RecurringTodo, rid)
     if r.user_id == current_user.id:
-        # Clear recurring_id on spawned todos (keep the todos, just unlink)
-        Todo.query.filter_by(recurring_id=r.id).update({'recurring_id': None})
+        from app.models.recurring_completion import RecurringCompletion
+        RecurringCompletion.query.filter_by(recurring_id=r.id).delete()
         db.session.delete(r)
         db.session.commit()
     if request.is_json or request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -737,63 +864,23 @@ def recurring_ai_recommend():
 @main_bp.route('/recurring-todos/<int:rid>/toggle', methods=['POST'])
 @login_required
 def recurring_toggle(rid):
-    """Toggle done status of today's todo spawned from a recurring template."""
-    todo = Todo.query.filter_by(
-        user_id=current_user.id, recurring_id=rid, created_date=date.today()).first()
-    if not todo:
-        return jsonify(ok=False, msg='未找到任务')
-    if todo.status == 'done':
-        todo.status = 'todo'
-        todo.done_date = None
-    else:
-        todo.status = 'done'
-        todo.done_date = date.today()
-    db.session.commit()
-    return jsonify(ok=True, done=todo.status == 'done')
-
-
-@main_bp.route('/recurring-todos/<int:rid>/adopt', methods=['POST'])
-@login_required
-def recurring_adopt(rid):
-    """Create a real todo from a recurring template for today."""
+    """Toggle completion of a recurring todo for today (independent of daily todos)."""
     from app.models.recurring_todo import RecurringTodo
+    from app.models.recurring_completion import RecurringCompletion
     r = db.get_or_404(RecurringTodo, rid)
     if r.user_id != current_user.id:
         return jsonify(ok=False), 403
-    auto_done = request.args.get('done') == '1' or (request.get_json() or {}).get('done')
-    # Prevent duplicate
-    existing = Todo.query.filter_by(
-        user_id=current_user.id, recurring_id=rid, created_date=date.today()).first()
+    today = date.today()
+    existing = RecurringCompletion.query.filter_by(
+        recurring_id=rid, user_id=current_user.id, completed_date=today).first()
     if existing:
-        return jsonify(ok=True, todo_id=existing.id, duplicate=True)
-    todo = Todo(user_id=current_user.id, title=r.title,
-                due_date=date.today(), category='work', source='manual',
-                recurring_id=r.id,
-                status='done' if auto_done else 'todo',
-                done_date=date.today() if auto_done else None)
-    todo.items.append(TodoItem(title=r.title, sort_order=0, is_done=auto_done))
-    db.session.add(todo)
+        db.session.delete(existing)
+        db.session.commit()
+        return jsonify(ok=True, done=False)
+    comp = RecurringCompletion(recurring_id=rid, user_id=current_user.id, completed_date=today)
+    db.session.add(comp)
     db.session.commit()
-    return jsonify(ok=True, todo_id=todo.id)
-
-
-@main_bp.route('/recurring-todos/adopt-ai', methods=['POST'])
-@login_required
-def recurring_adopt_ai():
-    """Import an AI-recommended recurring todo into today's todo list."""
-    data = request.get_json() or {}
-    title = data.get('title', '').strip()
-    category = data.get('category', 'team')  # team or personal
-
-    if not title:
-        return jsonify(ok=False, msg='标题不能为空')
-
-    todo = Todo(user_id=current_user.id, title=title,
-                due_date=date.today(), category=category, source='ai')
-    todo.items.append(TodoItem(title=title, sort_order=0))
-    db.session.add(todo)
-    db.session.commit()
-    return jsonify(ok=True, todo_id=todo.id)
+    return jsonify(ok=True, done=True)
 
 
 @main_bp.route('/rant', methods=['POST'])

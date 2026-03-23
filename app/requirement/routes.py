@@ -213,7 +213,7 @@ def requirement_edit(req_id):
         flash('需求更新成功', 'success')
         return redirect(url_for('requirement.requirement_detail', req_id=req.id))
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
-    return render_template('requirement/form.html', form=form, title=f'编辑需求 - {req.number}', users=users)
+    return render_template('requirement/form.html', form=form, title=f'编辑需求 - {req.number}', users=users, req=req)
 
 
 @requirement_bp.route('/<int:req_id>/status', methods=['POST'])

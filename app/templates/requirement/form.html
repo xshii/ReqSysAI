@@ -37,6 +37,7 @@
                             {% from "_user_picker.html" import user_picker %}
                             {% set cur_name = '' %}
                             {% if form.assignee_id.data %}{% for u in users %}{% if u.id == form.assignee_id.data %}{% set cur_name = u.name %}{% endif %}{% endfor %}{% endif %}
+                            {% if not cur_name and req and req.assignee_name %}{% set cur_name = req.assignee_name %}{% endif %}
                             {{ user_picker('assignee_name', users, value=cur_name, value_name=cur_name, mode='text', placeholder='搜索或输入') }}
                         </div>
                         <label class="col-2 col-form-label col-form-label-sm">截止 *</label>

@@ -1,18 +1,24 @@
 {% extends "base.html" %}
-{% block title %}首页 - 研发协作平台{% endblock %}
+{% block title %}{% if todo_total %}({{ todo_total - todo_done }}) {% endif %}首页 - 研发协作平台{% endblock %}
 
-{# Pomodoro icons macro: multiple tomatoes with color by completion % #}
-{% macro pomodoro_icons(minutes, pomo_min) %}
-{% if minutes and minutes > 0 %}
-{% set pomo = pomo_min or 45 %}
-{% set full = (minutes // pomo) | int %}
-{% set remainder_pct = ((minutes % pomo) / pomo * 100) | int %}
-<span class="text-muted ms-1" style="font-size:.7em;" title="专注 {{ minutes }} 分钟">
-{% for i in range(full) %}<i class="bi bi-circle-fill text-success" style="font-size:.7em;"></i>{% endfor %}
-{% if remainder_pct > 0 %}<i class="bi bi-x-circle text-warning" style="font-size:.7em;" title="打断({{ remainder_pct }}%)"></i>{% endif %}
-{{ minutes }}m</span>
-{% endif %}
-{% endmacro %}
+{% block extra_css %}
+<style>
+.ai-highlight {
+    font-size: .7em !important;
+    transform: scale(1.35);
+    display: inline-block;
+    box-shadow: 0 0 0 3px rgba(13,202,240,.35);
+    animation: ai-pulse 1.5s ease-in-out 3;
+    border-radius: .25rem;
+}
+@keyframes ai-pulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(13,202,240,.35); }
+    50% { box-shadow: 0 0 0 6px rgba(13,202,240,.15); }
+}
+</style>
+{% endblock %}
+
+{% from "_todo_macros.html" import pomodoro_icons, todo_row, block_popover_html, todo_row_js with context %}
 
 {% block content %}
 {% if alerts %}
@@ -23,13 +29,48 @@
 </div>
 {% endif %}
 
-<h4 class="mb-3">{{ current_user.name }}，{{ today.strftime('%Y-%m-%d') }}
-    {% if ai_enabled %}
-    <button class="btn btn-sm btn-outline-primary ms-2" id="btnAiRecommend" title="AI 根据需求进度和截止日期推荐今日任务" style="vertical-align:middle;">
-        <i class="bi bi-robot"></i> AI 推荐
-    </button>
-    {% endif %}
-</h4>
+<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <h4 class="mb-0">{{ current_user.name }}，{{ today.strftime('%Y-%m-%d') }}
+        <span class="ms-2 align-middle" style="font-size:.6em;">
+            {% set init_pct = (todo_done / todo_total * 100)|int if todo_total else 0 %}
+            <span id="todayProgressBadge" class="badge bg-{{ 'success' if init_pct >= 66 else ('warning' if init_pct >= 33 else 'danger') }}{% if init_pct < 100 %} bg-opacity-75{% endif %}" style="font-size:1em;">
+                {{ todo_done }}/{{ todo_total }}
+            </span>
+            {% set pct = (todo_done / todo_total * 100)|int if todo_total else 0 %}
+            <div class="d-inline-block align-middle ms-1" style="width:100px;height:8px;background:#e9ecef;border-radius:4px;overflow:hidden;">
+                <div id="todayProgressBar" data-pct="{{ pct }}" style="width:{{ pct }}%;height:100%;background:{{ '#198754' if pct >= 100 else ('#5cb85c' if pct >= 66 else ('#f0ad4e' if pct >= 33 else '#dc3545')) }};border-radius:4px;transition:width .3s,background .3s;"></div>
+            </div>
+        </span>
+        {% if week_focus > 0 %}
+        <span class="ms-2 align-middle" style="font-size:.55em;">
+            <i class="bi bi-clock-fill text-success"></i> 本周专注 {{ (week_focus / 60)|round(1) }}h
+        </span>
+        {% endif %}
+    </h4>
+    <div class="ms-auto d-flex gap-1">
+        <button class="btn btn-sm btn-outline-secondary" id="btnDailyProgress" title="AI 生成今日进展报告">
+            <i class="bi bi-journal-text"></i> 每日进展
+        </button>
+        {% if ai_enabled %}
+        <button class="btn btn-sm btn-outline-primary" id="btnAiRecommend" title="AI 根据需求进度和截止日期推荐今日任务">
+            <i class="bi bi-robot"></i> AI 推荐
+        </button>
+        {% endif %}
+    </div>
+</div>
+{# Daily progress panel #}
+<div id="dailyProgressPanel" class="card border-secondary mb-2 d-none">
+    <div class="card-body py-2">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="small fw-bold"><i class="bi bi-journal-text"></i> 每日进展</span>
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="copyProgress()" title="复制"><i class="bi bi-clipboard"></i></button>
+                <button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="document.getElementById('dailyProgressPanel').classList.add('d-none')"><i class="bi bi-x"></i></button>
+            </div>
+        </div>
+        <pre id="dailyProgressText" class="mb-0 small" style="white-space:pre-wrap;font-family:inherit;"></pre>
+    </div>
+</div>
 <div class="row">
     <!-- Left: Todo + Requirements -->
     <div class="col-md-7">
@@ -49,11 +90,14 @@
         </div>
 
         {# Risk/urgent todos #}
-        <div class="card mb-2 border-danger border-opacity-25">
+        {% set risk_all_done = risk_todos|length > 0 and risk_todos|rejectattr('status', 'equalto', 'done')|list|length == 0 %}
+        <div class="card mb-2 {% if risk_all_done %}border-success border-opacity-25{% else %}border-danger border-opacity-25{% endif %}">
             <div class="card-body py-2">
                 <div class="d-flex align-items-center gap-2 mb-1">
                     <div class="d-flex align-items-center gap-1 flex-shrink-1">
+                        <i class="bi bi-chevron-{{ 'right' if risk_all_done else 'down' }} text-muted" style="font-size:.6em;cursor:pointer;" role="button" data-bs-toggle="collapse" data-bs-target="#riskTodos"></i>
                         <span class="badge bg-danger" style="font-size:.65em;">风险</span>
+                        {% if risk_todos %}<span class="badge bg-{{ 'success' if risk_all_done else 'secondary' }} bg-opacity-{{ '75' if risk_all_done else '50' }}" style="font-size:.55em;">{{ risk_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ risk_todos|length }}</span>{% endif %}
                         <span class="small fw-bold text-danger"><i class="bi bi-lightning-charge"></i> 风险&突发</span>
                     </div>
                     <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-grow-1 quick-todo-form">
@@ -62,41 +106,23 @@
                         <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加风险Todo / @人名 求助" required style="font-size:.8em;">
                     </form>
                 </div>
-                <div class="todo-list-for-req" data-req-id="risk">
-                {% for t in risk_todos %}
-                <div class="d-flex align-items-center gap-1 mb-1 ps-2 todo-drag-item {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}" draggable="true" data-todo-id="{{ t.id }}" style="cursor:grab;">
-                    <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent">
-                            <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-danger' }}"></i>
-                        </button>
-                    </form>
-                    <span class="small">{{ t.title }}</span>
-                    {% if t.need_help %}<span class="badge bg-danger" style="font-size:.55em;">阻塞{% if t.blocked_reason %}：{{ t.blocked_reason }}{% endif %}</span>{% endif %}
-                    {% if t.source == "ai" %}<span class="badge bg-info" style="font-size:.55em;">AI</span>{% endif %}{% if t.recurring %}<span class="badge bg-{{ "success" if t.status == "done" else "danger" }}" style="font-size:.55em;">{{ t.recurring.schedule_desc }}</span>{% endif %}
-                    {% if t.status != 'done' %}
-                    <button class="btn btn-sm py-0 px-0 {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer-home" data-id="{{ t.id }}" title="{{ '暂停番茄钟' if t.timer_running else '启动番茄钟' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;">
-                        <i class="bi bi-{{ 'clock-fill' if t.timer_running else 'clock' }}"></i>
-                    </button>
-                    <button class="btn btn-sm py-0 px-0 {% if t.need_help %}text-danger{% else %}text-muted{% endif %} btn-block-home" data-id="{{ t.id }}" title="{{ '解除阻塞' if t.need_help else '标记阻塞' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;">
-                        <i class="bi bi-{% if t.need_help %}play-circle{% else %}pause-circle{% endif %}"></i>
-                    </button>
-                    {% endif %}
-                    {{ pomodoro_icons(t.actual_minutes, current_user.pomodoro_minutes) }}
-                    <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" title="删除" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>
-                </div>
-                {% endfor %}
+                <div class="collapse {% if not risk_all_done %}show{% endif %} todo-list-for-req" data-req-id="risk" id="riskTodos">
+                {% for t in risk_todos %}{{ todo_row(t, 'text-danger') }}{% endfor %}
                 </div>
             </div>
         </div>
 
-        {# Each requirement with its todos #}
+        {# Each requirement with its todos — collapsible, auto-collapse when all done #}
         {% for r in display_reqs %}
-        <div class="card mb-2">
+        {% set r_todos = req_todos.get(r.id, []) %}
+        {% set r_all_done = r_todos|length > 0 and r_todos|rejectattr('status', 'equalto', 'done')|list|length == 0 %}
+        <div class="card mb-2 {% if r_all_done %}border-success border-opacity-25{% endif %}">
             <div class="card-body py-2">
                 <div class="d-flex align-items-center gap-2 mb-1">
                     <div class="d-flex align-items-center gap-1 flex-shrink-1" style="min-width:0;overflow:hidden;">
-                        <span class="badge bg-{{ r.status_color }}" style="font-size:.65em;flex-shrink:0;">{{ r.status_label }}</span>
+                        <i class="bi bi-chevron-{{ 'right' if r_all_done else 'down' }} text-muted" style="font-size:.6em;cursor:pointer;" role="button" data-bs-toggle="collapse" data-bs-target="#reqTodos{{ r.id }}"></i>
+                        <span class="badge bg-{{ r.status_color }}" style="font-size:.65em;flex-shrink:0;cursor:pointer;" role="button" data-bs-toggle="collapse" data-bs-target="#reqTodos{{ r.id }}">{{ r.status_label }}</span>
+                        {% if r_todos %}<span class="badge bg-{{ 'success' if r_all_done else 'secondary' }} bg-opacity-{{ '75' if r_all_done else '50' }}" style="font-size:.55em;flex-shrink:0;">{{ r_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ r_todos|length }}</span>{% endif %}
                         {% if r.due_date and r.due_date < today %}<span class="badge bg-danger" style="font-size:.65em;flex-shrink:0;">超期</span>{% endif %}
                         <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="small fw-bold text-primary text-nowrap text-decoration-none" style="overflow:hidden;text-overflow:ellipsis;" title="{{ r.number }} {{ r.title }}">{{ r.number }} {{ r.title }}</a>
                     </div>
@@ -106,78 +132,63 @@
                         <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加Todo / @人名 求助 / #总结" required style="font-size:.8em;">
                     </form>
                 </div>
-                <div class="todo-list-for-req" data-req-id="{{ r.id }}">
-                {% for t in req_todos.get(r.id, []) %}
-                {% set is_help_request = t.children | length > 0 %}
-                <div class="d-flex align-items-center gap-1 mb-1 ps-2 todo-drag-item {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}" draggable="true" data-todo-id="{{ t.id }}" style="cursor:grab;">
-                    {% if is_help_request %}
-                    <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'hourglass-split text-warning' }}" style="font-size:.9em;" title="等待{{ t.children[0].user.name }}完成"></i>
-                    {% else %}
-                    <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="{{ '撤销完成' if t.status == 'done' else '标记完成' }}">
-                            <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-secondary' }}"></i>
-                        </button>
-                    </form>
-                    {% endif %}
-                    <span class="small">{{ t.title }}</span>
-                    {% if t.need_help %}<span class="badge bg-danger" style="font-size:.55em;">阻塞{% if t.blocked_reason %}：{{ t.blocked_reason }}{% endif %}</span>{% endif %}
-                    {% if t.source == "ai" %}<span class="badge bg-info" style="font-size:.55em;">AI</span>{% endif %}{% if t.recurring %}<span class="badge bg-{{ "success" if t.status == "done" else "danger" }}" style="font-size:.55em;">{{ t.recurring.schedule_desc }}</span>{% endif %}
-                    {% if is_help_request %}<span class="badge bg-warning text-dark" style="font-size:.55em;">@{{ t.children[0].user.name }}</span>{% endif %}
-                    {% if t.status != 'done' %}
-                    <button class="btn btn-sm py-0 px-0 {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer-home" data-id="{{ t.id }}"
-                            title="{{ '暂停番茄钟' if t.timer_running else '启动番茄钟' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;">
-                        <i class="bi bi-{{ 'clock-fill' if t.timer_running else 'clock' }}"></i>
-                    </button>
-                    <button class="btn btn-sm py-0 px-0 {% if t.need_help %}text-danger{% else %}text-muted{% endif %} btn-block-home" data-id="{{ t.id }}" title="{{ '解除阻塞' if t.need_help else '标记阻塞' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;">
-                        <i class="bi bi-{% if t.need_help %}play-circle{% else %}pause-circle{% endif %}"></i>
-                    </button>
-                    {% endif %}
-                    {{ pomodoro_icons(t.actual_minutes, current_user.pomodoro_minutes) }}
-                    <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" title="删除" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>
-                </div>
-                {% endfor %}
+                <div class="collapse {% if not r_all_done %}show{% endif %} todo-list-for-req" data-req-id="{{ r.id }}" id="reqTodos{{ r.id }}">
+                {% for t in r_todos %}{{ todo_row(t) }}{% endfor %}
                 </div>
             </div>
         </div>
         {% endfor %}
 
-        {# Team affairs - same style as requirement cards #}
-        <div class="card mb-2">
+        {# Team affairs - collapsible, grouped by source person #}
+        {% set team_all_done = team_todos|length > 0 and team_todos|rejectattr('status', 'equalto', 'done')|list|length == 0 %}
+        <div class="card mb-2 {% if team_all_done %}border-success border-opacity-25{% endif %}">
             <div class="card-body py-2">
                 <div class="d-flex align-items-center gap-2 mb-1">
                     <div class="d-flex align-items-center gap-1 flex-shrink-1">
+                        <i class="bi bi-chevron-{{ 'right' if team_all_done else 'down' }} text-muted" style="font-size:.6em;cursor:pointer;" role="button" data-bs-toggle="collapse" data-bs-target="#teamTodos"></i>
                         <span class="badge bg-secondary" style="font-size:.65em;">团队</span>
+                        {% if team_todos %}<span class="badge bg-{{ 'success' if team_all_done else 'secondary' }} bg-opacity-{{ '75' if team_all_done else '50' }}" style="font-size:.55em;">{{ team_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ team_todos|length }}</span>{% endif %}
                         <span class="small fw-bold text-secondary"><i class="bi bi-people"></i> 团队事务</span>
                     </div>
                     <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-grow-1 quick-todo-form">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="category" value="team">
-                        <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加团队事务 / @小组名 全组接收" required style="font-size:.8em;">
+                        <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加团队事务 / @人名 求助 / @小组名 广播" required style="font-size:.8em;">
                     </form>
                 </div>
-                <div class="todo-list-for-req" data-req-id="team">
-                {% for t in team_todos %}
-                <div class="d-flex align-items-center gap-1 mb-1 ps-2 todo-drag-item {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}" draggable="true" data-todo-id="{{ t.id }}" style="cursor:grab;">
-                    <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
+                <div class="collapse {% if not team_all_done %}show{% endif %} todo-list-for-req" data-req-id="team" id="teamTodos">
+                {# Group: help requests (from others) #}
+                {% set help_todos = team_todos|selectattr('parent_id')|list %}
+                {% set my_todos_team = team_todos|rejectattr('parent_id')|list %}
+                {% if help_todos %}
+                <div class="text-muted ps-2 mb-1" style="font-size:.65em;"><i class="bi bi-person-raised-hand"></i> 他人求助</div>
+                {% for t in help_todos %}{{ todo_row(t) }}{% endfor %}
+                {% endif %}
+                {% if help_todos and my_todos_team %}<hr class="my-1 opacity-25">{% endif %}
+                {% for t in my_todos_team %}{{ todo_row(t) }}{% endfor %}
+                </div>
+                <div class="d-flex gap-1 ps-2 mt-1 flex-wrap">
+                    {% for label in ['站会','Code Review','文档更新','知识分享'] %}
+                    <form method="POST" action="{{ url_for('main.quick_todo') }}" class="d-inline quick-todo-form">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent"><i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-secondary' }}"></i></button>
+                        <input type="hidden" name="category" value="team">
+                        <input type="hidden" name="title" value="{{ label }}">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.75em;">{{ label }}</button>
                     </form>
-                    <span class="small">{{ t.title }}</span>
-                    {{ pomodoro_icons(t.actual_minutes, current_user.pomodoro_minutes) }}
-                    <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" style="font-size:.7em;"><i class="bi bi-x"></i></button>
-                </div>
-                {% endfor %}
+                    {% endfor %}
                 </div>
             </div>
         </div>
 
-        {# Personal growth - same style #}
-        <div class="card mb-2">
+        {# Personal growth - collapsible #}
+        {% set personal_all_done = personal_todos|length > 0 and personal_todos|rejectattr('status', 'equalto', 'done')|list|length == 0 %}
+        <div class="card mb-2 {% if personal_all_done %}border-success border-opacity-25{% endif %}">
             <div class="card-body py-2">
                 <div class="d-flex align-items-center gap-2 mb-1">
                     <div class="d-flex align-items-center gap-1 flex-shrink-1">
+                        <i class="bi bi-chevron-{{ 'right' if personal_all_done else 'down' }} text-muted" style="font-size:.6em;cursor:pointer;" role="button" data-bs-toggle="collapse" data-bs-target="#personalTodos"></i>
                         <span class="badge bg-light text-dark border" style="font-size:.65em;">个人</span>
+                        {% if personal_todos %}<span class="badge bg-{{ 'success' if personal_all_done else 'secondary' }} bg-opacity-{{ '75' if personal_all_done else '50' }}" style="font-size:.55em;">{{ personal_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ personal_todos|length }}</span>{% endif %}
                         <span class="small fw-bold text-secondary"><i class="bi bi-person-hearts"></i> 个人提升</span>
                     </div>
                     <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-grow-1 quick-todo-form">
@@ -186,18 +197,8 @@
                         <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加个人事项" required style="font-size:.8em;">
                     </form>
                 </div>
-                <div class="todo-list-for-req" data-req-id="personal">
-                {% for t in personal_todos %}
-                <div class="d-flex align-items-center gap-1 mb-1 ps-2 todo-drag-item {% if t.status == 'done' %}text-muted text-decoration-line-through{% endif %}" draggable="true" data-todo-id="{{ t.id }}" style="cursor:grab;">
-                    <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent"><i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle text-secondary' }}"></i></button>
-                    </form>
-                    <span class="small">{{ t.title }}</span>
-                    {{ pomodoro_icons(t.actual_minutes, current_user.pomodoro_minutes) }}
-                    <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" style="font-size:.7em;"><i class="bi bi-x"></i></button>
-                </div>
-                {% endfor %}
+                <div class="collapse {% if not personal_all_done %}show{% endif %} todo-list-for-req" data-req-id="personal" id="personalTodos">
+                {% for t in personal_todos %}{{ todo_row(t) }}{% endfor %}
                 </div>
                 <div class="d-flex gap-1 ps-2 mt-1 flex-wrap">
                     {% for label in ['跑步','喝水','阅读','冥想','拉伸'] %}
@@ -212,37 +213,75 @@
             </div>
         </div>
 
-        <!-- Recurring todos -->
+        <!-- Recurring todos: weekly | monthly two columns -->
+        {# Macro for rendering recurring badges to avoid duplication #}
+        {% macro recurring_row(title, items) %}
+        <div class="d-flex align-items-center gap-1 mb-1 flex-wrap">
+            <span class="small {% if items|selectattr('id', 'in', recurring_status.keys())|list|length == items|length %}text-muted text-decoration-line-through{% endif %}">{{ title }}</span>
+            {% for r in items %}
+            {% set is_due = r.is_due_today() %}
+            {% set r_status = recurring_status.get(r.id) %}
+            {% set is_overdue = not is_due and r.days_since_last() is not none and r.days_since_last() > 0 %}
+            {% if r_status == 'done' and not is_overdue %}
+            {# 当天/未到期 已完成 → 绿色 #}
+            <span class="badge bg-success btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
+            {% elif r_status == 'done' and is_overdue %}
+            {# 超期后补完成 → 黄色 #}
+            <span class="badge bg-warning text-dark btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
+            {% elif is_overdue %}
+            {# 超期 未完成 → 红色 #}
+            <span class="badge bg-danger bg-opacity-75 btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
+            {% else %}
+            {# 未到期/当天到期 未完成 → 灰色 #}
+            <span class="badge bg-light text-muted border btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endmacro %}
+
+        {% set weekly_recurring = all_recurring|selectattr('cycle', 'in', ['weekly', 'weekdays'])|list %}
+        {% set monthly_recurring = all_recurring|selectattr('cycle', 'equalto', 'monthly')|list %}
         <div class="card mb-2">
             <div class="card-body py-2">
+                {% set recurring_done_count = recurring_status.keys()|list|length %}
+                {% set recurring_total_count = all_recurring|length %}
+                {% set recurring_all_done = recurring_total_count > 0 and recurring_done_count == recurring_total_count %}
                 <div class="d-flex align-items-center gap-1 mb-1">
+                    <i class="bi bi-chevron-{{ 'right' if recurring_all_done else 'down' }} text-muted" style="font-size:.6em;cursor:pointer;" role="button" data-bs-toggle="collapse" data-bs-target="#recurringSection"></i>
                     <span class="badge bg-light text-dark border" style="font-size:.65em;">周期</span>
+                    {% if all_recurring %}<span class="badge bg-{{ 'success' if recurring_all_done else 'secondary' }} bg-opacity-{{ '75' if recurring_all_done else '50' }}" style="font-size:.55em;">{{ recurring_done_count }}/{{ recurring_total_count }}</span>{% endif %}
                     <span class="small fw-bold text-secondary">周期任务</span>
                     <a href="{{ url_for('main.recurring_list') }}" class="ms-auto small text-muted">编辑</a>
                 </div>
                 {% if all_recurring %}
-                {% for title, group_items in all_recurring|groupby('title') %}
-                {% set items = group_items|list %}
-                <div class="d-flex align-items-center gap-1 mb-1 ps-2 flex-wrap">
-                    <span class="small {% if items|selectattr('id', 'in', recurring_status.keys())|list|length == items|length %}text-muted text-decoration-line-through{% endif %}">{{ title }}</span>
-                    {% for r in items %}
-                    {% set is_due = r.is_due_today() %}
-                    {% set r_status = recurring_status.get(r.id) %}
-                    {% set is_overdue = not is_due and r.days_since_last() is not none and r.days_since_last() > 0 %}
-                    {% if r_status == 'done' and (is_due or not is_overdue) %}
-                    <span class="badge bg-success btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
-                    {% elif r_status == 'done' and is_overdue %}
-                    <span class="badge bg-warning text-dark btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
-                    {% elif is_due %}
-                    <span class="badge bg-primary btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
-                    {% elif is_overdue %}
-                    <span class="badge bg-danger bg-opacity-75 btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
-                    {% else %}
-                    <span class="badge bg-light text-muted border btn-click-recurring" data-rid="{{ r.id }}" style="font-size:.55em;cursor:pointer;">{{ r.schedule_desc }}</span>
-                    {% endif %}
-                    {% endfor %}
+                <div class="collapse {% if not recurring_all_done %}show{% endif %} row gx-3" id="recurringSection">
+                    <div class="col-6">
+                        {% set week_start = today - timedelta(days=today.weekday()) %}
+                        {% set week_end = week_start + timedelta(days=6) %}
+                        <div class="small text-muted fw-bold mb-1" style="font-size:.7em;">
+                            <i class="bi bi-calendar-week"></i> 周任务 <span class="fw-normal">{{ week_start.strftime('%m/%d') }}-{{ week_end.strftime('%m/%d') }}</span>
+                        </div>
+                        {% if weekly_recurring %}
+                        {% for title, group_items in weekly_recurring|groupby('title') %}
+                        {{ recurring_row(title, group_items|list) }}
+                        {% endfor %}
+                        {% else %}
+                        <div class="text-muted" style="font-size:.7em;">暂无</div>
+                        {% endif %}
+                    </div>
+                    <div class="col-6">
+                        <div class="small text-muted fw-bold mb-1" style="font-size:.7em;">
+                            <i class="bi bi-calendar-month"></i> 月任务 <span class="fw-normal">{{ today.strftime('%Y/%m') }}</span>
+                        </div>
+                        {% if monthly_recurring %}
+                        {% for title, group_items in monthly_recurring|groupby('title') %}
+                        {{ recurring_row(title, group_items|list) }}
+                        {% endfor %}
+                        {% else %}
+                        <div class="text-muted" style="font-size:.7em;">暂无</div>
+                        {% endif %}
+                    </div>
                 </div>
-                {% endfor %}
                 {% else %}
                 <div class="text-muted small ps-2"><a href="{{ url_for('main.recurring_list') }}">添加周期任务</a></div>
                 {% endif %}
@@ -264,7 +303,7 @@
         <!-- Contribution Heatmap -->
         <div class="card mb-3 border-0 shadow-sm">
             <div class="card-header py-2 bg-white small" role="button" data-bs-toggle="collapse" data-bs-target="#heatmapBody" style="cursor:pointer;">
-                <i class="bi bi-calendar-check"></i> 完成热力图 <span class="text-muted">近90天</span> <i class="bi bi-chevron-down float-end mt-1" style="font-size:.7em;"></i>
+                <i class="bi bi-chevron-down text-muted me-1" style="font-size:.6em;"></i><i class="bi bi-calendar-check"></i> 完成热力图 <span class="text-muted">近90天</span>
             </div>
             <div class="collapse show" id="heatmapBody">
             <div class="card-body py-2 px-3">
@@ -292,7 +331,7 @@
         <!-- My Risks -->
         <div class="card mb-3 border-0 shadow-sm">
             <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#riskBody" style="cursor:pointer;">
-                <i class="bi bi-exclamation-triangle text-danger"></i> 我的风险 <span class="badge bg-{{ 'danger' if my_risks else 'secondary' }}">{{ my_risks | length }}</span> <i class="bi bi-chevron-down float-end mt-1" style="font-size:.7em;"></i>
+                <i class="bi bi-chevron-down text-muted me-1" style="font-size:.6em;"></i><i class="bi bi-exclamation-triangle text-danger"></i> 我的风险 <span class="badge bg-{{ 'danger' if my_risks else 'secondary' }}">{{ my_risks | length }}</span>
             </div>
             <div class="collapse show" id="riskBody">
             <div class="card-body py-2">
@@ -315,7 +354,7 @@
         <!-- Incentive Stars -->
         <div class="card mb-3 border-0 shadow-sm">
             <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#incentiveBody" style="cursor:pointer;">
-                <i class="bi bi-star-fill text-warning"></i> 激励之星 <span class="badge bg-secondary">{{ approved_incentives | length }}</span> <i class="bi bi-chevron-down float-end mt-1" style="font-size:.7em;"></i>
+                <i class="bi bi-chevron-right text-muted me-1" style="font-size:.6em;"></i><i class="bi bi-star-fill text-warning"></i> 激励之星 <span class="badge bg-secondary">{{ approved_incentives | length }}</span>
             </div>
             <div class="collapse" id="incentiveBody">
             <div class="card-body py-2">
@@ -356,7 +395,7 @@
         <!-- AI Usage Ranking -->
         <div class="card mb-3 border-0 shadow-sm">
             <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#aiRankBody" style="cursor:pointer;">
-                <i class="bi bi-robot"></i> AI 使用排行 <span class="badge bg-secondary">{{ ai_ranking | length }}</span> <i class="bi bi-chevron-down float-end mt-1" style="font-size:.7em;"></i>
+                <i class="bi bi-chevron-right text-muted me-1" style="font-size:.6em;"></i><i class="bi bi-robot"></i> AI 使用排行 <span class="badge bg-secondary">{{ ai_ranking | length }}</span>
             </div>
             <div class="collapse" id="aiRankBody">
             <div class="card-body py-2 px-3">
@@ -386,7 +425,7 @@
         <!-- Graffiti board -->
         <div class="card mb-3 border-0 shadow-sm">
             <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#rantBody" style="cursor:pointer;">
-                <i class="bi bi-chat-dots"></i> 涂鸦板 <span class="text-muted small">完全匿名</span> <i class="bi bi-chevron-down float-end mt-1" style="font-size:.7em;"></i>
+                <i class="bi bi-chevron-down text-muted me-1" style="font-size:.6em;"></i><i class="bi bi-chat-dots"></i> 涂鸦板 <span class="text-muted small">完全匿名</span>
             </div>
             <div class="collapse show" id="rantBody">
             <div class="card-body py-2">
@@ -421,43 +460,73 @@
 </div>
 
 <!-- Block Reason Modal -->
-<div class="modal fade" id="blockModal" tabindex="-1">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
-            <div class="modal-header py-2"><h6 class="modal-title">标记阻塞</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-            <div class="modal-body">
-                <input type="hidden" id="blockTodoId">
-                <input type="text" id="blockReason" class="form-control form-control-sm" placeholder="阻塞原因（可选），@姓名 求助">
-            </div>
-            <div class="modal-footer py-1"><button type="button" class="btn btn-sm btn-danger" id="blockConfirm">确认阻塞</button></div>
-        </div>
-    </div>
-</div>
+{{ block_popover_html() }}
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Unified recurring click: adopt+done if not adopted, toggle if adopted
+// Sync chevron icon on all Bootstrap collapse toggles
+document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function(trigger) {
+    var target = document.querySelector(trigger.dataset.bsTarget);
+    if (!target) return;
+    var chevron = trigger.querySelector('.bi-chevron-down, .bi-chevron-right')
+        || (trigger.classList.contains('bi-chevron-down') || trigger.classList.contains('bi-chevron-right') ? trigger : null);
+    if (!chevron) return;
+    target.addEventListener('show.bs.collapse', function() {
+        chevron.classList.remove('bi-chevron-right');
+        chevron.classList.add('bi-chevron-down');
+    });
+    target.addEventListener('hide.bs.collapse', function() {
+        chevron.classList.remove('bi-chevron-down');
+        chevron.classList.add('bi-chevron-right');
+    });
+});
+
+// Recurring click: toggle completion directly, update badge without reload
 var _recurringBusy = false;
 function recurringClick(rid, el) {
     if (_recurringBusy) return;
     _recurringBusy = true;
-    // Immediate visual feedback
     if (el) { el.style.opacity = '0.5'; el.style.pointerEvents = 'none'; }
+    // Save original classes before toggle
+    if (!el.dataset.origClass) {
+        el.dataset.origClass = el.className;
+    }
     fetch('/recurring-todos/' + rid + '/toggle', {method: 'POST'})
     .then(function(r) { return r.json(); })
     .then(function(d) {
-        if (d.ok) { window.location.reload(); return; }
-        // Not adopted yet → adopt + auto done
-        return fetch('/recurring-todos/' + rid + '/adopt', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({done: true})
-        }).then(function() { window.location.reload(); });
+        _recurringBusy = false;
+        if (!el) return;
+        el.style.opacity = '1'; el.style.pointerEvents = '';
+        if (d.done) {
+            // Check if was overdue (red) → yellow for late completion, otherwise green
+            var wasOverdue = el.dataset.origClass && el.dataset.origClass.indexOf('bg-danger') >= 0;
+            el.classList.remove('bg-warning', 'bg-primary', 'bg-danger', 'bg-light', 'bg-info',
+                'bg-opacity-75', 'text-muted', 'text-dark', 'border', 'ai-highlight');
+            if (wasOverdue) {
+                el.classList.add('bg-warning', 'text-dark');
+            } else {
+                el.classList.add('bg-success', 'text-white');
+            }
+        } else {
+            // Revert to original appearance
+            el.className = el.dataset.origClass;
+        }
+        // Update strikethrough on title row
+        var row = el.closest('.d-flex');
+        if (row) {
+            var badges = row.querySelectorAll('.btn-click-recurring');
+            var allDone = Array.from(badges).every(function(b) { return b.classList.contains('bg-success'); });
+            var titleEl = row.querySelector('span.small');
+            if (titleEl) {
+                if (allDone) { titleEl.classList.add('text-muted', 'text-decoration-line-through'); }
+                else { titleEl.classList.remove('text-muted', 'text-decoration-line-through'); }
+            }
+        }
     })
-    .catch(function() { window.location.reload(); });
+    .catch(function() { _recurringBusy = false; if (el) { el.style.opacity = '1'; el.style.pointerEvents = ''; } });
 }
-document.querySelectorAll('.btn-adopt-recurring, .btn-click-recurring, .btn-toggle-recurring').forEach(function(el) {
+document.querySelectorAll('.btn-click-recurring').forEach(function(el) {
     el.addEventListener('click', function(e) { e.stopPropagation(); recurringClick(el.dataset.rid, el); });
 });
 // Recurring todo delete
@@ -468,27 +537,30 @@ document.querySelectorAll('.btn-del-recurring').forEach(function(btn) {
         .then(function() { location.reload(); });
     });
 });
-// AI import recurring
-function aiImportRecurring() {
-    var btn = event.target.closest('button');
+
+// AI Recommend
+// Daily progress
+document.getElementById('btnDailyProgress').addEventListener('click', function() {
+    var btn = this;
     btn.disabled = true;
-    btn.textContent = '导入中...';
-    apiPost('{{ url_for("main.recurring_ai_recommend") }}', {}).then(function(d) {
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 生成中...';
+    apiPost('{{ url_for("main.daily_progress") }}', {}).then(function(d) {
         btn.disabled = false;
-        btn.textContent = 'AI 导入';
-        if (!d || !d.ok) { showToast(d && d.raw ? d.raw : (d && d.msg ? d.msg : '失败'), 'danger'); return; }
-        if (!d.items || !d.items.length) { showToast('今天没有需要导入的周期任务', 'info'); return; }
-        // Auto import all recommended
-        var count = 0;
-        var promises = d.items.map(function(item) {
-            return apiPost('{{ url_for("main.recurring_adopt_ai") }}', {title: item.title, category: item.category || 'team'})
-                .then(function(r) { if (r && r.ok) count++; });
-        });
-        Promise.all(promises).then(function() {
-            showToast('已导入 ' + count + ' 个周期任务', 'success');
-            setTimeout(function() { location.reload(); }, 500);
-        });
-    }).catch(function() { btn.disabled = false; btn.textContent = 'AI 导入'; });
+        btn.innerHTML = '<i class="bi bi-journal-text"></i> 每日进展';
+        if (d && d.ok) {
+            document.getElementById('dailyProgressText').textContent = d.text;
+            document.getElementById('dailyProgressPanel').classList.remove('d-none');
+        } else {
+            showToast('生成失败', 'danger');
+        }
+    }).catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-journal-text"></i> 每日进展';
+    });
+});
+function copyProgress() {
+    var text = document.getElementById('dailyProgressText').textContent;
+    navigator.clipboard.writeText(text).then(function() { showToast('已复制', 'success'); });
 }
 
 // AI Recommend
@@ -513,52 +585,49 @@ if (_aiBtn) _aiBtn.addEventListener('click', function() {
                     + '<span class="small flex-grow-1">'
                     + (t.req_number ? '<span class="text-muted">' + t.req_number + '</span> ' : '')
                     + t.title
-
                     + (t.reason ? ' <span class="text-muted" style="font-size:.75em;">(' + t.reason + ')</span>' : '')
                     + '</span>'
-                    + '<button class="btn btn-sm py-0 px-1 btn-success ai-adopt" data-title="' + t.title.replace(/"/g, '&quot;') + '" data-reason="' + (t.reason || '').replace(/"/g, '&quot;') + '" data-req-id="' + (t.req_id || 0) + '"' + (t.recurring_ids ? ' data-recurring-ids="' + t.recurring_ids.join(',') + '"' : '') + ' title="采纳">采纳</button>'
+                    + '<button class="btn btn-sm py-0 px-1 btn-success ai-adopt" data-title="' + t.title.replace(/"/g, '&quot;') + '" data-reason="' + (t.reason || '').replace(/"/g, '&quot;') + '" data-req-id="' + (t.req_id || 0) + '" title="采纳">采纳</button>'
                     + '<button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="this.closest(\'.ai-rec-item\').remove()" title="忽略"><i class="bi bi-x"></i></button>'
                     + '</div>';
             });
             list.innerHTML = html;
             area.classList.remove('d-none');
-            // Bind adopt: create todo and insert into requirement section
+            // Bind adopt: create daily todo
             list.querySelectorAll('.ai-adopt').forEach(function(ab) {
                 ab.addEventListener('click', function() {
-                    var rids = ab.dataset.recurringIds;
-                    if (rids) {
-                        // Recurring task — adopt all related recurring IDs
-                        var ids = rids.split(',');
-                        var promises = ids.map(function(rid) {
-                            return fetch('/recurring-todos/' + rid + '/adopt', {
-                                method: 'POST', headers: {'Content-Type': 'application/json'},
-                                body: JSON.stringify({done: true})
-                            });
-                        });
-                        Promise.all(promises).then(function() {
+                    var reason = ab.dataset.reason || '';
+                    var fullTitle = reason ? ab.dataset.title + '（' + reason + '）' : ab.dataset.title;
+                    var data = {title: fullTitle, category: 'work'};
+                    var reqId = parseInt(ab.dataset.reqId);
+                    if (reqId) data.req_id = reqId;
+                    apiPost('{{ url_for("main.quick_todo") }}', data).then(function(r) {
+                        if (r && r.ok) {
                             ab.closest('.ai-rec-item').remove();
-                            showToast(ab.dataset.title + ' 已完成', 'success');
-                            location.reload();
-                        });
-                    } else {
-                        // Normal requirement todo
-                        var reason = ab.dataset.reason || '';
-                        var fullTitle = reason ? ab.dataset.title + '（' + reason + '）' : ab.dataset.title;
-                        var data = {title: fullTitle, category: 'work'};
-                        var reqId = parseInt(ab.dataset.reqId);
-                        if (reqId) data.req_id = reqId;
-                        apiPost('{{ url_for("main.quick_todo") }}', data).then(function(r) {
-                            if (r && r.ok) {
-                                ab.closest('.ai-rec-item').remove();
-                                var listEl = document.querySelector('.todo-list-for-req[data-req-id="' + reqId + '"]');
-                                if (listEl) listEl.appendChild(createTodoRow(r.todo_id, fullTitle, {source: 'ai'}));
-                                showToast(ab.dataset.title + ' 已采纳', 'success');
-                            }
-                        });
-                    }
+                            var listEl = document.querySelector('.todo-list-for-req[data-req-id="' + reqId + '"]');
+                            if (listEl) listEl.appendChild(createTodoRow(r.todo_id, fullTitle, {source: 'ai'}));
+                            _todoTotal++; _updateProgress();
+                            showToast(ab.dataset.title + ' 已采纳', 'success');
+                        }
+                    });
                 });
             });
-            // Store for batch adopt
+            // Highlight recurring badges that AI recommends — blue ring + scale up
+            if (d.recurring_highlight_ids && d.recurring_highlight_ids.length) {
+                var highlighted = 0;
+                d.recurring_highlight_ids.forEach(function(rid) {
+                    var badge = document.querySelector('.btn-click-recurring[data-rid="' + rid + '"]');
+                    if (badge && !badge.classList.contains('bg-success')) {
+                        badge.classList.remove('bg-primary', 'bg-light', 'bg-danger', 'text-muted', 'border');
+                        badge.classList.add('bg-info', 'text-white', 'ai-highlight');
+                        badge.title = 'AI 推荐完成';
+                        highlighted++;
+                        // Scroll first highlighted badge into view
+                        if (highlighted === 1) badge.scrollIntoView({behavior: 'smooth', block: 'center'});
+                    }
+                });
+                if (highlighted > 0) showToast('AI 推荐了 ' + highlighted + ' 个周期任务，已高亮标记', 'info');
+            }
             window._aiRecommendedTodos = d.todos;
         } else {
             showToast('暂无推荐', 'info');
@@ -586,6 +655,7 @@ document.getElementById('btnAdoptAll').addEventListener('click', function() {
                 if (listEl) listEl.appendChild(createTodoRow(item.todo_id, item.title, {source: 'ai'}));
             });
             document.getElementById('aiRecommendArea').classList.add('d-none');
+            _todoTotal += (d.count || 0); _updateProgress();
             showToast('已采纳 ' + d.count + ' 条推荐', 'success');
         }
         btn.disabled = false;
@@ -717,11 +787,32 @@ function createTodoRow(todoId, title, opts) {
     var badge = '';
     if (opts.source === 'ai') badge += ' <span class="badge bg-info" style="font-size:.55em;">AI</span>';
     if (opts.helper) badge += ' <span class="badge bg-warning text-dark" style="font-size:.6em;">@' + opts.helper + '</span>';
-    row.innerHTML = '<i class="bi bi-circle text-secondary"></i>'
+    row.innerHTML = '<i class="bi bi-circle text-secondary btn-toggle-r" style="cursor:pointer;"></i>'
         + ' <span class="small">' + title + '</span>' + badge
         + ' <button class="btn btn-sm py-0 px-0 btn-outline-secondary btn-timer-r" data-id="' + todoId + '" style="font-size:.7em;line-height:1;" title="启动番茄钟"><i class="bi bi-clock"></i></button>'
         + ' <button class="btn btn-sm py-0 px-0 text-muted btn-block-r" data-id="' + todoId + '" style="font-size:.7em;line-height:1;" title="标记阻塞"><i class="bi bi-pause-circle"></i></button>'
         + ' <button class="btn btn-sm py-0 px-0 text-muted btn-del-r" data-id="' + todoId + '" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>';
+    // Bind toggle done
+    row.querySelector('.btn-toggle-r').addEventListener('click', function() {
+        var icon = this;
+        apiPost('/todo/' + todoId + '/toggle', {}).then(function(d) {
+            if (d && d.ok) {
+                if (d.done) {
+                    row.classList.add('text-muted', 'text-decoration-line-through');
+                    icon.className = 'bi bi-check-circle-fill text-success btn-toggle-r';
+                    icon.style.cursor = 'pointer';
+                    _todoDone++;
+                } else {
+                    row.classList.remove('text-muted', 'text-decoration-line-through');
+                    icon.className = 'bi bi-circle text-secondary btn-toggle-r';
+                    icon.style.cursor = 'pointer';
+                    _todoDone--;
+                }
+                _updateProgress();
+                _checkSectionDone(row);
+            }
+        });
+    });
     // Bind timer
     row.querySelector('.btn-timer-r').addEventListener('click', function() {
         var b = this;
@@ -735,9 +826,7 @@ function createTodoRow(todoId, title, opts) {
     });
     // Bind blocker
     row.querySelector('.btn-block-r').addEventListener('click', function() {
-        document.getElementById('blockTodoId').value = todoId;
-        document.getElementById('blockReason').value = '';
-        _blockModal.show();
+        showBlockPopover(this, todoId);
     });
     // Bind delete
     row.querySelector('.btn-del-r').addEventListener('click', function() {
@@ -746,26 +835,59 @@ function createTodoRow(todoId, title, opts) {
     return row;
 }
 
-// Toggle todo (AJAX)
-document.querySelectorAll('form[action*="/todo/"][action*="/toggle"]').forEach(function(form) {
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        var todoId = form.action.match(/\/todo\/(\d+)\/toggle/)[1];
-        apiPost('/todo/' + todoId + '/toggle', {}).then(function(d) {
-            if (d && d.ok) {
-                var row = form.closest('.d-flex');
-                var icon = form.querySelector('i');
-                if (d.done) {
-                    row.classList.add('text-muted', 'text-decoration-line-through');
-                    icon.className = 'bi bi-check-circle-fill text-success';
-                } else {
-                    row.classList.remove('text-muted', 'text-decoration-line-through');
-                    icon.className = 'bi bi-circle text-secondary';
-                }
-            }
-        });
+// Check if a section is all-done after toggle, auto-collapse/expand
+function _checkSectionDone(row) {
+    var container = row.closest('.todo-list-for-req');
+    if (!container) return;
+    var items = container.querySelectorAll('.todo-drag-item');
+    if (!items.length) return;
+    var allDone = Array.from(items).every(function(el) { return el.classList.contains('text-decoration-line-through'); });
+    var card = container.closest('.card');
+    var collapseId = container.id;
+    var chevron = card ? card.querySelector('[data-bs-target="#' + collapseId + '"]') : null;
+    // Update card border
+    if (card) {
+        if (allDone) { card.classList.add('border-success', 'border-opacity-25'); card.classList.remove('border-danger'); }
+        else { card.classList.remove('border-success', 'border-opacity-25'); }
+    }
+    // Auto-collapse when all done, auto-expand when undone
+    var bsCollapse = bootstrap.Collapse.getInstance(container) || new bootstrap.Collapse(container, {toggle: false});
+    if (allDone) { bsCollapse.hide(); }
+    else { bsCollapse.show(); }
+    // Update section progress badge
+    var doneCount = Array.from(items).filter(function(el) { return el.classList.contains('text-decoration-line-through'); }).length;
+    var sectionBadges = card ? card.querySelectorAll('.badge') : [];
+    sectionBadges.forEach(function(b) {
+        if (b.textContent.match(/^\d+\/\d+$/)) {
+            b.textContent = doneCount + '/' + items.length;
+            b.className = 'badge bg-' + (allDone ? 'success' : 'secondary') + ' bg-opacity-' + (allDone ? '75' : '50');
+            b.style.fontSize = '.55em';
+        }
     });
-});
+}
+
+// Homepage progress bar
+var _todoDone = {{ todo_done }}, _todoTotal = {{ todo_total }};
+function _updateProgress() {
+    var badge = document.getElementById('todayProgressBadge');
+    var bar = document.getElementById('todayProgressBar');
+    if (badge) badge.textContent = _todoDone + '/' + _todoTotal;
+    var pct = _todoTotal ? (_todoDone / _todoTotal * 100) : 0;
+    if (bar) bar.style.width = pct + '%';
+    var barColor = pct >= 100 ? '#198754' : pct >= 66 ? '#5cb85c' : pct >= 33 ? '#f0ad4e' : '#dc3545';
+    var badgeColor = pct >= 100 ? 'success' : pct >= 66 ? 'success' : pct >= 33 ? 'warning' : 'danger';
+    if (badge) {
+        badge.className = 'badge bg-' + badgeColor + (pct >= 100 ? '' : ' bg-opacity-75');
+        badge.style.fontSize = '1em';
+    }
+    if (bar) bar.style.background = barColor;
+    // Update page title
+    var remaining = _todoTotal - _todoDone;
+    document.title = (remaining > 0 ? '(' + remaining + ') ' : '') + '首页 - 研发协作平台';
+}
+
+// Shared todo row JS (toggle, delete, timer, block)
+{{ todo_row_js() }}
 
 // Timer + Focus Mode (Pomodoro countdown)
 var POMODORO_MIN = {{ current_user.pomodoro_minutes or 45 }};
@@ -870,38 +992,23 @@ document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
     });
 });
 
-// Block toggle (homepage)
-var _blockModal = new bootstrap.Modal(document.getElementById('blockModal'));
-document.getElementById('blockConfirm').addEventListener('click', function() {
-    var tid = document.getElementById('blockTodoId').value;
-    var reason = document.getElementById('blockReason').value.trim();
-    apiPost('/todos/' + tid + '/block', {reason: reason}).then(function(d) {
-        _blockModal.hide();
-        if (d && d.ok) location.reload();
-    });
+// Auto-scroll while dragging near page edges
+var _dragScrollTimer = null;
+document.addEventListener('dragover', function(e) {
+    if (!window._isDragging) return;
+    var edge = 60;
+    var speed = 8;
+    if (e.clientY < edge) {
+        if (!_dragScrollTimer) _dragScrollTimer = setInterval(function() { window.scrollBy(0, -speed); }, 16);
+    } else if (e.clientY > window.innerHeight - edge) {
+        if (!_dragScrollTimer) _dragScrollTimer = setInterval(function() { window.scrollBy(0, speed); }, 16);
+    } else if (_dragScrollTimer) {
+        clearInterval(_dragScrollTimer);
+        _dragScrollTimer = null;
+    }
 });
-document.querySelectorAll('.btn-block-home').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-        var isBlocked = btn.querySelector('i').classList.contains('bi-unlock');
-        if (isBlocked) {
-            apiPost('/todos/' + btn.dataset.id + '/block', {}).then(function(d) {
-                if (d && d.ok) location.reload();
-            });
-        } else {
-            document.getElementById('blockTodoId').value = btn.dataset.id;
-            document.getElementById('blockReason').value = '';
-            _blockModal.show();
-        }
-    });
-});
-
-// Delete todo
-document.querySelectorAll('.btn-delete-home').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-        apiPost('/todos/' + btn.dataset.id + '/edit', {title: ''}).then(function(d) {
-            if (d && d.ok) btn.closest('.d-flex').remove();
-        });
-    });
+document.addEventListener('dragend', function() {
+    if (_dragScrollTimer) { clearInterval(_dragScrollTimer); _dragScrollTimer = null; }
 });
 
 // Init Bootstrap tooltips
@@ -911,18 +1018,37 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
 
 // Drag-sort todos (supports cross-container move)
 (function() {
-    var dragEl = null;
+    window._isDragging = false;
+    var dragEl = null, _dragCollapsed = [];
     document.querySelectorAll('.todo-drag-item').forEach(function(el) {
         el.addEventListener('dragstart', function(e) {
             dragEl = el;
+            window._isDragging = true;
+            el._sourceContainer = el.closest('.todo-list-for-req');
             el.style.opacity = '0.4';
             e.dataTransfer.effectAllowed = 'move';
+            // Expand all collapsed sections so user can drop into them
+            _dragCollapsed = [];
+            document.querySelectorAll('.todo-list-for-req.collapse:not(.show)').forEach(function(c) {
+                _dragCollapsed.push(c);
+                var bs = bootstrap.Collapse.getInstance(c) || new bootstrap.Collapse(c, {toggle: false});
+                bs.show();
+            });
         });
         el.addEventListener('dragend', function() {
             el.style.opacity = '';
             dragEl = null;
+            window._isDragging = false;
             document.querySelectorAll('.todo-drag-item').forEach(function(e) { e.style.borderTop = ''; e.style.borderBottom = ''; });
             document.querySelectorAll('.todo-list-for-req').forEach(function(c) { c.style.outline = ''; });
+            // Re-collapse sections that were collapsed before drag
+            if (_dragCollapsed) {
+                _dragCollapsed.forEach(function(c) {
+                    var bs = bootstrap.Collapse.getInstance(c);
+                    if (bs) bs.hide();
+                });
+                _dragCollapsed = [];
+            }
         });
         el.addEventListener('dragover', function(e) {
             e.preventDefault();
@@ -938,22 +1064,23 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
         el.addEventListener('dragleave', function() { el.style.borderTop = ''; el.style.borderBottom = ''; });
         el.addEventListener('drop', function(e) {
             e.preventDefault();
+            e.stopPropagation();  // Prevent container drop from firing
             el.style.borderTop = ''; el.style.borderBottom = '';
             if (!dragEl || dragEl === el) return;
             var targetContainer = el.closest('.todo-list-for-req');
-            var sourceContainer = dragEl.closest('.todo-list-for-req');
+            var sourceContainer = dragEl._sourceContainer;
             var rect = el.getBoundingClientRect();
             if (e.clientY < rect.top + rect.height / 2) {
                 el.parentElement.insertBefore(dragEl, el);
             } else {
                 el.parentElement.insertBefore(dragEl, el.nextSibling);
             }
-            // Same container: reorder
+            // Save reorder
             var ids = [];
-            el.parentElement.querySelectorAll('.todo-drag-item').forEach(function(item) { ids.push(parseInt(item.dataset.todoId)); });
+            targetContainer.querySelectorAll('.todo-drag-item').forEach(function(item) { ids.push(parseInt(item.dataset.todoId)); });
             apiPost('/todos/drag', {order: ids});
             // Cross container: move todo to new requirement
-            if (targetContainer && sourceContainer !== targetContainer) {
+            if (sourceContainer && sourceContainer !== targetContainer) {
                 var reqId = targetContainer.dataset.reqId;
                 var todoId = parseInt(dragEl.dataset.todoId);
                 var targetReqId = isNaN(parseInt(reqId)) ? reqId : parseInt(reqId);
@@ -961,7 +1088,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
             }
         });
     });
-    // Also allow drop on empty containers
+    // Also allow drop on containers (empty or to insert at top/bottom)
     document.querySelectorAll('.todo-list-for-req').forEach(function(container) {
         container.addEventListener('dragover', function(e) { e.preventDefault(); if (dragEl) container.style.outline = '2px dashed #0d6efd'; });
         container.addEventListener('dragleave', function() { container.style.outline = ''; });
@@ -969,11 +1096,25 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
             e.preventDefault();
             container.style.outline = '';
             if (!dragEl) return;
-            container.appendChild(dragEl);
-            var reqId = container.dataset.reqId;
-            var todoId = parseInt(dragEl.dataset.todoId);
-            var targetReqId = isNaN(parseInt(reqId)) ? reqId : parseInt(reqId);
-            apiPost('{{ url_for("main.move_todo") }}', {todo_id: todoId, req_id: targetReqId});
+            // Insert at top if dropped above first item, otherwise append
+            var firstItem = container.querySelector('.todo-drag-item');
+            if (firstItem && e.clientY < firstItem.getBoundingClientRect().top + firstItem.getBoundingClientRect().height / 2) {
+                container.insertBefore(dragEl, firstItem);
+            } else {
+                container.appendChild(dragEl);
+            }
+            // Save order
+            var ids = [];
+            container.querySelectorAll('.todo-drag-item').forEach(function(item) { ids.push(parseInt(item.dataset.todoId)); });
+            apiPost('/todos/drag', {order: ids});
+            // Cross container: move todo
+            var sourceContainer = dragEl._sourceContainer;
+            if (sourceContainer && sourceContainer !== container) {
+                var reqId = container.dataset.reqId;
+                var todoId = parseInt(dragEl.dataset.todoId);
+                var targetReqId = isNaN(parseInt(reqId)) ? reqId : parseInt(reqId);
+                apiPost('{{ url_for("main.move_todo") }}', {todo_id: todoId, req_id: targetReqId});
+            }
         });
     });
 })();
@@ -1011,6 +1152,7 @@ document.querySelectorAll('form[action$="/quick-todo"]').forEach(function(form) 
                     form.closest('.card-body').querySelector('.todo-list-for-req').appendChild(row);
                 }
                 if (titleInput.type === 'text') titleInput.value = '';
+                _todoTotal++; _updateProgress();
                 showToast(d.helper ? '已向 ' + d.helper + ' 发起求助' : title + ' 已添加', 'success');
             } else {
                 form.submit();

@@ -44,8 +44,8 @@ for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (
 )
 set LOCAL_IP=%LOCAL_IP: =%
 
-REM Read port from config
-for /f "tokens=2 delims=: " %%p in ('findstr /c:"port:" config.yml') do set PORT=%%p
+REM Read port from config (match exactly "  port:" to avoid ssh_local_port etc.)
+for /f "tokens=2 delims=: " %%p in ('findstr /r /c:"^  port:" config.yml') do set PORT=%%p
 if "%PORT%"=="" set PORT=5001
 
 echo.

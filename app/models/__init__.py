@@ -13,3 +13,4 @@ from app.models.project_member import ProjectMember  # noqa: F401
 from app.models.knowledge import Knowledge, PermissionRequest  # noqa: F401
 from app.models.emotion import EmotionRecord, EmotionComment  # noqa: F401
 from app.models.recurring_todo import RecurringTodo  # noqa: F401
+from app.models.recurring_completion import RecurringCompletion  # noqa: F401

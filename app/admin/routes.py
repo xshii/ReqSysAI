@@ -219,7 +219,6 @@ def _do_csv_import(text, require_group=False):
 
         # Parse roles
         role_names = [r.strip() for r in role_str.replace(',', ';').split(';') if r.strip()]
-        role_names = [r for r in role_names if r not in hidden]
         roles = Role.query.filter(Role.name.in_(role_names)).all() if role_names else []
         if role_names and len(roles) != len(role_names):
             found = {r.name for r in roles}
@@ -237,8 +236,9 @@ def _do_csv_import(text, require_group=False):
             user.name = name
             user.pinyin = to_pinyin(name)
             user.group = group
-            kept = [r for r in user.roles if r.name in hidden]
-            user.roles = kept + (roles if roles else [r for r in user.roles if r.name not in hidden])
+            if roles:
+                user.roles = roles
+            # If no roles in CSV, keep existing roles unchanged
             updated += 1
         else:
             user = User(

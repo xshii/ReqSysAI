@@ -183,53 +183,12 @@ class TestRecurringRoutes:
             periods = sorted(r.monthly_days for r in items)
             assert periods == ['end', 'start']
 
-    def test_adopt_creates_todo(self, client, app):
+    def test_toggle_creates_completion(self, client, app):
+        """点击 toggle 创建 RecurringCompletion 记录"""
         with app.app_context():
             from app.models.recurring_todo import RecurringTodo
-            r = RecurringTodo(user_id=1, title='adopt测试', cycle='weekly')
-            _db.session.add(r)
-            _db.session.commit()
-            rid = r.id
-
-        resp = client.post(f'/recurring-todos/{rid}/adopt',
-                           json={'done': True})
-        assert resp.status_code == 200
-        data = resp.get_json()
-        assert data['ok'] is True
-        with app.app_context():
-            from app.models.todo import Todo
-            t = Todo.query.filter_by(recurring_id=rid).first()
-            assert t is not None
-            assert t.status == 'done'
-            assert t.done_date == date.today()
-
-    def test_adopt_without_done(self, client, app):
-        with app.app_context():
-            from app.models.recurring_todo import RecurringTodo
-            r = RecurringTodo(user_id=1, title='adopt不完成', cycle='weekly')
-            _db.session.add(r)
-            _db.session.commit()
-            rid = r.id
-
-        resp = client.post(f'/recurring-todos/{rid}/adopt', json={})
-        data = resp.get_json()
-        assert data['ok'] is True
-        with app.app_context():
-            from app.models.todo import Todo
-            t = Todo.query.filter_by(recurring_id=rid).first()
-            assert t.status == 'todo'
-
-    def test_toggle(self, client, app):
-        with app.app_context():
-            from app.models.recurring_todo import RecurringTodo
-            from app.models.todo import Todo, TodoItem
             r = RecurringTodo(user_id=1, title='toggle测试', cycle='weekly')
             _db.session.add(r)
-            _db.session.flush()
-            t = Todo(user_id=1, title='toggle测试', recurring_id=r.id,
-                     created_date=date.today(), status='todo')
-            t.items.append(TodoItem(title='toggle测试', sort_order=0))
-            _db.session.add(t)
             _db.session.commit()
             rid = r.id
 
@@ -239,67 +198,78 @@ class TestRecurringRoutes:
         assert data['ok'] is True
         assert data['done'] is True
 
-        # Toggle back to todo
+        # Verify completion record created
+        with app.app_context():
+            from app.models.recurring_completion import RecurringCompletion
+            c = RecurringCompletion.query.filter_by(
+                recurring_id=rid, completed_date=date.today()).first()
+            assert c is not None
+
+        # Toggle back (undo)
         resp = client.post(f'/recurring-todos/{rid}/toggle')
         data = resp.get_json()
         assert data['ok'] is True
         assert data['done'] is False
 
-    def test_delete_unlinks_todos(self, client, app):
+        # Verify completion record removed
+        with app.app_context():
+            from app.models.recurring_completion import RecurringCompletion
+            c = RecurringCompletion.query.filter_by(
+                recurring_id=rid, completed_date=date.today()).first()
+            assert c is None
+
+    def test_delete_cleans_completions(self, client, app):
+        """删除周期任务时清理完成记录"""
         with app.app_context():
             from app.models.recurring_todo import RecurringTodo
-            from app.models.todo import Todo, TodoItem
+            from app.models.recurring_completion import RecurringCompletion
             r = RecurringTodo(user_id=1, title='delete测试', cycle='weekly')
             _db.session.add(r)
             _db.session.flush()
-            t = Todo(user_id=1, title='delete测试', recurring_id=r.id,
-                     created_date=date.today())
-            t.items.append(TodoItem(title='delete测试', sort_order=0))
-            _db.session.add(t)
+            c = RecurringCompletion(recurring_id=r.id, user_id=1, completed_date=date.today())
+            _db.session.add(c)
             _db.session.commit()
             rid = r.id
-            tid = t.id
 
         resp = client.post(f'/recurring-todos/{rid}/delete',
                            headers={'X-Requested-With': 'XMLHttpRequest'})
         assert resp.status_code == 200
         with app.app_context():
-            from app.models.todo import Todo
             from app.models.recurring_todo import RecurringTodo
+            from app.models.recurring_completion import RecurringCompletion
             assert RecurringTodo.query.get(rid) is None
-            t = _db.session.get(Todo, tid)
-            assert t is not None  # todo still exists
-            assert t.recurring_id is None  # but unlinked
+            assert RecurringCompletion.query.filter_by(recurring_id=rid).count() == 0
 
 
 class TestRecurringEdgeCases:
     """边界场景和安全测试"""
 
-    def test_duplicate_adopt_same_day(self, client, app):
-        """同一天重复 adopt 不应创建多条 todo"""
+    def test_double_toggle_same_day(self, client, app):
+        """同一天重复 toggle 不会创建多条完成记录"""
         with app.app_context():
             from app.models.recurring_todo import RecurringTodo
-            r = RecurringTodo(user_id=1, title='重复adopt', cycle='weekly')
+            r = RecurringTodo(user_id=1, title='重复toggle', cycle='weekly')
             _db.session.add(r)
             _db.session.commit()
             rid = r.id
 
-        # First adopt
-        resp1 = client.post(f'/recurring-todos/{rid}/adopt', json={'done': True})
-        assert resp1.get_json()['ok'] is True
-        # Second adopt
-        resp2 = client.post(f'/recurring-todos/{rid}/adopt', json={'done': True})
-        assert resp2.get_json()['ok'] is True
+        # Toggle on
+        resp1 = client.post(f'/recurring-todos/{rid}/toggle')
+        assert resp1.get_json()['done'] is True
+        # Toggle off
+        resp2 = client.post(f'/recurring-todos/{rid}/toggle')
+        assert resp2.get_json()['done'] is False
+        # Toggle on again
+        resp3 = client.post(f'/recurring-todos/{rid}/toggle')
+        assert resp3.get_json()['done'] is True
 
-        # Second adopt should return duplicate flag, not create new todo
-        data2 = resp2.get_json()
-        assert data2.get('duplicate') is True
         with app.app_context():
-            from app.models.todo import Todo
-            todos = Todo.query.filter_by(recurring_id=rid, created_date=date.today()).all()
-            assert len(todos) == 1  # exactly one, no duplicates
+            from app.models.recurring_completion import RecurringCompletion
+            count = RecurringCompletion.query.filter_by(
+                recurring_id=rid, completed_date=date.today()).count()
+            assert count == 1  # exactly one record
 
-    def test_adopt_other_user_forbidden(self, client, app):
+    def test_toggle_other_user_forbidden(self, client, app):
         """不能操作别人的周期任务"""
         with app.app_context():
             from app.models.recurring_todo import RecurringTodo
@@ -312,16 +282,13 @@ class TestRecurringEdgeCases:
             _db.session.commit()
             rid = r.id
 
-        resp = client.post(f'/recurring-todos/{rid}/adopt', json={})
+        resp = client.post(f'/recurring-todos/{rid}/toggle')
         assert resp.get_json()['ok'] is False or resp.status_code == 403
 
     def test_toggle_nonexistent(self, client, app):
-        """toggle 不存在的周期任务"""
+        """toggle 不存在的周期任务返回 404"""
         resp = client.post('/recurring-todos/99999/toggle')
-        # Should return 404 or ok=False
-        assert resp.status_code in (404, 200)
-        if resp.status_code == 200:
-            assert resp.get_json()['ok'] is False
+        assert resp.status_code == 404
 
     def test_delete_other_user(self, client, app):
         """不能删别人的周期任务"""
@@ -345,107 +312,70 @@ class TestRecurringEdgeCases:
 
 
 class TestRecurringStatus:
-    """首页 recurring_status 渲染逻辑测试"""
+    """首页 recurring_status 渲染逻辑测试（基于 RecurringCompletion）"""
 
-    def test_status_map_includes_all_recurring(self, client, app):
-        """recurring_status 应查所有 recurring，不只 due 的"""
+    def test_status_from_completion(self, client, app):
+        """recurring_status 从 RecurringCompletion 表查询"""
         with app.app_context():
             from app.models.recurring_todo import RecurringTodo
-            from app.models.todo import Todo, TodoItem
-            # Create a weekly recurring (not due on Saturday)
-            r = RecurringTodo(user_id=1, title='status测试', cycle='monthly', monthly_days='mid')
+            from app.models.recurring_completion import RecurringCompletion
+            r = RecurringTodo(user_id=1, title='completion状态测试', cycle='monthly', monthly_days='mid')
             _db.session.add(r)
             _db.session.flush()
-            # Create a done todo for it today
-            t = Todo(user_id=1, title='status测试', recurring_id=r.id,
-                     created_date=date.today(), status='done', done_date=date.today())
-            t.items.append(TodoItem(title='status测试', sort_order=0))
-            _db.session.add(t)
+            c = RecurringCompletion(recurring_id=r.id, user_id=1, completed_date=date.today())
+            _db.session.add(c)
             _db.session.commit()
 
         resp = client.get('/')
         html = resp.data.decode()
-        # The monthly badge should NOT be red (bg-danger) since it's done
-        assert 'status测试' in html
+        assert 'completion状态测试' in html
         import re
-        match = re.search(r'status测试.*?badge ([^"]+)"[^>]*>月中', html, re.DOTALL)
+        match = re.search(r'completion状态测试.*?badge ([^"]+)"[^>]*>每月月中', html, re.DOTALL)
         if match:
             badge_class = match.group(1)
+            # Should be green (done) or yellow (补完成), not red
             assert 'bg-danger' not in badge_class, f'Should not be red, got: {badge_class}'
 
-    def test_weekday_per_day_status(self, client, app):
-        """weekdays 模式每天独立状态"""
+    def test_no_completion_shows_due_or_future(self, client, app):
+        """没有完成记录时，到期显示蓝色，未到期显示灰色"""
         with app.app_context():
             from app.models.recurring_todo import RecurringTodo
-            from app.models.todo import Todo, TodoItem
-            r = RecurringTodo(user_id=1, title='每日独立', cycle='weekdays', weekdays='0,1,2,3,4')
+            r = RecurringTodo(user_id=1, title='未完成状态测试', cycle='weekdays',
+                              weekdays=str(date.today().weekday()))
             _db.session.add(r)
-            _db.session.flush()
-            # Create todo for today
-            t = Todo(user_id=1, title='每日独立', recurring_id=r.id,
-                     created_date=date.today(), status='done', done_date=date.today())
-            t.items.append(TodoItem(title='每日独立', sort_order=0))
-            _db.session.add(t)
             _db.session.commit()
 
         resp = client.get('/')
         html = resp.data.decode()
-        assert '每日独立' in html
-
-    def test_weekday_past_done_shows_warning(self, client, app):
-        """过去天补完成应显示黄色（bg-warning），不是红色"""
+        assert '未完成状态测试' in html
         import re
+        match = re.search(r'未完成状态测试.*?badge ([^"]+)"', html, re.DOTALL)
+        if match:
+            badge_class = match.group(1)
+            # Today's due item without completion → gray (bg-light), not red
+            assert 'bg-light' in badge_class, f'Expected gray for due today, got: {badge_class}'
+
+    def test_completion_independent_of_todo(self, client, app):
+        """周期任务完成不会创建 Todo 记录"""
         with app.app_context():
             from app.models.recurring_todo import RecurringTodo
-            from app.models.todo import Todo, TodoItem
-            r = RecurringTodo(user_id=1, title='补完成测试', cycle='weekdays', weekdays='0,1,2,3,4')
+            r = RecurringTodo(user_id=1, title='独立性测试', cycle='weekly')
             _db.session.add(r)
-            _db.session.flush()
-            # Adopt today (补完成 for past days)
-            t = Todo(user_id=1, title='补完成测试', recurring_id=r.id,
-                     created_date=date.today(), status='done', done_date=date.today())
-            t.items.append(TodoItem(title='补完成测试', sort_order=0))
-            _db.session.add(t)
-            _db.session.commit()
-
-        resp = client.get('/')
-        html = resp.data.decode()
-        # Past weekday badges should be warning (yellow), not danger (red)
-        section = html[html.find('补完成测试'):html.find('补完成测试') + 800]
-        past_badges = re.findall(r'badge (bg-\S+)[^>]*>[一二三四五]', section)
-        for badge_class in past_badges:
-            if 'bg-success' not in badge_class:  # today's badge is green
-                assert 'bg-danger' not in badge_class, f'Past day should not be red, got: {badge_class}'
-
-    @pytest.mark.skipif(True, reason="Requires isolated DB; passes standalone, flaky in full suite due to shared state")
-    def test_monthly_done_shows_warning_not_red(self, client, app):
-        """月度补完成应显示黄色，不是红色"""
-        import re
-        with app.app_context():
-            from app.models.recurring_todo import RecurringTodo
-            from app.models.todo import Todo, TodoItem
-            # Use unique title to avoid collision with other tests
-            r = RecurringTodo(user_id=1, title='月度黄色验证XYZ', cycle='monthly', monthly_days='start')
-            _db.session.add(r)
-            _db.session.flush()
-            t = Todo(user_id=1, title='月度黄色验证XYZ', recurring_id=r.id,
-                     created_date=date.today(), status='done', done_date=date.today())
-            t.items.append(TodoItem(title='月度黄色验证XYZ', sort_order=0))
-            _db.session.add(t)
             _db.session.commit()
             rid = r.id
 
-        resp = client.get('/')
-        html = resp.data.decode()
-        today = date.today()
-        if today.day > 1:  # 月初已过，应该显示黄色补完成
-            # Find this specific recurring's section and check its badge
-            idx = html.find('月度黄色验证XYZ')
-            assert idx >= 0, 'Not found in HTML'
-            section = html[idx:idx+1000]
-            badge_match = re.search(r'badge ([^"]+)"[^>]*>月初', section)
-            assert badge_match is not None, f'Badge not found after title, section: {section[:200]}'
-            assert 'bg-warning' in badge_match.group(1), f'Should be bg-warning, got: {badge_match.group(1)}'
+        # Complete via toggle
+        client.post(f'/recurring-todos/{rid}/toggle')
+
+        with app.app_context():
+            from app.models.todo import Todo
+            from app.models.recurring_completion import RecurringCompletion
+            # Completion record exists
+            c = RecurringCompletion.query.filter_by(recurring_id=rid).first()
+            assert c is not None
+            # No Todo record created
+            t = Todo.query.filter_by(recurring_id=rid).first()
+            assert t is None
 
 
 class TestRecurringMonthlyPeriods:

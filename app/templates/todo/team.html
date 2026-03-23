@@ -1,14 +1,28 @@
 {% extends "base.html" %}
 {% block title %}团队 Todo - 研发协作平台{% endblock %}
 
+{% from "_todo_macros.html" import todo_row, block_popover_html, todo_row_js with context %}
+
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4>团队 Todo <span class="text-muted small">{{ today.strftime('%Y-%m-%d') }}</span></h4>
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h4 class="mb-0">团队 Todo <span class="text-muted small">{{ today.strftime('%Y-%m-%d') }}</span></h4>
     {% if ai_enabled %}
     <button class="btn btn-sm btn-outline-info" id="btnStandup" onclick="genStandup()">
         <i class="bi bi-megaphone"></i> 站会摘要
     </button>
     {% endif %}
+</div>
+{# Per-person filter badges #}
+<div class="d-flex gap-1 mb-3 flex-wrap">
+    <span class="badge bg-primary team-person-filter" style="cursor:pointer;font-size:.75em;" onclick="filterTeamPerson('')">全部</span>
+    {% for u in users %}
+    {% set u_count = (user_active.get(u.id, [])|length) %}
+    {% if u_count > 0 %}
+    <span class="badge bg-light text-dark border team-person-filter" style="cursor:pointer;font-size:.75em;" onclick="filterTeamPerson('{{ u.id }}')">
+        {{ u.name }} <span class="text-muted">{{ u_count }}</span>
+    </span>
+    {% endif %}
+    {% endfor %}
 </div>
 
 <!-- Standup panel -->
@@ -26,73 +40,34 @@
         <h6 class="text-muted mb-3">近两日进展</h6>
         {% for u in users %}
         {% set todos = user_active.get(u.id, []) %}
-        {% if todos %}
-        <div class="card mb-3">
+        <div class="card mb-3 team-user-card" data-uid="{{ u.id }}" data-uname="{{ u.name }}">
             <div class="card-header py-2 d-flex justify-content-between align-items-center">
                 <span class="fw-bold small">{{ u.name }} <span class="text-muted">{{ u.group or '' }}</span></span>
-                <span class="badge bg-secondary">{{ todos | length }}</span>
+                <span class="badge bg-secondary team-card-count">{{ todos | length }}</span>
             </div>
-            <div class="card-body py-2">
+            <div class="card-body py-2 team-card-body" style="min-height:30px;">
+            {% if todos %}
             {% set seen_reqs = namespace(ids=[]) %}
             {% for t in todos %}
                 {% set req = t.requirements[0] if t.requirements else None %}
                 {% set rid = req.id if req else 0 %}
                 {% if rid and rid not in seen_reqs.ids %}
                     {% if seen_reqs.ids %}<div class="mt-2"></div>{% endif %}
-                    <div class="small fw-bold text-primary mb-1">{{ req.number }} {{ req.title }}</div>
+                    <div class="small fw-bold text-primary mb-1"><a href="{{ url_for('requirement.requirement_detail', req_id=rid) }}" class="text-decoration-none">{{ req.number }} {{ req.title }}</a></div>
                     {% set _ = seen_reqs.ids.append(rid) %}
                 {% elif not rid and 0 not in seen_reqs.ids %}
                     {% if seen_reqs.ids %}<div class="mt-2"></div>{% endif %}
                     <div class="small fw-bold text-secondary mb-1">团队事务</div>
                     {% set _ = seen_reqs.ids.append(0) %}
                 {% endif %}
-                {% set is_done = t.status == 'done' %}
-                {% set is_carryover = not is_done and t.created_date and t.created_date < today and not before_10am %}
-                <div class="mb-1 ps-2 {% if t.need_help %}bg-danger bg-opacity-10 border-start border-3 border-danger{% elif is_done %}border-start border-3 border-success{% elif is_carryover %}bg-warning bg-opacity-10 border-start border-3 border-warning{% endif %}">
-                    <div class="d-flex align-items-center">
-                        {% if not is_done %}
-                        <button class="btn btn-sm p-0 border-0 bg-transparent me-1 btn-toggle-done" data-id="{{ t.id }}" title="标记完成" style="font-size:.8em;"><i class="bi bi-circle text-muted"></i></button>
-                        {% else %}
-                        <span class="text-success me-1" style="font-size:.75em;">&#10003;</span>
-                        {% endif %}
-                        {% if t.items %}
-                            {% for item in t.items %}
-                            <span class="small {% if item.is_done %}text-decoration-line-through text-muted{% endif %}">{{ item.title }}</span>
-                            {% endfor %}
-                        {% else %}
-                            <span class="small {% if is_done %}text-muted{% endif %}">{{ t.title }}</span>
-                        {% endif %}
-                        {% if t.actual_minutes %}<span class="text-muted ms-1" style="font-size:.7em;">{{ t.actual_minutes }}m</span>{% endif %}
-                        {% if is_carryover %}<span class="text-warning ms-1" style="font-size:.7em;">结转</span>{% endif %}
-                        {% if t.need_help %}<span class="badge bg-danger ms-1" style="font-size:.6em;">阻塞{% if t.blocked_reason %}：{{ t.blocked_reason }}{% endif %}</span>{% endif %}
-                        {% if is_done and t.done_date %}<span class="text-muted ms-1" style="font-size:.7em;">{{ t.done_date.strftime('%m-%d') }}</span>{% endif %}
-                    </div>
-                    <!-- Comments -->
-                    {% if t.comments %}
-                    <div class="ps-2 mt-1">
-                        {% for c in t.comments %}
-                        <div class="text-muted" style="font-size:.78em;">
-                            <strong>{{ c.user.name }}</strong> {{ c.created_at.strftime('%m-%d %H:%M') }}：{{ c.content }}
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                    <!-- Comment input -->
-                    <div class="d-flex gap-1 mt-1" style="max-width:400px;">
-                        <input type="text" class="form-control form-control-sm py-0 comment-input" data-todo-id="{{ t.id }}" placeholder="评论 或 @姓名 求助" style="font-size:.78em;">
-                        <button class="btn btn-sm btn-outline-secondary py-0 comment-submit" data-todo-id="{{ t.id }}" style="font-size:.75em;">发</button>
-                    </div>
-                </div>
+                {{ todo_row(t) }}
             {% endfor %}
+            {% else %}
+            <div class="text-muted small text-center py-1">暂无待办</div>
+            {% endif %}
             </div>
         </div>
-        {% endif %}
         {% endfor %}
-        {% if not user_active %}
-        <div class="text-center text-muted py-4">
-            <p class="small mt-1">全部完成</p>
-        </div>
-        {% endif %}
     </div>
 
     <!-- Right: done this week -->
@@ -122,18 +97,103 @@
         {% endif %}
     </div>
 </div>
+{{ block_popover_html() }}
 {% endblock %}
 
 {% block extra_js %}
 <script>
-/* Toggle done */
-document.querySelectorAll('.btn-toggle-done').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-        fetch('/todos/' + btn.dataset.id + '/toggle', {method: 'POST'})
-        .then(function(r) { return r.json(); })
-        .then(function(d) { if (d.ok) location.reload(); });
+/* Filter by person */
+function filterTeamPerson(uid) {
+    document.querySelectorAll('.team-user-card').forEach(function(card) {
+        card.style.display = (!uid || card.dataset.uid === uid) ? '' : 'none';
     });
-});
+    document.querySelectorAll('.team-person-filter').forEach(function(b) {
+        b.classList.remove('bg-primary', 'text-white');
+        b.classList.add('bg-light', 'text-dark', 'border');
+    });
+    event.target.classList.remove('bg-light', 'text-dark', 'border');
+    event.target.classList.add('bg-primary', 'text-white');
+}
+
+/* Shared todo row JS (toggle, delete, timer, block) */
+{{ todo_row_js() }}
+
+/* Cross-user drag: reassign todo to another team member */
+(function() {
+    var dragEl = null;
+    var sourceCard = null;
+
+    // Make todo items draggable (they already have draggable="true" from todo_row macro)
+    document.querySelectorAll('.todo-drag-item').forEach(function(el) {
+        el.addEventListener('dragstart', function(e) {
+            dragEl = el;
+            sourceCard = el.closest('.team-user-card');
+            el.style.opacity = '0.4';
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        el.addEventListener('dragend', function() {
+            el.style.opacity = '';
+            dragEl = null;
+            sourceCard = null;
+            document.querySelectorAll('.team-user-card').forEach(function(c) {
+                c.style.outline = '';
+            });
+        });
+    });
+
+    // Make user cards droppable
+    document.querySelectorAll('.team-user-card').forEach(function(card) {
+        var body = card.querySelector('.team-card-body');
+
+        card.addEventListener('dragover', function(e) {
+            if (!dragEl) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            var targetCard = card;
+            if (targetCard !== sourceCard) {
+                targetCard.style.outline = '2px dashed #0d6efd';
+            }
+        });
+        card.addEventListener('dragleave', function() {
+            card.style.outline = '';
+        });
+        card.addEventListener('drop', function(e) {
+            e.preventDefault();
+            card.style.outline = '';
+            if (!dragEl || card === sourceCard) return;
+
+            var todoId = parseInt(dragEl.dataset.todoId);
+            var targetUid = card.dataset.uid;
+            var targetName = card.dataset.uname;
+
+            // Move DOM element
+            body.appendChild(dragEl);
+
+            // Update badge counts
+            if (sourceCard) {
+                var srcCount = sourceCard.querySelector('.team-card-count');
+                if (srcCount) srcCount.textContent = sourceCard.querySelectorAll('.todo-drag-item').length;
+            }
+            var tgtCount = card.querySelector('.team-card-count');
+            if (tgtCount) tgtCount.textContent = card.querySelectorAll('.todo-drag-item').length;
+
+            // Remove "暂无待办" placeholder if present
+            var placeholder = body.querySelector('.text-center.text-muted');
+            if (placeholder) placeholder.remove();
+
+            // API call to reassign
+            apiPost('/api/reassign-todo', {todo_id: todoId, target_user_id: parseInt(targetUid)})
+            .then(function(d) {
+                if (d && d.ok) {
+                    showToast(d.title + ' → ' + d.new_user, 'success');
+                } else {
+                    showToast('转交失败：' + (d.msg || ''), 'danger');
+                    location.reload();
+                }
+            });
+        });
+    });
+})();
 
 /* @mention autocomplete */
 var _allUsers = [{% for u in all_users %}{name:'{{ u.name }}',py:'{{ u.pinyin or "" }}'}{% if not loop.last %},{% endif %}{% endfor %}];

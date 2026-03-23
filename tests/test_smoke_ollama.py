@@ -1,14 +1,17 @@
 """
-Ollama AI 解析烟测试 — 手动运行，不纳入自动回归
-用法: python tests/smoke_ollama.py
-
-需要本地 Ollama 运行中，会实际调用模型推理
+Ollama AI 解析烟测试 — 依赖外部 Ollama 服务，不纳入自动回归
+用法:
+  pytest tests/test_smoke_ollama.py -m smoke    # 显式运行
+  python tests/test_smoke_ollama.py             # 直接运行
 """
 import sys
 import os
 import json
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+pytestmark = pytest.mark.smoke  # 整个文件标记为 smoke，默认跳过
 
 # Use local Ollama
 os.environ['OLLAMA_BASE_URL'] = 'http://localhost:11434'

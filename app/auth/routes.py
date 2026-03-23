@@ -19,7 +19,11 @@ def load_user(user_id):
 
 
 def _get_client_ip():
-    """Get real client IP, respecting proxy headers."""
+    """Get real client IP, respecting proxy headers. Supports DEV_CLIENT_IP override for local dev."""
+    import os
+    override = os.environ.get('DEV_CLIENT_IP')
+    if override:
+        return override
     return request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
 
 
@@ -32,12 +36,29 @@ def login():
     client_ip = _get_client_ip()
 
     # Auto-login by IP: if a user is bound to this IP, login directly
-    auto_user = User.query.filter_by(ip_address=client_ip, is_active=True).first()
+    # Skip if user just logged out (prevent immediate re-login)
+    if session.pop('_logged_out', False):
+        auto_user = None
+    else:
+        # Support comma-separated multi-IP (e.g. "192.168.1.100,127.0.0.1")
+        # Use exact match first, then check comma-separated with boundary matching
+        auto_user = User.query.filter_by(ip_address=client_ip).first()
+        if not auto_user:
+            # Match ",IP," or "IP," (start) or ",IP" (end) to avoid partial matches
+            candidates = User.query.filter(
+                User.ip_address.contains(client_ip)
+            ).all()
+            for u in candidates:
+                if client_ip in [ip.strip() for ip in u.ip_address.split(',')]:
+                    auto_user = u
+                    break
     if auto_user and request.method == 'GET':
         login_user(auto_user, remember=False)
         session.permanent = True
         auto_user.last_login = datetime.utcnow()
         db.session.commit()
+        # Clear "请先登录" flash message from login_required redirect
+        session.pop('_flashes', None)
         return redirect(url_for('main.index'))
 
     form = LoginForm()
@@ -48,17 +69,15 @@ def login():
 
         if not user:
             flash('工号未注册', 'danger')
+            form.employee_id.data = ''
             return render_template('auth/login.html', form=form, client_ip=client_ip)
 
-        if not user.is_active:
-            flash('账号已被禁用，请联系管理员', 'danger')
-            return render_template('auth/login.html', form=form, client_ip=client_ip)
-
+        bound_ips = [ip.strip() for ip in user.ip_address.split(',')]
         if user.ip_address.startswith('pending-'):
             # First login: bind IP
             user.ip_address = client_ip
             db.session.commit()
-        elif user.ip_address != client_ip:
+        elif client_ip not in bound_ips:
             # Check if there's already a pending request
             from app.models.ip_request import IPChangeRequest
             pending = IPChangeRequest.query.filter_by(
@@ -321,12 +340,14 @@ def ai_efficiency():
     ]
     # Recurring todo discipline
     from app.models.recurring_todo import RecurringTodo
+    from app.models.recurring_completion import RecurringCompletion
     recurring_all = RecurringTodo.query.filter_by(user_id=uid, is_active=True).all()
     if recurring_all:
-        recurring_total = Todo.query.filter(Todo.user_id == uid, Todo.recurring_id.isnot(None)).count()
-        recurring_done = Todo.query.filter(Todo.user_id == uid, Todo.recurring_id.isnot(None), Todo.status == 'done').count()
-        rate = round(recurring_done / recurring_total * 100) if recurring_total else 0
-        lines.append(f'周期任务 {len(recurring_all)} 个，历史执行 {recurring_total} 次，完成 {recurring_done} 次（{rate}%）')
+        recurring_total = RecurringCompletion.query.filter(
+            RecurringCompletion.user_id == uid,
+            RecurringCompletion.recurring_id.in_([r.id for r in recurring_all]),
+        ).count()
+        lines.append(f'周期任务 {len(recurring_all)} 个，历史完成 {recurring_total} 次')
 
     prompt = get_prompt('personal_efficiency') + '\n\n' + '\n'.join(lines)
     _, raw = call_ollama(prompt)
@@ -341,5 +362,6 @@ def ai_efficiency():
 @login_required
 def logout():
     logout_user()
+    session['_logged_out'] = True
     flash('已退出登录', 'info')
     return redirect(url_for('auth.login'))

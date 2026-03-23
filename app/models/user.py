@@ -46,7 +46,7 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     employee_id = db.Column(db.String(30), unique=True, nullable=False, index=True)
     name = db.Column(db.String(80), nullable=False)
-    ip_address = db.Column(db.String(45), unique=True, nullable=False, index=True)
+    ip_address = db.Column(db.String(200), nullable=False, index=True)  # supports comma-separated multi-IP
     pinyin = db.Column(db.String(100), nullable=True)
     avatar = db.Column(db.String(300), nullable=True)  # 个人照片路径
     group = db.Column(db.String(50), nullable=True)

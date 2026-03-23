@@ -966,40 +966,46 @@ def my_weekly():
 
             # Recurring todo stats this week
             from app.models.recurring_todo import RecurringTodo
+            from app.models.recurring_completion import RecurringCompletion
             all_recurring = RecurringTodo.query.filter_by(user_id=current_user.id, is_active=True).all()
             if all_recurring:
                 # Count how many times each recurring was due this week and how many were completed
                 recurring_due_count = 0
                 recurring_done_count = 0
-                recurring_late_count = 0
+                # Get all completions this week in one query
+                week_completions = set()
+                for c in RecurringCompletion.query.filter(
+                    RecurringCompletion.user_id == current_user.id,
+                    RecurringCompletion.recurring_id.in_([r.id for r in all_recurring]),
+                    RecurringCompletion.completed_date >= monday,
+                    RecurringCompletion.completed_date <= sunday,
+                ).all():
+                    week_completions.add((c.recurring_id, c.completed_date))
+
                 for d in range((sunday - monday).days + 1):
                     check_date = monday + timedelta(days=d)
                     if check_date > date.today():
                         break
                     for r in all_recurring:
-                        # Check if due on this date
                         is_due = False
                         if r.cycle == 'weekly' and check_date.weekday() == 0:
                             is_due = True
-                        elif r.cycle == 'monthly' and check_date.day == (r.monthly_day or 1):
-                            is_due = True
+                        elif r.cycle == 'monthly':
+                            for p in r.monthly_periods:
+                                if check_date.day == r._period_day(p, check_date.year, check_date.month):
+                                    is_due = True
+                                    break
                         elif r.cycle == 'weekdays' and r.weekdays and str(check_date.weekday()) in r.weekdays.split(','):
                             is_due = True
                         if is_due:
                             recurring_due_count += 1
-                            t = Todo.query.filter_by(user_id=current_user.id, recurring_id=r.id,
-                                                      created_date=check_date).first()
-                            if t and t.status == 'done':
+                            if (r.id, check_date) in week_completions:
                                 recurring_done_count += 1
-                                if t.done_date and t.done_date > check_date:
-                                    recurring_late_count += 1
 
                 if recurring_due_count > 0:
                     rate = round(recurring_done_count / recurring_due_count * 100)
                     lines.append(f'\n周期任务执行情况：')
                     lines.append(f'- 本周到期 {recurring_due_count} 次，完成 {recurring_done_count} 次（完成率 {rate}%）')
-                    if recurring_late_count:
-                        lines.append(f'- 其中 {recurring_late_count} 次为补完成（非当天完成）')
                     lines.append(f'- 周期任务共 {len(all_recurring)} 个：' + '、'.join(r.title for r in all_recurring))
 
             prompt = get_prompt('personal_weekly') + '\n\n' + '\n'.join(lines)

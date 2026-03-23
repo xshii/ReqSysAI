@@ -1,0 +1,172 @@
+{# Shared todo macros — used by homepage and team page #}
+
+{# Pomodoro icons #}
+{% macro pomodoro_icons(minutes, pomo_min) %}
+{% if minutes and minutes > 0 %}
+{% set pomo = pomo_min or 45 %}
+{% set full = (minutes // pomo) | int %}
+{% set remainder_pct = ((minutes % pomo) / pomo * 100) | int %}
+<span class="text-muted ms-1" style="font-size:.7em;" title="专注 {{ minutes }} 分钟">
+{% for i in range(full) %}<i class="bi bi-circle-fill text-success" style="font-size:.7em;"></i>{% endfor %}
+{% if remainder_pct > 0 %}<i class="bi bi-x-circle text-warning" style="font-size:.7em;" title="打断({{ remainder_pct }}%)"></i>{% endif %}
+{{ minutes }}m</span>
+{% endif %}
+{% endmacro %}
+
+{# Unified todo row — single source of truth #}
+{% macro todo_row(t, icon_color='text-secondary') %}
+{% set is_help = t.children | length > 0 %}
+<div class="d-flex align-items-center gap-1 mb-1 ps-2 todo-drag-item {% if t.status == 'done' %}text-muted text-decoration-line-through{% elif t.workdays_overdue >= 3 %}border-start border-danger border-2{% elif t.workdays_overdue >= 1 %}border-start border-warning border-2{% endif %}" draggable="true" data-todo-id="{{ t.id }}" style="cursor:grab;">
+    {% if is_help %}
+    <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'hourglass-split text-warning' }}" style="font-size:.9em;" title="等待{{ t.children[0].user.name }}完成"></i>
+    {% else %}
+    <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="{{ '撤销完成' if t.status == 'done' else '标记完成' }}">
+            <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle ' + icon_color }}"></i>
+        </button>
+    </form>
+    {% endif %}
+    <span class="small">{{ t.title }}</span>
+    {%- if t.comments %}<span class="text-muted" style="font-size:.65em;" title="{{ t.comments[-1].content }}"><i class="bi bi-chat-left-text"></i> {{ t.comments[-1].content[:15] }}{% if t.comments[-1].content|length > 15 %}...{% endif %}</span>{% endif %}
+    {%- if t.workdays_overdue >= 1 and t.status != 'done' %}<span class="badge bg-{{ t.overdue_color }} bg-opacity-75" style="font-size:.5em;">延{{ t.workdays_overdue }}天</span>{% endif %}
+    {%- if t.need_help %}<span class="badge bg-danger" style="font-size:.55em;">阻塞{% if t.blocked_reason %}：{{ t.blocked_reason }}{% endif %}</span>{% endif %}
+    {%- if t.source == "ai" %}<span class="badge bg-info" style="font-size:.55em;">AI</span>{% endif %}
+    {%- if is_help %}<span class="badge bg-warning text-dark" style="font-size:.55em;">@{{ t.children[0].user.name }}</span>{% endif %}
+    <button class="btn btn-sm py-0 px-0 {{ 'btn-success' if t.timer_running else 'btn-outline-secondary' }} btn-timer-home todo-action-btn" data-id="{{ t.id }}" title="{{ '暂停番茄钟' if t.timer_running else '启动番茄钟' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;{% if t.status == 'done' %}display:none;{% endif %}">
+        <i class="bi bi-{{ 'clock-fill' if t.timer_running else 'clock' }}"></i>
+    </button>
+    <button class="btn btn-sm py-0 px-0 {% if t.need_help %}text-danger{% else %}text-muted{% endif %} btn-block-home todo-action-btn" data-id="{{ t.id }}" title="{{ '解除阻塞' if t.need_help else '标记阻塞' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;{% if t.status == 'done' %}display:none;{% endif %}">
+        <i class="bi bi-{% if t.need_help %}play-circle{% else %}pause-circle{% endif %}"></i>
+    </button>
+    {{ pomodoro_icons(t.actual_minutes, current_user.pomodoro_minutes) }}
+    <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" title="删除" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>
+</div>
+{% endmacro %}
+
+{# Shared JS for todo row interactions (toggle, timer, block, delete) — include once per page #}
+{% macro todo_row_js() %}
+// Toggle todo (AJAX) — works for both homepage and team page
+document.querySelectorAll('form[action*="/todo/"][action*="/toggle"]').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var todoId = form.action.match(/\/todo\/(\d+)\/toggle/)[1];
+        apiPost('/todo/' + todoId + '/toggle', {}).then(function(d) {
+            if (d && d.ok) {
+                var row = form.closest('.d-flex');
+                var icon = form.querySelector('i');
+                if (d.done) {
+                    row.classList.add('text-muted', 'text-decoration-line-through');
+                    icon.className = 'bi bi-check-circle-fill text-success';
+                    row.querySelectorAll('.todo-action-btn').forEach(function(b) { b.style.display = 'none'; });
+                } else {
+                    row.classList.remove('text-muted', 'text-decoration-line-through');
+                    icon.className = 'bi bi-circle text-secondary';
+                    row.querySelectorAll('.todo-action-btn').forEach(function(b) { b.style.display = ''; });
+                }
+                if (typeof _updateProgress === 'function') {
+                    if (d.done) _todoDone++; else _todoDone--;
+                    _updateProgress();
+                }
+                if (typeof _checkSectionDone === 'function') _checkSectionDone(row);
+            }
+        });
+    });
+});
+
+// Delete todo
+document.querySelectorAll('.btn-delete-home').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var row = btn.closest('.d-flex');
+        var wasDone = row && row.classList.contains('text-decoration-line-through');
+        var container = row.closest('.todo-list-for-req');
+        apiPost('/todos/' + btn.dataset.id + '/edit', {title: ''}).then(function(d) {
+            if (d && d.ok) {
+                row.remove();
+                if (typeof _todoTotal !== 'undefined') {
+                    _todoTotal--;
+                    if (wasDone) _todoDone--;
+                    _updateProgress();
+                }
+                if (typeof _checkSectionDone === 'function' && container) {
+                    var remaining = container.querySelector('.todo-drag-item');
+                    if (remaining) _checkSectionDone(remaining);
+                }
+            }
+        });
+    });
+});
+
+// Timer
+document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var todoId = btn.dataset.id;
+        var title = btn.closest('.d-flex').querySelector('.small').textContent;
+        apiPost('/todos/' + todoId + '/timer', {}).then(function(d) {
+            if (d && d.ok) {
+                if (d.running) {
+                    btn.className = btn.className.replace('btn-outline-secondary', 'btn-success');
+                    btn.querySelector('i').className = 'bi bi-clock-fill';
+                    if (typeof enterFocusMode === 'function') enterFocusMode(todoId, title);
+                } else {
+                    btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
+                    btn.querySelector('i').className = 'bi bi-clock';
+                    if (d.minutes > 0 && typeof showToast === 'function') showToast('专注 ' + d.minutes + ' 分钟', 'info');
+                }
+            }
+        });
+    });
+});
+
+// Block popover — global functions so createTodoRow can call them
+var _blockPop = document.getElementById('blockPopover');
+window.showBlockPopover = function(btn, todoId) {
+    if (!_blockPop) return;
+    var rect = btn.getBoundingClientRect();
+    _blockPop.style.display = 'block';
+    _blockPop.style.top = Math.min(rect.bottom + 4, window.innerHeight - 120) + 'px';
+    _blockPop.style.left = Math.min(rect.left, window.innerWidth - 250) + 'px';
+    document.getElementById('blockTodoId').value = todoId;
+    document.getElementById('blockReason').value = '';
+    document.getElementById('blockReason').focus();
+};
+window.hideBlockPopover = function() { if (_blockPop) _blockPop.style.display = 'none'; };
+if (_blockPop) {
+    document.addEventListener('click', function(e) {
+        if (_blockPop.style.display === 'block' && !_blockPop.contains(e.target) && !e.target.closest('.btn-block-home')) hideBlockPopover();
+    });
+    document.getElementById('blockConfirm').addEventListener('click', function() {
+        var tid = document.getElementById('blockTodoId').value;
+        var reason = document.getElementById('blockReason').value.trim();
+        hideBlockPopover();
+        apiPost('/todos/' + tid + '/block', {reason: reason}).then(function(d) {
+            if (d && d.ok) location.reload();
+        });
+    });
+    document.querySelectorAll('.btn-block-home').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var isBlocked = btn.querySelector('i').classList.contains('bi-play-circle');
+            if (isBlocked) {
+                apiPost('/todos/' + btn.dataset.id + '/block', {}).then(function(d) {
+                    if (d && d.ok) location.reload();
+                });
+            } else {
+                showBlockPopover(btn, btn.dataset.id);
+            }
+        });
+    });
+}
+{% endmacro %}
+
+{# Block popover HTML — include once per page #}
+{% macro block_popover_html() %}
+<div id="blockPopover" class="position-fixed bg-white border rounded shadow-sm p-2" style="display:none;z-index:1060;width:240px;">
+    <div class="d-flex align-items-center justify-content-between mb-1">
+        <span class="small fw-bold">标记阻塞</span>
+        <button type="button" class="btn-close" style="font-size:.6em;" onclick="hideBlockPopover()"></button>
+    </div>
+    <input type="hidden" id="blockTodoId">
+    <input type="text" id="blockReason" class="form-control form-control-sm mb-1" placeholder="阻塞原因（可选），@姓名 求助">
+    <button type="button" class="btn btn-sm btn-danger w-100" id="blockConfirm">确认阻塞</button>
+</div>
+{% endmacro %}
