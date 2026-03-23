@@ -138,10 +138,17 @@ def requirement_create():
             st = st.strip()
             if st:
                 sub_type = sub_types[i] if i < len(sub_types) else 'analysis'
-                try:
-                    assignee = int(sub_assignees[i]) if i < len(sub_assignees) and sub_assignees[i] else None
-                except (ValueError, IndexError):
-                    assignee = None
+                assignee = None
+                assignee_name_ext = None
+                if i < len(sub_assignees) and sub_assignees[i].strip():
+                    val = sub_assignees[i].strip()
+                    try:
+                        assignee = int(val)
+                    except ValueError:
+                        # Try match by name
+                        a_id, a_name = _resolve_assignee(val)
+                        assignee = a_id
+                        assignee_name_ext = a_name
                 try:
                     days = float(sub_days[i]) if i < len(sub_days) and sub_days[i] else None
                 except (ValueError, IndexError):
@@ -160,6 +167,7 @@ def requirement_create():
                     project_id=req.project_id,
                     priority=req.priority,
                     assignee_id=assignee,
+                    assignee_name=assignee_name_ext,
                     estimate_days=days,
                     code_lines=est_lines if sub_type == 'coding' else None,
                     test_cases=est_cases if sub_type == 'testing' else None,
