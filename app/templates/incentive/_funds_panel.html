@@ -24,7 +24,7 @@
     {% for src, st in source_stats.items() %}
     {% set is_custom = src not in ('instant','special','project','knowledge','improvement') %}
     <div class="col-6 col-md-3">
-        <div class="card {% if src in (fund_conflicts|default([])) %}border-warning{% endif %}">
+        <div class="card {% if src in (fund_conflict_keys|default([])) %}border-warning{% endif %}">
             <div class="card-body py-2 position-relative">
                 {% if is_custom %}
                 <button type="button" class="btn p-0 border-0 bg-transparent text-muted position-absolute" style="top:4px;right:6px;font-size:.7em;"

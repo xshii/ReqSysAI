@@ -109,7 +109,8 @@ def index():
         for f in funds:
             t = 'budget' if f.has_budget else 'pool'
             source_types.setdefault(f.source, set()).add(t)
-        fund_conflicts = [source_stats[src]['label'] for src, types in source_types.items() if len(types) > 1]
+        fund_conflict_keys = [src for src, types in source_types.items() if len(types) > 1]
+        fund_conflicts = [source_stats[src]['label'] for src in fund_conflict_keys]
 
     return render_template('incentive/index.html',
         items=items, users=users, is_reviewer=is_reviewer,
@@ -117,7 +118,9 @@ def index():
         month_filter=month_filter, search_q=search_q,
         can_export=is_reviewer or current_user.is_admin,
         today=date.today(),
-        funds=funds, source_stats=source_stats, fund_conflicts=fund_conflicts if funds else [],
+        funds=funds, source_stats=source_stats,
+        fund_conflicts=fund_conflicts if funds else [],
+        fund_conflict_keys=fund_conflict_keys if funds else [],
         source_labels=_get_source_labels(),
         inc_stats=inc_stats, stats_period=stats_period, saved_report=saved_report,
         all_funds=IncentiveFund.query.order_by(IncentiveFund.name).all() if is_reviewer else [])
