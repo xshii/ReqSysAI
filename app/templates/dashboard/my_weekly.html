@@ -42,7 +42,7 @@
     <form method="POST" action="?week={{ offset }}" class="d-inline ms-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-sm {{ 'btn-outline-secondary' if report else 'btn-primary' }}" id="btn-gen">
-            {{ '重新生成' if report else '生成周报' }}
+            <i class="bi bi-robot"></i> {{ '重新生成' if report else '生成周报' }}
         </button>
     </form>
 </div>

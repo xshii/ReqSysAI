@@ -319,7 +319,7 @@
 <div class="mt-3 d-flex gap-2">
     <form method="POST" action="?week={{ offset }}&project_id={{ cur_project_id }}" class="d-inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-outline-primary" id="btn-gen"><i class="bi bi-arrow-clockwise"></i> 重新生成</button>
+        <button type="submit" class="btn btn-outline-primary" id="btn-gen"><i class="bi bi-robot"></i> 重新生成</button>
     </form>
     {% if saved_report and cur_project and (cur_project.owner_id == current_user.id or current_user.is_admin) %}
     <form method="POST" action="{{ url_for('dashboard.weekly_report_freeze') }}" class="d-inline">

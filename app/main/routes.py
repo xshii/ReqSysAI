@@ -55,7 +55,7 @@ def index():
             Todo.status == TODO_STATUS_TODO,
             db.and_(Todo.status == TODO_STATUS_DONE, Todo.done_date == today),
         )
-    ).options(joinedload(Todo.items), joinedload(Todo.requirements), joinedload(Todo.children), joinedload(Todo.comments), joinedload(Todo.pomodoros))\
+    ).options(joinedload(Todo.items), joinedload(Todo.requirements), joinedload(Todo.children), joinedload(Todo.comments), joinedload(Todo.pomodoros), joinedload(Todo.parent))\
      .order_by(db.case((Todo.status == TODO_STATUS_TODO, 0), else_=1), Todo.sort_order).all()
     todo_total = len(my_todos)
     todo_done = sum(1 for t in my_todos if t.status == TODO_STATUS_DONE)
@@ -106,8 +106,8 @@ def index():
         for r in my_risks if r.is_overdue
     ]
 
-    # Help requests: todos where I'm blocked or others asked me for help
-    help_requests = [t for t in my_todos if t.need_help and t.status != 'done']
+    # Help requests: others' @me child todos I haven't completed
+    help_requests = [t for t in my_todos if t.parent_id and t.status != 'done']
 
     # Approved incentives: last 2 months excluding recent 7 days; fallback to 3 months if empty
     inc_end = today - timedelta(days=7)
@@ -296,7 +296,7 @@ def quick_todo():
             my_todo.items.append(TodoItem(title=title, sort_order=0))
             db.session.add(my_todo)
             db.session.flush()
-            helper_todo = Todo(user_id=helper.id, title=title, due_date=today,
+            helper_todo = Todo(user_id=helper.id, title=title, due_date=today + timedelta(days=7),
                                category=category, source='help', parent_id=my_todo.id, requirements=reqs)
             helper_todo.items.append(TodoItem(title=title, sort_order=0))
             db.session.add(helper_todo)

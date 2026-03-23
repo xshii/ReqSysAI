@@ -74,6 +74,14 @@ def edit(todo_id):
     todo.title = title
     if 'due_date' in data:
         todo.due_date = date.fromisoformat(data['due_date']) if data['due_date'] else None
+    if 'category' in data:
+        todo.category = data['category']
+    # Add comment if provided
+    comment_text = (data.get('comment') or '').strip()
+    if comment_text:
+        from app.models.todo import TodoComment
+        c = TodoComment(todo_id=todo.id, user_id=current_user.id, content=comment_text[:500])
+        db.session.add(c)
     db.session.commit()
     return jsonify(ok=True)
 
@@ -177,7 +185,7 @@ def toggle_block(todo_id):
                         category=todo.category,
                         source='help',
                         parent_id=todo.id,
-                        due_date=date.today(),
+                        due_date=date.today() + timedelta(days=7),
                         created_date=date.today(),
                     )
                     help_todo.items.append(TodoItem(title=f'协助：{todo.title}', sort_order=0))
@@ -227,7 +235,7 @@ def add_comment(todo_id):
             help_title = clean or todo.title
             help_todo = Todo(
                 user_id=helper.id, title=help_title,
-                due_date=date.today(), category='team', source='help',
+                due_date=date.today() + timedelta(days=7), category='team', source='help',
                 parent_id=todo.id, requirements=list(todo.requirements))
             help_todo.items.append(TodoItem(title=help_title, sort_order=0))
             db.session.add(help_todo)

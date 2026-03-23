@@ -165,7 +165,7 @@ def edit(inc_id):
     if current_user.id != inc.submitted_by and not current_user.is_admin:
         flash('无权限', 'danger')
         return redirect(url_for('incentive.index'))
-    if inc.status not in ('submitted', 'pending', 'rejected'):
+    if inc.status not in ('submitted', 'pending'):
         flash('已通过的激励不可编辑', 'warning')
         return redirect(url_for('incentive.index'))
 
@@ -191,12 +191,12 @@ def edit(inc_id):
     if photo_path:
         inc.photo = photo_path
 
-    # Re-submit after edit (pending/rejected → submitted)
-    if inc.status in ('pending', 'rejected'):
+    # Re-submit after edit (pending → submitted)
+    if inc.status == 'pending':
         inc.status = 'submitted'
 
     db.session.commit()
-    flash('激励已更新' + ('并重新提交' if inc.status == 'pending' else ''), 'success')
+    flash('激励已更新', 'success')
     return redirect(url_for('incentive.index'))
 
 

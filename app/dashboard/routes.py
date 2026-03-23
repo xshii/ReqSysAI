@@ -1585,7 +1585,7 @@ def emotion_comment(record_id):
             clean_content = re.sub(r'@\S+', '', content).strip()
             todo_title = f'[情绪跟进] {record.member_name}：{clean_content[:50]}'
             todo = Todo(user_id=target_user.id, title=todo_title,
-                        due_date=date.today(), category='team', source='help')
+                        due_date=date.today() + timedelta(days=7), category='team', source='help')
             todo.items.append(TodoItem(title=todo_title, sort_order=0))
             db.session.add(todo)
 

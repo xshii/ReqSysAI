@@ -8,6 +8,7 @@
         <a href="{{ url_for('requirement.export_csv', project_id=cur_project or '') }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出</a>
         <form method="POST" action="{{ url_for('requirement.import_csv') }}" enctype="multipart/form-data" id="csvImportForm" class="d-none">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if cur_project %}<input type="hidden" name="project_id" value="{{ cur_project }}">{% endif %}
             <input type="file" name="csv_file" accept=".csv" onchange="this.form.submit();">
         </form>
         <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.querySelector('#csvImportForm input[type=file]').click()"><i class="bi bi-upload"></i> 导入</button>

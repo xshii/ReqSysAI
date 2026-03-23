@@ -501,9 +501,11 @@ def import_csv():
         proj_name = (row.get('项目') or '').strip()
         pid = project_map.get(proj_name)
         if not pid:
-            # Use first active project as fallback
-            first_proj = Project.query.filter_by(status='active').first()
-            pid = first_proj.id if first_proj else 1
+            # Use form-submitted project_id, fallback to first active
+            pid = request.form.get('project_id', type=int)
+            if not pid:
+                first_proj = Project.query.filter_by(status='active').first()
+                pid = first_proj.id if first_proj else 1
 
         # Resolve assignee
         assignee_str = (row.get('负责人') or '').strip()
