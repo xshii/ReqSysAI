@@ -63,7 +63,7 @@ def index():
     # My assigned requirements (active)
     my_reqs = Requirement.query.filter_by(assignee_id=current_user.id)\
         .filter(Requirement.status.notin_(REQ_INACTIVE_STATUSES))\
-        .options(joinedload(Requirement.project))\
+        .options(joinedload(Requirement.project), joinedload(Requirement.comments))\
         .order_by(Requirement.due_date.asc().nullslast(), Requirement.priority, Requirement.updated_at.desc()).limit(10).all()
 
     # Group todos by category for merged display
@@ -226,33 +226,21 @@ def quick_todo():
         category = 'work'
     today = date.today()
 
-    # Handle #summary → add comment to the most recent todo for this requirement
+    # Handle #comment → add as requirement-level comment (not tied to specific todo)
     if title.startswith('#') and req_id:
         comment_text = title[1:].strip()
         if comment_text:
-            # Find latest active todo for this req
-            latest_todo = Todo.query.filter(
-                Todo.user_id == current_user.id,
-            ).join(todo_requirements, Todo.id == todo_requirements.c.todo_id)\
-             .filter(todo_requirements.c.requirement_id == req_id)\
-             .order_by(Todo.created_at.desc()).first()
-            if latest_todo:
-                db.session.add(TodoComment(
-                    todo_id=latest_todo.id, user_id=current_user.id, content=comment_text,
-                ))
-                # Sync to requirement comment + activity
-                from app.models.requirement import Comment as ReqComment, Activity
-                db.session.add(ReqComment(
-                    requirement_id=req_id, user_id=current_user.id, content=comment_text,
-                ))
-                db.session.add(Activity(
-                    requirement_id=req_id, user_id=current_user.id,
-                    action='commented', detail=comment_text,
-                ))
-                db.session.commit()
-                return jsonify(ok=True, title=comment_text, todo_id=latest_todo.id, action='comment') if is_ajax else redirect(url_for('main.index'))
-            # No todo found, create as normal todo
-            pass
+            from app.models.requirement import Comment as ReqComment, Activity
+            db.session.add(ReqComment(
+                requirement_id=req_id, user_id=current_user.id, content=comment_text,
+            ))
+            db.session.add(Activity(
+                requirement_id=req_id, user_id=current_user.id,
+                action='commented', detail=comment_text,
+            ))
+            db.session.commit()
+            return jsonify(ok=True, title=comment_text, req_id=req_id,
+                           user=current_user.name, action='comment') if is_ajax else redirect(url_for('main.index'))
 
     # Handle @name or @group → create todos for target(s)
     at_target = None
@@ -566,6 +554,11 @@ def toggle_todo(todo_id):
     todo = db.session.get(Todo, todo_id)
     if not todo:
         return jsonify(ok=False) if request.is_json else redirect(url_for('main.index'))
+    # Allow same-group members to toggle (team collaboration)
+    if todo.user_id != current_user.id:
+        owner = db.session.get(User, todo.user_id)
+        if not owner or owner.group != current_user.group:
+            return jsonify(ok=False, msg='无权操作') if request.is_json else redirect(url_for('main.index'))
     if todo.status == TODO_STATUS_DONE:
         todo.status = TODO_STATUS_TODO
         todo.done_date = None
@@ -698,7 +691,32 @@ def daily_progress():
         Requirement.status.notin_(('done', 'closed', 'cancelled')),
     ).options(joinedload(Requirement.project)).all()
 
-    lines = [f'【{today.strftime("%Y-%m-%d")}】进展：']
+    # Build person context
+    from app.models.project_member import ProjectMember
+    my_roles = '、'.join(r.name for r in current_user.roles) or '成员'
+    lines = [f'汇报人：{current_user.name}（{my_roles}，{current_user.group or ""}）']
+
+    # Collect project members from related projects
+    project_ids = set(r.project_id for r in my_reqs if r.project_id)
+    if project_ids:
+        members = ProjectMember.query.filter(
+            ProjectMember.project_id.in_(project_ids)
+        ).all()
+        if members:
+            lines.append('项目成员：')
+            seen = set()
+            for m in members:
+                if m.user_id and m.user_id not in seen:
+                    seen.add(m.user_id)
+                    u = db.session.get(User, m.user_id)
+                    if u:
+                        u_roles = '、'.join(r.name for r in u.roles) or '成员'
+                        lines.append(f'  - {u.name}（{u_roles}，项目角色：{m.project_role}）')
+                elif m.external_name and m.external_name not in seen:
+                    seen.add(m.external_name)
+                    lines.append(f'  - {m.external_name}（外部，项目角色：{m.project_role}）')
+
+    lines.append(f'\n【{today.strftime("%Y-%m-%d")}】进展：')
 
     if done_today:
         for i, t in enumerate(done_today, 1):
@@ -735,40 +753,73 @@ def daily_progress():
             overdue_info = f'，已超期{(today - r.due_date).days}天' if r.due_date and r.due_date < today else ''
             lines.append(f'- [{r.number}] {r.title}：完成{pct}%（{done}/{total}）{due_info}{overdue_info}')
 
-    if blocked:
+    # Blocked todos + open risks → "当前问题"
+    from app.models.risk import Risk
+    open_risks = Risk.query.filter(
+        Risk.status == 'open',
+        db.or_(Risk.tracker_id == current_user.id, Risk.created_by == current_user.id),
+    ).all()
+    if blocked or open_risks:
         lines.append('')
         lines.append('当前问题：')
-        for i, t in enumerate(blocked, 1):
+        idx = 1
+        for t in blocked:
             days = t.workdays_overdue or 0
+            owner = current_user.name
+            owner_role = my_roles
+            if t.requirements:
+                req = t.requirements[0]
+                if req.assignee_id and req.assignee_id != current_user.id:
+                    assignee_user = db.session.get(User, req.assignee_id)
+                    if assignee_user:
+                        owner = assignee_user.name
+                        owner_role = '、'.join(r.name for r in assignee_user.roles) or '成员'
+                    else:
+                        owner = req.assignee_display
+                        owner_role = ''
             reason = t.blocked_reason or '待解决'
-            lines.append(f'{i}. {t.title}——责任人：{current_user.name}，阻塞{days}天 / {reason}')
+            role_tag = f'（{owner_role}）' if owner_role else ''
+            lines.append(f'{idx}. {t.title}——责任人：{owner}{role_tag}，阻塞{days}天 / {reason}')
+            idx += 1
+        for r in open_risks:
+            tracker = db.session.get(User, r.tracker_id)
+            tracker_name = tracker.name if tracker else '未指定'
+            tracker_role = ('、'.join(rl.name for rl in tracker.roles) if tracker else '')
+            role_tag = f'（{tracker_role}）' if tracker_role else ''
+            days = (today - r.due_date).days if r.due_date and r.due_date < today else 0
+            due_info = f'超期{days}天' if days > 0 else (f'截止{r.due_date.strftime("%m-%d")}' if r.due_date else '')
+            lines.append(f'{idx}. [风险] {r.title}（{r.severity_label}）——跟踪人：{tracker_name}{role_tag}，{due_info}')
+            idx += 1
+
+    raw_data = '\n'.join(lines)
+
+    # No data at all — return as-is, don't call AI
+    if not done_today and not active and not my_reqs:
+        return jsonify(ok=True, text=raw_data)
 
     # Let AI format it nicely
     from app.services.ai import call_ollama
-    raw_data = '\n'.join(lines)
     prompt = (
-        '你是一个研发日报助手。根据以下数据，生成格式化的每日进展报告。\n'
-        '严格使用以下格式，不要添加多余内容，直接输出文本（不要 JSON）：\n\n'
+        '你是一个研发日报助手。将以下原始数据整理成格式化的每日进展报告。\n'
+        f'当前用户：{current_user.name}\n\n'
+        '输出格式（纯文本，不要 JSON、不要 markdown）：\n'
         f'【{today.strftime("%Y-%m-%d")}】进展：\n'
-        '1. 具体完成的事项\n'
-        '2. ...\n\n'
+        '1. 完成的事项（过去式描述成果）\n\n'
         '进行中：\n'
-        '1. 当前正在做的事项\n\n'
+        '1. 正在做的事项（描述当前进度）\n\n'
         '当前问题：\n'
-        '1. 问题描述——责任人：xxx，阻塞N天/预期解决时间x.x\n\n'
-        '规则：\n'
-        '- 合并相似的任务，不要逐条罗列\n'
-        '- 完成项用过去式描述成果\n'
-        '- 进行中项描述当前进度和下一步\n'
-        '- 问题项必须标注责任人和阻塞天数\n'
-        '- 如果没有问题就不输出"当前问题"部分\n'
-        '- 如果没有进行中就不输出"进行中"部分\n\n'
+        f'1. 具体问题描述——责任人：{current_user.name}，阻塞N天/预期解决时间x.x\n\n'
+        '红线规则（违反则输出无效）：\n'
+        '1. 严禁编造原始数据中不存在的任务、人名、数字\n'
+        '2. 责任人/跟踪人必须使用原始数据中出现的人名，不能编造\n'
+        '3. 问题描述必须写具体内容（如"SSO token刷新接口未修复"），不要写"问题描述"四个字\n'
+        '4. 没有数据的部分直接省略，不要输出空段落\n'
+        '5. 可以合并相似任务、润色措辞，但不能添加不存在的内容\n\n'
         '原始数据：\n' + raw_data
     )
     _, ai_text = call_ollama(prompt)
     if ai_text:
         return jsonify(ok=True, text=ai_text)
-    # Fallback to raw data if AI fails
     return jsonify(ok=True, text=raw_data)
 
 

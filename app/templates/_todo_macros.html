@@ -7,16 +7,23 @@
 {% set full = (minutes // pomo) | int %}
 {% set remainder_pct = ((minutes % pomo) / pomo * 100) | int %}
 <span class="text-muted ms-1" style="font-size:.7em;" title="专注 {{ minutes }} 分钟">
-{% for i in range(full) %}<i class="bi bi-circle-fill text-success" style="font-size:.7em;"></i>{% endfor %}
-{% if remainder_pct > 0 %}<i class="bi bi-x-circle text-warning" style="font-size:.7em;" title="打断({{ remainder_pct }}%)"></i>{% endif %}
+{% for i in range(full) %}<i class="bi bi-circle-fill text-danger" style="font-size:.7em;"></i>{% endfor %}
+{% if remainder_pct > 0 %}
+{% if remainder_pct >= 80 %}<i class="bi bi-circle-fill text-primary" style="font-size:.7em;" title="{{ remainder_pct }}%"></i>
+{% elif remainder_pct >= 50 %}<i class="bi bi-circle-half text-warning" style="font-size:.7em;" title="{{ remainder_pct }}%"></i>
+{% elif remainder_pct >= 20 %}<i class="bi bi-circle-half text-secondary" style="font-size:.7em;" title="{{ remainder_pct }}%"></i>
+{% else %}<i class="bi bi-circle text-secondary" style="font-size:.7em;" title="{{ remainder_pct }}%"></i>
+{% endif %}
+{% endif %}
 {{ minutes }}m</span>
 {% endif %}
 {% endmacro %}
 
 {# Unified todo row — single source of truth #}
-{% macro todo_row(t, icon_color='text-secondary') %}
+{% macro todo_row(t, icon_color='text-secondary', show_comment_input=false) %}
 {% set is_help = t.children | length > 0 %}
-<div class="d-flex align-items-center gap-1 mb-1 ps-2 todo-drag-item {% if t.status == 'done' %}text-muted text-decoration-line-through{% elif t.workdays_overdue >= 3 %}border-start border-danger border-2{% elif t.workdays_overdue >= 1 %}border-start border-warning border-2{% endif %}" draggable="true" data-todo-id="{{ t.id }}" style="cursor:grab;">
+<div class="mb-1 ps-2">
+<div class="d-flex align-items-center gap-1 todo-drag-item {% if t.status == 'done' %}text-muted text-decoration-line-through{% elif t.workdays_overdue >= 3 %}border-start border-danger border-2{% elif t.workdays_overdue >= 1 %}border-start border-warning border-2{% endif %}" draggable="true" data-todo-id="{{ t.id }}" style="cursor:grab;">
     {% if is_help %}
     <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'hourglass-split text-warning' }}" style="font-size:.9em;" title="等待{{ t.children[0].user.name }}完成"></i>
     {% else %}
@@ -41,6 +48,21 @@
     </button>
     {{ pomodoro_icons(t.actual_minutes, current_user.pomodoro_minutes) }}
     <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" title="删除" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>
+</div>
+{% if show_comment_input %}
+{# Inline comments + input for team page #}
+{% if t.comments %}
+<div class="ps-3">
+    {% for c in t.comments %}
+    <div class="text-muted" style="font-size:.75em;"><strong>{{ c.user.name }}</strong> {{ c.created_at.strftime('%m-%d %H:%M') }}：{{ c.content }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+<div class="d-flex gap-1 ps-3 mt-1" style="max-width:400px;">
+    <input type="text" class="form-control form-control-sm py-0 comment-input" data-todo-id="{{ t.id }}" placeholder="评论 或 @姓名 求助" style="font-size:.75em;">
+    <button class="btn btn-sm btn-outline-secondary py-0 comment-submit" data-todo-id="{{ t.id }}" style="font-size:.72em;">发</button>
+</div>
+{% endif %}
 </div>
 {% endmacro %}
 
@@ -77,11 +99,19 @@ document.querySelectorAll('form[action*="/todo/"][action*="/toggle"]').forEach(f
 // Delete todo
 document.querySelectorAll('.btn-delete-home').forEach(function(btn) {
     btn.addEventListener('click', function() {
+        // Destroy tooltip before removing element to prevent orphan
+        var tip = bootstrap.Tooltip.getInstance(btn);
+        if (tip) tip.dispose();
         var row = btn.closest('.d-flex');
         var wasDone = row && row.classList.contains('text-decoration-line-through');
         var container = row.closest('.todo-list-for-req');
         apiPost('/todos/' + btn.dataset.id + '/edit', {title: ''}).then(function(d) {
             if (d && d.ok) {
+                // Destroy all tooltips in the row before removing
+                row.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+                    var t = bootstrap.Tooltip.getInstance(el);
+                    if (t) t.dispose();
+                });
                 row.remove();
                 if (typeof _todoTotal !== 'undefined') {
                     _todoTotal--;

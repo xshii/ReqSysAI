@@ -16,7 +16,8 @@
 <div class="d-flex gap-1 mb-3 flex-wrap">
     <span class="badge bg-primary team-person-filter" style="cursor:pointer;font-size:.75em;" onclick="filterTeamPerson('')">全部</span>
     {% for u in users %}
-    {% set u_count = (user_active.get(u.id, [])|length) %}
+    {% set ud = user_data.get(u.id, {}) %}
+    {% set u_count = ud.get('todo_total', 0) %}
     {% if u_count > 0 %}
     <span class="badge bg-light text-dark border team-person-filter" style="cursor:pointer;font-size:.75em;" onclick="filterTeamPerson('{{ u.id }}')">
         {{ u.name }} <span class="text-muted">{{ u_count }}</span>
@@ -39,32 +40,62 @@
     <div class="col-md-7">
         <h6 class="text-muted mb-3">近两日进展</h6>
         {% for u in users %}
-        {% set todos = user_active.get(u.id, []) %}
-        <div class="card mb-3 team-user-card" data-uid="{{ u.id }}" data-uname="{{ u.name }}">
-            <div class="card-header py-2 d-flex justify-content-between align-items-center">
-                <span class="fw-bold small">{{ u.name }} <span class="text-muted">{{ u.group or '' }}</span></span>
-                <span class="badge bg-secondary team-card-count">{{ todos | length }}</span>
+        {% set ud = user_data.get(u.id, {}) %}
+        {% set u_total = ud.get('todo_total', 0) %}
+        {% set u_done = ud.get('todo_done', 0) %}
+        {% set u_all_done = u_total > 0 and u_done == u_total %}
+        <div class="card mb-3 team-user-card {% if u_all_done %}border-success border-opacity-25{% endif %}" data-uid="{{ u.id }}" data-uname="{{ u.name }}">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center" role="button" data-bs-toggle="collapse" data-bs-target="#teamUser{{ u.id }}" style="cursor:pointer;">
+                <span class="fw-bold small">
+                    <i class="bi bi-chevron-{{ 'right' if u_all_done else 'down' }} text-muted" style="font-size:.6em;"></i>
+                    {{ u.name }} <span class="text-muted">{{ u.group or '' }}</span>
+                </span>
+                {% if u_total %}<span class="badge bg-{{ 'success' if u_all_done else 'secondary' }}">{{ u_done }}/{{ u_total }}</span>{% endif %}
             </div>
-            <div class="card-body py-2 team-card-body" style="min-height:30px;">
-            {% if todos %}
-            {% set seen_reqs = namespace(ids=[]) %}
-            {% for t in todos %}
-                {% set req = t.requirements[0] if t.requirements else None %}
-                {% set rid = req.id if req else 0 %}
-                {% if rid and rid not in seen_reqs.ids %}
-                    {% if seen_reqs.ids %}<div class="mt-2"></div>{% endif %}
-                    <div class="small fw-bold text-primary mb-1"><a href="{{ url_for('requirement.requirement_detail', req_id=rid) }}" class="text-decoration-none">{{ req.number }} {{ req.title }}</a></div>
-                    {% set _ = seen_reqs.ids.append(rid) %}
-                {% elif not rid and 0 not in seen_reqs.ids %}
-                    {% if seen_reqs.ids %}<div class="mt-2"></div>{% endif %}
-                    <div class="small fw-bold text-secondary mb-1">团队事务</div>
-                    {% set _ = seen_reqs.ids.append(0) %}
+            <div class="collapse {% if not u_all_done %}show{% endif %} team-card-body" id="teamUser{{ u.id }}" style="min-height:30px;">
+            <div class="card-body py-2">
+            {% if ud %}
+                {# Risk todos #}
+                {% if ud.risk_todos %}
+                <div class="mb-2">
+                    <div class="d-flex align-items-center gap-1 mb-1">
+                        <span class="badge bg-danger" style="font-size:.6em;">风险</span>
+                        <span class="badge bg-secondary bg-opacity-50" style="font-size:.5em;">{{ ud.risk_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ ud.risk_todos|length }}</span>
+                    </div>
+                    {% for t in ud.risk_todos %}{{ todo_row(t, 'text-danger', show_comment_input=true) }}{% endfor %}
+                </div>
                 {% endif %}
-                {{ todo_row(t) }}
-            {% endfor %}
+
+                {# Requirement todos — same as homepage #}
+                {% for r in ud.display_reqs %}
+                {% set r_todos = ud.req_todos.get(r.id, []) %}
+                {% if r_todos %}
+                <div class="mb-2">
+                    <div class="d-flex align-items-center gap-1 mb-1">
+                        <span class="badge bg-{{ r.status_color }}" style="font-size:.6em;">{{ r.status_label }}</span>
+                        <span class="badge bg-secondary bg-opacity-50" style="font-size:.5em;">{{ r_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ r_todos|length }}</span>
+                        {% if r.due_date and r.due_date < today %}<span class="badge bg-danger" style="font-size:.55em;">超期</span>{% endif %}
+                        <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="small fw-bold text-primary text-decoration-none" style="overflow:hidden;text-overflow:ellipsis;">{{ r.number }} {{ r.title }}</a>
+                    </div>
+                    {% for t in r_todos %}{{ todo_row(t, show_comment_input=true) }}{% endfor %}
+                </div>
+                {% endif %}
+                {% endfor %}
+
+                {# Team todos #}
+                {% if ud.team_todos %}
+                <div class="mb-1">
+                    <div class="d-flex align-items-center gap-1 mb-1">
+                        <span class="badge bg-secondary" style="font-size:.6em;">团队</span>
+                        <span class="badge bg-secondary bg-opacity-50" style="font-size:.5em;">{{ ud.team_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ ud.team_todos|length }}</span>
+                    </div>
+                    {% for t in ud.team_todos %}{{ todo_row(t, show_comment_input=true) }}{% endfor %}
+                </div>
+                {% endif %}
             {% else %}
             <div class="text-muted small text-center py-1">暂无待办</div>
             {% endif %}
+            </div>
             </div>
         </div>
         {% endfor %}
@@ -118,12 +149,11 @@ function filterTeamPerson(uid) {
 /* Shared todo row JS (toggle, delete, timer, block) */
 {{ todo_row_js() }}
 
-/* Cross-user drag: reassign todo to another team member */
+/* Cross-user drag: reassign + precise positioning */
 (function() {
     var dragEl = null;
     var sourceCard = null;
 
-    // Make todo items draggable (they already have draggable="true" from todo_row macro)
     document.querySelectorAll('.todo-drag-item').forEach(function(el) {
         el.addEventListener('dragstart', function(e) {
             dragEl = el;
@@ -135,13 +165,52 @@ function filterTeamPerson(uid) {
             el.style.opacity = '';
             dragEl = null;
             sourceCard = null;
-            document.querySelectorAll('.team-user-card').forEach(function(c) {
-                c.style.outline = '';
-            });
+            // Clear all visual hints
+            document.querySelectorAll('.team-user-card').forEach(function(c) { c.style.outline = ''; });
+            document.querySelectorAll('.todo-drag-item').forEach(function(e) { e.style.borderTop = ''; e.style.borderBottom = ''; });
+        });
+
+        // Item-level dragover: show insert indicator
+        el.addEventListener('dragover', function(e) {
+            if (!dragEl || dragEl === el) return;
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = 'move';
+            var rect = el.getBoundingClientRect();
+            if (e.clientY < rect.top + rect.height / 2) {
+                el.style.borderTop = '2px solid #0d6efd'; el.style.borderBottom = '';
+            } else {
+                el.style.borderBottom = '2px solid #0d6efd'; el.style.borderTop = '';
+            }
+            // Highlight target card if cross-user
+            var targetCard = el.closest('.team-user-card');
+            if (targetCard && targetCard !== sourceCard) targetCard.style.outline = '2px dashed #0d6efd';
+        });
+        el.addEventListener('dragleave', function() { el.style.borderTop = ''; el.style.borderBottom = ''; });
+
+        // Item-level drop: precise positioning
+        el.addEventListener('drop', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            el.style.borderTop = ''; el.style.borderBottom = '';
+            if (!dragEl || dragEl === el) return;
+
+            var targetCard = el.closest('.team-user-card');
+            var rect = el.getBoundingClientRect();
+            if (e.clientY < rect.top + rect.height / 2) {
+                el.parentElement.insertBefore(dragEl, el);
+            } else {
+                el.parentElement.insertBefore(dragEl, el.nextSibling);
+            }
+
+            // Cross-user: reassign
+            if (targetCard && targetCard !== sourceCard) {
+                _doReassign(dragEl, sourceCard, targetCard);
+            }
         });
     });
 
-    // Make user cards droppable
+    // Card-level drop: fallback for empty cards or drop on card header
     document.querySelectorAll('.team-user-card').forEach(function(card) {
         var body = card.querySelector('.team-card-body');
 
@@ -149,50 +218,48 @@ function filterTeamPerson(uid) {
             if (!dragEl) return;
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
-            var targetCard = card;
-            if (targetCard !== sourceCard) {
-                targetCard.style.outline = '2px dashed #0d6efd';
-            }
+            if (card !== sourceCard) card.style.outline = '2px dashed #0d6efd';
         });
-        card.addEventListener('dragleave', function() {
-            card.style.outline = '';
+        card.addEventListener('dragleave', function(e) {
+            // Only clear if actually leaving the card (not entering a child)
+            if (!card.contains(e.relatedTarget)) card.style.outline = '';
         });
         card.addEventListener('drop', function(e) {
             e.preventDefault();
             card.style.outline = '';
             if (!dragEl || card === sourceCard) return;
 
-            var todoId = parseInt(dragEl.dataset.todoId);
-            var targetUid = card.dataset.uid;
-            var targetName = card.dataset.uname;
-
-            // Move DOM element
-            body.appendChild(dragEl);
-
-            // Update badge counts
-            if (sourceCard) {
-                var srcCount = sourceCard.querySelector('.team-card-count');
-                if (srcCount) srcCount.textContent = sourceCard.querySelectorAll('.todo-drag-item').length;
-            }
-            var tgtCount = card.querySelector('.team-card-count');
-            if (tgtCount) tgtCount.textContent = card.querySelectorAll('.todo-drag-item').length;
-
-            // Remove "暂无待办" placeholder if present
+            // Append to card body (fallback position)
             var placeholder = body.querySelector('.text-center.text-muted');
             if (placeholder) placeholder.remove();
+            body.appendChild(dragEl);
 
-            // API call to reassign
-            apiPost('/api/reassign-todo', {todo_id: todoId, target_user_id: parseInt(targetUid)})
-            .then(function(d) {
-                if (d && d.ok) {
-                    showToast(d.title + ' → ' + d.new_user, 'success');
-                } else {
-                    showToast('转交失败：' + (d.msg || ''), 'danger');
-                    location.reload();
-                }
-            });
+            _doReassign(dragEl, sourceCard, card);
         });
     });
+
+    function _doReassign(el, fromCard, toCard) {
+        var todoId = parseInt(el.dataset.todoId);
+        var targetUid = toCard.dataset.uid;
+
+        // Update badge counts
+        if (fromCard) {
+            var srcCount = fromCard.querySelector('.team-card-count');
+            if (srcCount) srcCount.textContent = fromCard.querySelectorAll('.todo-drag-item').length;
+        }
+        var tgtCount = toCard.querySelector('.team-card-count');
+        if (tgtCount) tgtCount.textContent = toCard.querySelectorAll('.todo-drag-item').length;
+
+        apiPost('/api/reassign-todo', {todo_id: todoId, target_user_id: parseInt(targetUid)})
+        .then(function(d) {
+            if (d && d.ok) {
+                showToast(d.title + ' → ' + d.new_user, 'success');
+            } else {
+                showToast('转交失败：' + (d.msg || ''), 'danger');
+                location.reload();
+            }
+        });
+    }
 })();
 
 /* @mention autocomplete */

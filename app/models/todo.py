@@ -18,7 +18,6 @@ class Todo(db.Model):
     status = db.Column(db.String(20), default='todo')  # todo / done
     category = db.Column(db.String(20), default='work')  # work / team / personal
     source = db.Column(db.String(20), default='manual')  # manual / ai / help
-    estimated_minutes = db.Column(db.Integer, nullable=True)  # Estimated time in minutes
     parent_id = db.Column(db.Integer, db.ForeignKey('todos.id'), nullable=True)
     sort_order = db.Column(db.Integer, default=0)
     due_date = db.Column(db.Date, nullable=True)
@@ -28,12 +27,10 @@ class Todo(db.Model):
     blocked_reason = db.Column(db.String(200), nullable=True)  # 阻塞原因
     started_at = db.Column(db.DateTime, nullable=True)  # Timer start
     actual_minutes = db.Column(db.Integer, nullable=True)  # Recorded on completion
-    recurring_id = db.Column(db.Integer, db.ForeignKey('recurring_todos.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = db.relationship('User', backref='todos')
-    recurring = db.relationship('RecurringTodo', backref='spawned_todos', foreign_keys=[recurring_id])
     comments = db.relationship('TodoComment', backref='todo', cascade='all, delete-orphan',
                                order_by='TodoComment.created_at')
     requirements = db.relationship('Requirement', secondary=todo_requirements, backref='todos', lazy='joined')

@@ -38,7 +38,7 @@ class Requirement(db.Model):
             return self.assignee.name
         return self.assignee_name or '未分配'
     comments = db.relationship('Comment', back_populates='requirement', cascade='all, delete-orphan',
-                               order_by='Comment.created_at')
+                               order_by='Comment.created_at.desc()')
     activities = db.relationship('Activity', back_populates='requirement', cascade='all, delete-orphan',
                                  order_by='Activity.created_at.desc()')
 

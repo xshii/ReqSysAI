@@ -412,9 +412,7 @@ class TestRecurringCompletion:
 
         with app.app_context():
             from app.models.recurring_completion import RecurringCompletion
-            from app.models.todo import Todo
             assert RecurringCompletion.query.filter_by(recurring_id=rid).count() == 1
-            assert Todo.query.filter_by(recurring_id=rid).count() == 0
 
     def test_toggle_undo_removes_completion(self, client, app):
         """再次点击取消完成，删除 completion 记录"""

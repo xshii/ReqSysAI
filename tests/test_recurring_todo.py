@@ -373,9 +373,6 @@ class TestRecurringStatus:
             # Completion record exists
             c = RecurringCompletion.query.filter_by(recurring_id=rid).first()
             assert c is not None
-            # No Todo record created
-            t = Todo.query.filter_by(recurring_id=rid).first()
-            assert t is None
 
 
 class TestRecurringMonthlyPeriods:

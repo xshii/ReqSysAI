@@ -485,27 +485,40 @@ def team():
         Todo.done_date.desc(),
     ).all() if user_ids else []
 
-    # Left: recent (last 2 working days) — all todos (active + recently done)
-    # Right: older completed todos
-    user_active = {}  # uid → [recent todos, including done today/yesterday]
-    user_done = {}    # uid → [older done todos]
+    # Group todos by user → by category (same structure as homepage)
+    user_data = {}  # uid → {req_todos, risk_todos, team_todos, display_reqs, todo_total, todo_done}
+    user_done = {}  # uid → [older done todos]
     for t in all_todos:
         work_date = t.done_date or t.created_date or today
         if t.status == TODO_STATUS_TODO or work_date >= yesterday:
-            user_active.setdefault(t.user_id, []).append(t)
+            ud = user_data.setdefault(t.user_id, {
+                'req_todos': {}, 'risk_todos': [], 'team_todos': [],
+                'display_reqs': [], 'todos': [], '_req_map': {},
+            })
+            ud['todos'].append(t)
+            if t.category == 'risk':
+                ud['risk_todos'].append(t)
+            elif t.category == 'team' or not t.requirements:
+                ud['team_todos'].append(t)
+            else:
+                for r in t.requirements:
+                    if r.status not in REQ_INACTIVE_STATUSES:
+                        ud['req_todos'].setdefault(r.id, []).append(t)
+                        if r.id not in ud['_req_map']:
+                            ud['_req_map'][r.id] = r
+                if not t.requirements or all(r.status in REQ_INACTIVE_STATUSES for r in t.requirements):
+                    ud['team_todos'].append(t)
         elif t.status == TODO_STATUS_DONE:
             user_done.setdefault(t.user_id, []).append(t)
-    # Sort: blocked first, then overdue (carryover, only after 10am), then active, then done
-    from datetime import datetime as dt_
-    _before_10am = dt_.now().hour < 10
-    for uid in user_active:
-        user_active[uid].sort(key=lambda t: (
-            0 if t.need_help else 1,  # blocked first
-            0 if not _before_10am and t.status == TODO_STATUS_TODO and t.created_date and t.created_date < today else 1,  # overdue (after 10am only)
-            0 if t.status == TODO_STATUS_TODO else 1,  # active before done
-            0 if t.requirements else 1,
-            t.requirements[0].id if t.requirements else 999999,
-        ))
+
+    # Build display_reqs for each user
+    for uid, ud in user_data.items():
+        ud['display_reqs'] = sorted(ud['_req_map'].values(),
+            key=lambda r: (r.due_date or date(2099,1,1), r.priority))
+        ud['todo_total'] = len(ud['todos'])
+        ud['todo_done'] = sum(1 for t in ud['todos'] if t.status == TODO_STATUS_DONE)
+        del ud['_req_map'], ud['todos']
+
     for uid in user_done:
         user_done[uid].sort(key=lambda t: t.done_date or t.created_date, reverse=True)
 
@@ -553,13 +566,10 @@ def team():
         Todo.user_id.in_(user_ids),
     ).options(joinedload(Todo.requirements)).order_by(Todo.created_at.desc()).all()
 
-    from datetime import datetime as dt_
-    before_10am = dt_.now().hour < 10
-
     return render_template('todo/team.html',
-        users=users, user_active=user_active, user_done=user_done, groups=groups,
-        cur_group=cur_group, today=today, form=form,
+        users=users, user_data=user_data, user_done=user_done, groups=groups,
+        cur_group=cur_group, today=today, timedelta=timedelta, form=form,
         reqs=reqs, default_req_ids=default_req_ids, all_users=all_users_list,
         due_options=due_options, help_due_options=help_due_options,
-        help_todos=help_todos, before_10am=before_10am,
+        help_todos=help_todos,
     )
