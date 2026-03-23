@@ -249,18 +249,25 @@
 {% if _roles or _pmap %}
 <div class="report-section">
     <h6>人力地图</h6>
-    {% set _names = _roles.keys()|list if _roles else _pmap.keys()|list %}
-    {% set cols = 3 if _names|length > 12 else (2 if _names|length > 6 else 1) %}
-    <div class="row g-1">
-        {% for name in _names %}
-        <div class="col-{{ 12 // cols }}">
-            <div class="d-flex align-items-center gap-1" style="font-size:.85em;">
-                <span>{{ name }}</span>
-                <span class="text-muted" style="font-size:.8em;">{{ _roles.get(name, '') }}</span>
-            </div>
-        </div>
+    {% set _items = _roles.items()|list if _roles else [] %}
+    {% if not _items and _pmap %}{% set _items = [] %}{% for n in _pmap.keys() %}{% if _items.append((n, '')) %}{% endif %}{% endfor %}{% endif %}
+    <table class="report-table">
+        <thead><tr><th>姓名</th><th>角色</th><th>姓名</th><th>角色</th></tr></thead>
+        <tbody>
+        {% for i in range(0, _items|length, 2) %}
+        <tr>
+            <td>{{ _items[i][0] }}</td>
+            <td class="text-muted">{{ _items[i][1] }}</td>
+            {% if i + 1 < _items|length %}
+            <td>{{ _items[i+1][0] }}</td>
+            <td class="text-muted">{{ _items[i+1][1] }}</td>
+            {% else %}
+            <td></td><td></td>
+            {% endif %}
+        </tr>
         {% endfor %}
-    </div>
+        </tbody>
+    </table>
 </div>
 {% endif %}
 
