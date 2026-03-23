@@ -77,7 +77,23 @@ function updateRoleLabel() {
     if (checked.length === 0) label.textContent = '请选择';
     else label.textContent = Array.from(checked).map(function(c) { return c.nextElementSibling.textContent; }).join(', ');
 }
-document.querySelectorAll('.role-cb').forEach(function(cb) { cb.addEventListener('change', updateRoleLabel); });
+var _roleCbs = {};
+document.querySelectorAll('.role-cb').forEach(function(cb) {
+    var label = cb.nextElementSibling.textContent.trim();
+    _roleCbs[label] = cb;
+});
+function _autoCheck(name) { if (_roleCbs[name] && !_roleCbs[name].checked) _roleCbs[name].checked = true; }
+document.querySelectorAll('.role-cb').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+        var label = cb.nextElementSibling.textContent.trim();
+        if (cb.checked) {
+            if (label === '模块架构工程师') { _autoCheck('代码评审人'); _autoCheck('开发工程师'); _autoCheck('测试工程师'); }
+            else if (label === '代码评审人') { _autoCheck('开发工程师'); _autoCheck('测试工程师'); }
+            else if (label === '开发工程师') { _autoCheck('测试工程师'); }
+        }
+        updateRoleLabel();
+    });
+});
 updateRoleLabel();
 </script>
 {% endblock %}

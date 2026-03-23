@@ -6,10 +6,10 @@
     <h4>激励专区</h4>
     <div class="d-flex gap-2">
         {% if current_user.is_admin %}
-        <button class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#adminModal"><i class="bi bi-plus-circle"></i> 管理员录入</button>
+        <button class="btn btn-outline-success btn-sm mgr-only" data-bs-toggle="modal" data-bs-target="#adminModal"><i class="bi bi-plus-circle"></i> 管理员录入</button>
         {% endif %}
         {% if current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR') %}
-        {% if ai_enabled %}<button class="btn btn-outline-warning btn-sm" id="btnAiIncentive" onclick="aiRecommendCandidates()"><i class="bi bi-robot"></i> AI 推荐候选</button>{% endif %}
+        {% if ai_enabled %}<button class="btn btn-outline-warning btn-sm mgr-only" id="btnAiIncentive" onclick="aiRecommendCandidates()"><i class="bi bi-robot"></i> AI 推荐候选</button>{% endif %}
         {% endif %}
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#submitModal"><i class="bi bi-star"></i> 推荐激励</button>
     </div>
@@ -32,7 +32,7 @@
 {# Tab navigation #}
 {% if is_reviewer %}
 {% set cur_tab = request.args.get('tab', status_filter or 'submitted') %}
-<ul class="nav nav-tabs mb-3 small">
+<ul class="nav nav-tabs mb-3 small mgr-only">
     <li class="nav-item"><a class="nav-link {% if cur_tab == 'submitted' %}active{% endif %}" href="?tab=submitted&status=submitted&scope=all&period={{ period }}">待评审</a></li>
     <li class="nav-item"><a class="nav-link {% if cur_tab == 'pending' %}active{% endif %}" href="?tab=pending&status=pending&scope=all&period={{ period }}">待修改</a></li>
     <li class="nav-item"><a class="nav-link {% if cur_tab == 'approved' %}active{% endif %}" href="?tab=approved&status=approved&scope=all&period={{ period }}">已通过</a></li>

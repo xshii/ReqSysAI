@@ -17,7 +17,11 @@ auth:
 roles:
   - { name: SE, desc: 软件工程师 }
   - { name: DE, desc: 开发工程师 }
-  - { name: QA, desc: 测试工程师 }
+  - { name: TE, desc: 测试工程师 }
+  - { name: Committer, desc: 代码评审人 }
+  - { name: MDE, desc: 模块架构工程师 }
+  - { name: QA, desc: 质量管理 }
+  - { name: SEC, desc: 秘书 }
   - { name: FO, desc: 功能负责人 }
   - { name: PM, desc: 项目经理 }
   - { name: PL, desc: 项目负责人, hidden: true }

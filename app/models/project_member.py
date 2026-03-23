@@ -23,7 +23,8 @@ class ProjectMember(db.Model):
         'PM': '项目经理',
         'PL': '技术负责人',
         'DEV': '开发',
-        'QA': '测试',
+        'TE': '测试',
+        'QA': '质量管理',
         'UI': '设计',
     }
 

@@ -19,6 +19,11 @@
                 <i class="bi bi-kanban"></i> 研发协作平台
             </a>
             <div class="d-flex align-items-center gap-2">
+                {% if current_user.is_authenticated and (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')) %}
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="mgrEyeBtn" onclick="toggleMgrView()" title="管理视图">
+                    <i class="bi bi-eye-slash" id="mgrEyeIcon"></i>
+                </button>
+                {% endif %}
                 <a href="{{ url_for('main.index') }}" class="btn btn-primary position-relative" title="通知">
                     <i class="bi bi-bell"></i>
                     {% if notif_count > 0 %}
@@ -177,23 +182,23 @@
                         </a>
                     </li>
                     {% if current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR') %}
-                    <li class="nav-header">管理</li>
-                    <li class="nav-item">
+                    <li class="nav-header mgr-only">管理 <i class="bi bi-eye text-muted" style="font-size:.7em;"></i></li>
+                    <li class="nav-item mgr-only">
                         <a class="nav-link {% if request.endpoint == 'dashboard.resource_map' %}active{% endif %}" href="{{ url_for('dashboard.resource_map') }}">
                             <i class="bi bi-people-fill"></i> 人力投入
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item mgr-only">
                         <a class="nav-link {% if request.endpoint == 'dashboard.stats' and not _cur_pid %}active{% endif %}" href="{{ url_for('dashboard.stats') }}">
                             <i class="bi bi-graph-up"></i> 统计报表
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item mgr-only">
                         <a class="nav-link {% if request.endpoint == 'dashboard.metrics' %}active{% endif %}" href="{{ url_for('dashboard.metrics') }}">
                             <i class="bi bi-speedometer2"></i> 交付度量
                         </a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item mgr-only">
                         <a class="nav-link {% if request.endpoint == 'dashboard.emotion_predict' %}active{% endif %}" href="{{ url_for('dashboard.emotion_predict') }}">
                             <i class="bi bi-emoji-neutral"></i> 情绪预测
                         </a>
@@ -384,6 +389,64 @@
         .catch(function() { location.reload(); });
     });
     </script>
+    {% if current_user.is_authenticated and (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')) %}
+    <script>
+    (function() {
+        var MGR_KEY = 'mgr_view', MGR_TS_KEY = 'mgr_view_ts', MGR_PWD_KEY = 'mgr_pwd';
+        var EXPIRE_MS = 6 * 3600 * 1000; // 6 hours
+        var DEFAULT_PWD = '88888888';
+
+        function isOpen() {
+            var ts = parseInt(localStorage.getItem(MGR_TS_KEY) || '0');
+            if (localStorage.getItem(MGR_KEY) === '1' && (Date.now() - ts) < EXPIRE_MS) return true;
+            localStorage.removeItem(MGR_KEY);
+            return false;
+        }
+
+        function applyView(open) {
+            document.querySelectorAll('.mgr-only').forEach(function(el) {
+                el.style.display = open ? '' : 'none';
+            });
+            var icon = document.getElementById('mgrEyeIcon');
+            var btn = document.getElementById('mgrEyeBtn');
+            if (icon) icon.className = open ? 'bi bi-eye' : 'bi bi-eye-slash';
+            if (btn) btn.className = open ? 'btn btn-primary btn-sm' : 'btn btn-outline-secondary btn-sm';
+        }
+
+        function getSavedPwd() { return localStorage.getItem(MGR_PWD_KEY) || DEFAULT_PWD; }
+
+        window.toggleMgrView = function() {
+            if (isOpen()) {
+                localStorage.removeItem(MGR_KEY);
+                applyView(false);
+                return;
+            }
+            var pwd = getSavedPwd();
+            if (pwd === DEFAULT_PWD) {
+                // First time: prompt to change password
+                var newPwd = prompt('首次使用，请设置管理视图密码（6-15位，支持字母数字符号）：');
+                if (!newPwd || newPwd.length < 6 || newPwd.length > 15) {
+                    alert('密码长度需6-15位'); return;
+                }
+                localStorage.setItem(MGR_PWD_KEY, newPwd);
+                pwd = newPwd;
+                alert('密码已设置');
+            }
+            var input = prompt('请输入管理视图密码：');
+            if (input === pwd) {
+                localStorage.setItem(MGR_KEY, '1');
+                localStorage.setItem(MGR_TS_KEY, String(Date.now()));
+                applyView(true);
+            } else if (input !== null) {
+                alert('密码错误');
+            }
+        };
+
+        // Apply on load
+        applyView(isOpen());
+    })();
+    </script>
+    {% endif %}
     {% block extra_js %}{% endblock %}
 </body>
 </html>
