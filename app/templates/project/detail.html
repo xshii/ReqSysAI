@@ -263,7 +263,7 @@
             <div class="card-header py-2 small fw-bold"><i class="bi bi-link-45deg"></i> 快捷入口</div>
             <div class="list-group list-group-flush small">
                 <a href="{{ url_for('project.risk_list', project_id=project.id) }}" class="list-group-item list-group-item-action py-2">
-                    <i class="bi bi-shield-exclamation"></i> 风险管理 {% if open_risks %}<span class="badge bg-danger float-end">{{ open_risks|length }}</span>{% endif %}
+                    <i class="bi bi-shield-exclamation"></i> 风险问题 {% if open_risks %}<span class="badge bg-danger float-end">{{ open_risks|length }}</span>{% endif %}
                 </a>
                 <a href="{{ url_for('project.meeting_list', project_id=project.id) }}" class="list-group-item list-group-item-action py-2"><i class="bi bi-chat-dots"></i> 会议纪要</a>
                 <a href="{{ url_for('project.knowledge_list', project_id=project.id) }}" class="list-group-item list-group-item-action py-2"><i class="bi bi-book"></i> 知识管理</a>

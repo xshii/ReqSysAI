@@ -442,8 +442,14 @@ def risk_add(project_id):
 def risk_resolve(risk_id):
     risk = db.get_or_404(Risk, risk_id)
     resolution = request.form.get('resolution', '').strip()
+    # If no resolution provided, use latest comment from last 24h
+    if not resolution and risk.comments:
+        from datetime import timedelta as _td
+        latest = risk.comments[0]  # ordered desc
+        if (datetime.utcnow() - latest.created_at).total_seconds() < 86400:
+            resolution = latest.content
     if not resolution:
-        flash('请填写解决方案', 'danger')
+        flash('请填写解决方案（或先添加评论）', 'danger')
         return redirect(url_for('project.risk_list', project_id=risk.project_id))
     risk.status = 'resolved'
     risk.resolution = resolution
@@ -468,11 +474,13 @@ def risk_close(risk_id):
 def risk_reopen(risk_id):
     risk = db.get_or_404(Risk, risk_id)
     risk.status = 'open'
-    risk.resolved_at = None
     risk.resolution = None
+    risk.resolved_at = None
     db.session.commit()
-    flash('风险已重新打开', 'success')
+    flash('已重新打开', 'success')
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
+
+
 
 
 @project_bp.route('/risks/<int:risk_id>/edit', methods=['POST'])

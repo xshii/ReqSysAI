@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}风险管理 · {{ project.name }} - 研发协作平台{% endblock %}
+{% block title %}风险问题 · {{ project.name }} - 研发协作平台{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4>风险管理 · {{ project.name }}</h4>
+    <h4>风险问题 · {{ project.name }}</h4>
     <div class="d-flex gap-2">
         {% if ai_enabled %}<button class="btn btn-outline-warning btn-sm" id="aiScanBtn" onclick="aiRiskScan()"><i class="bi bi-robot"></i> AI 风险识别</button>{% endif %}
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg"></i> 登记风险</button>
@@ -86,6 +86,10 @@
                 <form method="POST" action="{{ url_for('project.risk_close', risk_id=r.id) }}" class="d-inline">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm btn-outline-secondary py-0">关闭</button>
+                </form>
+                <form method="POST" action="{{ url_for('project.risk_reopen', risk_id=r.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-warning py-0">重开</button>
                 </form>
                 {% else %}
                 <form method="POST" action="{{ url_for('project.risk_reopen', risk_id=r.id) }}" class="d-inline">

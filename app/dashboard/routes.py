@@ -943,11 +943,59 @@ def my_day():
 
     weekday_names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
+    # ---- Merged from profile_stats (个人效能) ----
+    from app.models.incentive import Incentive
+    from app.constants import TODO_STATUS_DONE
+    uid = current_user.id
+    six_months_ago = today - timedelta(days=180)
+
+    monthly_todos = db.session.query(
+        db.func.strftime('%Y-%m', Todo.done_date).label('month'),
+        db.func.count(Todo.id),
+    ).filter(
+        Todo.user_id == uid, Todo.status == TODO_STATUS_DONE,
+        Todo.done_date >= six_months_ago,
+    ).group_by('month').order_by('month').all()
+
+    monthly_focus = db.session.query(
+        db.func.strftime('%Y-%m', Todo.done_date).label('month'),
+        db.func.sum(Todo.actual_minutes),
+    ).filter(
+        Todo.user_id == uid, Todo.status == TODO_STATUS_DONE,
+        Todo.done_date >= six_months_ago, Todo.actual_minutes > 0,
+    ).group_by('month').order_by('month').all()
+
+    req_count = Requirement.query.filter_by(assignee_id=uid).count()
+    req_done = Requirement.query.filter_by(assignee_id=uid, status='done').count()
+    incentive_count = db.session.query(db.func.count(Incentive.id)).filter(
+        Incentive.status == 'approved', Incentive.nominees.any(id=uid),
+    ).scalar() or 0
+
+    year_ago = today - timedelta(days=365)
+    heatmap_rows = db.session.query(
+        Todo.done_date, db.func.count(Todo.id),
+    ).filter(
+        Todo.user_id == uid, Todo.status == TODO_STATUS_DONE,
+        Todo.done_date >= year_ago,
+    ).group_by(Todo.done_date).all()
+    heatmap = {str(row[0]): row[1] for row in heatmap_rows}
+
+    all_focus_hours = round((db.session.query(
+        db.func.sum(Todo.actual_minutes),
+    ).filter(Todo.user_id == uid, Todo.actual_minutes > 0).scalar() or 0) / 60, 1)
+
     return render_template('dashboard/my_day.html',
                            today=today, days=days, day_data=day_data,
                            total_focus=total_focus, total_sessions=total_sessions,
                            total_done=total_done, focus_ranking=focus_ranking,
-                           weekday_names=weekday_names)
+                           weekday_names=weekday_names,
+                           # 个人效能
+                           monthly_todos=monthly_todos, monthly_focus=monthly_focus,
+                           req_count=req_count, req_done=req_done,
+                           incentive_count=incentive_count,
+                           heatmap=heatmap, heatmap_start=year_ago,
+                           all_focus_hours=all_focus_hours,
+                           timedelta=timedelta)
 
 
 # ---- Personal weekly report ----

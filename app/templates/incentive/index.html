@@ -132,7 +132,12 @@
                 {% endif %}
                 <div class="text-muted small mt-1">
                     提交人：{{ inc.submitter.name }} · {{ inc.created_at.strftime('%m-%d %H:%M') }}
-                    {% if is_reviewer %}{% if inc.amount %} · ¥{{ inc.amount }}{% endif %} · {{ inc.source_label }}{% endif %}
+                    {% if is_reviewer %}
+                    {% if inc.amount %} · ¥{{ inc.amount }}{% endif %} · {{ inc.source_label }}
+                    {% elif current_user.id == inc.submitted_by and inc.status == 'approved' %}
+                    {% if inc.amount %} · <span class="text-success fw-bold">¥{{ inc.amount }}</span>{% endif %}
+                    {% if inc.reviewed_at %} · {{ inc.reviewed_at.strftime('%Y-%m') }}{% endif %}
+                    {% endif %}
                 </div>
                 </div>
             </div>
@@ -143,7 +148,7 @@
                 <span class="badge bg-secondary">已提交</span>
                 {% endif %}
                 {% if is_reviewer and inc.status in ('submitted', 'pending') %}
-                <button class="btn btn-sm btn-outline-primary mt-1 btn-review-inc"
+                <button class="btn btn-sm btn-outline-primary mt-1 btn-review-inc mgr-only"
                         data-bs-toggle="modal" data-bs-target="#reviewModal"
                         data-inc-id="{{ inc.id }}" data-title="{{ inc.title }}"
                         data-comment="{{ inc.review_comment or '' }}"

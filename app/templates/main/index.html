@@ -505,9 +505,7 @@ function recurringClick(rid, el) {
     if (!el.dataset.origClass) {
         el.dataset.origClass = el.className;
     }
-    fetch('/recurring-todos/' + rid + '/toggle', {method: 'POST'})
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
+    apiPost('/recurring-todos/' + rid + '/toggle', {}).then(function(d) {
         _recurringBusy = false;
         if (!el) return;
         el.style.opacity = '1'; el.style.pointerEvents = '';
@@ -987,17 +985,19 @@ function addTomatoIcon(btn, minutes) {
     tomato.style.cssText = 'font-size:.6em;margin-left:1px;cursor:default;';
     tomato.setAttribute('data-bs-toggle', 'tooltip');
     tomato.setAttribute('title', minutes + '分钟 (' + pct + '%)');
-    new bootstrap.Tooltip(tomato);
-    // Insert after the last tomato icon or after the timer button
-    var container = btn.parentElement;
-    var lastTomato = container.querySelector('.pomodoro-area');
-    if (!lastTomato) {
-        lastTomato = document.createElement('span');
-        lastTomato.className = 'pomodoro-area';
-        lastTomato.style.cssText = 'font-size:.8em;margin-left:2px;';
-        container.insertBefore(lastTomato, btn.nextSibling);
+    // Find or create pomodoro-area container
+    var container = btn.closest('.d-flex');
+    var area = container.querySelector('.pomodoro-area');
+    if (!area) {
+        area = document.createElement('span');
+        area.className = 'pomodoro-area ms-1';
+        // Insert before delete button
+        var delBtn = container.querySelector('.btn-delete-home');
+        if (delBtn) container.insertBefore(area, delBtn);
+        else container.appendChild(area);
     }
-    lastTomato.appendChild(tomato);
+    area.appendChild(tomato);
+    new bootstrap.Tooltip(tomato);
 }
 
 document.querySelectorAll('.btn-timer-home').forEach(function(btn) {

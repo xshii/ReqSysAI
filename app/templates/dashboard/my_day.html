@@ -31,7 +31,17 @@
         <span class="text-muted small">{{ today.strftime('%Y年%m月%d日') }}</span>
         {% set wk = ['周一','周二','周三','周四','周五','周六','周日'] %}
         <span class="badge bg-primary bg-opacity-10 text-primary">{{ wk[today.weekday()] }}</span>
+        <button class="btn btn-sm btn-outline-info" id="btnAiEff" onclick="aiEfficiency()"><i class="bi bi-robot"></i> AI 分析</button>
     </div>
+</div>
+
+{# AI Analysis panel #}
+<div id="aiEffPanel" class="card border-info mb-3 d-none">
+    <div class="card-header py-1 bg-info bg-opacity-10 d-flex justify-content-between">
+        <span class="small fw-bold"><i class="bi bi-robot"></i> AI 效能分析</span>
+        <button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="document.getElementById('aiEffPanel').classList.add('d-none')"><i class="bi bi-x"></i></button>
+    </div>
+    <div class="card-body py-2 small" id="aiEffContent" style="white-space:pre-wrap;"></div>
 </div>
 
 {# Stats cards — modern style #}
@@ -263,6 +273,124 @@
         {% endfor %}
     </div>
 </div>
+
+{# ---- 个人效能 ---- #}
+<hr class="my-4">
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="bi bi-graph-up text-primary"></i> 个人效能</h5>
+    <span class="text-muted small">{{ current_user.name }}</span>
+</div>
+
+<div class="row g-2 mb-3">
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-2">
+            <div class="fw-bold text-primary" style="font-size:1.3em;">{{ req_count }}</div>
+            <div class="text-muted" style="font-size:.65em;">参与需求</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-2">
+            <div class="fw-bold text-success" style="font-size:1.3em;">{{ req_done }}</div>
+            <div class="text-muted" style="font-size:.65em;">已完成需求</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-2">
+            <div class="fw-bold text-info" style="font-size:1.3em;">{{ all_focus_hours }}h</div>
+            <div class="text-muted" style="font-size:.65em;">累计专注</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 shadow-sm text-center py-2">
+            <div class="fw-bold text-warning" style="font-size:1.3em;">{{ incentive_count }}</div>
+            <div class="text-muted" style="font-size:.65em;">获得激励</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-7">
+        {# Monthly Todo Trend #}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white py-2 border-bottom"><span class="fw-bold small"><i class="bi bi-graph-up text-primary"></i> 月度完成趋势</span></div>
+            <div class="card-body py-2">
+                <div class="d-flex align-items-end gap-2" style="height:100px;">
+                    {% set max_val = monthly_todos | map(attribute=1) | max if monthly_todos else 1 %}
+                    {% for month, count in monthly_todos %}
+                    <div class="flex-fill text-center">
+                        <div class="bg-primary bg-opacity-75 rounded-top mx-auto" style="width:24px;height:{{ (count / max_val * 100) | int }}px;min-height:4px;" title="{{ count }}"></div>
+                        <div class="text-muted" style="font-size:.6em;">{{ month[5:] }}月</div>
+                        <div style="font-size:.7em;" class="fw-bold">{{ count }}</div>
+                    </div>
+                    {% else %}
+                    <div class="text-muted small">暂无数据</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        {# Monthly Focus #}
+        {% if monthly_focus %}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white py-2 border-bottom"><span class="fw-bold small"><i class="bi bi-stopwatch text-info"></i> 月度专注时长</span></div>
+            <div class="card-body py-2">
+                <div class="d-flex align-items-end gap-2" style="height:100px;">
+                    {% set max_f = monthly_focus | map(attribute=1) | max if monthly_focus else 1 %}
+                    {% for month, minutes in monthly_focus %}
+                    {% set hours = (minutes / 60) | round(1) %}
+                    <div class="flex-fill text-center">
+                        <div class="bg-info bg-opacity-75 rounded-top mx-auto" style="width:24px;height:{{ (minutes / max_f * 100) | int }}px;min-height:4px;" title="{{ hours }}h"></div>
+                        <div class="text-muted" style="font-size:.6em;">{{ month[5:] }}月</div>
+                        <div style="font-size:.7em;" class="fw-bold">{{ hours }}h</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-5">
+        {# Annual Heatmap #}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white py-2 border-bottom"><span class="fw-bold small"><i class="bi bi-calendar-check text-success"></i> 年度贡献</span></div>
+            <div class="card-body py-2 px-3" style="overflow-x:auto;">
+                <div class="d-flex gap-1 flex-wrap" style="max-width:100%;">
+                {% set ns = namespace(d=heatmap_start) %}
+                {% for i in range(365) %}
+                    {% set ds = ns.d.strftime('%Y-%m-%d') %}
+                    {% set cnt = heatmap.get(ds, 0) %}
+                    {% set color = '#ebedf0' if cnt == 0 else ('#9be9a8' if cnt <= 2 else ('#40c463' if cnt <= 4 else ('#30a14e' if cnt <= 6 else '#216e39'))) %}
+                    <div style="width:8px;height:8px;background:{{ color }};border-radius:1px;" title="{{ ds }}：{{ cnt }}个"></div>
+                    {% set ns.d = ns.d + timedelta(days=1) %}
+                {% endfor %}
+                </div>
+                <div class="d-flex align-items-center gap-1 mt-1 text-muted" style="font-size:.6em;">
+                    <span>少</span>
+                    {% for c in ['#ebedf0','#9be9a8','#40c463','#30a14e','#216e39'] %}
+                    <div style="width:8px;height:8px;background:{{ c }};border-radius:1px;"></div>
+                    {% endfor %}
+                    <span>多</span>
+                </div>
+            </div>
+        </div>
+
+        {# Requirement Completion Ring #}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white py-2 border-bottom"><span class="fw-bold small"><i class="bi bi-pie-chart text-success"></i> 需求完成率</span></div>
+            <div class="card-body text-center py-2">
+                {% set pct = (req_done / req_count * 100) | round(0) | int if req_count > 0 else 0 %}
+                <svg width="90" height="90" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="#eee" stroke-width="10"/>
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="#198754" stroke-width="10"
+                            stroke-dasharray="{{ 314 * pct / 100 }} 314" transform="rotate(-90 60 60)"/>
+                    <text x="60" y="65" text-anchor="middle" font-size="24" font-weight="bold" fill="#198754">{{ pct }}%</text>
+                </svg>
+                <div class="text-muted" style="font-size:.65em;">{{ req_done }} / {{ req_count }} 个需求</div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -284,5 +412,20 @@ if (marker) {
 document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
     new bootstrap.Tooltip(el);
 });
+
+// AI Efficiency Analysis
+function aiEfficiency() {
+    var btn = document.getElementById('btnAiEff');
+    var loading = aiLoading(btn, 'AI分析');
+    fetch('{{ url_for("auth.ai_efficiency") }}', {method: 'POST'})
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(d) {
+        loading.stop();
+        if (d.ok) {
+            document.getElementById('aiEffContent').innerHTML = d.html || d.text || '';
+            document.getElementById('aiEffPanel').classList.remove('d-none');
+        } else { alert(d.error || 'AI分析失败'); }
+    }).catch(function(e) { loading.stop(); alert('请求失败：' + e.message); });
+}
 </script>
 {% endblock %}

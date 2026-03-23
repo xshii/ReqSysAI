@@ -20,7 +20,7 @@
             </a>
             <div class="d-flex align-items-center gap-2">
                 {% if current_user.is_authenticated and (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')) %}
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="mgrEyeBtn" onclick="toggleMgrView()" title="管理视图">
+                <button type="button" class="btn btn-sm border-0" id="mgrEyeBtn" onclick="toggleMgrView()" title="管理视图" style="font-size:.85em;opacity:.4;color:#fff;">
                     <i class="bi bi-eye-slash" id="mgrEyeIcon"></i>
                 </button>
                 {% endif %}
@@ -38,7 +38,7 @@
                         <span class="badge bg-light text-primary ms-1">{{ current_user.role_names }}</span>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="{{ url_for('auth.profile_stats') }}"><i class="bi bi-graph-up"></i> 个人效能</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('dashboard.my_day') }}"><i class="bi bi-graph-up"></i> 我的一天</a></li>
                         <li><a class="dropdown-item" href="{{ url_for('auth.profile') }}"><i class="bi bi-gear"></i> 个人设置</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="bi bi-box-arrow-right"></i> 退出登录</a></li>
@@ -136,7 +136,7 @@
                     <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.risk_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('project.risk_list', project_id=p.id) }}">
-                            风险管理 {% if p.risks | selectattr('status', 'equalto', 'open') | list | length %}<span class="badge bg-danger rounded-pill" style="font-size:.6rem;">{{ p.risks | selectattr('status', 'equalto', 'open') | list | length }}</span>{% endif %}
+                            风险问题 {% if p.risks | selectattr('status', 'equalto', 'open') | list | length %}<span class="badge bg-danger rounded-pill" style="font-size:.6rem;">{{ p.risks | selectattr('status', 'equalto', 'open') | list | length }}</span>{% endif %}
                         </a>
                     </li>
                     <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}">
@@ -210,8 +210,8 @@
                         </a>
                     </li>
                     {% if current_user.is_admin %}
-                    <li class="nav-header">系统</li>
-                    <li class="nav-item">
+                    <li class="nav-header mgr-only">系统</li>
+                    <li class="nav-item mgr-only">
                         <a class="nav-link {% if request.endpoint and 'admin.' in request.endpoint %}active{% endif %}" href="{{ url_for('admin.user_list') }}">
                             <i class="bi bi-gear"></i> 后台管理
                         </a>
@@ -410,7 +410,7 @@
             var icon = document.getElementById('mgrEyeIcon');
             var btn = document.getElementById('mgrEyeBtn');
             if (icon) icon.className = open ? 'bi bi-eye' : 'bi bi-eye-slash';
-            if (btn) btn.className = open ? 'btn btn-primary btn-sm' : 'btn btn-outline-secondary btn-sm';
+            if (btn) { btn.className = 'btn btn-sm border-0'; btn.style.fontSize = '.85em'; btn.style.opacity = open ? '1' : '.4'; btn.style.color = open ? '#ffc107' : '#fff'; }
         }
 
         function getSavedPwd() { return localStorage.getItem(MGR_PWD_KEY) || DEFAULT_PWD; }

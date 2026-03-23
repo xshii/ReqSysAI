@@ -35,7 +35,8 @@
 {# Unified todo row — single source of truth #}
 {% macro todo_row(t, icon_color='text-secondary', show_comment_input=false) %}
 {% set is_help = t.children | length > 0 %}
-<div class="mb-1 ps-2">
+{% set is_emotion = t.title.startswith('[情绪跟进]') %}
+<div class="mb-1 ps-2 {% if is_emotion %}mgr-only{% endif %}">
 <div class="d-flex align-items-center gap-1 todo-drag-item {% if t.status == 'done' %}text-muted text-decoration-line-through{% elif t.workdays_overdue >= 3 %}border-start border-danger border-2{% elif t.workdays_overdue >= 1 %}border-start border-warning border-2{% endif %}" draggable="true" data-todo-id="{{ t.id }}" style="cursor:grab;">
     {% if is_help %}
     <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'hourglass-split text-warning' }}" style="font-size:.9em;" title="等待{{ t.children[0].user.name }}完成"></i>

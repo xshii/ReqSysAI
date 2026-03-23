@@ -66,6 +66,11 @@
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-check-lg"></i> 保存
                     </button>
+                    {% if current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR') %}
+                    <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="localStorage.removeItem('mgr_pwd');localStorage.removeItem('mgr_view');localStorage.removeItem('mgr_view_ts');alert('已重置，下次开眼时重新设置密码');">
+                        <i class="bi bi-eye"></i> 重置管理视图密码
+                    </button>
+                    {% endif %}
                 </form>
             </div>
         </div>
