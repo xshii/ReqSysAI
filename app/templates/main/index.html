@@ -28,6 +28,16 @@
     {% for a in alerts %}{{ a }}{% if not loop.last %}；{% endif %}{% endfor %}
 </div>
 {% endif %}
+{% if help_requests %}
+<div class="alert alert-warning py-2 mb-3 small alert-dismissible">
+    <i class="bi bi-person-raised-hand me-1"></i>
+    <strong>求助：</strong>
+    {% for t in help_requests %}
+    <span class="me-2">{{ t.title }}{% if t.blocked_reason %} <span class="text-muted">({{ t.blocked_reason }})</span>{% endif %}</span>
+    {% endfor %}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" style="font-size:.6em;"></button>
+</div>
+{% endif %}
 
 <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
     <h4 class="mb-0">{{ current_user.name }}，{{ today.strftime('%Y-%m-%d') }}

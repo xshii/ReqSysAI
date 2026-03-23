@@ -106,12 +106,16 @@ def index():
         for r in my_risks if r.is_overdue
     ]
 
+    # Help requests: todos where I'm blocked or others asked me for help
+    help_requests = [t for t in my_todos if t.need_help and t.status != 'done']
+
     # Approved incentives: last 2 months excluding recent 7 days; fallback to 3 months if empty
     inc_end = today - timedelta(days=7)
     for months in (60, 90):
         inc_start = today - timedelta(days=months)
         approved_incentives = Incentive.query.filter(
             Incentive.status == 'approved',
+            Incentive.is_public == True,
             Incentive.reviewed_at >= str(inc_start),
             Incentive.reviewed_at <= str(inc_end),
         ).order_by(Incentive.reviewed_at.desc()).all()
@@ -199,7 +203,7 @@ def index():
         req_todos=req_todos, risk_todos=risk_todos, team_todos=team_todos, personal_todos=personal_todos,
         display_reqs=display_reqs,
         approved_incentives=approved_incentives, rants=rants,
-        ai_ranking=ai_ranking, alerts=alerts,
+        ai_ranking=ai_ranking, alerts=alerts, help_requests=help_requests,
         heatmap=heatmap, heatmap_start=heatmap_start, timedelta=timedelta,
         milestones=milestones, all_recurring=all_recurring, recurring_due=recurring_due,
         recurring_status=recurring_status, week_focus=week_focus,

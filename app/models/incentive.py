@@ -49,6 +49,7 @@ class Incentive(db.Model):
     reviewed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     reviewed_at = db.Column(db.DateTime, nullable=True)
 
+    is_public = db.Column(db.Boolean, default=True)  # 首页对外可见
     likes = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

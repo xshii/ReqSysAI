@@ -220,6 +220,7 @@ def review(inc_id):
         inc.amount = amount
         inc.source = source
         inc.fund_id = fund_id
+        inc.is_public = 'is_public' in request.form
     elif action == 'reject':
         inc.status = 'rejected'
     elif action == 'pending':

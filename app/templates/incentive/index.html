@@ -155,7 +155,8 @@
                         data-desc="{{ inc.description }}"
                         data-amount="{{ inc.amount or '' }}"
                         data-source="{{ inc.source or 'instant' }}"
-                        data-nominee-ids="{{ inc.nominees|map(attribute='id')|list|join(',') }}">评审</button>
+                        data-nominee-ids="{{ inc.nominees|map(attribute='id')|list|join(',') }}"
+                        data-public="{{ '1' if inc.is_public else '0' }}">评审</button>
                 {% endif %}
                 {% if (current_user.id == inc.submitted_by or current_user.is_admin) and inc.status in ('submitted', 'pending', 'rejected') %}
                 <button class="btn btn-sm btn-outline-secondary mt-1 btn-edit-inc"
@@ -289,6 +290,15 @@
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">激励年月</label>
                         <div class="col-9"><input type="month" name="award_month" class="form-control form-control-sm" value="{{ today.strftime('%Y-%m') }}"></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">首页可见</label>
+                        <div class="col-9">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="is_public" id="reviewIsPublic" value="1" checked>
+                                <label class="form-check-label small text-muted" for="reviewIsPublic">勾选后在首页展示</label>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer py-1">
@@ -614,6 +624,8 @@ document.querySelectorAll('.btn-review-inc').forEach(function(btn) {
             sourceSelect.value = btn.dataset.source || 'instant';
             filterFundsBySource(sourceSelect.value);
         }
+        var pubCb = document.getElementById('reviewIsPublic');
+        if (pubCb) pubCb.checked = btn.dataset.public !== '0';
     });
 });
 
