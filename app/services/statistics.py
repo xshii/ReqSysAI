@@ -244,17 +244,21 @@ def gather_week_stats(monday, sunday, group=None, project_id=None):
 
 
 def get_reviewer(current_user):
-    """Determine reviewer based on current user's role and group."""
+    """Determine reviewer based on current user's role and group.
+    PL → LM/XM (global, not group-specific)
+    Others → same-group PL
+    """
     from app.models.user import Role
     if current_user.has_role('PL'):
-        # LM first, then XM, then PM
-        for role_name in ('LM', 'XM', 'PM'):
-            reviewer = User.query.filter(User.is_active == True, User.group == current_user.group)\
+        # LM/XM are global roles (one per org, not per group)
+        for role_name in ('LM', 'XM'):
+            reviewer = User.query.filter(User.is_active == True)\
                 .join(User.roles).filter(Role.name == role_name).first()
             if reviewer:
                 return reviewer.name
         return '待定'
     else:
+        # Find PL in same group
         pl = User.query.filter(User.is_active == True, User.group == current_user.group)\
             .join(User.roles).filter(Role.name == 'PL').first()
         return pl.name if pl else '待定'

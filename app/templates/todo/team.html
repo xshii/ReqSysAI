@@ -273,12 +273,11 @@ document.querySelectorAll('.comment-input').forEach(function(inp) {
     inp.addEventListener('input', function() {
         var val = inp.value;
         var atIdx = val.lastIndexOf('@');
-        if (atIdx < 0 || atIdx === val.length - 1) { dropdown.style.display = 'none'; return; }
+        if (atIdx < 0) { dropdown.style.display = 'none'; return; }
         var q = val.substring(atIdx + 1).toLowerCase();
-        if (!q) { dropdown.style.display = 'none'; return; }
         var html = '';
         _allUsers.forEach(function(u) {
-            if (u.name.toLowerCase().includes(q) || u.py.toLowerCase().includes(q)) {
+            if (!q || u.name.toLowerCase().includes(q) || u.py.toLowerCase().includes(q)) {
                 html += '<a href="#" class="list-group-item list-group-item-action py-1 small" data-name="' + u.name + '">' + u.name + '</a>';
             }
         });

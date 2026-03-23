@@ -183,13 +183,12 @@ if (_blockPop) {
     _blockInput.addEventListener('input', function() {
         var val = _blockInput.value;
         var atIdx = val.lastIndexOf('@');
-        if (atIdx < 0 || atIdx === val.length - 1) { _blockAtList.style.display = 'none'; return; }
+        if (atIdx < 0) { _blockAtList.style.display = 'none'; return; }
         var q = val.substring(atIdx + 1).toLowerCase();
-        if (!q) { _blockAtList.style.display = 'none'; return; }
         function showMatches(users) {
             var html = '';
             users.forEach(function(u) {
-                if (u.name.toLowerCase().includes(q) || (u.pinyin || '').toLowerCase().includes(q)) {
+                if (!q || u.name.toLowerCase().includes(q) || (u.pinyin || '').toLowerCase().includes(q)) {
                     html += '<div class="px-2 py-1" style="cursor:pointer;" onmousedown="event.preventDefault();fillBlockAt(\'' + u.name + '\')">' + u.name + '</div>';
                 }
             });

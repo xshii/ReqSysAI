@@ -70,8 +70,8 @@
                     <div class="text-center" style="flex:1;">
                         <div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:12px solid {{ c }};margin:0 auto;"></div>
                         <div style="white-space:nowrap;margin-top:4px;">
-                            <div class="fw-bold" style="font-size:.82rem;color:{{ c }};">{{ ms.name }}</div>
-                            {% if ms.due_date %}<div style="font-size:.72rem;color:#64748b;">{{ ms.due_date.strftime('%m-%d') }}</div>{% endif %}
+                            <div class="fw-bold" style="font-size:.85rem;color:{{ c }};">{{ ms.name }}</div>
+                            {% if ms.due_date %}<div style="font-size:.8rem;color:#64748b;">{{ ms.due_date.strftime('%Y-%m-%d') }}</div>{% endif %}
                         </div>
                     </div>
                     {% endfor %}

@@ -188,14 +188,13 @@ document.addEventListener('input', function(e) {
     if (!dropdown) return;
     var val = inp.value;
     var atIdx = val.lastIndexOf('@');
-    if (atIdx < 0 || atIdx === val.length - 1) { dropdown.style.display = 'none'; return; }
+    if (atIdx < 0) { dropdown.style.display = 'none'; return; }
     var q = val.substring(atIdx + 1).toLowerCase();
-    if (!q) { dropdown.style.display = 'none'; return; }
     function show(users) {
         var html = '';
         users.forEach(function(u) {
-            if (u.name.toLowerCase().includes(q) || (u.pinyin || '').toLowerCase().includes(q))
-                html += '<div class="px-2 py-1" style="cursor:pointer;" data-name="' + u.name + '">' + u.name + '</div>';
+            if (!q || u.name.toLowerCase().includes(q) || (u.pinyin || '').toLowerCase().includes(q) || (u.employee_id || '').toLowerCase().includes(q))
+                html += '<div class="px-2 py-1" style="cursor:pointer;" data-name="' + u.name + '">' + u.name + ' <span class="text-muted">' + (u.employee_id || '') + '</span></div>';
         });
         dropdown.innerHTML = html;
         dropdown.style.display = html ? '' : 'none';

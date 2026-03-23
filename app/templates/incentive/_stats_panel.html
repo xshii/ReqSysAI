@@ -1,0 +1,269 @@
+{# Inline stats panel for incentive page #}
+{% set s = inc_stats %}
+
+{# Time period + AI Analysis #}
+<div class="d-flex gap-2 align-items-center mb-3">
+    <span class="text-muted small">分析时段：</span>
+    <select class="form-select form-select-sm" style="width:auto;" id="statsPeriodSel" onchange="var url=new URL(location);url.searchParams.set('stats_period',this.value);location=url;">
+        <option value="3m" {% if stats_period == '3m' %}selected{% endif %}>近3月</option>
+        <option value="6m" {% if stats_period == '6m' %}selected{% endif %}>近6月</option>
+        <option value="1y" {% if stats_period == '1y' %}selected{% endif %}>近1年</option>
+        <option value="all" {% if stats_period == 'all' %}selected{% endif %}>全部</option>
+    </select>
+    <button class="btn btn-sm btn-outline-info" id="btnAiStats" onclick="aiStatsAnalysis()"><i class="bi bi-robot"></i> AI 分析</button>
+</div>
+<div id="aiStatsResult" class="card border-info mb-3 {% if not saved_report %}d-none{% endif %}">
+    <div class="card-header py-1 bg-info bg-opacity-10 d-flex justify-content-between">
+        <span class="small fw-bold"><i class="bi bi-robot"></i> AI 分析结果
+            {% if saved_report %}<span class="text-muted" style="font-size:.8em;">{{ saved_report.created_at.strftime('%m-%d %H:%M') }}</span>{% endif %}
+        </span>
+        <div>
+            {% if saved_report %}
+            <button class="btn btn-sm py-0 px-1 btn-outline-danger" title="删除"
+                onclick="apiPost('{{ url_for('incentive.stats_report_delete', report_id=saved_report.id) }}',{}).then(function(d){if(d&&d.ok)location.reload();})"><i class="bi bi-trash"></i></button>
+            {% endif %}
+            <button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="document.getElementById('aiStatsResult').classList.add('d-none')"><i class="bi bi-x"></i></button>
+        </div>
+    </div>
+    <div class="card-body py-2" id="aiStatsBody">
+        {% if saved_report %}
+        <div id="savedReportData" class="d-none">{{ saved_report.data }}</div>
+        {% endif %}
+    </div>
+</div>
+
+{# Summary cards #}
+<div class="row g-2 mb-3">
+    <div class="col-6 col-md-2">
+        <div class="card border-0 shadow-sm text-center py-2">
+            <div class="fw-bold text-primary" style="font-size:1.3em;">¥{{ '%.0f'|format(s.total_amount) }}</div>
+            <div class="text-muted" style="font-size:.65em;">累计金额</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card border-0 shadow-sm text-center py-2">
+            <div class="fw-bold text-success" style="font-size:1.3em;">{{ s.total_count }}</div>
+            <div class="text-muted" style="font-size:.65em;">已通过</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card border-0 shadow-sm text-center py-2">
+            <div class="fw-bold text-info" style="font-size:1.3em;">{{ s.awarded_people }}/{{ s.total_people }}</div>
+            <div class="text-muted" style="font-size:.65em;">获奖覆盖率</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card border-0 shadow-sm text-center py-2">
+            {% set coverage_pct = (s.awarded_people * 100 / s.total_people)|int if s.total_people else 0 %}
+            {% set cov_color = 'danger' if coverage_pct < 30 else ('warning' if coverage_pct < 60 else 'success') %}
+            <div class="fw-bold text-{{ cov_color }}" style="font-size:1.3em;">{{ coverage_pct }}%</div>
+            <div class="text-muted" style="font-size:.65em;">覆盖率</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card border-0 shadow-sm text-center py-2">
+            <div class="fw-bold text-danger" style="font-size:1.3em;">{{ s.never_awarded|length }}</div>
+            <div class="text-muted" style="font-size:.65em;">未获奖</div>
+        </div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card border-0 shadow-sm text-center py-2">
+            {% set avg = (s.total_amount / s.awarded_people)|int if s.awarded_people else 0 %}
+            <div class="fw-bold text-warning" style="font-size:1.3em;">¥{{ avg }}</div>
+            <div class="text-muted" style="font-size:.65em;">人均金额</div>
+        </div>
+    </div>
+</div>
+
+
+<div class="row g-3">
+    {# Left column #}
+    <div class="col-md-6">
+        {# Group coverage (people stability) #}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white py-2 border-bottom"><span class="fw-bold small"><i class="bi bi-people text-success"></i> 小组激励覆盖率</span></div>
+            <div class="card-body py-2">
+                {% for group, gc in s.group_coverage %}
+                {% set gpct = (gc.awarded * 100 / gc.total)|int if gc.total else 0 %}
+                {% set gcolor = 'danger' if gpct < 30 else ('warning' if gpct < 60 else 'success') %}
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between" style="font-size:.75em;">
+                        <span class="fw-bold">{{ group }}</span>
+                        <span>{{ gc.awarded }}/{{ gc.total }}人获奖 · <span class="text-{{ gcolor }}">{{ gpct }}%</span></span>
+                    </div>
+                    <div class="progress" style="height:10px;">
+                        <div class="progress-bar bg-{{ gcolor }}" style="width:{{ gpct }}%;"></div>
+                    </div>
+                    {% if gc.not_awarded %}
+                    <div class="text-muted" style="font-size:.6em;">未获奖：{{ gc.not_awarded|join('、') }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# Monthly trend #}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white py-2 border-bottom"><span class="fw-bold small"><i class="bi bi-graph-up text-primary"></i> 月度趋势</span></div>
+            <div class="card-body py-2">
+                {% set max_amt = [1] %}
+                {% for k, v in s.monthly %}{% if v.amount > max_amt[0] %}{% if max_amt.append(v.amount) %}{% endif %}{% endif %}{% endfor %}
+                {% for month_key, v in s.monthly %}
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="text-muted" style="font-size:.7em;min-width:50px;">{{ month_key }}</span>
+                    <div class="flex-grow-1">
+                        {% set pct = (v.amount / max_amt[-1] * 100)|int if max_amt[-1] > 0 else 0 %}
+                        <div class="progress" style="height:16px;">
+                            <div class="progress-bar bg-primary bg-opacity-75" style="width:{{ pct }}%;font-size:.6em;line-height:16px;">
+                                {% if pct > 15 %}¥{{ '%.0f'|format(v.amount) }}{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <span class="text-muted" style="font-size:.6em;min-width:30px;">{{ v.count }}次</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# Category + Source side by side #}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white py-2 border-bottom"><span class="fw-bold small"><i class="bi bi-tags text-warning"></i> 类别 / 来源分布</span></div>
+            <div class="card-body py-2">
+                <div class="row">
+                    <div class="col-6">
+                        {% for cat, cd in s.cat_data %}
+                        <div class="d-flex justify-content-between mb-1" style="font-size:.7em;">
+                            <span>{{ cat }}</span>
+                            <span class="fw-bold">¥{{ '%.0f'|format(cd.amount) }} <span class="text-muted">({{ cd.count }})</span></span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="col-6">
+                        {% for src, sd in s.src_data %}
+                        <div class="d-flex justify-content-between mb-1" style="font-size:.7em;">
+                            <span>{{ src }}</span>
+                            <span class="fw-bold">¥{{ '%.0f'|format(sd.amount) }} <span class="text-muted">({{ sd.count }})</span></span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Right column #}
+    <div class="col-md-6">
+        {# Person-month heatmap #}
+        {% if s.person_monthly %}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white py-2 border-bottom"><span class="fw-bold small"><i class="bi bi-grid-3x3 text-info"></i> 个人获奖热力图（近6月）</span></div>
+            <div class="card-body py-1" style="overflow-x:auto;">
+                <table class="table table-sm mb-0" style="font-size:.65em;">
+                    <thead><tr><th>姓名</th>{% for mk in s.month_keys %}<th class="text-center">{{ mk[5:] }}月</th>{% endfor %}<th class="text-center">合计</th></tr></thead>
+                    <tbody>
+                        {% for name, nd in s.top_nominees %}
+                        {% set pm = s.person_monthly.get(name, {}) %}
+                        {% set total_n = pm.values()|sum %}
+                        <tr>
+                            <td class="text-nowrap">{{ name }}</td>
+                            {% for mk in s.month_keys %}
+                            {% set cnt = pm.get(mk, 0) %}
+                            <td class="text-center {% if cnt >= 3 %}bg-danger bg-opacity-25{% elif cnt == 2 %}bg-warning bg-opacity-25{% elif cnt == 1 %}bg-success bg-opacity-10{% endif %}">
+                                {{ cnt or '' }}
+                            </td>
+                            {% endfor %}
+                            <td class="text-center fw-bold">{{ total_n }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Top nominees #}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white py-2 border-bottom"><span class="fw-bold small"><i class="bi bi-trophy text-danger"></i> 获奖排行</span></div>
+            <div class="card-body py-2">
+                {% for name, nd in s.top_nominees %}
+                <div class="d-flex align-items-center gap-2 mb-1" style="font-size:.75em;">
+                    <span class="fw-bold text-{{ 'danger' if loop.index <= 3 else 'muted' }}" style="min-width:18px;">{{ loop.index }}</span>
+                    <span class="flex-grow-1">{{ name }}</span>
+                    <span class="text-muted">{{ nd.count }}次</span>
+                    <span class="fw-bold">¥{{ '%.0f'|format(nd.amount) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# Never awarded warning #}
+        {% if s.never_awarded %}
+        <div class="card border-0 shadow-sm border-start border-warning border-3 mb-3">
+            <div class="card-header bg-white py-2 border-bottom"><span class="fw-bold small text-warning"><i class="bi bi-exclamation-triangle"></i> 从未获奖人员（{{ s.never_awarded|length }}人）</span></div>
+            <div class="card-body py-2">
+                <div class="d-flex flex-wrap gap-1">
+                    {% for name in s.never_awarded %}
+                    <span class="badge bg-light text-dark border">{{ name }}</span>
+                    {% endfor %}
+                </div>
+                <div class="text-muted mt-1" style="font-size:.65em;">建议关注这些成员的贡献和参与度，适时给予认可</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function renderAiReport(d) {
+    var body = document.getElementById('aiStatsBody');
+    var html = '';
+    if (d.structured) {
+        var sc = d.health_score || 0;
+        var sColor = sc >= 80 ? 'success' : (sc >= 60 ? 'warning' : 'danger');
+        html += '<div class="d-flex align-items-center gap-3 mb-3">';
+        html += '<div class="text-center"><div class="fw-bold text-' + sColor + '" style="font-size:2em;">' + sc + '</div><div class="text-muted" style="font-size:.7em;">健康评分</div></div>';
+        html += '<div class="flex-grow-1"><div class="progress" style="height:12px;"><div class="progress-bar bg-' + sColor + '" style="width:' + sc + '%;"></div></div>';
+        html += '<div class="small text-muted mt-1">' + (d.summary || '') + '</div></div></div>';
+        if (d.findings && d.findings.length) {
+            var lc = {info:'info',warning:'warning',danger:'danger'};
+            var li = {info:'info-circle',warning:'exclamation-triangle',danger:'x-octagon'};
+            d.findings.forEach(function(f) {
+                var c = lc[f.level]||'secondary', ic = li[f.level]||'circle';
+                html += '<div class="d-flex gap-2 mb-2 ps-2 border-start border-3 border-'+c+'"><i class="bi bi-'+ic+' text-'+c+' flex-shrink-0 mt-1"></i><div><div class="fw-bold small">'+f.title+'</div><div class="small text-muted">'+f.detail+'</div></div></div>';
+            });
+        }
+        if (d.risk_people && d.risk_people.length) {
+            html += '<div class="mb-3"><div class="fw-bold small mb-1"><i class="bi bi-people text-danger"></i> 风险人员</div>';
+            var rc = {high:'danger',medium:'warning',low:'secondary'};
+            d.risk_people.forEach(function(p) { html += '<span class="badge bg-'+(rc[p.level]||'secondary')+' me-1 mb-1">'+p.name+'</span><span class="text-muted small me-2">'+p.reason+'</span>'; });
+            html += '</div>';
+        }
+        if (d.suggestions && d.suggestions.length) {
+            html += '<div><div class="fw-bold small mb-1"><i class="bi bi-lightbulb text-warning"></i> 改进建议</div><ul class="small text-muted mb-0 ps-3">';
+            d.suggestions.forEach(function(s) { html += '<li>'+s+'</li>'; });
+            html += '</ul></div>';
+        }
+    } else {
+        html = '<div class="small" style="white-space:pre-wrap;">'+(d.text||'')+'</div>';
+    }
+    body.innerHTML = html;
+}
+
+// Render saved report on load
+var savedEl = document.getElementById('savedReportData');
+if (savedEl) {
+    try { renderAiReport(JSON.parse(savedEl.textContent)); } catch(e) {}
+}
+
+function aiStatsAnalysis() {
+    var btn = document.getElementById('btnAiStats');
+    var loading = aiLoading(btn, 'AI分析');
+    var period = document.getElementById('statsPeriodSel').value;
+    apiPost('{{ url_for("incentive.stats_ai_analysis") }}', {period: period}).then(function(d) {
+        loading.stop();
+        if (!d || !d.ok) { alert((d && d.msg) || 'AI分析失败'); return; }
+        renderAiReport(d);
+        document.getElementById('aiStatsResult').classList.remove('d-none');
+    }).catch(function() { loading.stop(); });
+}
+</script>

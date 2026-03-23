@@ -1,0 +1,226 @@
+{# Inline fund pool panel — included in index.html when funds tab active #}
+<div class="d-flex gap-2 mb-3 align-items-center">
+    <form method="POST" action="{{ url_for('incentive.fund_import_csv') }}" enctype="multipart/form-data" id="fundCsvForm" class="d-none">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="file" name="csv_file" accept=".csv" onchange="this.form.submit();">
+    </form>
+    <a href="{{ url_for('incentive.fund_export_csv') }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出CSV</a>
+    <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.querySelector('#fundCsvForm input[type=file]').click()"><i class="bi bi-upload"></i> 导入CSV</button>
+    <button class="btn btn-sm btn-outline-info" data-bs-toggle="collapse" data-bs-target="#addSourceForm"><i class="bi bi-tag"></i> 新建来源</button>
+    <button class="btn btn-sm btn-primary" data-bs-toggle="collapse" data-bs-target="#addFundForm"><i class="bi bi-plus-lg"></i> 添加资金</button>
+</div>
+
+{# Usage overview cards #}
+{% if source_stats %}
+<div class="row g-2 mb-3">
+    {% for src, st in source_stats.items() %}
+    {% if st.total > 0 %}
+    {% set pct = (st.used / st.total * 100)|int %}
+    {% set color = 'danger' if pct >= 90 else ('warning' if pct >= 70 else 'success') %}
+    <div class="col-6 col-md-3">
+        <div class="card">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="fw-bold small">{{ st.label }}</span>
+                    <span class="badge bg-{{ color }}" style="font-size:.65em;">{{ pct }}%</span>
+                </div>
+                <div class="progress" style="height:6px;">
+                    <div class="progress-bar bg-{{ color }}" style="width:{{ pct }}%;"></div>
+                </div>
+                <div class="d-flex justify-content-between mt-1" style="font-size:.7em;">
+                    <span class="text-muted">已用 ¥{{ '%.0f'|format(st.used) }}</span>
+                    <span>总额 ¥{{ '%.0f'|format(st.total) }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-6 col-md-3">
+        <div class="card">
+            <div class="card-body py-2">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="fw-bold small">{{ st.label }}</span>
+                    <span class="badge bg-secondary" style="font-size:.65em;">公共池</span>
+                </div>
+                <div class="text-muted" style="font-size:.7em;">已用 ¥{{ '%.0f'|format(st.used) }} · 不限额</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+{# Source management — always visible #}
+<div class="d-flex flex-wrap gap-1 align-items-center mb-3">
+    <span class="text-muted small">激励来源：</span>
+    {% for k, v in source_labels.items() %}
+    <span class="badge bg-light text-dark border">{{ v }}
+        {% if k not in ('instant','special','project','knowledge','improvement') %}
+        <button type="button" class="btn p-0 border-0 bg-transparent text-muted" style="font-size:.7em;line-height:1;"
+                onclick="if(confirm('删除来源「{{ v }}」？')){apiPost('{{ url_for('incentive.fund_delete_source') }}',{key:'{{ k }}'}).then(function(){location.reload();});}"><i class="bi bi-x"></i></button>
+        {% endif %}
+    </span>
+    {% endfor %}
+    <div class="collapse d-inline-flex gap-1" id="addSourceForm">
+        <form method="POST" action="{{ url_for('incentive.fund_add_source') }}" class="d-flex gap-1">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="text" name="label" class="form-control form-control-sm py-0" required placeholder="新来源名称" style="width:100px;font-size:.8em;">
+            <button type="submit" class="btn btn-sm btn-info py-0" style="font-size:.8em;">添加</button>
+        </form>
+    </div>
+</div>
+
+{# Add fund form #}
+<div class="collapse mb-3" id="addFundForm">
+    <div class="card">
+        <div class="card-body py-2">
+            <form method="POST" action="{{ url_for('incentive.fund_add') }}" class="row g-2 align-items-end">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="col-md-3">
+                    <label class="form-label small mb-0">名称 *</label>
+                    <input type="text" name="name" class="form-control form-control-sm" required placeholder="资金条目名称">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">金额</label>
+                    <input type="number" name="amount" class="form-control form-control-sm" step="100" min="0" placeholder="空=公共池">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">激励来源</label>
+                    <select name="source" class="form-select form-select-sm">
+                        {% for k, v in source_labels.items() %}
+                        <option value="{{ k }}">{{ v }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">截止日期</label>
+                    <input type="date" name="expires_at" class="form-control form-control-sm">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">备注</label>
+                    <input type="text" name="note" class="form-control form-control-sm" placeholder="可选">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-sm btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Fund list table #}
+{% if funds %}
+<div class="table-responsive">
+    <table class="table table-hover table-sm">
+        <thead class="table-light">
+            <tr>
+                <th>名称</th>
+                <th>激励来源</th>
+                <th class="text-end">总金额</th>
+                <th class="text-end">已使用</th>
+                <th class="text-end">剩余</th>
+                <th>使用率</th>
+                <th>截止日期</th>
+                <th>备注</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in funds %}
+            {% set used = f.used_amount %}
+            {% set has_budget = f.has_budget %}
+            {% set pct = (used / f.total_amount * 100)|int if has_budget else 0 %}
+            {% set color = 'danger' if pct >= 90 else ('warning' if pct >= 70 else 'success') %}
+            <tr class="{% if f.is_expired %}text-muted{% endif %} fund-row" data-fund-id="{{ f.id }}">
+                <td class="fund-name">{{ f.name }}</td>
+                <td><span class="badge bg-light text-dark border">{{ f.source_label }}</span></td>
+                <td class="text-end fund-amount">{% if has_budget %}¥{{ '%.0f'|format(f.total_amount) }}{% else %}<span class="text-muted">不限额</span>{% endif %}</td>
+                <td class="text-end">¥{{ '%.0f'|format(used) }}</td>
+                <td class="text-end">{% if has_budget %}<span class="fw-bold text-{{ color }}">¥{{ '%.0f'|format(f.remaining) }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                <td style="min-width:80px;">
+                    {% if has_budget %}
+                    <div class="d-flex align-items-center gap-1">
+                        <div class="progress flex-grow-1" style="height:5px;">
+                            <div class="progress-bar bg-{{ color }}" style="width:{{ pct }}%;"></div>
+                        </div>
+                        <span style="font-size:.7em;">{{ pct }}%</span>
+                    </div>
+                    {% else %}
+                    <span class="badge bg-secondary" style="font-size:.6em;">公共池</span>
+                    {% endif %}
+                </td>
+                <td class="fund-expires">
+                    {% if f.expires_at %}
+                    <span class="{% if f.is_expired %}text-danger{% endif %}">{{ f.expires_at.strftime('%Y-%m-%d') }}</span>
+                    {% if f.is_expired %}<span class="badge bg-danger" style="font-size:.55em;">已过期</span>{% endif %}
+                    {% else %}<span class="text-muted">—</span>{% endif %}
+                </td>
+                <td class="text-muted small fund-note">{{ f.note or '' }}</td>
+                <td class="text-nowrap">
+                    <button type="button" class="btn btn-sm p-0 text-primary border-0 bg-transparent btn-fund-edit" title="编辑"
+                            data-id="{{ f.id }}" data-name="{{ f.name }}" data-amount="{{ f.total_amount or '' }}"
+                            data-source="{{ f.source }}" data-expires="{{ f.expires_at.isoformat() if f.expires_at else '' }}"
+                            data-note="{{ f.note or '' }}"><i class="bi bi-pencil"></i></button>
+                    <button type="button" class="btn btn-sm p-0 text-danger border-0 bg-transparent ms-1"
+                            onclick="if(confirm('确认删除？')){apiPost('{{ url_for('incentive.fund_delete', fund_id=f.id) }}',{}).then(function(){location.reload();});}"><i class="bi bi-x-lg"></i></button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-bank" style="font-size:2em;"></i>
+    <p class="mt-2">暂无资金条目，点击"添加资金"或"导入CSV"开始</p>
+</div>
+{% endif %}
+
+{# Edit Fund Modal #}
+<div class="modal fade" id="fundEditModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header py-2"><h6 class="modal-title">编辑资金</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body py-2">
+                <input type="hidden" id="feId">
+                <div class="mb-2"><label class="form-label small mb-0">名称</label><input type="text" id="feName" class="form-control form-control-sm"></div>
+                <div class="mb-2"><label class="form-label small mb-0">金额（空=公共池）</label><input type="number" id="feAmount" class="form-control form-control-sm" step="100" min="0"></div>
+                <div class="mb-2"><label class="form-label small mb-0">激励来源</label>
+                    <select id="feSource" class="form-select form-select-sm">
+                        {% for k, v in source_labels.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="mb-2"><label class="form-label small mb-0">截止日期</label><input type="date" id="feExpires" class="form-control form-control-sm"></div>
+                <div class="mb-2"><label class="form-label small mb-0">备注</label><input type="text" id="feNote" class="form-control form-control-sm"></div>
+            </div>
+            <div class="modal-footer py-1"><button type="button" class="btn btn-sm btn-primary" onclick="saveFundEdit()">保存</button></div>
+        </div>
+    </div>
+</div>
+<script>
+document.querySelectorAll('.btn-fund-edit').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.getElementById('feId').value = btn.dataset.id;
+        document.getElementById('feName').value = btn.dataset.name;
+        document.getElementById('feAmount').value = btn.dataset.amount;
+        document.getElementById('feSource').value = btn.dataset.source;
+        document.getElementById('feExpires').value = btn.dataset.expires;
+        document.getElementById('feNote').value = btn.dataset.note;
+        new bootstrap.Modal(document.getElementById('fundEditModal')).show();
+    });
+});
+function saveFundEdit() {
+    var id = document.getElementById('feId').value;
+    apiPost('/incentive/funds/' + id + '/edit', {
+        name: document.getElementById('feName').value,
+        amount: document.getElementById('feAmount').value,
+        source: document.getElementById('feSource').value,
+        expires_at: document.getElementById('feExpires').value,
+        note: document.getElementById('feNote').value,
+    }).then(function(d) {
+        if (d && d.ok) location.reload();
+        else alert((d && d.msg) || '保存失败');
+    });
+}
+</script>

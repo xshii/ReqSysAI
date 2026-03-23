@@ -29,25 +29,61 @@
     </div>
 </div>
 
+{# Tab navigation #}
+{% if is_reviewer %}
+{% set cur_tab = request.args.get('tab', status_filter or 'submitted') %}
+<ul class="nav nav-tabs mb-3 small">
+    <li class="nav-item"><a class="nav-link {% if cur_tab == 'submitted' %}active{% endif %}" href="?tab=submitted&status=submitted&scope=all&period={{ period }}">待评审</a></li>
+    <li class="nav-item"><a class="nav-link {% if cur_tab == 'pending' %}active{% endif %}" href="?tab=pending&status=pending&scope=all&period={{ period }}">待修改</a></li>
+    <li class="nav-item"><a class="nav-link {% if cur_tab == 'approved' %}active{% endif %}" href="?tab=approved&status=approved&scope=all&period={{ period }}">已通过</a></li>
+    <li class="nav-item"><a class="nav-link {% if cur_tab == 'rejected' %}active{% endif %}" href="?tab=rejected&status=rejected&scope=all&period={{ period }}">已拒绝</a></li>
+    <li class="nav-item"><a class="nav-link {% if cur_tab == 'all' %}active{% endif %}" href="?tab=all&status=&scope=all&period={{ period }}">全部</a></li>
+    <li class="nav-item"><a class="nav-link {% if cur_tab == 'funds' %}active{% endif %}" href="?tab=funds&status=funds&scope=all"><i class="bi bi-bank"></i> 资金池</a></li>
+    <li class="nav-item"><a class="nav-link {% if cur_tab == 'stats' %}active{% endif %}" href="?tab=stats&status=stats&scope=all"><i class="bi bi-bar-chart"></i> 统计报表</a></li>
+</ul>
+{% endif %}
+
+{% if status_filter == 'stats' and is_reviewer %}
+{% include "incentive/_stats_panel.html" %}
+{% elif status_filter == 'funds' and is_reviewer %}
+{# ---- Fund Pool Tab Content (inline) ---- #}
+{% include "incentive/_funds_panel.html" %}
+{% else %}
+{# ---- Incentive List Tab Content ---- #}
 <div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
-    {% if is_reviewer %}
-    <select class="form-select form-select-sm" style="width:auto;" onchange="applyFilter();" id="scopeFilter">
-        <option value="all" {% if scope == 'all' %}selected{% endif %}>全部</option>
-        <option value="mine" {% if scope == 'mine' %}selected{% endif %}>我的推荐</option>
-    </select>
-    <select class="form-select form-select-sm" style="width:auto;" onchange="applyFilter();" id="statusFilter">
+    <input type="hidden" id="scopeFilter" value="{{ scope }}">
+    <input type="hidden" id="statusFilter" value="{{ status_filter }}">
+    {% if cur_tab == 'all' and is_reviewer %}
+    <select class="form-select form-select-sm" style="width:auto;" id="inlineStatusFilter">
         <option value="" {% if not status_filter %}selected{% endif %}>全部状态</option>
-        <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>待评审</option>
+        <option value="submitted" {% if status_filter == 'submitted' %}selected{% endif %}>待评审</option>
+        <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>待修改</option>
         <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>已通过</option>
         <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>已拒绝</option>
     </select>
     {% endif %}
-    <select class="form-select form-select-sm" style="width:auto;" onchange="applyFilter();" id="periodFilter">
-        <option value="1m" {% if period == '1m' %}selected{% endif %}>近1月</option>
-        <option value="3m" {% if period == '3m' %}selected{% endif %}>近3月</option>
-        <option value="6m" {% if period == '6m' %}selected{% endif %}>近6月</option>
-        <option value="1y" {% if period == '1y' %}selected{% endif %}>近1年</option>
+    <select class="form-select form-select-sm" style="width:auto;" id="periodFilter">
+        <option value="1m" {% if period == '1m' and not month_filter %}selected{% endif %}>近1月</option>
+        <option value="3m" {% if period == '3m' and not month_filter %}selected{% endif %}>近3月</option>
+        <option value="6m" {% if period == '6m' and not month_filter %}selected{% endif %}>近6月</option>
+        <option value="1y" {% if period == '1y' and not month_filter %}selected{% endif %}>近1年</option>
     </select>
+    {% set cur_y = (month_filter or '')[:4] %}
+    {% set cur_m = (month_filter or '')[5:7] %}
+    <select class="form-select form-select-sm" style="width:90px;" id="monthYear">
+        <option value="">选年</option>
+        {% for y in range(today.year - 2, today.year + 1) %}
+        <option value="{{ y }}" {% if cur_y == y|string %}selected{% endif %}>{{ y }}年</option>
+        {% endfor %}
+    </select>
+    <select class="form-select form-select-sm" style="width:72px;" id="monthMonth">
+        <option value="">选月</option>
+        {% for m in range(1, 13) %}
+        <option value="{{ '%02d'|format(m) }}" {% if cur_m == '%02d'|format(m) %}selected{% endif %}>{{ m }}月</option>
+        {% endfor %}
+    </select>
+    <input type="text" class="form-control form-control-sm" style="width:80px;" id="searchFilter" placeholder="关键词" value="{{ search_q or '' }}">
+    <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyFilter()"><i class="bi bi-search"></i> 筛选</button>
     <span class="text-muted small">{{ items | length }} 条</span>
     {% if can_export %}
     <div class="ms-auto d-flex gap-1">
@@ -76,8 +112,8 @@
                     {% if current_user.id == inc.submitted_by or current_user.id == inc.reviewed_by or current_user.is_admin %}
                     <form method="POST" action="{{ url_for('incentive.update_photo', inc_id=inc.id) }}" enctype="multipart/form-data" class="position-absolute bottom-0 end-0">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <label class="btn btn-sm btn-light py-0 px-1 rounded-circle" style="font-size:.7em;cursor:pointer;" title="替换照片">
-                            <i class="bi bi-camera"></i>
+                        <label class="btn btn-sm btn-light shadow-sm rounded-circle d-flex align-items-center justify-content-center" style="width:28px;height:28px;cursor:pointer;" title="替换照片">
+                            <i class="bi bi-camera" style="font-size:.85em;"></i>
                             <input type="file" name="photo" class="d-none" accept="image/*" onchange="this.form.submit()">
                         </label>
                     </form>
@@ -101,20 +137,27 @@
                 </div>
             </div>
             <div class="text-end">
-                {% if is_reviewer %}
+                {% if is_reviewer or current_user.id == inc.submitted_by %}
                 <span class="badge bg-{{ inc.status_color }}">{{ inc.status_label }}</span>
-                {% elif inc.status == 'pending' %}
-                <span class="badge bg-warning text-dark">待评审</span>
                 {% else %}
                 <span class="badge bg-secondary">已提交</span>
                 {% endif %}
-                {% if is_reviewer and inc.status == 'pending' %}
-                <button class="btn btn-sm btn-outline-primary mt-1" data-bs-toggle="modal" data-bs-target="#reviewModal"
-                        onclick="setReview({{ inc.id }}, '{{ inc.title }}', '{{ (inc.review_comment or '')|e }}')">评审</button>
+                {% if is_reviewer and inc.status in ('submitted', 'pending') %}
+                <button class="btn btn-sm btn-outline-primary mt-1 btn-review-inc"
+                        data-bs-toggle="modal" data-bs-target="#reviewModal"
+                        data-inc-id="{{ inc.id }}" data-title="{{ inc.title }}"
+                        data-comment="{{ inc.review_comment or '' }}"
+                        data-desc="{{ inc.description }}"
+                        data-amount="{{ inc.amount or '' }}"
+                        data-source="{{ inc.source or 'instant' }}"
+                        data-nominee-ids="{{ inc.nominees|map(attribute='id')|list|join(',') }}">评审</button>
                 {% endif %}
-                {% if (current_user.id == inc.submitted_by or current_user.is_admin) and inc.status in ('pending', 'rejected') %}
-                <button class="btn btn-sm btn-outline-secondary mt-1" data-bs-toggle="modal" data-bs-target="#editModal"
-                        onclick="setEdit({{ inc.id }}, '{{ inc.category }}', '{{ inc.title|e }}', '{{ inc.description|e }}')"><i class="bi bi-pencil"></i> 编辑</button>
+                {% if (current_user.id == inc.submitted_by or current_user.is_admin) and inc.status in ('submitted', 'pending', 'rejected') %}
+                <button class="btn btn-sm btn-outline-secondary mt-1 btn-edit-inc"
+                        data-bs-toggle="modal" data-bs-target="#editModal"
+                        data-inc-id="{{ inc.id }}" data-category="{{ inc.category }}"
+                        data-title="{{ inc.title }}" data-desc="{{ inc.description }}"
+                        data-nominee-ids="{{ inc.nominees|map(attribute='id')|list|join(',') }}"><i class="bi bi-pencil"></i> 编辑</button>
                 {% endif %}
             </div>
         </div>
@@ -124,6 +167,7 @@
 {% else %}
 <div class="text-center text-muted py-5">暂无记录</div>
 {% endif %}
+{% endif %}{# end funds/else #}
 
 <!-- Submit Modal -->
 <div class="modal fade" id="submitModal" tabindex="-1">
@@ -193,14 +237,23 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header py-2"><h6 class="modal-title" id="reviewTitle">评审激励</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
+                    <div id="reviewNomineeIds"></div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">描述</label>
+                        <div class="col-9">
+                            <textarea name="description" id="reviewDesc" class="form-control form-control-sm" rows="3"></textarea>
+                            <div class="d-flex gap-2 mt-1">
+                                <button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="aiPolish('reviewDesc','reviewDescHint')"><i class="bi bi-robot"></i> AI润色</button>
+                                <button type="button" class="btn btn-sm btn-outline-success py-0" onclick="aiDescribe('generate','reviewDesc','reviewDescHint')"><i class="bi bi-robot"></i> AI生成</button>
+                                <span class="small text-muted align-self-center" id="reviewDescHint"></span>
+                            </div>
+                        </div>
+                    </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">评语</label>
                         <div class="col-9">
-                            <textarea name="review_comment" id="reviewComment" class="form-control form-control-sm" rows="3" maxlength="150" placeholder="150字以内"></textarea>
-                            <div class="d-flex justify-content-between mt-1">
-                                <button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="aiPolish()"><i class="bi bi-robot"></i> AI润色</button>
-                                <span class="small text-muted" id="charCount">0/150</span>
-                            </div>
+                            <input type="text" name="review_comment" id="reviewComment" class="form-control form-control-sm" maxlength="150" placeholder="选填，150字以内">
+                            <span class="small text-muted float-end" id="charCount">0/150</span>
                         </div>
                     </div>
                     <div class="row mb-2">
@@ -211,16 +264,31 @@
                         <label class="col-3 col-form-label col-form-label-sm">激励来源</label>
                         <div class="col-9">
                             <select name="source" class="form-select form-select-sm">
-                                <option value="instant" selected>及时激励</option>
-                                <option value="special">专项激励</option>
-                                <option value="knowledge">知识管理激励</option>
-                                <option value="improvement">持续改进激励</option>
+                                {% for k, v in source_labels.items() %}
+                                <option value="{{ k }}"{% if k == 'instant' %} selected{% endif %}>{{ v }}</option>
+                                {% endfor %}
                             </select>
                         </div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">资金池</label>
+                        <div class="col-9">
+                            <select name="fund_id" id="reviewFundId" class="form-select form-select-sm">
+                                <option value="">-- 不指定 --</option>
+                                {% for f in all_funds %}
+                                <option value="{{ f.id }}" data-source="{{ f.source }}" data-remaining="{{ f.remaining if f.has_budget else 999999 }}" data-expires="{{ f.expires_at.isoformat() if f.expires_at else '9999-12-31' }}">{{ f.name }}{% if f.has_budget %} (余¥{{ '%.0f'|format(f.remaining) }}){% else %} (公共池){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">激励年月</label>
+                        <div class="col-9"><input type="month" name="award_month" class="form-control form-control-sm" value="{{ today.strftime('%Y-%m') }}"></div>
                     </div>
                 </div>
                 <div class="modal-footer py-1">
                     <button type="submit" name="action" value="reject" class="btn btn-sm btn-outline-danger">拒绝</button>
+                    <button type="submit" name="action" value="pending" class="btn btn-sm btn-outline-warning">退回修改</button>
                     <button type="submit" name="action" value="approve" class="btn btn-sm btn-success">通过</button>
                 </div>
             </form>
@@ -237,6 +305,7 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header py-2"><h6 class="modal-title" id="editTitle">编辑激励</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
+                    <div id="editNomineeIds"></div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">类别</label>
                         <div class="col-9">
@@ -254,7 +323,14 @@
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">描述 *</label>
-                        <div class="col-9"><textarea name="description" id="editDesc" class="form-control form-control-sm" rows="3" required></textarea></div>
+                        <div class="col-9">
+                            <textarea name="description" id="editDesc" class="form-control form-control-sm" rows="3" required></textarea>
+                            <div class="d-flex gap-2 mt-1">
+                                <button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="aiDescribe('polish','editDesc','editDescHint','#editModal select[name=category]')"><i class="bi bi-robot"></i> AI润色</button>
+                                <button type="button" class="btn btn-sm btn-outline-success py-0" onclick="aiDescribe('generate','editDesc','editDescHint','#editModal select[name=category]')"><i class="bi bi-robot"></i> AI生成</button>
+                                <span class="small text-muted align-self-center" id="editDescHint"></span>
+                            </div>
+                        </div>
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">照片</label>
@@ -304,10 +380,9 @@
                         <div class="col-4 mb-2"><input type="number" name="amount" class="form-control form-control-sm" placeholder="金额" step="50"></div>
                         <div class="col-4 mb-2">
                             <select name="source" class="form-select form-select-sm">
-                                <option value="instant">及时激励</option>
-                                <option value="special">专项激励</option>
-                                <option value="knowledge">知识管理激励</option>
-                                <option value="improvement">持续改进激励</option>
+                                {% for k, v in source_labels.items() %}
+                                <option value="{{ k }}">{{ v }}</option>
+                                {% endfor %}
                             </select>
                         </div>
                         <div class="col-4 mb-2"><input type="file" name="photo" class="form-control form-control-sm" accept="image/*"></div>
@@ -358,13 +433,29 @@ function aiRecommendCandidates() {
 function applyFilter() {
     var url = new URL(window.location);
     var scope = document.getElementById('scopeFilter');
-    var status = document.getElementById('statusFilter');
+    var inlineStatus = document.getElementById('inlineStatusFilter');
     var period = document.getElementById('periodFilter');
+    var my = document.getElementById('monthYear');
+    var mm = document.getElementById('monthMonth');
+    var search = document.getElementById('searchFilter');
+    var tab = url.searchParams.get('tab') || '';
+    if (tab) url.searchParams.set('tab', tab);
     if (scope) url.searchParams.set('scope', scope.value);
-    if (status && status.value) url.searchParams.set('status', status.value);
-    else url.searchParams.delete('status');
-    if (period) url.searchParams.set('period', period.value);
+    if (inlineStatus) {
+        if (inlineStatus.value) url.searchParams.set('status', inlineStatus.value);
+        else url.searchParams.delete('status');
+    }
+    var monthVal = (my && my.value && mm && mm.value) ? my.value + '-' + mm.value : '';
+    if (monthVal) { url.searchParams.set('month', monthVal); url.searchParams.delete('period'); }
+    else { url.searchParams.delete('month'); if (period) url.searchParams.set('period', period.value); }
+    if (search && search.value.trim()) url.searchParams.set('q', search.value.trim());
+    else url.searchParams.delete('q');
     window.location = url;
+}
+function applyMonthFilter() {
+    var my = document.getElementById('monthYear');
+    var mm = document.getElementById('monthMonth');
+    if (my.value && mm.value) applyFilter();
 }
 
 var csrfToken = '{{ csrf_token() }}';
@@ -483,18 +574,64 @@ function filterNominees2(input) {
     });
 }
 
-function setEdit(id, category, title, desc) {
-    document.getElementById('editForm').action = '{{ url_for("incentive.edit", inc_id=0) }}'.replace('/0/', '/' + id + '/');
-    document.getElementById('editCategory').value = category;
-    document.getElementById('editTitleInput').value = title;
-    document.getElementById('editDesc').value = desc;
+function _fillNomineeIds(containerId, idsStr) {
+    var c = document.getElementById(containerId);
+    if (!c) return;
+    c.innerHTML = '';
+    if (idsStr) {
+        idsStr.split(',').forEach(function(id) {
+            if (id) { var h = document.createElement('input'); h.type='hidden'; h.name='nominee_ids'; h.value=id; c.appendChild(h); }
+        });
+    }
 }
 
-function setReview(id, title, comment) {
-    document.getElementById('reviewForm').action = '{{ url_for("incentive.review", inc_id=0) }}'.replace('/0/', '/' + id + '/');
-    document.getElementById('reviewTitle').textContent = '评审：' + title;
-    document.getElementById('reviewComment').value = comment || '';
-    document.getElementById('charCount').textContent = (comment || '').length + '/150';
+document.querySelectorAll('.btn-edit-inc').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.getElementById('editForm').action = '{{ url_for("incentive.edit", inc_id=0) }}'.replace('/0/', '/' + btn.dataset.incId + '/');
+        document.getElementById('editCategory').value = btn.dataset.category;
+        document.getElementById('editTitleInput').value = btn.dataset.title;
+        document.getElementById('editDesc').value = btn.dataset.desc;
+        _fillNomineeIds('editNomineeIds', btn.dataset.nomineeIds);
+    });
+});
+
+document.querySelectorAll('.btn-review-inc').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        document.getElementById('reviewForm').action = '{{ url_for("incentive.review", inc_id=0) }}'.replace('/0/', '/' + btn.dataset.incId + '/');
+        document.getElementById('reviewTitle').textContent = '评审：' + btn.dataset.title;
+        document.getElementById('reviewDesc').value = btn.dataset.desc || '';
+        document.getElementById('reviewComment').value = btn.dataset.comment || '';
+        _fillNomineeIds('reviewNomineeIds', btn.dataset.nomineeIds);
+        var amountInput = document.querySelector('#reviewModal input[name="amount"]');
+        if (amountInput) amountInput.value = btn.dataset.amount || '';
+        var sourceSelect = document.querySelector('#reviewModal select[name="source"]');
+        if (sourceSelect) {
+            sourceSelect.value = btn.dataset.source || 'instant';
+            filterFundsBySource(sourceSelect.value);
+        }
+    });
+});
+
+// Filter fund dropdown by source and auto-select best match
+function filterFundsBySource(src) {
+    var sel = document.getElementById('reviewFundId');
+    if (!sel) return;
+    var best = null, bestExpires = '9999-12-31';
+    sel.querySelectorAll('option').forEach(function(opt) {
+        if (!opt.value) { opt.style.display = ''; return; }
+        var match = opt.dataset.source === src;
+        opt.style.display = match ? '' : 'none';
+        if (match && parseFloat(opt.dataset.remaining) > 0 && opt.dataset.expires < bestExpires) {
+            best = opt.value;
+            bestExpires = opt.dataset.expires;
+        }
+    });
+    sel.value = best || '';
+}
+// Bind source change to re-filter
+var reviewSourceSel = document.querySelector('#reviewModal select[name="source"]');
+if (reviewSourceSel) {
+    reviewSourceSel.addEventListener('change', function() { filterFundsBySource(this.value); });
 }
 
 var commentEl = document.getElementById('reviewComment');
@@ -504,63 +641,58 @@ if (commentEl) {
     });
 }
 
-function aiDescribe(mode) {
-    var hint = document.getElementById('descHint');
-    var desc = document.getElementById('descInput').value.trim();
-    var category = document.querySelector('#submitModal select[name="category"]').value;
+function aiDescribe(mode, targetId, hintId, categorySelector) {
+    var hint = document.getElementById(hintId || 'descHint');
+    var target = document.getElementById(targetId || 'descInput');
+    var desc = target.value.trim();
+    var catEl = document.querySelector(categorySelector || '#submitModal select[name="category"]');
+    var category = catEl ? catEl.value : 'professional';
 
     var nomineeIds = [];
     if (mode === 'generate') {
-        document.querySelectorAll('#selectedNominees input[name="nominee_ids"]').forEach(function(el) {
-            nomineeIds.push(parseInt(el.value));
-        });
+        // Find nominee IDs from the closest open modal, or from submit modal
+        var modal = target.closest('.modal');
+        var nomineeEls = modal ? modal.querySelectorAll('input[name="nominee_ids"]') : [];
+        if (!nomineeEls.length) nomineeEls = document.querySelectorAll('#selectedNominees input[name="nominee_ids"]');
+        nomineeEls.forEach(function(el) { nomineeIds.push(parseInt(el.value)); });
         if (!nomineeIds.length) { hint.textContent = '请先选择推荐人员'; return; }
     } else if (!desc) {
         hint.textContent = '请先输入描述内容'; return;
     }
 
-    hint.textContent = '检测 AI 服务...';
+    var btn = hint.previousElementSibling || hint;
+    var loading = aiLoading(btn, mode === 'generate' ? 'AI生成' : 'AI润色');
     checkAI().then(function() {
-        hint.textContent = 'AI 生成中...';
         return fetch('{{ url_for("incentive.ai_describe") }}', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-            body: JSON.stringify({
-                nominee_ids: nomineeIds,
-                description: desc,
-                category: category
-            })
+            body: JSON.stringify({nominee_ids: nomineeIds, description: desc, category: category})
         });
     }).then(function(r) { return r.json(); }).then(function(d) {
-        if (d.ok) {
-            document.getElementById('descInput').value = d.text;
-            hint.textContent = '';
-        } else {
-            hint.textContent = d.msg || 'AI 服务不可用';
-        }
-    }).catch(function(e) { hint.textContent = e.message || 'AI 请求失败'; });
+        loading.stop();
+        if (d.ok) { target.value = d.text; hint.textContent = ''; }
+        else { hint.textContent = d.msg || 'AI 服务不可用'; }
+    }).catch(function(e) { loading.stop(); hint.textContent = e.message || 'AI 请求失败'; });
 }
 
-function aiPolish() {
-    var text = document.getElementById('reviewComment').value.trim();
+function aiPolish(targetId, hintId) {
+    var target = document.getElementById(targetId || 'reviewComment');
+    var text = target.value.trim();
     if (!text) return;
-    var countEl = document.getElementById('charCount');
-    countEl.textContent = '检测 AI 服务...';
+    var hint = document.getElementById(hintId || 'charCount');
+    var btn = hint.previousElementSibling || hint;
+    var loading = aiLoading(btn, 'AI润色');
     checkAI().then(function() {
-        countEl.textContent = 'AI 润色中...';
         return fetch('{{ url_for("incentive.ai_polish") }}', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
             body: JSON.stringify({text: text})
         });
     }).then(function(r) { return r.json(); }).then(function(d) {
-        if (d.ok) {
-            document.getElementById('reviewComment').value = d.text;
-            countEl.textContent = d.text.length + '/150';
-        } else {
-            countEl.textContent = d.msg || 'AI 服务不可用';
-        }
-    }).catch(function(e) { countEl.textContent = e.message || 'AI 请求失败'; });
+        loading.stop();
+        if (d.ok) { target.value = d.text; hint.textContent = d.text.length + '/150'; }
+        else { hint.textContent = d.msg || 'AI 服务不可用'; }
+    }).catch(function(e) { loading.stop(); hint.textContent = e.message || 'AI 请求失败'; });
 }
 </script>
 {% endblock %}

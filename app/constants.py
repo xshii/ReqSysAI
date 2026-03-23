@@ -58,12 +58,44 @@ DEFAULT_POMODORO_MINUTES = 45
 # ---------------------------------------------------------------------------
 # Incentive source (激励来源)
 # ---------------------------------------------------------------------------
-INCENTIVE_SOURCE_LABELS = {
+_INCENTIVE_SOURCE_DEFAULTS = {
     'instant': '及时激励',
     'special': '专项激励',
+    'project': '项目激励',
     'knowledge': '知识管理激励',
     'improvement': '持续改进激励',
 }
+
+def _get_incentive_source_labels():
+    import json, os
+    result = dict(_INCENTIVE_SOURCE_DEFAULTS)
+    path = os.path.join(os.path.dirname(__file__), 'custom_sources.json')
+    if os.path.exists(path):
+        with open(path, 'r', encoding='utf-8') as f:
+            result.update(json.load(f))
+    return result
+
+
+class _SourceLabelsProxy(dict):
+    """Dict that reloads custom sources on every access."""
+    def __getitem__(self, key):
+        return _get_incentive_source_labels()[key]
+    def get(self, key, default=None):
+        return _get_incentive_source_labels().get(key, default)
+    def items(self):
+        return _get_incentive_source_labels().items()
+    def keys(self):
+        return _get_incentive_source_labels().keys()
+    def values(self):
+        return _get_incentive_source_labels().values()
+    def __iter__(self):
+        return iter(_get_incentive_source_labels())
+    def __len__(self):
+        return len(_get_incentive_source_labels())
+    def __contains__(self, key):
+        return key in _get_incentive_source_labels()
+
+INCENTIVE_SOURCE_LABELS = _SourceLabelsProxy()
 
 # ---------------------------------------------------------------------------
 # Query & pagination limits
