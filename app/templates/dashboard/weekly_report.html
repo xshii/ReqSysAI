@@ -70,6 +70,9 @@
 
 <!-- Row 1: Title -->
 <div class="report-header">{{ report_data.project_name }} 周报（{{ monday.strftime('%m-%d') }} ~ {{ sunday.strftime('%m-%d') }}）</div>
+{% if report_data.get('project_goal') %}
+<div class="text-muted small text-center mb-1" style="font-size:.8em;">项目目标：{{ report_data.project_goal }}</div>
+{% endif %}
 
 <!-- Row 2: Publisher / Reviewer -->
 <div class="report-meta">
@@ -93,23 +96,25 @@
     </div>
     {% endif %}
     {% endif %}
-    <div style="overflow-x:auto;min-width:{{ report_data.milestones|length * 110 }}px;">
-        <!-- Axis line -->
-        <div style="height:2px;background:#1e3a5f;margin:0 8px;"></div>
-        <!-- Triangles + Labels -->
-        <div class="d-flex justify-content-between" style="margin:0 8px;">
-            {% for ms in report_data.milestones %}
-            {% set ms_done = ms.status == 'completed' %}
-            {% set ms_overdue = not ms_done and ms.due_date and ms.due_date < report_data.today %}
-            {% set c = '#10b981' if ms_done else '#dc2626' if ms_overdue else '#1e3a5f' %}
-            <div class="text-center" style="flex:1;min-width:90px;max-width:140px;">
-                <div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:12px solid {{ c }};margin:0 auto;"></div>
-                <div style="margin-top:4px;">
-                    <div class="fw-bold text-truncate" style="font-size:.78rem;color:{{ c }};" title="{{ ms.name }}">{{ ms.name }}</div>
-                    {% if ms.due_date %}<div style="font-size:.7rem;color:#64748b;">{{ ms.due_date.strftime('%Y-%m-%d') }}</div>{% endif %}
+    <div style="overflow-x:auto;">
+        <div style="min-width:{{ [report_data.milestones|length * 100, 400] | max }}px;">
+            <!-- Axis line -->
+            <div style="height:2px;background:#1e3a5f;margin:0 8px;"></div>
+            <!-- Triangles + Labels -->
+            <div class="d-flex" style="margin:0 8px;">
+                {% for ms in report_data.milestones %}
+                {% set ms_done = ms.status == 'completed' %}
+                {% set ms_overdue = not ms_done and ms.due_date and ms.due_date < report_data.today %}
+                {% set c = '#10b981' if ms_done else '#dc2626' if ms_overdue else '#1e3a5f' %}
+                <div class="text-center" style="flex:1 0 0;min-width:80px;">
+                    <div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:10px solid {{ c }};margin:0 auto;"></div>
+                    <div style="margin-top:3px;">
+                        <div class="fw-bold text-truncate" style="font-size:.72rem;color:{{ c }};" title="{{ ms.name }}">{{ ms.name }}</div>
+                        {% if ms.due_date %}<div style="font-size:.65rem;color:#64748b;">{{ ms.due_date.strftime('%Y-%m-%d') }}</div>{% endif %}
+                    </div>
                 </div>
+                {% endfor %}
             </div>
-            {% endfor %}
         </div>
     </div>
 </div>
@@ -220,10 +225,9 @@
 <div class="report-section">
     <h6>需求列表</h6>
     <table class="report-table">
-        <thead><tr><th>编号</th><th>标题</th><th>状态</th><th>负责人</th><th>预估</th><th>预期完成</th><th>本周投入</th></tr></thead>
+        <thead><tr><th>编号</th><th>标题</th><th>状态</th><th>负责人</th><th>预估</th><th>预期完成</th></tr></thead>
         <tbody>
         {% for r in report_data.all_reqs %}
-        {% set inv = report_data.req_investment.get(r.number) %}
         <tr>
             <td>{{ r.number }}</td>
             <td>{{ r.title }}{% if r.children %} <span class="text-muted small">({{ r.children | selectattr('status', 'in', ['done','closed']) | list | length }}/{{ r.children | length }})</span>{% endif %}</td>
@@ -232,7 +236,6 @@
             <td>{{ r.assignee_display }}</td>
             <td>{{ r.estimate_days or '-' }}</td>
             <td>{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
-            <td>{% if inv %}{{ inv.people | length }}人·{{ inv.days }}天{% else %}-{% endif %}</td>
         </tr>
         {% endfor %}
         </tbody>
@@ -241,29 +244,23 @@
 {% endif %}
 
 <!-- Row 8: People Map -->
-{% if report_data.people_map %}
+{% set _roles = report_data.get('people_roles', {}) %}
+{% set _pmap = report_data.get('people_map', {}) %}
+{% if _roles or _pmap %}
 <div class="report-section">
     <h6>人力地图</h6>
-    <table class="report-table">
-        <thead>
-            <tr>
-                <th>姓名</th>
-                {% for rnum in report_data.people_map_reqs %}<th class="small">{{ rnum }}</th>{% endfor %}
-                <th>合计</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for name, row in report_data.people_map.items() %}
-        <tr>
-            <td>{{ name }}</td>
-            {% for rnum in report_data.people_map_reqs %}
-            <td class="text-center small">{% if row.get(rnum) %}{{ row[rnum] }}{% else %}-{% endif %}</td>
-            {% endfor %}
-            <td class="fw-bold text-center">{{ row.get('_total', 0) }}</td>
-        </tr>
+    {% set _names = _roles.keys()|list if _roles else _pmap.keys()|list %}
+    {% set cols = 3 if _names|length > 12 else (2 if _names|length > 6 else 1) %}
+    <div class="row g-1">
+        {% for name in _names %}
+        <div class="col-{{ 12 // cols }}">
+            <div class="d-flex align-items-center gap-1" style="font-size:.85em;">
+                <span>{{ name }}</span>
+                <span class="text-muted" style="font-size:.8em;">{{ _roles.get(name, '') }}</span>
+            </div>
+        </div>
         {% endfor %}
-        </tbody>
-    </table>
+    </div>
 </div>
 {% endif %}
 

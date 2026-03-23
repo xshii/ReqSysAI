@@ -426,6 +426,7 @@ def weekly_report():
 
         report_data = {
             'project_name': project_name,
+            'project_goal': cur_project.description if cur_project else '',
             'today': date.today(),
             'monday': monday,
             'sunday': sunday,
@@ -441,6 +442,7 @@ def weekly_report():
             'open_risks': open_risks,
             'people_map': people_map,
             'people_map_reqs': people_map_reqs,
+            'people_roles': {m.display_name: m.role_label for m in ProjectMember.query.filter_by(project_id=cur_project_id).all()},
             'ai': ai_analysis,
             'sub_projects': sub_projects,
         }
@@ -565,6 +567,7 @@ def weekly_report():
 
         report_data = {
             'project_name': project_name,
+            'project_goal': cur_project.description if cur_project else '',
             'today': date.today(),
             'monday': monday,
             'sunday': sunday,
@@ -580,6 +583,7 @@ def weekly_report():
             'open_risks': open_risks,
             'people_map': people_map,
             'people_map_reqs': people_map_reqs,
+            'people_roles': {m.display_name: m.role_label for m in ProjectMember.query.filter_by(project_id=cur_project_id).all()},
             'ai': ai_analysis,
             'sub_projects': sub_projects,
         }
@@ -1296,7 +1300,7 @@ def resource_map():
     is_pm = current_user.is_admin or current_user.has_role('PM', 'PL', 'FO', 'LM', 'XM', 'HR')
     return render_template('dashboard/resource_map.html',
         flat_rows=flat_rows, proj_flat_rows=proj_flat_rows,
-        projects=projects, project_ids=project_ids,
+        projects=projects, project_ids=project_ids, users=users,
         period=period, mode=mode, label=label, offset=week_offset,
         is_pm=is_pm,
     )
