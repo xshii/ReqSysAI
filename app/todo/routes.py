@@ -124,14 +124,22 @@ def timer(todo_id):
     if todo.user_id != current_user.id:
         return jsonify(ok=False), 403
     if todo.started_at:
-        # Stop timer, record elapsed
-        todo.actual_minutes = (todo.actual_minutes or 0) + todo.elapsed_minutes
+        # Stop timer — save this session
+        from app.models.todo import PomodoroSession
+        elapsed_sec = (datetime.utcnow() - todo.started_at).total_seconds()
+        elapsed_min = max(1, round(elapsed_sec / 60))  # At least 1 minute
+        pomo_min = current_user.pomodoro_minutes or 45
+        completed = elapsed_min >= pomo_min
+        db.session.add(PomodoroSession(todo_id=todo.id, started_at=todo.started_at, minutes=elapsed_min, completed=completed))
+        todo.actual_minutes = (todo.actual_minutes or 0) + elapsed_min
         todo.started_at = None
+        db.session.commit()
+        return jsonify(ok=True, running=False, minutes=elapsed_min,
+                       completed=completed, total_minutes=todo.actual_minutes)
     else:
         todo.started_at = datetime.utcnow()
-    db.session.commit()
-    return jsonify(ok=True, running=todo.timer_running,
-                   minutes=todo.actual_minutes or 0)
+        db.session.commit()
+        return jsonify(ok=True, running=True, minutes=0)
 
 
 # ---- Help / Comments ----
@@ -150,8 +158,30 @@ def toggle_block(todo_id):
         todo.blocked_reason = None
     else:
         # Block
+        reason = (data.get('reason') or '').strip()[:200] or None
         todo.need_help = True
-        todo.blocked_reason = (data.get('reason') or '').strip()[:200] or None
+        todo.blocked_reason = reason
+        # Parse @name → create help todo for that person
+        if reason:
+            import re
+            at_match = re.search(r'@(\S+)', reason)
+            if at_match:
+                from app.models.user import User
+                helper_name = at_match.group(1)
+                helper = User.query.filter_by(name=helper_name, is_active=True).first()
+                if helper and helper.id != current_user.id:
+                    from app.models.todo import TodoItem
+                    help_todo = Todo(
+                        user_id=helper.id,
+                        title=f'协助：{todo.title}',
+                        category=todo.category,
+                        source='help',
+                        parent_id=todo.id,
+                        due_date=date.today(),
+                        created_date=date.today(),
+                    )
+                    help_todo.items.append(TodoItem(title=f'协助：{todo.title}', sort_order=0))
+                    db.session.add(help_todo)
     db.session.commit()
     return jsonify(ok=True, blocked=todo.need_help, reason=todo.blocked_reason)
 
@@ -470,6 +500,7 @@ def team():
     all_todos = Todo.query.filter(
         Todo.user_id.in_(user_ids),
         Todo.category != 'personal',
+        ~Todo.title.startswith('[情绪跟进]'),
         db.or_(
             Todo.status == TODO_STATUS_TODO,
             db.and_(Todo.status == TODO_STATUS_DONE, Todo.done_date >= week_ago),
@@ -478,7 +509,7 @@ def team():
     ).options(
         joinedload(Todo.requirements), joinedload(Todo.parent),
         joinedload(Todo.children), joinedload(Todo.items),
-        joinedload(Todo.comments),
+        joinedload(Todo.comments), joinedload(Todo.pomodoros),
     ).order_by(
         db.case((Todo.status == TODO_STATUS_TODO, 0), else_=1),
         Todo.sort_order,

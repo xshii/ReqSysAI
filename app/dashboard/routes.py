@@ -299,6 +299,10 @@ def weekly_report():
         project_name = cur_project.name if cur_project else '研发团队'
         lines = [f'本周（{monday} ~ {sunday}）{project_name}工作数据：\n']
 
+        # Project goal
+        if cur_project and cur_project.description:
+            lines.append(f'项目目标：{cur_project.description}\n')
+
         # Milestones
         if milestones:
             lines.append('里程碑：')
@@ -866,6 +870,86 @@ def weekly_report_export():
                      as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
+# ---- My Day (我的一天) ----
+
+@dashboard_bp.route('/my-day')
+@login_required
+def my_day():
+    """Personal daily schedule — 5-day Outlook-style timeline based on pomodoro sessions."""
+    from app.models.todo import PomodoroSession
+
+    today = date.today()
+    # 5 days: today + 4 previous days (today first)
+    days = [today - timedelta(days=i) for i in range(5)]
+
+    # Load all pomodoro sessions for the 5-day range
+    range_start = datetime(days[-1].year, days[-1].month, days[-1].day)
+    range_end = datetime(today.year, today.month, today.day) + timedelta(days=1)
+    all_sessions = PomodoroSession.query.join(Todo).filter(
+        Todo.user_id == current_user.id,
+        PomodoroSession.created_at >= range_start,
+        PomodoroSession.created_at < range_end,
+    ).options(joinedload(PomodoroSession.todo)).order_by(PomodoroSession.started_at.asc().nullslast()).all()
+
+    # Group sessions by date
+    day_data = {}
+    for d in days:
+        day_data[d] = {
+            'sessions': [],
+            'timeline': [],
+            'total_min': 0,
+            'count': 0,
+            'done': [],
+        }
+
+    for s in all_sessions:
+        s_date = (s.started_at or s.created_at).date() if (s.started_at or s.created_at) else None
+        if s_date and s_date in day_data:
+            dd = day_data[s_date]
+            dd['sessions'].append(s)
+            dd['total_min'] += s.minutes
+            dd['count'] += 1
+            start = s.started_at or s.created_at
+            dd['timeline'].append({
+                'start_hour': start.hour,
+                'start_min': start.minute,
+                'duration': s.minutes,
+                'title': s.todo.title if s.todo else '',
+                'completed': s.completed,
+            })
+
+    # Load done todos per day
+    done_todos = Todo.query.filter(
+        Todo.user_id == current_user.id,
+        Todo.status == 'done',
+        Todo.done_date.in_(days),
+    ).all()
+    for t in done_todos:
+        if t.done_date in day_data:
+            day_data[t.done_date]['done'].append(t)
+
+    # Aggregate stats
+    total_focus = sum(dd['total_min'] for dd in day_data.values())
+    total_sessions = sum(dd['count'] for dd in day_data.values())
+    total_done = sum(len(dd['done']) for dd in day_data.values())
+
+    # Focus ranking across 5 days
+    focus_by_todo = {}
+    for s in all_sessions:
+        focus_by_todo.setdefault(s.todo_id, {'title': s.todo.title if s.todo else '', 'minutes': 0, 'count': 0})
+        focus_by_todo[s.todo_id]['minutes'] += s.minutes
+        focus_by_todo[s.todo_id]['count'] += 1
+    focus_ranking = sorted(focus_by_todo.values(), key=lambda x: -x['minutes'])[:10]
+
+    weekday_names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+
+    return render_template('dashboard/my_day.html',
+                           today=today, days=days, day_data=day_data,
+                           total_focus=total_focus, total_sessions=total_sessions,
+                           total_done=total_done, focus_ranking=focus_ranking,
+                           weekday_names=weekday_names)
+
+
 # ---- Personal weekly report ----
 
 @dashboard_bp.route('/my-weekly', methods=['GET', 'POST'])
@@ -1058,9 +1142,15 @@ def resource_map():
     if period == '3month':
         start = today - timedelta(days=90)
         end = today
+    elif period == 'last_month':
+        first_this_month = today.replace(day=1)
+        end = first_this_month - timedelta(days=1)
+        start = end.replace(day=1)
     elif period == 'month':
         start = today.replace(day=1)
         end = today
+    elif period == 'last_week':
+        start, end = week_range(-1)
     else:
         start, end = week_range(week_offset)
     label = f'{start.strftime("%Y-%m-%d")} ~ {end.strftime("%Y-%m-%d")}'
@@ -1185,9 +1275,15 @@ def resource_map_export():
     if period == '3month':
         start = today - timedelta(days=90)
         end = today
+    elif period == 'last_month':
+        first_this_month = today.replace(day=1)
+        end = first_this_month - timedelta(days=1)
+        start = end.replace(day=1)
     elif period == 'month':
         start = today.replace(day=1)
         end = today
+    elif period == 'last_week':
+        start, end = week_range(-1)
     else:
         start, end = week_range(week_offset)
 
@@ -1290,7 +1386,12 @@ def emotion_predict():
         abort(403)
     from app.models.emotion import EmotionRecord
     # Load saved records grouped by date
-    records = EmotionRecord.query.order_by(EmotionRecord.scan_date.desc(), EmotionRecord.risk_level.desc()).all()
+    risk_order = db.case(
+        (EmotionRecord.risk_level == 'high', 0),
+        (EmotionRecord.risk_level == 'medium', 1),
+        else_=2
+    )
+    records = EmotionRecord.query.order_by(EmotionRecord.scan_date.desc(), risk_order).all()
     dates = sorted(set(r.scan_date for r in records), reverse=True)
     grouped = {}
     for d in dates:
@@ -1372,6 +1473,7 @@ def emotion_save():
         db.session.add(EmotionRecord(
             scan_date=today,
             member_name=m.get('name', ''),
+            group=m.get('group', ''),
             status=m.get('status', '正常'),
             risk_level=m.get('risk_level', 'low'),
             signals=json_lib.dumps(m.get('signals', []), ensure_ascii=False),
@@ -1380,6 +1482,18 @@ def emotion_save():
         ))
     db.session.commit()
     return jsonify(ok=True, count=len(members))
+
+
+@dashboard_bp.route('/emotion/delete-record/<int:record_id>', methods=['POST'])
+@login_required
+def emotion_delete_record(record_id):
+    """Delete a single emotion record."""
+    from app.models.emotion import EmotionRecord
+    r = db.session.get(EmotionRecord, record_id)
+    if r:
+        db.session.delete(r)
+        db.session.commit()
+    return jsonify(ok=True)
 
 
 @dashboard_bp.route('/emotion/delete/<scan_date>', methods=['POST'])

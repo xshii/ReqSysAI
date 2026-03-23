@@ -120,7 +120,7 @@ def requirement_create():
             estimate_days=form.estimate_days.data,
             code_lines=form.code_lines.data,
             test_cases=form.test_cases.data,
-            source='manual',
+            source=form.source.data or None,
             created_by=current_user.id,
         )
         db.session.add(req)
@@ -208,6 +208,7 @@ def requirement_edit(req_id):
         req.estimate_days = form.estimate_days.data
         req.code_lines = form.code_lines.data
         req.test_cases = form.test_cases.data
+        req.source = form.source.data or req.source
         _log_activity(req, 'edited', '编辑了需求')
         db.session.commit()
         flash('需求更新成功', 'success')
@@ -395,3 +396,234 @@ def _build_requirement_form(obj=None):
         (u.id, u.name) for u in User.query.filter_by(is_active=True).all()
     ]
     return form
+
+
+# ---- CSV Export / Import ----
+
+@requirement_bp.route('/export-csv')
+@login_required
+def export_csv():
+    """Export requirements as CSV (supports project filter)."""
+    import csv
+    import io
+    from flask import Response
+
+    project_id = request.args.get('project_id', type=int)
+    query = Requirement.query.options(
+        joinedload(Requirement.project), joinedload(Requirement.assignee),
+        joinedload(Requirement.parent),
+    )
+    if project_id:
+        query = query.filter_by(project_id=project_id)
+    query = query.order_by(Requirement.project_id, Requirement.number)
+    reqs = query.all()
+
+    buf = io.StringIO()
+    buf.write('\ufeff')  # BOM for Excel
+    writer = csv.writer(buf)
+    writer.writerow([
+        '需求编号', '层级', '需求类型', '标题', '项目', '优先级', '状态',
+        '负责人', '工号', '预估工期(天)', '代码行数', '用例数',
+        '开始日期', '截止日期', '父需求编号', '描述',
+    ])
+    for r in reqs:
+        assignee_eid = r.assignee.employee_id if r.assignee else ''
+        level = '子需求' if r.parent_id else '需求'
+        writer.writerow([
+            r.number,
+            level,
+            r.source_label,
+            r.title,
+            r.project.name if r.project else '',
+            r.priority_label,
+            r.status_label,
+            r.assignee_display,
+            assignee_eid or '',
+            r.estimate_days or '',
+            r.code_lines or '',
+            r.test_cases or '',
+            r.start_date.isoformat() if r.start_date else '',
+            r.due_date.isoformat() if r.due_date else '',
+            r.parent.number if r.parent else '',
+            r.description or '',
+        ])
+
+    return Response(
+        buf.getvalue(), mimetype='text/csv; charset=utf-8',
+        headers={'Content-Disposition': 'attachment; filename=requirements.csv'},
+    )
+
+
+@requirement_bp.route('/import-csv', methods=['POST'])
+@login_required
+def import_csv():
+    """Import requirements from CSV. Supports parent-child via '父需求编号'."""
+    import csv
+    import io
+
+    file = request.files.get('csv_file')
+    if not file or not file.filename.lower().endswith('.csv'):
+        flash('请选择 CSV 文件', 'danger')
+        return redirect(url_for('requirement.requirement_list'))
+
+    raw = file.read()
+    for enc in ('utf-8-sig', 'gbk', 'utf-8'):
+        try:
+            text = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        flash('编码无法识别', 'danger')
+        return redirect(url_for('requirement.requirement_list'))
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not {'标题'}.issubset(set(reader.fieldnames or [])):
+        flash('CSV 缺少必填列：标题', 'danger')
+        return redirect(url_for('requirement.requirement_list'))
+
+    # Reverse lookup maps
+    status_rev = {v: k for k, v in Requirement.STATUS_LABELS.items()}
+    priority_rev = {v: k for k, v in Requirement.PRIORITY_LABELS.items()}
+    source_rev = {v: k for k, v in Requirement.SOURCE_LABELS.items()}
+    user_map = {u.name: u.id for u in User.query.filter_by(is_active=True).all()}
+    project_map = {p.name: p.id for p in Project.query.all()}
+
+    # First pass: create requirements (skip parent linking)
+    created = []
+    number_to_req = {}
+    for row in reader:
+        title = (row.get('标题') or '').strip()
+        if not title:
+            continue
+
+        # Resolve project
+        proj_name = (row.get('项目') or '').strip()
+        pid = project_map.get(proj_name)
+        if not pid:
+            # Use first active project as fallback
+            first_proj = Project.query.filter_by(status='active').first()
+            pid = first_proj.id if first_proj else 1
+
+        # Resolve assignee
+        assignee_str = (row.get('负责人') or '').strip()
+        assignee_id, assignee_name = None, None
+        if assignee_str:
+            uid = user_map.get(assignee_str)
+            if uid:
+                assignee_id = uid
+            else:
+                assignee_name = assignee_str
+
+        # Check if requirement already exists (by number)
+        number = (row.get('需求编号') or '').strip()
+        existing = Requirement.query.filter_by(number=number).first() if number else None
+        if existing:
+            # Update existing
+            existing.title = title
+            existing.priority = priority_rev.get((row.get('优先级') or '').strip(), existing.priority)
+            existing.status = status_rev.get((row.get('状态') or '').strip(), existing.status)
+            src = source_rev.get((row.get('需求类型') or '').strip())
+            if src:
+                existing.source = src
+            existing.assignee_id = assignee_id or existing.assignee_id
+            existing.assignee_name = assignee_name or existing.assignee_name
+            est = (row.get('预估工期(天)') or '').strip()
+            if est:
+                try:
+                    existing.estimate_days = float(est)
+                except ValueError:
+                    pass
+            sd = (row.get('开始日期') or '').strip()
+            if sd:
+                try:
+                    existing.start_date = date.fromisoformat(sd)
+                except ValueError:
+                    pass
+            dd = (row.get('截止日期') or '').strip()
+            if dd:
+                try:
+                    existing.due_date = date.fromisoformat(dd)
+                except ValueError:
+                    pass
+            cl = (row.get('代码行数') or '').strip()
+            if cl:
+                try:
+                    existing.code_lines = int(cl)
+                except ValueError:
+                    pass
+            tc = (row.get('用例数') or '').strip()
+            if tc:
+                try:
+                    existing.test_cases = int(tc)
+                except ValueError:
+                    pass
+            desc = (row.get('描述') or '').strip()
+            if desc:
+                existing.description = desc
+            number_to_req[number] = existing
+            continue
+
+        req = Requirement(
+            number=number or Requirement.generate_number(),
+            project_id=pid,
+            title=title,
+            priority=priority_rev.get((row.get('优先级') or '').strip(), 'medium'),
+            status=status_rev.get((row.get('状态') or '').strip(), 'pending_review'),
+            source=source_rev.get((row.get('需求类型') or '').strip()),
+            assignee_id=assignee_id,
+            assignee_name=assignee_name,
+            description=(row.get('描述') or '').strip() or None,
+            created_by=current_user.id,
+        )
+        est = (row.get('预估工期(天)') or '').strip()
+        if est:
+            try:
+                req.estimate_days = float(est)
+            except ValueError:
+                pass
+        sd = (row.get('开始日期') or '').strip()
+        if sd:
+            try:
+                req.start_date = date.fromisoformat(sd)
+            except ValueError:
+                pass
+        dd = (row.get('截止日期') or '').strip()
+        if dd:
+            try:
+                req.due_date = date.fromisoformat(dd)
+            except ValueError:
+                pass
+        cl = (row.get('代码行数') or '').strip()
+        if cl:
+            try:
+                req.code_lines = int(cl)
+            except ValueError:
+                pass
+        tc = (row.get('用例数') or '').strip()
+        if tc:
+            try:
+                req.test_cases = int(tc)
+            except ValueError:
+                pass
+        db.session.add(req)
+        created.append(req)
+        number_to_req[req.number] = req
+
+    db.session.flush()  # Get IDs for parent linking
+
+    # Second pass: link parent requirements
+    reader2 = csv.DictReader(io.StringIO(text))
+    for row in reader2:
+        number = (row.get('需求编号') or '').strip()
+        parent_number = (row.get('父需求编号') or '').strip()
+        if number and parent_number:
+            req = number_to_req.get(number)
+            parent = number_to_req.get(parent_number) or \
+                     Requirement.query.filter_by(number=parent_number).first()
+            if req and parent:
+                req.parent_id = parent.id
+
+    db.session.commit()
+    flash(f'导入成功，新建 {len(created)} 条需求', 'success')
+    return redirect(url_for('requirement.requirement_list'))

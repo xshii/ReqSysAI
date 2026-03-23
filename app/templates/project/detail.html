@@ -2,7 +2,7 @@
 {% block title %}{{ project.name }} - 研发协作平台{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-2">
     <div>
         {% if project.parent %}
         <div class="small text-muted mb-1">
@@ -10,9 +10,12 @@
         </div>
         {% endif %}
         <h4 class="mb-0">{{ project.name }}
-            <span class="badge bg-{{ 'success' if project.status == 'active' else 'secondary' }} ms-1" style="font-size:0.6em;">{{ project.status_label }}</span>
+            <form method="POST" action="{{ url_for('project.project_status', project_id=project.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="status" value="{{ 'completed' if project.status == 'active' else 'active' }}">
+                <button type="submit" class="badge bg-{{ 'success' if project.status == 'active' else 'secondary' }} border-0 ms-1" style="font-size:0.6em;cursor:pointer;" title="点击切换状态">{{ project.status_label }}</button>
+            </form>
         </h4>
-        {% if project.description %}<p class="text-muted small mt-1 mb-0">{{ project.description }}</p>{% endif %}
     </div>
     <div class="d-flex gap-2">
         <form method="POST" action="{{ url_for('project.toggle_follow', project_id=project.id) }}" class="d-inline">
@@ -21,12 +24,66 @@
                 <i class="bi bi-heart{% if project.id in sidebar_followed_ids %}-fill{% endif %}"></i> {{ '已关注' if project.id in sidebar_followed_ids else '关注' }}
             </button>
         </form>
-        <a href="{{ url_for('project.project_edit', project_id=project.id) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil"></i> 编辑</a>
+        <a href="{{ url_for('project.project_edit', project_id=project.id) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil"></i> 编辑项目</a>
     </div>
 </div>
 
+{# Project goal / description #}
+{% if project.description %}
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-body py-2">
+        <div class="d-flex align-items-start gap-2">
+            <i class="bi bi-bullseye text-primary" style="font-size:1.1em;margin-top:2px;"></i>
+            <div>
+                <div class="small fw-bold text-muted mb-1">项目目标</div>
+                <div class="small">{{ project.description }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# Milestone timeline — top position #}
+{% if project.milestones %}
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-body py-2">
+        {% set _ms_dates = project.milestones|selectattr('due_date')|map(attribute='due_date')|list %}
+        {% if _ms_dates %}
+        {% set _ms_min = _ms_dates|min %}
+        {% set _ms_max = _ms_dates|max %}
+        {% set _ms_range = (_ms_max - _ms_min).days or 1 %}
+        {% set _today_pos = ((today - _ms_min).days / _ms_range * 100) %}
+        {% if _today_pos >= 0 and _today_pos <= 100 %}
+        <div style="position:relative;height:22px;margin:0 8px;">
+            <div style="position:absolute;left:{{ _today_pos }}%;transform:translateX(-50%);text-align:center;line-height:1;">
+                <div style="color:#dc2626;font-size:10px;font-weight:bold;">今天</div>
+                <div style="width:2px;height:8px;background:#dc2626;margin:0 auto;"></div>
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
+        <div style="overflow-x:auto;min-width:{{ project.milestones|length * 110 }}px;">
+            <div style="height:2px;background:{{ milestone_color }};margin:0 8px;"></div>
+            <div class="d-flex justify-content-between" style="margin:0 8px;">
+                    {% for ms in project.milestones %}
+                    {% set c = milestone_color %}
+                    <div class="text-center" style="flex:1;">
+                        <div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:12px solid {{ c }};margin:0 auto;"></div>
+                        <div style="white-space:nowrap;margin-top:4px;">
+                            <div class="fw-bold" style="font-size:.82rem;color:{{ c }};">{{ ms.name }}</div>
+                            {% if ms.due_date %}<div style="font-size:.72rem;color:#64748b;">{{ ms.due_date.strftime('%m-%d') }}</div>{% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Stats Cards -->
-<div class="row g-3 mb-4">
+<div class="row g-3 mb-3">
     <div class="col-6 col-md-3">
         <div class="card text-center border-0 shadow-sm">
             <div class="card-body py-3">
@@ -63,48 +120,6 @@
         </div>
     </div>
 </div>
-
-<!-- Milestone Timeline (full width) -->
-{% if project.milestones %}
-<div class="card mb-4 border-0 shadow-sm">
-    <div class="card-header py-2 d-flex justify-content-between align-items-center bg-white">
-        <span class="small fw-bold">里程碑</span>
-        <a href="{{ url_for('project.milestone_create', project_id=project.id) }}" class="btn btn-sm btn-outline-dark py-0"><i class="bi bi-plus"></i></a>
-    </div>
-    <div class="card-body py-2">
-        {% set _ms_dates = project.milestones|selectattr('due_date')|map(attribute='due_date')|list %}
-        {% if _ms_dates %}
-        {% set _ms_min = _ms_dates|min %}
-        {% set _ms_max = _ms_dates|max %}
-        {% set _ms_range = (_ms_max - _ms_min).days or 1 %}
-        {% set _today_pos = ((today - _ms_min).days / _ms_range * 100) %}
-        {% if _today_pos >= 0 and _today_pos <= 100 %}
-        <div style="position:relative;height:18px;margin:0 8px;">
-            <div style="position:absolute;left:{{ _today_pos }}%;transform:translateX(-50%);color:#dc2626;font-size:14px;line-height:1;" title="今天 {{ today.strftime('%m-%d') }}">&#9733;</div>
-        </div>
-        {% endif %}
-        {% endif %}
-        <div style="overflow-x:auto;min-width:{{ project.milestones|length * 110 }}px;">
-            <div style="height:2px;background:#1e3a5f;margin:0 8px;"></div>
-            <div class="d-flex justify-content-between" style="margin:0 8px;">
-                    {% for ms in project.milestones %}
-                    {% set ms_done = ms.status == 'completed' %}
-                    {% set ms_overdue = not ms_done and ms.due_date and ms.due_date < today %}
-                    {% set c = '#10b981' if ms_done else '#dc2626' if ms_overdue else '#1e3a5f' %}
-                    <div class="text-center" style="flex:1;">
-                        <div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:12px solid {{ c }};margin:0 auto;"></div>
-                        <div style="white-space:nowrap;margin-top:4px;">
-                            <div class="fw-bold" style="font-size:.82rem;color:{{ c }};">{{ ms.name }}</div>
-                            {% if ms.due_date %}<div style="font-size:.72rem;color:#64748b;">{{ ms.due_date.strftime('%m-%d') }}</div>{% endif %}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
 
 <div class="row g-3">
     <!-- Left Column -->
@@ -209,7 +224,7 @@
         <div class="card mb-3">
             <div class="card-header py-2 d-flex justify-content-between align-items-center">
                 <span class="small fw-bold"><i class="bi bi-people"></i> 关键成员</span>
-                <a href="{{ url_for('project.member_list', project_id=project.id) }}" class="small">管理</a>
+                <a href="{{ url_for('project.project_edit', project_id=project.id) }}?tab=members" class="small text-muted" title="管理成员"><i class="bi bi-pencil"></i></a>
             </div>
             <div class="card-body py-2">
                 {% if key_members %}

@@ -1,9 +1,10 @@
 import json
 from datetime import datetime, date, timedelta
 
-from flask import render_template, redirect, url_for, flash, request, jsonify
+from flask import render_template, redirect, url_for, flash, request, jsonify, make_response
 from flask_login import current_user
 
+from app.constants import MILESTONE_COLOR
 from app.project import project_bp
 from app.project.forms import ProjectForm, MilestoneForm
 from flask_login import login_required
@@ -64,6 +65,83 @@ def project_create():
     return render_template('project/form.html', form=form, title='新建项目', templates=templates)
 
 
+@project_bp.route('/milestone-templates', methods=['POST'])
+@login_required
+def milestone_template_action():
+    """Create / edit / delete / copy milestone templates."""
+    from app.models.project import MilestoneTemplate, MilestoneTemplateItem
+    from app.constants import parse_offset
+
+    action = request.form.get('action')
+
+    if action == 'create':
+        name = request.form.get('name', '').strip()
+        if not name:
+            flash('请输入模板名称', 'danger')
+        elif MilestoneTemplate.query.filter_by(name=name).first():
+            flash(f'模板 {name} 已存在', 'warning')
+        else:
+            tpl = MilestoneTemplate(name=name, description=request.form.get('description', '').strip() or None)
+            item_names = request.form.getlist('item_name')
+            item_offsets = request.form.getlist('item_offset')
+            cumulative = 0
+            for i, iname in enumerate(item_names):
+                iname = iname.strip()
+                if iname:
+                    raw = item_offsets[i].strip() if i < len(item_offsets) and item_offsets[i] else '0'
+                    cumulative += parse_offset(raw)
+                    tpl.items.append(MilestoneTemplateItem(name=iname, offset_days=cumulative, sort_order=i))
+            db.session.add(tpl)
+            db.session.commit()
+            flash(f'模板 {name} 已创建', 'success')
+
+    elif action == 'edit':
+        tpl_id = request.form.get('template_id', type=int)
+        tpl = db.session.get(MilestoneTemplate, tpl_id) if tpl_id else None
+        if tpl:
+            tpl.name = request.form.get('name', '').strip() or tpl.name
+            tpl.description = request.form.get('description', '').strip() or None
+            MilestoneTemplateItem.query.filter_by(template_id=tpl.id).delete()
+            item_names = request.form.getlist('item_name')
+            item_offsets = request.form.getlist('item_offset')
+            cumulative = 0
+            for i, iname in enumerate(item_names):
+                iname = iname.strip()
+                if iname:
+                    raw = item_offsets[i].strip() if i < len(item_offsets) and item_offsets[i] else '0'
+                    cumulative += parse_offset(raw)
+                    tpl.items.append(MilestoneTemplateItem(name=iname, offset_days=cumulative, sort_order=i))
+            db.session.commit()
+            flash(f'模板 {tpl.name} 已更新', 'success')
+
+    elif action == 'copy':
+        tpl_id = request.form.get('template_id', type=int)
+        tpl = db.session.get(MilestoneTemplate, tpl_id) if tpl_id else None
+        if tpl:
+            new_name = f'{tpl.name}（副本）'
+            idx = 2
+            while MilestoneTemplate.query.filter_by(name=new_name).first():
+                new_name = f'{tpl.name}（副本{idx}）'
+                idx += 1
+            copy = MilestoneTemplate(name=new_name, description=tpl.description)
+            for item in tpl.items:
+                copy.items.append(MilestoneTemplateItem(name=item.name, offset_days=item.offset_days, sort_order=item.sort_order))
+            db.session.add(copy)
+            db.session.commit()
+            flash(f'已复制为 {new_name}', 'success')
+
+    elif action == 'delete':
+        tpl_id = request.form.get('template_id', type=int)
+        tpl = db.session.get(MilestoneTemplate, tpl_id) if tpl_id else None
+        if tpl:
+            db.session.delete(tpl)
+            db.session.commit()
+            flash(f'模板 {tpl.name} 已删除', 'success')
+
+    next_url = request.form.get('next') or request.args.get('next')
+    return redirect(next_url) if next_url else redirect(request.referrer or url_for('project.project_list'))
+
+
 @project_bp.route('/api/template/<int:tpl_id>')
 @login_required
 def api_template(tpl_id):
@@ -75,6 +153,70 @@ def api_template(tpl_id):
         {'name': item.name, 'offset_days': item.offset_days}
         for item in tpl.items
     ])
+
+
+@project_bp.route('/api/templates', methods=['GET', 'POST'])
+@login_required
+def api_templates():
+    """List / create / delete milestone templates (accessible to all users)."""
+    from app.models.project import MilestoneTemplate, MilestoneTemplateItem
+    from app.constants import parse_offset
+
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        action = data.get('action')
+        if action == 'create':
+            name = (data.get('name') or '').strip()
+            if not name:
+                return jsonify(ok=False, msg='名称不能为空')
+            if MilestoneTemplate.query.filter_by(name=name).first():
+                return jsonify(ok=False, msg=f'模板 {name} 已存在')
+            tpl = MilestoneTemplate(name=name, description=(data.get('description') or '').strip() or None)
+            cumulative = 0
+            for i, item in enumerate(data.get('items', [])):
+                iname = (item.get('name') or '').strip()
+                if iname:
+                    cumulative += parse_offset(item.get('offset', 0))
+                    tpl.items.append(MilestoneTemplateItem(name=iname, offset_days=cumulative, sort_order=i))
+            db.session.add(tpl)
+            db.session.commit()
+            return jsonify(ok=True, id=tpl.id)
+        elif action == 'copy':
+            tpl_id = data.get('id')
+            tpl = db.session.get(MilestoneTemplate, tpl_id) if tpl_id else None
+            if not tpl:
+                return jsonify(ok=False, msg='模板不存在')
+            new_name = f'{tpl.name}（副本）'
+            idx = 2
+            while MilestoneTemplate.query.filter_by(name=new_name).first():
+                new_name = f'{tpl.name}（副本{idx}）'
+                idx += 1
+            copy = MilestoneTemplate(name=new_name, description=tpl.description)
+            for item in tpl.items:
+                copy.items.append(MilestoneTemplateItem(name=item.name, offset_days=item.offset_days, sort_order=item.sort_order))
+            db.session.add(copy)
+            db.session.commit()
+            return jsonify(ok=True, id=copy.id, name=new_name)
+        elif action == 'delete':
+            tpl_id = data.get('id')
+            tpl = db.session.get(MilestoneTemplate, tpl_id) if tpl_id else None
+            if tpl:
+                db.session.delete(tpl)
+                db.session.commit()
+            return jsonify(ok=True)
+
+    # GET: return all templates
+    templates = MilestoneTemplate.query.order_by(MilestoneTemplate.name).all()
+    result = []
+    for t in templates:
+        items = []
+        prev = 0
+        for item in t.items:
+            delta = item.offset_days - prev
+            items.append({'name': item.name, 'offset': delta, 'cumulative': item.offset_days})
+            prev = item.offset_days
+        result.append({'id': t.id, 'name': t.name, 'description': t.description, 'items': items})
+    return jsonify(ok=True, templates=result)
 
 
 @project_bp.route('/<int:project_id>')
@@ -114,7 +256,8 @@ def project_detail(project_id):
     return render_template('project/detail.html', project=project, today=today,
                            reqs=reqs, req_total=req_total, req_done=req_done,
                            req_overdue=req_overdue, open_risks=open_risks,
-                           key_members=key_members, recent_done=recent_done)
+                           key_members=key_members, recent_done=recent_done,
+                           milestone_color=MILESTONE_COLOR)
 
 
 @project_bp.route('/<int:project_id>/follow', methods=['POST'])
@@ -148,10 +291,33 @@ def project_edit(project_id):
         project.name = form.name.data
         project.description = form.description.data
         project.parent_id = form.parent_id.data or None
+        # Save milestones
+        ms_names = request.form.getlist('ms_name')
+        ms_dates = request.form.getlist('ms_date')
+        Milestone.query.filter_by(project_id=project.id).delete()
+        for i, name in enumerate(ms_names):
+            name = name.strip()
+            if name:
+                due_str = ms_dates[i].strip() if i < len(ms_dates) and ms_dates[i] else ''
+                due = date.fromisoformat(due_str) if due_str else None
+                db.session.add(Milestone(
+                    project_id=project.id, name=name,
+                    due_date=due, status='active',
+                ))
         db.session.commit()
         flash('项目更新成功', 'success')
         return redirect(url_for('project.project_detail', project_id=project.id))
-    return render_template('project/form.html', form=form, title=f'编辑项目 - {project.name}')
+    from app.models.project import MilestoneTemplate
+    from app.models.project_member import ProjectMember
+    templates = MilestoneTemplate.query.order_by(MilestoneTemplate.name).all()
+    members = ProjectMember.query.filter_by(project_id=project.id).all()
+    member_ids = {m.user_id for m in members}
+    available = [u for u in User.query.filter_by(is_active=True).order_by(User.name).all()
+                 if u.id not in member_ids]
+    return render_template('project/form.html', form=form, project=project,
+                           templates=templates, members=members, available=available,
+                           roles=ProjectMember.DEFAULT_ROLES,
+                           title=f'编辑项目 - {project.name}')
 
 
 @project_bp.route('/<int:project_id>/status', methods=['POST'])
@@ -442,22 +608,24 @@ def member_list(project_id):
     if request.method == 'POST' and can_edit:
         action = request.form.get('action')
         if action == 'add':
-            user_id = request.form.get('user_id', type=int)
-            ext_name = request.form.get('external_name', '').strip()
+            member_name = request.form.get('member_name', '').strip()
             role = request.form.get('project_role', 'DEV').strip()
-            custom_role = request.form.get('custom_role', '').strip()
-            if custom_role:
-                role = custom_role
-            if user_id:
-                if not ProjectMember.query.filter_by(project_id=project_id, user_id=user_id).first():
-                    db.session.add(ProjectMember(project_id=project_id, user_id=user_id, project_role=role))
-                    db.session.commit()
-                    flash('成员已添加', 'success')
-            elif ext_name:
-                ext_eid = request.form.get('external_eid', '').strip()
-                db.session.add(ProjectMember(project_id=project_id, external_name=ext_name, external_eid=ext_eid, project_role=role))
-                db.session.commit()
-                flash(f'外部成员 {ext_name} 已添加', 'success')
+            if member_name:
+                # Try to find internal user by name
+                user = User.query.filter_by(name=member_name, is_active=True).first()
+                if user:
+                    if not ProjectMember.query.filter_by(project_id=project_id, user_id=user.id).first():
+                        db.session.add(ProjectMember(project_id=project_id, user_id=user.id, project_role=role))
+                        db.session.commit()
+                        flash(f'{user.name} 已添加', 'success')
+                    else:
+                        flash(f'{user.name} 已在项目中', 'warning')
+                else:
+                    # External member
+                    if not ProjectMember.query.filter_by(project_id=project_id, external_name=member_name).first():
+                        db.session.add(ProjectMember(project_id=project_id, external_name=member_name, project_role=role))
+                        db.session.commit()
+                        flash(f'外部成员 {member_name} 已添加', 'success')
         elif action == 'remove':
             member_id = request.form.get('member_id', type=int)
             m = db.session.get(ProjectMember, member_id)
@@ -488,6 +656,90 @@ def member_list(project_id):
     return render_template('project/members.html', project=project, members=members,
                            available=available, roles=ProjectMember.DEFAULT_ROLES, can_edit=can_edit,
                            is_pm=can_edit)
+
+
+# ---- Member CSV import/export ----
+
+@project_bp.route('/<int:project_id>/members/export-csv')
+@login_required
+def member_export_csv(project_id):
+    """Export project members as CSV."""
+    import csv, io
+    project = db.get_or_404(Project, project_id)
+    members = ProjectMember.query.filter_by(project_id=project_id).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['id', '姓名', '工号', '角色'])
+    for m in members:
+        if m.user:
+            writer.writerow([m.id, m.user.name, m.user.employee_id, m.project_role])
+        else:
+            writer.writerow([m.id, m.external_name or '', m.external_eid or '', m.project_role])
+
+    resp = make_response(output.getvalue())
+    resp.headers['Content-Type'] = 'text/csv; charset=utf-8-sig'
+    from urllib.parse import quote
+    resp.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(project.name + '_members.csv')}"
+    return resp
+
+
+@project_bp.route('/<int:project_id>/members/import-csv', methods=['POST'])
+@login_required
+def member_import_csv(project_id):
+    """Import project members from CSV. Headers: id,姓名,工号,角色"""
+    import csv, io
+    project = db.get_or_404(Project, project_id)
+
+    file = request.files.get('csv_file')
+    if not file or not file.filename:
+        flash('请选择 CSV 文件', 'danger')
+        return redirect(url_for('project.project_edit', project_id=project_id, tab='members'))
+
+    try:
+        text = file.read().decode('utf-8-sig')
+    except UnicodeDecodeError:
+        file.seek(0)
+        text = file.read().decode('gbk', errors='replace')
+
+    reader = csv.DictReader(io.StringIO(text))
+    created, updated = 0, 0
+    for row in reader:
+        name = (row.get('姓名') or '').strip()
+        eid = (row.get('工号') or '').strip()
+        role = (row.get('角色') or 'DEV').strip()
+        if not name:
+            continue
+
+        # Try to find internal user
+        user = None
+        if eid:
+            user = User.query.filter_by(employee_id=eid).first()
+        if not user and name:
+            user = User.query.filter_by(name=name, is_active=True).first()
+
+        if user:
+            existing = ProjectMember.query.filter_by(project_id=project_id, user_id=user.id).first()
+            if existing:
+                existing.project_role = role
+                updated += 1
+            else:
+                db.session.add(ProjectMember(project_id=project_id, user_id=user.id, project_role=role))
+                created += 1
+        else:
+            # External member
+            existing = ProjectMember.query.filter_by(project_id=project_id, external_name=name).first()
+            if existing:
+                existing.project_role = role
+                updated += 1
+            else:
+                db.session.add(ProjectMember(project_id=project_id, external_name=name,
+                                             external_eid=eid, project_role=role))
+                created += 1
+
+    db.session.commit()
+    flash(f'导入完成：新增 {created} 人，更新 {updated} 人', 'success')
+    return redirect(url_for('project.project_edit', project_id=project_id, tab='members'))
 
 
 # ---- Knowledge management ----
@@ -749,15 +1001,25 @@ def meeting_apply(project_id, meeting_id):
 
     created_counts = {'todos': 0, 'requirements': 0, 'risks': 0}
 
-    # Create Todos
-    from app.models.todo import Todo
+    # Create Todos as low-severity risks (遗留问题)
     for item in data.get('todos', []):
-        todo = Todo(
-            user_id=current_user.id,
+        assignee_name = (item.get('assignee') or '').strip()
+        assignee = User.query.filter_by(name=assignee_name, is_active=True).first() if assignee_name else None
+        # Parse deadline
+        deadline_str = (item.get('deadline') or '').strip()
+        try:
+            due = date.fromisoformat(deadline_str)
+        except (ValueError, TypeError):
+            due = date.today() + timedelta(days=7)
+        risk = Risk(
+            project_id=project.id,
             title=item.get('title', ''),
-            created_date=date.today(),
+            severity='low',
+            due_date=due,
+            created_by=current_user.id,
+            tracker_id=assignee.id if assignee else current_user.id,
         )
-        db.session.add(todo)
+        db.session.add(risk)
         created_counts['todos'] += 1
 
     # Create Requirements
@@ -775,14 +1037,20 @@ def meeting_apply(project_id, meeting_id):
         db.session.add(req)
         created_counts['requirements'] += 1
 
-    # Create Risks
+    # Create Risks with tracker
     for item in data.get('risks', []):
+        deadline_str = (item.get('deadline') or '').strip()
+        try:
+            due = date.fromisoformat(deadline_str)
+        except (ValueError, TypeError):
+            due = date.today() + timedelta(days=7)
         risk = Risk(
             project_id=project.id,
             title=item.get('title', ''),
             severity=item.get('severity', 'medium'),
-            due_date=date.today(),
+            due_date=due,
             created_by=current_user.id,
+            tracker_id=current_user.id,
         )
         db.session.add(risk)
         created_counts['risks'] += 1

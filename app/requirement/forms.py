@@ -12,6 +12,9 @@ class RequirementForm(FlaskForm):
     priority = SelectField('优先级',
                            choices=list(Requirement.PRIORITY_LABELS.items()),
                            default='medium')
+    source = SelectField('需求类型',
+                         choices=[('', '-- 请选择 --')] + list(Requirement.SOURCE_LABELS.items()),
+                         default='', validators=[Optional()])
     assignee_id = SelectField('负责人', coerce=int, validators=[Optional()])
     start_date = DateField('启动时间', validators=[Optional()])
     due_date = DateField('预期完成时间', validators=[DataRequired(message='请选择预期完成时间')])

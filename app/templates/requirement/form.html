@@ -29,7 +29,9 @@
                         <label class="col-2 col-form-label col-form-label-sm">项目</label>
                         <div class="col-4">{{ form.project_id(class="form-select form-select-sm", id="reqProject") }}</div>
                         <label class="col-2 col-form-label col-form-label-sm">优先级</label>
-                        <div class="col-4">{{ form.priority(class="form-select form-select-sm", id="reqPriority") }}</div>
+                        <div class="col-2">{{ form.priority(class="form-select form-select-sm", id="reqPriority") }}</div>
+                        <label class="col-1 col-form-label col-form-label-sm">类型</label>
+                        <div class="col-2">{{ form.source(class="form-select form-select-sm") }}</div>
                     </div>
                     <div class="row mb-2">
                         <label class="col-2 col-form-label col-form-label-sm">负责人</label>
@@ -40,13 +42,17 @@
                             {% if not cur_name and req and req.assignee_name %}{% set cur_name = req.assignee_name %}{% endif %}
                             {{ user_picker('assignee_name', users, value=cur_name, value_name=cur_name, mode='text', placeholder='搜索或输入') }}
                         </div>
+                        <label class="col-1 col-form-label col-form-label-sm">启动</label>
+                        <div class="col-3">
+                            {{ form.start_date(class="form-control form-control-sm", type="date") }}
+                        </div>
+                    </div>
+                    <div class="row mb-2">
                         <label class="col-2 col-form-label col-form-label-sm">截止 *</label>
                         <div class="col-4">
                             {{ form.due_date(class="form-control form-control-sm", type="date", id="reqDueDate") }}
                             {% for e in form.due_date.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
                         </div>
-                    </div>
-                    <div class="row mb-2">
                         <label class="col-2 col-form-label col-form-label-sm">预估工期</label>
                         <div class="col-2">{{ form.estimate_days(class="form-control form-control-sm", id="reqDays", placeholder="人天") }}</div>
                         <label class="col-2 col-form-label col-form-label-sm">代码量</label>
@@ -75,24 +81,20 @@
     <div class="col-md-5">
         <div class="card">
             <div class="card-header py-2 d-flex justify-content-between align-items-center">
-                <span><i class="bi bi-robot"></i> AI 解析</span>
+                <span><i class="bi bi-robot"></i> AI 分解</span>
             </div>
             <div class="card-body">
                 <div class="mb-2">
-                    <textarea id="aiInput" class="form-control form-control-sm" rows="4" placeholder="粘贴聊天记录、会议纪要或需求描述..."></textarea>
+                    <textarea id="aiInput" class="form-control form-control-sm" rows="4" placeholder="粘贴需求描述、聊天记录或会议纪要，AI 自动分解为子需求..."></textarea>
                 </div>
                 <div class="d-flex gap-2 mb-3">
                     <button type="button" class="btn btn-sm btn-outline-primary flex-grow-1" id="btnAiParse">
-                        <i class="bi bi-robot"></i> 解析文本
+                        <i class="bi bi-robot"></i> AI 分解
                     </button>
-                    <label class="btn btn-sm btn-outline-secondary mb-0">
-                        <i class="bi bi-file-earmark-word"></i> 上传 .docx
-                        <input type="file" id="aiDocx" accept=".docx" class="d-none">
-                    </label>
                 </div>
                 <div id="aiResult" class="d-none">
                     <div class="alert alert-success py-2 small mb-2">
-                        <strong>解析完成</strong> — 点击"填入表单"自动填写左侧表单
+                        <strong>分解完成</strong> — 点击"填入表单"自动填写左侧表单
                     </div>
                     <div class="border rounded p-2 small mb-2" id="aiPreview"></div>
                     <button type="button" class="btn btn-sm btn-primary" id="btnAiFill">
@@ -100,7 +102,7 @@
                     </button>
                 </div>
                 <div id="aiLoading" class="d-none text-center py-3">
-                    <span class="spinner-border spinner-border-sm"></span> AI 解析中...
+                    <span class="spinner-border spinner-border-sm"></span> <i class="bi bi-robot"></i> AI 分解中... <span class="ai-timer">0s</span>
                 </div>
                 <div id="aiError" class="d-none">
                     <div class="alert alert-danger py-2 small mb-0"></div>
@@ -130,14 +132,14 @@ function addSubReq(title, days, type, estLines, estCases) {
     var t = type || 'analysis';
     var d = days || '';
     row.innerHTML = '<input type="text" name="sub_title" class="form-control" placeholder="子需求标题" value="' + (title || '').replace(/"/g, '&quot;') + '">'
-        + '<select name="sub_type" class="form-select" style="max-width:70px;" onchange="toggleSubFields(this)">'
+        + '<select name="sub_type" class="form-select" style="max-width:75px;" onchange="toggleSubFields(this)">'
         + '<option value="analysis"' + (t==='analysis'?' selected':'') + '>分析</option>'
         + '<option value="coding"' + (t==='coding'?' selected':'') + '>编码</option>'
         + '<option value="testing"' + (t==='testing'?' selected':'') + '>测试</option></select>'
-        + '<select name="sub_assignee" class="form-select" style="max-width:90px;">' + userOptsTpl + '</select>'
-        + '<input type="number" name="sub_days" class="form-control" style="max-width:65px;" placeholder="人天" step="0.5" min="0" value="' + d + '" oninput="sumSubDays()">'
-        + '<input type="number" name="sub_est_lines" class="form-control sub-lines" style="max-width:65px;' + (t==='coding'?'':'display:none;') + '" placeholder="预估行" min="0" value="' + (estLines||'') + '">'
-        + '<input type="number" name="sub_est_cases" class="form-control sub-cases" style="max-width:65px;' + (t==='testing'?'':'display:none;') + '" placeholder="预估例" min="0" value="' + (estCases||'') + '">'
+        + '<select name="sub_assignee" class="form-select" style="max-width:95px;">' + userOptsTpl + '</select>'
+        + '<input type="number" name="sub_days" class="form-control" style="max-width:75px;" placeholder="人天" step="0.5" min="0" value="' + d + '" oninput="sumSubDays()">'
+        + '<input type="number" name="sub_est_lines" class="form-control sub-lines" style="max-width:80px;' + (t==='coding'?'':'display:none;') + '" placeholder="预估行数" min="0" value="' + (estLines||'') + '">'
+        + '<input type="number" name="sub_est_cases" class="form-control sub-cases" style="max-width:80px;' + (t==='testing'?'':'display:none;') + '" placeholder="预估用例" min="0" value="' + (estCases||'') + '">'
         + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove();sumSubDays()">-</button>';
     div.appendChild(row);
 }

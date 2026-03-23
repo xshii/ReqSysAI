@@ -22,7 +22,7 @@ class Project(db.Model):
     milestones = db.relationship('Milestone', back_populates='project', cascade='all, delete-orphan')
     requirements = db.relationship('Requirement', back_populates='project', lazy='dynamic')
 
-    STATUS_LABELS = {'active': '进行中', 'completed': '已完成', 'archived': '已归档'}
+    STATUS_LABELS = {'active': '进行中', 'completed': '已完成'}
 
     @property
     def status_label(self):

@@ -100,6 +100,26 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 })();
 
+// ---- AI button loading state with timer ----
+function aiLoading(btn, loadingText) {
+    var origHtml = btn.innerHTML;
+    var startTime = Date.now();
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> <i class="bi bi-robot"></i> ' + (loadingText || '生成中') + ' <span class="ai-timer">0s</span>';
+    var timerEl = btn.querySelector('.ai-timer');
+    var interval = setInterval(function() {
+        var sec = Math.round((Date.now() - startTime) / 1000);
+        if (timerEl) timerEl.textContent = sec + 's';
+    }, 1000);
+    return {
+        stop: function() {
+            clearInterval(interval);
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
+    };
+}
+
 // ---- AJAX helper for JSON POST ----
 function apiPost(url, data) {
     var csrfMeta = document.querySelector('meta[name="csrf-token"]');

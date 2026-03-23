@@ -19,7 +19,7 @@ from app.utils.upload import save_photo
 def index():
     """List incentives with status filter."""
     is_reviewer = current_user.has_role('PL', 'XM', 'LM', 'HR') or current_user.is_admin
-    status_filter = request.args.get('status', '')
+    status_filter = request.args.get('status', 'pending' if is_reviewer else '')
     # Ordinary users can only see their own, forced to 'mine'
     scope = request.args.get('scope', 'all' if is_reviewer else 'mine')
     if not is_reviewer:
@@ -74,10 +74,56 @@ def submit():
     return redirect(url_for('incentive.index'))
 
 
+@incentive_bp.route('/<int:inc_id>/edit', methods=['POST'])
+@login_required
+def edit(inc_id):
+    """Edit a pending/rejected incentive. Submitter or admin only."""
+    inc = db.get_or_404(Incentive, inc_id)
+    if current_user.id != inc.submitted_by and not current_user.is_admin:
+        flash('无权限', 'danger')
+        return redirect(url_for('incentive.index'))
+    if inc.status not in ('pending', 'rejected'):
+        flash('已通过的激励不可编辑', 'warning')
+        return redirect(url_for('incentive.index'))
+
+    title = request.form.get('title', '').strip()
+    description = request.form.get('description', '').strip()
+    if not title or not description:
+        flash('请填写标题和描述', 'danger')
+        return redirect(url_for('incentive.index'))
+
+    inc.title = title
+    inc.description = description
+    inc.category = request.form.get('category', inc.category)
+
+    nominee_ids = request.form.getlist('nominee_ids', type=int)
+    if nominee_ids:
+        inc.nominees = User.query.filter(User.id.in_(nominee_ids)).all()
+    ext_names = request.form.getlist('external_nominees')
+    ext_str = ','.join(n.strip() for n in ext_names if n.strip()) or None
+    if ext_str:
+        inc.external_nominees = ext_str
+
+    photo_path = save_photo(request.files.get('photo'))
+    if photo_path:
+        inc.photo = photo_path
+
+    # If rejected, re-submit as pending
+    if inc.status == 'rejected':
+        inc.status = 'pending'
+        inc.review_comment = None
+        inc.reviewed_by = None
+        inc.reviewed_at = None
+
+    db.session.commit()
+    flash('激励已更新' + ('并重新提交' if inc.status == 'pending' else ''), 'success')
+    return redirect(url_for('incentive.index'))
+
+
 @incentive_bp.route('/<int:inc_id>/review', methods=['POST'])
 @login_required
 def review(inc_id):
-    if not (current_user.has_role('PL', 'XM') or current_user.is_admin):
+    if not (current_user.has_role('PL', 'XM', 'HR', 'LM') or current_user.is_admin):
         flash('无权限', 'danger')
         return redirect(url_for('incentive.index'))
 

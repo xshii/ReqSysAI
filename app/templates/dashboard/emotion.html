@@ -39,10 +39,11 @@
         <div class="col-md-6 col-lg-4">
             <div class="card border-{{ s_map.get(r.status, 'secondary') }} h-100">
                 <div class="card-header py-1 bg-{{ s_map.get(r.status, 'secondary') }} bg-opacity-10 d-flex justify-content-between small">
-                    <strong>{{ r.member_name }}</strong>
-                    <div>
+                    <strong>{{ r.member_name }}</strong>{% if r.group %} <span class="text-muted" style="font-size:.8em;">{{ r.group }}</span>{% endif %}
+                    <div class="d-flex align-items-center gap-1">
                         <span class="badge bg-{{ s_map.get(r.status, 'secondary') }}">{{ r.status }}</span>
                         <span class="badge bg-{{ r_map.get(r.risk_level, 'secondary') }}">风险:{{ r_label.get(r.risk_level, '低') }}</span>
+                        <button class="btn btn-sm p-0 border-0 bg-transparent text-muted" onclick="deleteRecord({{ r.id }}, this)" title="删除" style="font-size:.7em;"><i class="bi bi-x"></i></button>
                     </div>
                 </div>
                 <div class="card-body py-2 small">
@@ -64,9 +65,10 @@
                     {% endif %}
                     <!-- Comment input -->
                     <form method="POST" action="{{ url_for('dashboard.emotion_comment', record_id=r.id) }}" class="mt-1">
-                        <div class="input-group input-group-sm">
-                            <input type="text" name="content" class="form-control" placeholder="#评论 或 @某人跟进" maxlength="500" required style="font-size:.8em;">
+                        <div class="input-group input-group-sm position-relative">
+                            <input type="text" name="content" class="form-control at-input" placeholder="@某人跟进" maxlength="500" required style="font-size:.8em;" autocomplete="off">
                             <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-send"></i></button>
+                            <div class="at-dropdown position-absolute bg-white border rounded shadow-sm w-100" style="z-index:1070;display:none;max-height:120px;overflow-y:auto;font-size:.8em;top:100%;"></div>
                         </div>
                     </form>
                 </div>
@@ -89,18 +91,25 @@
 <script>
 var _aiMembers = null;
 
+function deleteRecord(rid, btn) {
+    var card = btn.closest('.col-md-6');
+    if (card) card.style.opacity = '0.3';
+    apiPost('/dashboard/emotion/delete-record/' + rid, {}).then(function(d) {
+        if (d && d.ok && card) card.remove();
+        else if (card) card.style.opacity = '1';
+    });
+}
+
 function runAnalyze() {
     var btn = document.getElementById('btnAnalyze');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 分析中...';
+    var loading = aiLoading(btn, '分析中');
     var hint = document.getElementById('emptyHint');
     if (hint) hint.classList.add('d-none');
 
     fetch('{{ url_for("dashboard.emotion_analyze") }}', {method: 'POST'})
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(d) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-robot"></i> 分析';
+        loading.stop();
         if (!d.ok) { alert('分析失败：' + (d.raw || d.msg || '')); return; }
 
         _aiMembers = d.members;
@@ -122,12 +131,14 @@ function runAnalyze() {
                 m.signals.forEach(function(s) { signals += '<li>' + s + '</li>'; });
                 signals += '</ul>';
             }
+            var idx = container.querySelectorAll('.col-md-6').length;
             container.innerHTML +=
-                '<div class="col-md-6 col-lg-4"><div class="card border-' + sc + ' h-100">' +
+                '<div class="col-md-6 col-lg-4" id="aiCard' + idx + '"><div class="card border-' + sc + ' h-100">' +
                 '<div class="card-header py-1 bg-' + sc + ' bg-opacity-10 d-flex justify-content-between small">' +
-                '<strong>' + m.name + '</strong>' +
-                '<div><span class="badge bg-' + sc + '">' + m.status + '</span> ' +
-                '<span class="badge bg-' + rc + '">风险:' + rl + '</span></div></div>' +
+                '<div><strong>' + m.name + '</strong>' + (m.group ? ' <span class="text-muted" style="font-size:.8em;">' + m.group + '</span>' : '') + '</div>' +
+                '<div class="d-flex align-items-center gap-1"><span class="badge bg-' + sc + '">' + m.status + '</span> ' +
+                '<span class="badge bg-' + rc + '">风险:' + rl + '</span>' +
+                '<button class="btn btn-sm p-0 border-0 bg-transparent text-muted" onclick="removeAiCard(' + idx + ',\'' + m.name + '\')" style="font-size:.7em;"><i class="bi bi-x"></i></button></div></div>' +
                 '<div class="card-body py-2 small">' +
                 (signals ? '<div class="mb-1"><strong>信号：</strong>' + signals + '</div>' : '') +
                 '<div><strong>建议：</strong>' + (m.suggestion || '-') + '</div>' +
@@ -135,8 +146,7 @@ function runAnalyze() {
         });
         document.getElementById('resultPanel').classList.remove('d-none');
     }).catch(function(err) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-robot"></i> 分析';
+        loading.stop();
         alert('请求失败：' + err.message);
     });
 }
@@ -161,5 +171,56 @@ function saveResults() {
         }
     });
 }
+
+// Remove AI card before save
+function removeAiCard(idx, name) {
+    var el = document.getElementById('aiCard' + idx);
+    if (el) el.remove();
+    if (_aiMembers) _aiMembers = _aiMembers.filter(function(m) { return m.name !== name; });
+}
+
+// @autocomplete for emotion comment inputs
+var _emotionUsers = null;
+document.addEventListener('input', function(e) {
+    var inp = e.target;
+    if (!inp.classList.contains('at-input')) return;
+    var dropdown = inp.closest('.position-relative').querySelector('.at-dropdown');
+    if (!dropdown) return;
+    var val = inp.value;
+    var atIdx = val.lastIndexOf('@');
+    if (atIdx < 0 || atIdx === val.length - 1) { dropdown.style.display = 'none'; return; }
+    var q = val.substring(atIdx + 1).toLowerCase();
+    if (!q) { dropdown.style.display = 'none'; return; }
+    function show(users) {
+        var html = '';
+        users.forEach(function(u) {
+            if (u.name.toLowerCase().includes(q) || (u.pinyin || '').toLowerCase().includes(q))
+                html += '<div class="px-2 py-1" style="cursor:pointer;" data-name="' + u.name + '">' + u.name + '</div>';
+        });
+        dropdown.innerHTML = html;
+        dropdown.style.display = html ? '' : 'none';
+    }
+    if (_emotionUsers) show(_emotionUsers);
+    else fetch('/api/users').then(function(r){return r.json();}).then(function(d){ _emotionUsers=d; show(d); });
+});
+document.addEventListener('mousedown', function(e) {
+    if (e.target.closest('.at-dropdown') && e.target.dataset.name) {
+        e.preventDefault();
+        var inp = e.target.closest('.position-relative').querySelector('.at-input');
+        var val = inp.value;
+        var atIdx = val.lastIndexOf('@');
+        inp.value = val.substring(0, atIdx + 1) + e.target.dataset.name + ' ';
+        e.target.closest('.at-dropdown').style.display = 'none';
+        inp.focus();
+    }
+});
+document.addEventListener('blur', function(e) {
+    if (e.target.classList.contains('at-input')) {
+        setTimeout(function() {
+            var dd = e.target.closest('.position-relative').querySelector('.at-dropdown');
+            if (dd) dd.style.display = 'none';
+        }, 200);
+    }
+}, true);
 </script>
 {% endblock %}

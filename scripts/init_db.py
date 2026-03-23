@@ -25,6 +25,19 @@ def seed():
                 db.session.add(Role(name=name, description=r.get('desc', '')))
         db.session.commit()
 
+        # Milestone templates
+        from app.models.project import MilestoneTemplate, MilestoneTemplateItem
+        from app.constants import MILESTONE_TEMPLATES, resolve_template_offsets
+        if MilestoneTemplate.query.count() == 0:
+            for tpl in MILESTONE_TEMPLATES:
+                t = MilestoneTemplate(name=tpl['name'], description=tpl['description'])
+                resolved = resolve_template_offsets(tpl['items'])
+                for i, (iname, offset) in enumerate(resolved):
+                    t.items.append(MilestoneTemplateItem(name=iname, offset_days=offset, sort_order=i))
+                db.session.add(t)
+            db.session.commit()
+            print(f'Milestone templates created: {len(MILESTONE_TEMPLATES)}')
+
         # Default admin
         admin_cfg = app.config.get('ADMIN_CONFIG', {})
         eid = admin_cfg.get('employee_id', 'a00000001')

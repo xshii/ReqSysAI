@@ -37,6 +37,8 @@ class Todo(db.Model):
     parent = db.relationship('Todo', remote_side=[id], backref='children')
     items = db.relationship('TodoItem', backref='todo', cascade='all, delete-orphan',
                             order_by='TodoItem.sort_order')
+    pomodoros = db.relationship('PomodoroSession', backref='todo', cascade='all, delete-orphan',
+                                order_by='PomodoroSession.created_at')
 
     STATUS_LABELS = {'todo': '待办', 'done': '完成'}
 
@@ -66,6 +68,14 @@ class Todo(db.Model):
         today = date.today()
         if self.created_date >= today:
             return 0
+        # Previous workday's todo is not overdue before 10am next workday
+        # e.g. Friday todo → not overdue before Monday 10am
+        if datetime.now().hour < 10:
+            prev_workday = today - timedelta(days=1)
+            while prev_workday.weekday() >= 5:  # skip weekend
+                prev_workday -= timedelta(days=1)
+            if self.created_date >= prev_workday:
+                return 0
         total_days = (today - self.created_date).days
         full_weeks, remaining = divmod(total_days, 7)
         count = full_weeks * 5
@@ -102,6 +112,21 @@ class Todo(db.Model):
 
     def __repr__(self):
         return f'<Todo {self.title}>'
+
+
+class PomodoroSession(db.Model):
+    """Individual pomodoro timer session record."""
+    __tablename__ = 'pomodoro_sessions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    todo_id = db.Column(db.Integer, db.ForeignKey('todos.id'), nullable=False)
+    started_at = db.Column(db.DateTime, nullable=True)  # When timer was started
+    minutes = db.Column(db.Integer, nullable=False, default=0)
+    completed = db.Column(db.Boolean, default=False)  # True if full pomodoro
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Pomodoro {self.minutes}min {"✓" if self.completed else "✗"}>'
 
 
 class TodoComment(db.Model):

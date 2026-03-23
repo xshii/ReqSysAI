@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+{% block title %}我的一天 - 研发协作平台{% endblock %}
+
+{% block extra_css %}
+<style>
+.day-stat-card { border-radius:12px;transition:box-shadow .2s; }
+.day-stat-card:hover { box-shadow:0 2px 12px rgba(0,0,0,.08); }
+.stat-icon { width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.1em; }
+.timeline-grid { position:relative; }
+.timeline-hour { height:40px;border-bottom:1px solid #f0f0f0; }
+.timeline-hour:nth-child(even) { background:#fafbfc; }
+.pomo-block { transition:transform .15s,box-shadow .15s;border-radius:4px;cursor:default; }
+.pomo-block:hover { transform:scaleY(1.05);box-shadow:0 2px 8px rgba(0,0,0,.12);z-index:20 !important; }
+.day-col { transition:background .2s; }
+.day-col.today-col { background:linear-gradient(180deg, rgba(13,110,253,.03) 0%, rgba(13,110,253,.01) 100%); }
+.focus-bar { height:8px;border-radius:4px;background:#e9ecef;overflow:hidden; }
+.focus-bar-fill { height:100%;border-radius:4px;transition:width .6s ease; }
+.done-item { padding:4px 0;border-bottom:1px solid #f8f9fa; }
+.done-item:last-child { border-bottom:none; }
+.empty-state { opacity:.5; }
+.now-line { position:absolute;left:0;right:0;z-index:15;pointer-events:none; }
+.now-line::before { content:'';position:absolute;left:-4px;top:-4px;width:8px;height:8px;background:#dc3545;border-radius:50%; }
+.now-line::after { content:'';position:absolute;left:0;right:0;top:0;border-top:2px solid #dc3545; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0"><i class="bi bi-calendar-day text-primary"></i> 我的一天</h5>
+    <div class="d-flex align-items-center gap-2">
+        <span class="text-muted small">{{ today.strftime('%Y年%m月%d日') }}</span>
+        {% set wk = ['周一','周二','周三','周四','周五','周六','周日'] %}
+        <span class="badge bg-primary bg-opacity-10 text-primary">{{ wk[today.weekday()] }}</span>
+    </div>
+</div>
+
+{# Stats cards — modern style #}
+<div class="row g-2 mb-3">
+    <div class="col-6 col-md-3">
+        <div class="card day-stat-card border-0 shadow-sm">
+            <div class="card-body py-2 d-flex align-items-center gap-2">
+                <div class="stat-icon bg-primary bg-opacity-10 text-primary"><i class="bi bi-clock-history"></i></div>
+                <div>
+                    <div class="fw-bold" style="font-size:1.2em;">{{ '%d:%02d'|format(total_focus // 60, total_focus % 60) }}</div>
+                    <div class="text-muted" style="font-size:.7em;">专注时长</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card day-stat-card border-0 shadow-sm">
+            <div class="card-body py-2 d-flex align-items-center gap-2">
+                <div class="stat-icon bg-danger bg-opacity-10 text-danger"><i class="bi bi-stopwatch"></i></div>
+                <div>
+                    <div class="fw-bold" style="font-size:1.2em;">{{ total_sessions }}</div>
+                    <div class="text-muted" style="font-size:.7em;">番茄钟</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card day-stat-card border-0 shadow-sm">
+            <div class="card-body py-2 d-flex align-items-center gap-2">
+                <div class="stat-icon bg-success bg-opacity-10 text-success"><i class="bi bi-check2-all"></i></div>
+                <div>
+                    <div class="fw-bold" style="font-size:1.2em;">{{ total_done }}</div>
+                    <div class="text-muted" style="font-size:.7em;">完成任务</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card day-stat-card border-0 shadow-sm">
+            <div class="card-body py-2 d-flex align-items-center gap-2">
+                <div class="stat-icon bg-warning bg-opacity-10 text-warning"><i class="bi bi-lightning"></i></div>
+                <div>
+                    <div class="fw-bold" style="font-size:1.2em;">{% if total_focus > 0 %}{{ (total_focus / (total_sessions or 1))|round(0)|int }}{% else %}0{% endif %}</div>
+                    <div class="text-muted" style="font-size:.7em;">平均专注/次</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Daily mini-bars #}
+<div class="row g-2 mb-3">
+    {% for d in days %}
+    {% set dd = day_data[d] %}
+    {% set max_min = [1] %}
+    {% for d2 in days %}{% if day_data[d2].total_min > max_min[0] %}{% if max_min.append(day_data[d2].total_min) %}{% endif %}{% endif %}{% endfor %}
+    {% set bar_pct = (dd.total_min / max_min[-1] * 100)|int if max_min[-1] > 0 else 0 %}
+    <div class="col">
+        <div class="card border-0 shadow-sm text-center py-2 {% if d == today %}border-start border-primary border-3{% endif %}">
+            <div class="px-2">
+                <div class="text-muted" style="font-size:.6em;">{{ d.strftime('%m/%d') }} {{ wk[d.weekday()] }}</div>
+                <div class="fw-bold {% if d == today %}text-primary{% endif %}" style="font-size:.9em;">{{ dd.total_min }}<span class="text-muted" style="font-size:.6em;">min</span></div>
+                <div class="focus-bar mt-1">
+                    <div class="focus-bar-fill {% if d == today %}bg-primary{% else %}bg-secondary bg-opacity-50{% endif %}" style="width:{{ bar_pct }}%;"></div>
+                </div>
+                <div class="text-muted" style="font-size:.55em;">{{ dd.count }}次 · {{ dd.done|length }}完成</div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="row g-3">
+    {# Left: 5-day timeline calendar #}
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center border-bottom">
+                <span class="fw-bold small"><i class="bi bi-calendar3-week text-primary"></i> 时间线</span>
+                <span class="text-muted" style="font-size:.7em;">8:00 - 22:00 · 每格30分钟</span>
+            </div>
+            <div class="card-body p-0" style="overflow-x:auto;">
+                <div class="d-flex">
+                    {# Hour labels #}
+                    <div style="min-width:38px;flex-shrink:0;border-right:1px solid #eee;">
+                        <div style="height:32px;"></div>
+                        {% for h in range(8, 22) %}
+                        <div class="timeline-hour d-flex align-items-start justify-content-end pe-1 pt-1">
+                            <span class="text-muted fw-light" style="font-size:.65em;">{{ '%02d'|format(h) }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    {# Day columns #}
+                    {% for d in days %}
+                    {% set dd = day_data[d] %}
+                    <div class="flex-fill day-col {% if d == today %}today-col{% endif %}" style="min-width:110px;border-right:1px solid #f0f0f0;position:relative;">
+                        {# Header #}
+                        <div class="text-center py-1" style="height:32px;border-bottom:1px solid #eee;">
+                            <span class="{% if d == today %}text-primary fw-bold{% else %}text-muted{% endif %}" style="font-size:.72em;">
+                                {{ d.strftime('%m/%d') }} {{ wk[d.weekday()] }}
+                                {% if d == today %}<i class="bi bi-circle-fill text-primary" style="font-size:.35em;vertical-align:middle;"></i>{% endif %}
+                            </span>
+                        </div>
+
+                        {# Grid + blocks #}
+                        <div class="timeline-grid" style="height:{{ 14 * 40 }}px;">
+                            {% for h in range(8, 22) %}
+                            <div class="timeline-hour" style="position:absolute;top:{{ (h-8)*40 }}px;left:0;right:0;"></div>
+                            {# Half-hour dashed line #}
+                            <div style="position:absolute;top:{{ (h-8)*40 + 20 }}px;left:0;right:0;border-bottom:1px dashed #f5f5f5;"></div>
+                            {% endfor %}
+
+                            {# Pomodoro blocks #}
+                            {% for block in dd.timeline %}
+                            {% set btop = ((block.start_hour - 8) * 40 + (block.start_min / 60 * 40))|int %}
+                            {% set bh = (block.duration / 60 * 40)|int %}
+                            {% if bh < 8 %}{% set bh = 8 %}{% endif %}
+                            <div class="pomo-block position-absolute px-1 d-flex align-items-center"
+                                 style="top:{{ btop }}px;left:3px;right:3px;height:{{ bh }}px;
+                                        background:{{ 'linear-gradient(135deg, rgba(220,53,69,.15), rgba(220,53,69,.08))' if block.completed else 'linear-gradient(135deg, rgba(13,110,253,.15), rgba(13,110,253,.06))' }};
+                                        border-left:3px solid {{ '#dc3545' if block.completed else '#0d6efd' }};
+                                        font-size:.62em;overflow:hidden;z-index:5;"
+                                 data-bs-toggle="tooltip" data-bs-placement="right"
+                                 title="{{ '%02d:%02d'|format(block.start_hour, block.start_min) }} - {{ block.title }} ({{ block.duration }}min){{ ' ✓完成' if block.completed else '' }}">
+                                <span class="text-truncate">
+                                    {% if bh >= 16 %}<strong>{{ '%02d:%02d'|format(block.start_hour, block.start_min) }}</strong> {% endif %}
+                                    {% if bh >= 12 %}{{ block.title }}{% endif %}
+                                </span>
+                            </div>
+                            {% endfor %}
+
+                            {# Now marker (today only) #}
+                            {% if d == today %}
+                            <div id="nowMarker" class="now-line"></div>
+                            {% endif %}
+
+                            {# Empty state #}
+                            {% if not dd.timeline %}
+                            <div class="empty-state text-center" style="position:absolute;top:45%;left:0;right:0;">
+                                <i class="bi bi-calendar-x text-muted" style="font-size:1.5em;"></i>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        {# Footer #}
+                        <div class="text-center py-1 border-top" style="font-size:.6em;background:#fafbfc;">
+                            {% if dd.total_min %}
+                            <span class="fw-bold text-primary">{{ dd.total_min }}min</span>
+                            <span class="text-muted">{{ dd.count }}次</span>
+                            {% else %}<span class="text-muted">—</span>{% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Right sidebar #}
+    <div class="col-lg-4">
+        {# Focus distribution #}
+        {% if focus_ranking %}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white py-2 border-bottom">
+                <span class="fw-bold small"><i class="bi bi-pie-chart text-primary"></i> 专注分布</span>
+                <span class="text-muted float-end" style="font-size:.65em;">近5天</span>
+            </div>
+            <div class="card-body py-2">
+                {% set colors = ['#0d6efd','#6610f2','#6f42c1','#d63384','#dc3545','#fd7e14','#ffc107','#198754','#20c997','#0dcaf0'] %}
+                {% for f in focus_ranking %}
+                {% set pct = (f.minutes / total_focus * 100)|int if total_focus else 0 %}
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <div style="width:8px;height:8px;border-radius:50%;background:{{ colors[loop.index0 % 10] }};flex-shrink:0;"></div>
+                    <span class="text-truncate flex-grow-1" style="font-size:.75em;max-width:55%;">{{ f.title }}</span>
+                    <span class="text-muted" style="font-size:.65em;">{{ f.minutes }}min</span>
+                    <div class="focus-bar flex-shrink-0" style="width:40px;">
+                        <div class="focus-bar-fill" style="width:{{ pct }}%;background:{{ colors[loop.index0 % 10] }};"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {# Today's completed #}
+        {% set today_dd = day_data[today] %}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white py-2 border-bottom d-flex justify-content-between align-items-center">
+                <span class="fw-bold small"><i class="bi bi-check-circle text-success"></i> 今日完成</span>
+                <span class="badge bg-success bg-opacity-10 text-success">{{ today_dd.done|length }}</span>
+            </div>
+            <div class="card-body py-1">
+                {% for t in today_dd.done %}
+                <div class="done-item d-flex align-items-center gap-2 py-1">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size:.7em;flex-shrink:0;"></i>
+                    <span class="small text-muted text-decoration-line-through text-truncate">{{ t.title }}</span>
+                </div>
+                {% endfor %}
+                {% if not today_dd.done %}
+                <div class="text-center py-3 empty-state">
+                    <i class="bi bi-inbox text-muted" style="font-size:1.5em;"></i>
+                    <p class="small text-muted mt-1 mb-0">今天还没有完成任务</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Historical days #}
+        {% for d in days %}
+        {% if d != today and day_data[d].done %}
+        <div class="card border-0 shadow-sm mb-2">
+            <div class="card-header bg-white py-1 d-flex align-items-center gap-1 border-bottom" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#done_{{ d.strftime('%m%d') }}">
+                <i class="bi bi-chevron-right text-muted" style="font-size:.55em;"></i>
+                <span class="fw-bold" style="font-size:.75em;">{{ d.strftime('%m/%d') }} {{ wk[d.weekday()] }}</span>
+                <span class="badge bg-success bg-opacity-10 text-success ms-auto" style="font-size:.6em;">{{ day_data[d].done|length }}完成</span>
+            </div>
+            <div class="collapse" id="done_{{ d.strftime('%m%d') }}">
+                <div class="card-body py-1">
+                    {% for t in day_data[d].done %}
+                    <div class="done-item d-flex align-items-center gap-2 py-1">
+                        <i class="bi bi-check-circle-fill text-success" style="font-size:.6em;flex-shrink:0;"></i>
+                        <span style="font-size:.72em;" class="text-muted text-truncate">{{ t.title }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Position "now" marker
+var marker = document.getElementById('nowMarker');
+if (marker) {
+    var now = new Date();
+    var top = (now.getHours() - 8) * 40 + (now.getMinutes() / 60 * 40);
+    if (top >= 0 && top <= 14 * 40) {
+        marker.style.top = top + 'px';
+        // Scroll timeline to show current time
+        setTimeout(function() { marker.scrollIntoView({block:'center',behavior:'smooth'}); }, 300);
+    } else {
+        marker.style.display = 'none';
+    }
+}
+// Init tooltips
+document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+    new bootstrap.Tooltip(el);
+});
+</script>
+{% endblock %}

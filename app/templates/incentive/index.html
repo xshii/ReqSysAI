@@ -110,7 +110,11 @@
                 {% endif %}
                 {% if is_reviewer and inc.status == 'pending' %}
                 <button class="btn btn-sm btn-outline-primary mt-1" data-bs-toggle="modal" data-bs-target="#reviewModal"
-                        onclick="setReview({{ inc.id }}, '{{ inc.title }}')">评审</button>
+                        onclick="setReview({{ inc.id }}, '{{ inc.title }}', '{{ (inc.review_comment or '')|e }}')">评审</button>
+                {% endif %}
+                {% if (current_user.id == inc.submitted_by or current_user.is_admin) and inc.status in ('pending', 'rejected') %}
+                <button class="btn btn-sm btn-outline-secondary mt-1" data-bs-toggle="modal" data-bs-target="#editModal"
+                        onclick="setEdit({{ inc.id }}, '{{ inc.category }}', '{{ inc.title|e }}', '{{ inc.description|e }}')"><i class="bi bi-pencil"></i> 编辑</button>
                 {% endif %}
             </div>
         </div>
@@ -224,6 +228,44 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="editForm" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header py-2"><h6 class="modal-title" id="editTitle">编辑激励</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">类别</label>
+                        <div class="col-9">
+                            <select name="category" id="editCategory" class="form-select form-select-sm">
+                                <option value="professional">专业</option>
+                                <option value="proactive">积极</option>
+                                <option value="beyond">超越期望</option>
+                                <option value="clean">代码Clean</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">标题 *</label>
+                        <div class="col-9"><input type="text" name="title" id="editTitleInput" class="form-control form-control-sm" required></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">描述 *</label>
+                        <div class="col-9"><textarea name="description" id="editDesc" class="form-control form-control-sm" rows="3" required></textarea></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">照片</label>
+                        <div class="col-9"><input type="file" name="photo" class="form-control form-control-sm" accept="image/*"></div>
+                    </div>
+                </div>
+                <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">保存</button></div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <!-- Admin Submit Modal -->
 {% if current_user.is_admin %}
@@ -441,9 +483,18 @@ function filterNominees2(input) {
     });
 }
 
-function setReview(id, title) {
-    document.getElementById('reviewForm').action = '/incentive/' + id + '/review';
+function setEdit(id, category, title, desc) {
+    document.getElementById('editForm').action = '{{ url_for("incentive.edit", inc_id=0) }}'.replace('/0/', '/' + id + '/');
+    document.getElementById('editCategory').value = category;
+    document.getElementById('editTitleInput').value = title;
+    document.getElementById('editDesc').value = desc;
+}
+
+function setReview(id, title, comment) {
+    document.getElementById('reviewForm').action = '{{ url_for("incentive.review", inc_id=0) }}'.replace('/0/', '/' + id + '/');
     document.getElementById('reviewTitle').textContent = '评审：' + title;
+    document.getElementById('reviewComment').value = comment || '';
+    document.getElementById('charCount').textContent = (comment || '').length + '/150';
 }
 
 var commentEl = document.getElementById('reviewComment');

@@ -45,8 +45,8 @@
                     </div>
                 </div>
                 <div id="sshFields" class="col-md-4" style="{{ '' if ollama_ssh_enabled else 'display:none' }}">
-                    <label class="form-label small mb-0">SSH 主机（user@host）</label>
-                    <input type="text" name="ssh_host" class="form-control form-control-sm" placeholder="user@gpu-server" value="{{ ollama_ssh_host }}">
+                    <label class="form-label small mb-0">SSH 主机</label>
+                    <input type="text" name="ssh_host" class="form-control form-control-sm" placeholder="user@host 或 SSH别名如 ollamaserver" value="{{ ollama_ssh_host }}">
                 </div>
                 <div id="sshPortField" class="col-md-1" style="{{ '' if ollama_ssh_enabled else 'display:none' }}">
                     <label class="form-label small mb-0">本地端口</label>

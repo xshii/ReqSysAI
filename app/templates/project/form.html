@@ -2,62 +2,268 @@
 {% block title %}{{ title }} - 研发协作平台{% endblock %}
 
 {% block content %}
-<div class="mb-4">
+<div class="mb-3">
+    {% if project is defined and project %}
+    <a href="{{ url_for('project.project_detail', project_id=project.id) }}" class="text-decoration-none">
+        <i class="bi bi-arrow-left"></i> 返回 {{ project.name }}
+    </a>
+    {% else %}
     <a href="{{ url_for('project.project_list') }}" class="text-decoration-none">
         <i class="bi bi-arrow-left"></i> 返回项目列表
     </a>
+    {% endif %}
 </div>
-<div class="row">
-    <div class="col-md-7">
-        <div class="card">
-            <div class="card-header"><h5 class="mb-0">{{ title }}</h5></div>
-            <div class="card-body">
-                <form method="POST">
-                    {{ form.hidden_tag() }}
-                    <div class="mb-3">
-                        <label class="form-label">{{ form.name.label.text }}</label>
-                        {{ form.name(class="form-control") }}
-                        {% for e in form.name.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ form.parent_id.label.text }}</label>
-                        {{ form.parent_id(class="form-select") }}
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ form.description.label.text }}</label>
-                        {{ form.description(class="form-control", rows=3) }}
-                    </div>
 
-                    {% if templates is defined and templates %}
-                    <div class="mb-3">
-                        <label class="form-label">里程碑模板</label>
-                        <div class="d-flex gap-2">
-                            <select id="tplSelect" class="form-select form-select-sm">
-                                <option value="">不使用模板</option>
-                                {% for t in templates %}
-                                <option value="{{ t.id }}">{{ t.name }}{% if t.description %} — {{ t.description }}{% endif %}</option>
-                                {% endfor %}
-                            </select>
-                            <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" onclick="loadTemplate()">导入</button>
-                        </div>
-                    </div>
-                    {% endif %}
+<h5 class="mb-3">{{ title }}</h5>
 
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between align-items-center mb-1">
-                            <label class="form-label mb-0">里程碑</label>
-                            <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="addMs()"><i class="bi bi-plus"></i> 添加</button>
-                        </div>
-                        <div id="msItems"></div>
-                        <div class="form-text">填写里程碑名称和截止日期</div>
-                    </div>
+{# Tabs — only show member tab when editing existing project #}
+{% set is_edit = project is defined and project %}
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabBasic" type="button">基本信息</button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabMilestone" type="button">里程碑</button>
+    </li>
+    {% if is_edit %}
+    <li class="nav-item">
+        <button class="nav-link{% if request.args.get('tab') == 'members' %} active{% endif %}" data-bs-toggle="tab" data-bs-target="#tabMembers" type="button">
+            成员 {% if members is defined %}<span class="badge bg-secondary">{{ members|length }}</span>{% endif %}
+        </button>
+    </li>
+    {% endif %}
+</ul>
 
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {{ form.submit.label.text }}</button>
-                </form>
+<div class="tab-content">
+    {# Tab 1: Basic info + Milestones in one form #}
+    <div class="tab-pane fade show active" id="tabBasic">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row mb-2">
+                <label class="col-2 col-form-label col-form-label-sm">{{ form.name.label.text }}</label>
+                <div class="col-10">
+                    {{ form.name(class="form-control form-control-sm") }}
+                    {% for e in form.name.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+                </div>
             </div>
-        </div>
+            <div class="row mb-2">
+                <label class="col-2 col-form-label col-form-label-sm">{{ form.parent_id.label.text }}</label>
+                <div class="col-10">
+                    {{ form.parent_id(class="form-select form-select-sm") }}
+                </div>
+            </div>
+            <div class="row mb-2">
+                <label class="col-2 col-form-label col-form-label-sm">{{ form.description.label.text }}</label>
+                <div class="col-10">
+                    {{ form.description(class="form-control form-control-sm", rows=2) }}
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check-lg"></i> {{ form.submit.label.text }}</button>
+        </form>
     </div>
+
+    {# Tab 2: Milestones #}
+    <div class="tab-pane fade" id="tabMilestone">
+        <div class="d-flex gap-2 align-items-center flex-wrap mb-2">
+            <select id="tplSelect" class="form-select form-select-sm" style="max-width:220px;">
+                <option value="">从模板导入...</option>
+                {% if templates is defined %}
+                {% for t in templates %}
+                <option value="{{ t.id }}">{{ t.name }}</option>
+                {% endfor %}
+                {% endif %}
+            </select>
+            <input type="date" id="tplStartDate" class="form-control form-control-sm" style="max-width:140px;" title="起始日期">
+            <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" onclick="loadTemplate()">导入</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0" data-bs-toggle="collapse" data-bs-target="#tplManagePanel"><i class="bi bi-gear"></i></button>
+            <span class="flex-grow-1"></span>
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0 flex-shrink-0" onclick="addMs()"><i class="bi bi-plus"></i> 新增</button>
+        </div>
+
+        {# Inline template management — collapsed, OUTSIDE the milestone form to avoid nesting #}
+            <div class="collapse mb-3" id="tplManagePanel">
+                <div class="card card-body py-2">
+                    {% set _tpl_next = url_for('project.project_edit', project_id=project.id, tab='milestone') if project is defined and project else '' %}
+                    {% if templates is defined and templates %}
+                    {% for tpl in templates %}
+                    {# Read-only view #}
+                    <div class="d-flex justify-content-between align-items-center mb-1" id="tplView{{ tpl.id }}">
+                        <div class="small flex-grow-1">
+                            <strong>{{ tpl.name }}</strong>
+                            {% if tpl.description %}<span class="text-muted">— {{ tpl.description }}</span>{% endif %}
+                            <div class="text-muted" style="font-size:.75em;">
+                            {% set ns_tpl = namespace(prev=0) %}
+                            {% for item in tpl.items %}
+                                {% set delta = item.offset_days - ns_tpl.prev %}
+                                {% if loop.first %}起点 {{ item.name }}{% else %} · +{{ delta }}天 {{ item.name }}{% endif %}
+                                {% set ns_tpl.prev = item.offset_days %}
+                            {% endfor %}
+                            </div>
+                        </div>
+                        <div class="d-flex gap-1 flex-shrink-0">
+                            <button class="btn btn-sm btn-outline-primary py-0" onclick="toggleTplEdit({{ tpl.id }})" title="编辑"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary py-0" title="复用到下方里程碑" onclick="applyTplToList({{ tpl.id }})"><i class="bi bi-box-arrow-in-down"></i></button>
+                            <button class="btn btn-sm btn-outline-danger py-0" title="删除" onclick="deleteTplAjax({{ tpl.id }}, this)"><i class="bi bi-trash"></i></button>
+                        </div>
+                    </div>
+                    {# Edit form (hidden) #}
+                    <div class="d-none mb-2" id="tplEdit{{ tpl.id }}">
+                        <form method="POST" action="{{ url_for('project.milestone_template_action') }}{% if _tpl_next %}?next={{ _tpl_next }}{% endif %}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="edit">
+                            <input type="hidden" name="template_id" value="{{ tpl.id }}">
+                            <div class="d-flex gap-2 mb-1">
+                                <input type="text" name="name" class="form-control form-control-sm" value="{{ tpl.name }}" style="max-width:180px;">
+                                <input type="text" name="description" class="form-control form-control-sm" value="{{ tpl.description or '' }}" placeholder="描述">
+                            </div>
+                            <div id="editTplItems{{ tpl.id }}">
+                            {% set ns2 = namespace(prev=0) %}
+                            {% for item in tpl.items %}
+                            {% set delta = item.offset_days - ns2.prev %}
+                            <div class="input-group input-group-sm mb-1">
+                                <input type="text" name="item_name" class="form-control" value="{{ item.name }}">
+                                <input type="text" name="item_offset" class="form-control" style="max-width:80px;" value="{% if loop.first %}0{% else %}+{{ delta }}天{% endif %}">
+                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>
+                            </div>
+                            {% set ns2.prev = item.offset_days %}
+                            {% endfor %}
+                            </div>
+                            <div class="d-flex gap-1 mb-1">
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="addEditTplRow('editTplItems{{ tpl.id }}')"><i class="bi bi-plus"></i></button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="bumpEditTplRow('editTplItems{{ tpl.id }}', 7)">+7天</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="bumpEditTplRow('editTplItems{{ tpl.id }}', 30)">+30天</button>
+                            </div>
+                            <div class="d-flex gap-1">
+                                <button type="submit" class="btn btn-sm btn-primary py-0">保存</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="toggleTplEdit({{ tpl.id }})">取消</button>
+                            </div>
+                        </form>
+                    </div>
+                    {% endfor %}
+                    <hr class="my-2">
+                    {% endif %}
+                    <div class="small fw-bold mb-1">新建模板</div>
+                    <form method="POST" action="{{ url_for('project.milestone_template_action') }}{% if project is defined and project %}?next={{ url_for('project.project_edit', project_id=project.id) }}{% endif %}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="create">
+                        <div class="d-flex gap-2 mb-1">
+                            <input type="text" name="name" class="form-control form-control-sm" placeholder="模板名称" required style="max-width:180px;">
+                            <input type="text" name="description" class="form-control form-control-sm" placeholder="描述（可选）">
+                        </div>
+                        <div id="newTplItems"></div>
+                        <div class="d-flex gap-1 mb-1">
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="addNewTplRow()"><i class="bi bi-plus"></i></button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="bumpNewTplRow(7)">+7天</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="bumpNewTplRow(30)">+30天</button>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary">创建模板</button>
+                    </form>
+                </div>
+            </div>
+
+        {# Milestone list form — separate from template management forms #}
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="{{ form.name.name }}" value="{{ form.name.data or '' }}">
+            <input type="hidden" name="{{ form.parent_id.name }}" value="{{ form.parent_id.data or 0 }}">
+            <input type="hidden" name="{{ form.description.name }}" value="{{ form.description.data or '' }}">
+            <div id="msItems">
+            {% if is_edit and project.milestones %}
+                {% for ms in project.milestones %}
+                <div class="input-group input-group-sm mb-1 ms-drag-row">
+                    <span class="input-group-text ms-drag-handle" style="cursor:grab;" draggable="true"><i class="bi bi-grip-vertical"></i></span>
+                    <input type="text" name="ms_name" class="form-control" value="{{ ms.name }}">
+                    <input type="date" name="ms_date" class="form-control" style="max-width:150px;" value="{{ ms.due_date.strftime('%Y-%m-%d') if ms.due_date else '' }}">
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>
+                </div>
+                {% endfor %}
+            {% endif %}
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm mt-2"><i class="bi bi-check-lg"></i> 保存里程碑</button>
+        </form>
+    </div>
+
+    {# Tab 3: Members (only for editing) #}
+    {% if is_edit %}
+    <div class="tab-pane fade{% if request.args.get('tab') == 'members' %} show active{% endif %}" id="tabMembers">
+        {# Add member form #}
+        <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="mb-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="add">
+            <div class="d-flex gap-2 align-items-end flex-wrap">
+                <div>
+                    <label class="form-label small mb-0">成员</label>
+                    {% from "_user_picker.html" import user_picker %}
+                    {{ user_picker('member_name', available, mode='text', placeholder='搜索姓名或输入外部成员', size='sm') }}
+                </div>
+                <div>
+                    <label class="form-label small mb-0">角色</label>
+                    <select name="project_role" class="form-select form-select-sm" style="max-width:100px;">
+                        {% for k, v in roles.items() %}
+                        <option value="{{ k }}">{{ v }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-plus"></i> 添加</button>
+            </div>
+        </form>
+        <div class="d-flex gap-2 mt-2 mb-2">
+            <a href="{{ url_for('project.member_export_csv', project_id=project.id) }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出CSV</a>
+            <form method="POST" action="{{ url_for('project.member_import_csv', project_id=project.id) }}" enctype="multipart/form-data" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label class="btn btn-sm btn-outline-primary mb-0"><i class="bi bi-upload"></i> 导入CSV <input type="file" name="csv_file" accept=".csv" hidden onchange="this.form.submit()"></label>
+            </form>
+        </div>
+
+        {# Member list #}
+        {% if members %}
+        <table class="table table-sm">
+            <thead><tr><th>成员</th><th>角色</th><th>关键</th><th></th></tr></thead>
+            <tbody>
+            {% for m in members %}
+            <tr>
+                <td class="small">{{ m.display_name }}{% if m.user and m.user.group %} <span class="text-muted">({{ m.user.group }})</span>{% endif %}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="role">
+                        <input type="hidden" name="member_id" value="{{ m.id }}">
+                        <select name="project_role" class="form-select form-select-sm d-inline" style="max-width:90px;" onchange="this.form.submit()">
+                            {% for k, v in roles.items() %}
+                            <option value="{{ k }}" {% if m.project_role == k %}selected{% endif %}>{{ v }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                </td>
+                <td>
+                    <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="toggle_key">
+                        <input type="hidden" name="member_id" value="{{ m.id }}">
+                        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent">
+                            <i class="bi bi-{{ 'star-fill text-warning' if m.is_key else 'star text-muted' }}"></i>
+                        </button>
+                    </form>
+                </td>
+                <td>
+                    <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="remove">
+                        <input type="hidden" name="member_id" value="{{ m.id }}">
+                        <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('移除该成员？')"><i class="bi bi-x"></i></button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-muted small">暂无成员</div>
+        {% endif %}
+    </div>
+    {% endif %}
 </div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -68,7 +274,7 @@ function addMs(name, dateVal) {
     row.className = 'input-group input-group-sm mb-1 ms-drag-row';
     row.innerHTML = '<span class="input-group-text ms-drag-handle" style="cursor:grab;" draggable="true"><i class="bi bi-grip-vertical"></i></span>'
         + '<input type="text" name="ms_name" class="form-control" placeholder="里程碑名称" value="' + (name || '').replace(/"/g, '&quot;') + '">'
-        + '<input type="date" name="ms_date" class="form-control" style="max-width:160px;" value="' + (dateVal || '') + '">'
+        + '<input type="date" name="ms_date" class="form-control" style="max-width:150px;" value="' + (dateVal || '') + '">'
         + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>';
     initMsDrag(row);
     div.appendChild(row);
@@ -90,8 +296,7 @@ function initMsDrag(row) {
         e.preventDefault();
         if (!msDragItem || msDragItem === row) return;
         var rect = row.getBoundingClientRect();
-        var mid = rect.top + rect.height / 2;
-        if (e.clientY < mid) row.parentNode.insertBefore(msDragItem, row);
+        if (e.clientY < rect.top + rect.height / 2) row.parentNode.insertBefore(msDragItem, row);
         else row.parentNode.insertBefore(msDragItem, row.nextSibling);
     });
 }
@@ -99,20 +304,131 @@ function initMsDrag(row) {
 function loadTemplate() {
     var tplId = document.getElementById('tplSelect').value;
     if (!tplId) return;
+    var startInput = document.getElementById('tplStartDate');
+    var startDate = startInput.value ? new Date(startInput.value + 'T00:00:00') : new Date();
+    if (!startInput.value) {
+        startInput.value = startDate.getFullYear() + '-' + String(startDate.getMonth()+1).padStart(2,'0') + '-' + String(startDate.getDate()).padStart(2,'0');
+    }
     fetch('/projects/api/template/' + tplId).then(function(r) { return r.json(); }).then(function(d) {
         if (!d.ok) return;
         var div = document.getElementById('msItems');
         div.innerHTML = '';
-        var today = new Date();
         d.items.forEach(function(item) {
-            var dt = new Date(today);
+            var dt = new Date(startDate);
             dt.setDate(dt.getDate() + item.offset_days);
-            // Skip weekends
             while (dt.getDay() === 0 || dt.getDay() === 6) dt.setDate(dt.getDate() + 1);
             var dateStr = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
             addMs(item.name, dateStr);
         });
     });
+}
+
+// Init drag for pre-loaded milestone rows
+document.querySelectorAll('.ms-drag-row').forEach(initMsDrag);
+
+// Auto-switch to tab if URL has ?tab=xxx
+{% if is_edit %}
+var _tabParam = new URLSearchParams(window.location.search).get('tab');
+if (_tabParam) {
+    var _tab = document.querySelector('[data-bs-target="#tab' + _tabParam.charAt(0).toUpperCase() + _tabParam.slice(1) + '"]');
+    if (_tab) new bootstrap.Tab(_tab).show();
+}
+{% endif %}
+
+// Delete template via AJAX (no page reload)
+function deleteTplAjax(tplId, btn) {
+    if (!confirm('删除该模板？')) return;
+    apiPost('/projects/api/templates', {action: 'delete', id: tplId}).then(function(d) {
+        if (d && d.ok) {
+            // Remove the template view + edit blocks from DOM
+            var view = document.getElementById('tplView' + tplId);
+            var edit = document.getElementById('tplEdit' + tplId);
+            if (view) view.remove();
+            if (edit) edit.remove();
+            // Remove from dropdown
+            var opt = document.querySelector('#tplSelect option[value="' + tplId + '"]');
+            if (opt) opt.remove();
+            showToast('模板已删除', 'success');
+        }
+    });
+}
+
+// Copy template items into the "new template" form for editing
+function applyTplToList(tplId) {
+    fetch('/projects/api/templates').then(function(r) { return r.json(); }).then(function(d) {
+        if (!d.ok) return;
+        var tpl = d.templates.find(function(t) { return t.id === tplId; });
+        if (!tpl) return;
+
+        // Expand the template management panel first
+        var panel = document.getElementById('tplManagePanel');
+        if (!panel.classList.contains('show')) {
+            new bootstrap.Collapse(panel).show();
+        }
+
+        // Wait for panel to expand, then fill
+        setTimeout(function() {
+            // Fill name
+            var nameInput = document.querySelector('#tplManagePanel input[name="name"]');
+            if (nameInput) nameInput.value = tpl.name + '_副本';
+
+            // Clear and fill items
+            var itemsDiv = document.getElementById('newTplItems');
+            itemsDiv.innerHTML = '';
+            tpl.items.forEach(function(item, i) {
+                addNewTplRow(item.name, i === 0 ? '0' : '+' + item.offset + '天');
+            });
+
+            if (nameInput) {
+                nameInput.scrollIntoView({behavior: 'smooth', block: 'center'});
+                nameInput.focus();
+            }
+            showToast('已复制到新建模板，请修改后创建', 'info');
+        }, 300);
+    });
+}
+
+// Template edit toggle
+function toggleTplEdit(id) {
+    document.getElementById('tplView' + id).classList.toggle('d-none');
+    document.getElementById('tplEdit' + id).classList.toggle('d-none');
+}
+
+// Edit existing template — add/bump rows
+function addEditTplRow(containerId, name, offset) {
+    var div = document.getElementById(containerId);
+    var row = document.createElement('div');
+    row.className = 'input-group input-group-sm mb-1';
+    row.innerHTML = '<input type="text" name="item_name" class="form-control" placeholder="里程碑名称" value="' + (name || '') + '">'
+        + '<input type="text" name="item_offset" class="form-control" style="max-width:80px;" placeholder="+N天" value="' + (offset || '') + '">'
+        + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>';
+    div.appendChild(row);
+}
+function bumpEditTplRow(containerId, days) {
+    var rows = document.querySelectorAll('#' + containerId + ' .input-group');
+    if (!rows.length) { addEditTplRow(containerId, '', '+' + days + '天'); return; }
+    var lastInput = rows[rows.length - 1].querySelector('input[name="item_offset"]');
+    var cur = parseInt((lastInput.value || '0').replace(/[^0-9]/g, '')) || 0;
+    lastInput.value = '+' + (cur + days) + '天';
+}
+
+// New template item management (inside collapse panel)
+function addNewTplRow(name, offset) {
+    var div = document.getElementById('newTplItems');
+    var row = document.createElement('div');
+    row.className = 'input-group input-group-sm mb-1';
+    var isFirst = div.querySelectorAll('.input-group').length === 0;
+    row.innerHTML = '<input type="text" name="item_name" class="form-control" placeholder="里程碑名称" value="' + (name || '') + '">'
+        + '<input type="text" name="item_offset" class="form-control" style="max-width:80px;" placeholder="' + (isFirst ? '0' : '+N天') + '" value="' + (offset || (isFirst ? '0' : '')) + '">'
+        + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>';
+    div.appendChild(row);
+}
+function bumpNewTplRow(days) {
+    var rows = document.querySelectorAll('#newTplItems .input-group');
+    if (!rows.length) { addNewTplRow('', '+' + days + '天'); return; }
+    var lastInput = rows[rows.length - 1].querySelector('input[name="item_offset"]');
+    var cur = parseInt((lastInput.value || '0').replace(/[^0-9]/g, '')) || 0;
+    lastInput.value = '+' + (cur + days) + '天';
 }
 </script>
 {% endblock %}

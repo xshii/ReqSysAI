@@ -64,3 +64,138 @@ INCENTIVE_SOURCE_LABELS = {
     'knowledge': '知识管理激励',
     'improvement': '持续改进激励',
 }
+
+# ---------------------------------------------------------------------------
+# Query & pagination limits
+# ---------------------------------------------------------------------------
+QUERY_LIMIT_MY_REQS = 10
+QUERY_LIMIT_AI_RANKING = 5
+QUERY_LIMIT_TOP_RANTS = 3
+QUERY_LIMIT_RANTS_MONTH = 20
+PAGINATION_PER_PAGE = 20
+MAX_ALIAS_LENGTH = 30
+AI_INPUT_MAX = 5000
+
+# ---------------------------------------------------------------------------
+# Time lookback periods (days)
+# ---------------------------------------------------------------------------
+LOOKBACK_WEEK = 7
+LOOKBACK_MONTH = 30
+LOOKBACK_QUARTER = 90
+LOOKBACK_HALF_YEAR = 180
+LOOKBACK_YEAR = 365
+
+INCENTIVE_PERIOD_DAYS = {'1m': 30, '3m': 90, '6m': 180, '1y': 365}
+
+# ---------------------------------------------------------------------------
+# Weekday names (Chinese)
+# ---------------------------------------------------------------------------
+WEEKDAY_NAMES_ZH = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+
+# ---------------------------------------------------------------------------
+# Milestone colors
+# ---------------------------------------------------------------------------
+MILESTONE_COLOR = '#1e3a5f'
+
+# ---------------------------------------------------------------------------
+# Milestone templates (used by init_db.py)
+# ---------------------------------------------------------------------------
+MILESTONE_TEMPLATES = [
+    {
+        'name': 'IPD标准流程',
+        'description': '华为IPD集成产品开发标准里程碑',
+        # offset: relative to previous milestone, supports: days(int), '+Nw'(weeks), '+Nm'(months)
+        'items': [
+            ('Charter 立项', 0),
+            ('CDCP 概念决策', '+2w'),
+            ('TR1 需求评审', '+1w'),
+            ('PDCP 计划决策', '+1w'),
+            ('TR2 方案评审', '+2w'),
+            ('TR3 详设评审', '+2w'),
+            ('TR4 编码完成', '+1m'),
+            ('TR5 系统测试', '+2w'),
+            ('ADCP 发布决策', '+1w'),
+            ('TR6 发布就绪', '+1w'),
+            ('GA 正式发布', 5),
+        ],
+    },
+    {
+        'name': '敏捷迭代（2周Sprint）',
+        'description': '标准Scrum 2周迭代里程碑',
+        'items': [
+            ('Sprint Planning', 0),
+            ('开发完成', 8),
+            ('Code Review', 1),
+            ('测试完成', 3),
+            ('Sprint Review', 1),
+            ('Sprint Retro', 1),
+        ],
+    },
+    {
+        'name': '瀑布模型',
+        'description': '传统瀑布式开发里程碑',
+        'items': [
+            ('需求基线化', 0),
+            ('概要设计评审', '+2w'),
+            ('详细设计评审', '+2w'),
+            ('编码完成', '+1m'),
+            ('单元测试', '+1w'),
+            ('集成测试', '+1w'),
+            ('系统测试', '+2w'),
+            ('UAT验收', '+1w'),
+            ('上线部署', '+1w'),
+        ],
+    },
+    {
+        'name': '简单项目（3阶段）',
+        'description': '小型项目快速交付',
+        'items': [
+            ('需求确认', 0),
+            ('开发完成', '+2w'),
+            ('测试上线', '+1w'),
+        ],
+    },
+]
+
+
+def parse_offset(offset_str):
+    """Parse offset: int, '+Nw'/'+N周', '+Nm'/'+N个月', '+N天' → days.
+    Returns 0 for empty/invalid input. Negative values return 0."""
+    if isinstance(offset_str, int):
+        return max(0, offset_str)
+    raw = str(offset_str).strip()
+    if raw.startswith('-'):
+        return 0
+    s = raw.lstrip('+')
+    if not s:
+        return 0
+    try:
+        # Chinese formats (1月=4周=28天)
+        if s.endswith('个月'):
+            return int(s[:-2] or '0') * 28
+        if s.endswith('周'):
+            return int(s[:-1] or '0') * 7
+        if s.endswith('天'):
+            return max(0, int(s[:-1] or '0'))
+        # English short formats
+        if s.endswith('w'):
+            return int(s[:-1] or '0') * 7
+        if s.endswith('m'):
+            return int(s[:-1] or '0') * 28
+        return max(0, int(s))
+    except ValueError:
+        return 0
+
+
+def resolve_template_offsets(items):
+    """Convert relative offsets to absolute offset_days from project start.
+
+    Input: [('name', relative_offset), ...]
+    Output: [('name', absolute_offset_days), ...]
+    """
+    result = []
+    cumulative = 0
+    for name, offset in items:
+        cumulative += parse_offset(offset)
+        result.append((name, cumulative))
+    return result

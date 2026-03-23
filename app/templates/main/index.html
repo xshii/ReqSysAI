@@ -49,7 +49,7 @@
     </h4>
     <div class="ms-auto d-flex gap-1">
         <button class="btn btn-sm btn-outline-secondary" id="btnDailyProgress" title="AI 生成今日进展报告">
-            <i class="bi bi-journal-text"></i> 每日进展
+            <i class="bi bi-robot"></i> 每日进展
         </button>
         {% if ai_enabled %}
         <button class="btn btn-sm btn-outline-primary" id="btnAiRecommend" title="AI 根据需求进度和截止日期推荐今日任务">
@@ -145,7 +145,7 @@
                     {% if r.comments|length > recent_comments|length %}<a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="text-muted ps-2" style="font-size:.6em;">查看全部 {{ r.comments|length }} 条评论</a>{% endif %}
                 </div>
                 {% endif %}
-                <div class="collapse {% if not r_all_done %}show{% endif %} todo-list-for-req" data-req-id="{{ r.id }}" id="reqTodos{{ r.id }}">
+                <div class="collapse {% if not r_all_done %}show{% endif %} todo-list-for-req" data-req-id="{{ r.id }}" id="reqTodos{{ r.id }}" style="min-height:24px;">
                 {% for t in r_todos %}{{ todo_row(t) }}{% endfor %}
                 </div>
             </div>
@@ -264,7 +264,7 @@
                     <span class="badge bg-light text-dark border" style="font-size:.65em;">周期</span>
                     {% if all_recurring %}<span class="badge bg-{{ 'success' if recurring_all_done else 'secondary' }} bg-opacity-{{ '75' if recurring_all_done else '50' }}" style="font-size:.55em;">{{ recurring_done_count }}/{{ recurring_total_count }}</span>{% endif %}
                     <span class="small fw-bold text-secondary">周期任务</span>
-                    <a href="{{ url_for('main.recurring_list') }}" class="ms-auto small text-muted">编辑</a>
+                    <a href="{{ url_for('main.recurring_list') }}" class="ms-auto small text-muted" title="编辑周期任务"><i class="bi bi-pencil"></i></a>
                 </div>
                 {% if all_recurring %}
                 <div class="collapse {% if not recurring_all_done %}show{% endif %} row gx-3" id="recurringSection">
@@ -554,22 +554,16 @@ document.querySelectorAll('.btn-del-recurring').forEach(function(btn) {
 // AI Recommend
 // Daily progress
 document.getElementById('btnDailyProgress').addEventListener('click', function() {
-    var btn = this;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 生成中...';
+    var loading = aiLoading(this, '生成中');
     apiPost('{{ url_for("main.daily_progress") }}', {}).then(function(d) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-journal-text"></i> 每日进展';
+        loading.stop();
         if (d && d.ok) {
             document.getElementById('dailyProgressText').textContent = d.text;
             document.getElementById('dailyProgressPanel').classList.remove('d-none');
         } else {
             showToast('生成失败', 'danger');
         }
-    }).catch(function() {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-journal-text"></i> 每日进展';
-    });
+    }).catch(function() { loading.stop(); });
 });
 function copyProgress() {
     var text = document.getElementById('dailyProgressText').textContent;
@@ -580,11 +574,9 @@ function copyProgress() {
 var _aiBtn = document.getElementById('btnAiRecommend');
 if (_aiBtn) _aiBtn.addEventListener('click', function() {
     var btn = this;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 推荐中...';
+    var loading = aiLoading(btn, '推荐中');
     apiPost('{{ url_for("main.ai_recommend_todos") }}', {}).then(function(d) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-robot"></i> AI 推荐今日 Todo';
+        loading.stop();
         if (!d || !d.ok) {
             showToast(d && d.msg ? d.msg : 'AI 推荐失败', 'danger');
             return;
@@ -647,8 +639,7 @@ if (_aiBtn) _aiBtn.addEventListener('click', function() {
         }
     }).catch(function(e) {
         console.error('AI recommend error:', e);
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-robot"></i> AI 推荐';
+        loading.stop();
         showToast('AI 服务不可用', 'danger');
     });
 });
@@ -965,35 +956,48 @@ function updateFocusTimer() {
 function exitFocusMode() {
     clearInterval(focusInterval);
     if (focusOverlay) focusOverlay.style.display = 'none';
+    var tid = focusTodoId;
     var completed = focusCompleted;
-    apiPost('/todos/' + focusTodoId + '/timer', {}).then(function(d) {
+    focusTodoId = null;
+    focusCompleted = false;
+    if (!tid) return;
+    apiPost('/todos/' + tid + '/timer', {}).then(function(d) {
         if (d && d.ok) {
-            var btn = document.querySelector('.btn-timer-home[data-id="' + focusTodoId + '"]');
+            var btn = document.querySelector('.btn-timer-home[data-id="' + tid + '"]');
             if (btn) {
                 btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
                 btn.querySelector('i').className = 'bi bi-clock';
-                if (d.minutes > 0) addTomatoIcon(btn, d.minutes);
+                addTomatoIcon(btn, d.minutes || 0);
             }
-            showToast(completed ? '● 番茄完成！' : '◐ 打断，' + d.minutes + '分钟', completed ? 'success' : 'info');
+            showToast(completed ? '● 番茄完成！' : '◐ 打断，' + (d.minutes || 0) + '分钟', completed ? 'success' : 'info');
         }
     });
-    focusTodoId = null;
-    focusCompleted = false;
 }
 
 function addTomatoIcon(btn, minutes) {
     var pct = Math.round(minutes / POMODORO_MIN * 100);
     var cls, icon;
-    if (pct >= 100) { cls = 'text-danger'; icon = 'bi-circle-fill'; }       // 番茄红
-    else if (pct >= 80) { cls = 'text-primary'; icon = 'bi-circle-fill'; }   // 蓝
-    else if (pct >= 50) { cls = 'text-warning'; icon = 'bi-circle-half'; }   // 黄
-    else if (pct >= 20) { cls = 'text-secondary'; icon = 'bi-circle-half'; } // 灰半
-    else { cls = 'text-secondary'; icon = 'bi-circle'; }                     // 灰空心
-    var tomato = document.createElement('span');
-    tomato.style.cssText = 'font-size:.8em;margin-left:2px;';
-    tomato.innerHTML = '<i class="bi ' + icon + ' ' + cls + '" style="font-size:.5em;"></i>';
-    tomato.title = minutes + 'min (' + pct + '%)';
-    btn.parentElement.insertBefore(tomato, btn.nextSibling);
+    if (pct >= 100) { cls = 'text-danger'; icon = 'bi-circle-fill'; }
+    else if (pct >= 80) { cls = 'text-primary'; icon = 'bi-circle-fill'; }
+    else if (pct >= 50) { cls = 'text-warning'; icon = 'bi-circle-half'; }
+    else if (pct >= 20) { cls = 'text-secondary'; icon = 'bi-circle-half'; }
+    else { cls = 'text-secondary'; icon = 'bi-circle'; }
+    var tomato = document.createElement('i');
+    tomato.className = 'bi ' + icon + ' ' + cls;
+    tomato.style.cssText = 'font-size:.6em;margin-left:1px;cursor:default;';
+    tomato.setAttribute('data-bs-toggle', 'tooltip');
+    tomato.setAttribute('title', minutes + '分钟 (' + pct + '%)');
+    new bootstrap.Tooltip(tomato);
+    // Insert after the last tomato icon or after the timer button
+    var container = btn.parentElement;
+    var lastTomato = container.querySelector('.pomodoro-area');
+    if (!lastTomato) {
+        lastTomato = document.createElement('span');
+        lastTomato.className = 'pomodoro-area';
+        lastTomato.style.cssText = 'font-size:.8em;margin-left:2px;';
+        container.insertBefore(lastTomato, btn.nextSibling);
+    }
+    lastTomato.appendChild(tomato);
 }
 
 document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
@@ -1014,7 +1018,7 @@ document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
                 } else {
                     btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
                     btn.querySelector('i').className = 'bi bi-clock';
-                    if (d.minutes > 0) addTomatoIcon(btn, d.minutes);
+                    addTomatoIcon(btn, d.minutes || 0);
                     showToast('◐ 打断，' + d.minutes + '分钟', 'info');
                 }
             }

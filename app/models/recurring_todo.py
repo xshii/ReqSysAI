@@ -115,11 +115,13 @@ class RecurringTodo(db.Model):
             target_days = sorted(int(d) for d in self.weekdays.split(',') if d.isdigit())
             if not target_days:
                 return None
+            # Find most recent past target day THIS week
             for d in reversed(target_days):
                 diff = today.weekday() - d
                 if diff > 0:
-                    return diff
-            return today.weekday() + (7 - target_days[-1])
+                    return diff  # days since that target day
+            # No target day has passed yet this week — not overdue
+            return 0
         return None
 
     def days_until_next(self):

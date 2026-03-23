@@ -1,21 +1,34 @@
 {# Shared todo macros — used by homepage and team page #}
 
-{# Pomodoro icons #}
-{% macro pomodoro_icons(minutes, pomo_min) %}
-{% if minutes and minutes > 0 %}
+{# Pomodoro icons — each session is a circle, hover shows time #}
+{% macro pomodoro_icons(todo, pomo_min) %}
+{% if todo.pomodoros %}
 {% set pomo = pomo_min or 45 %}
-{% set full = (minutes // pomo) | int %}
-{% set remainder_pct = ((minutes % pomo) / pomo * 100) | int %}
-<span class="text-muted ms-1" style="font-size:.7em;" title="专注 {{ minutes }} 分钟">
-{% for i in range(full) %}<i class="bi bi-circle-fill text-danger" style="font-size:.7em;"></i>{% endfor %}
-{% if remainder_pct > 0 %}
-{% if remainder_pct >= 80 %}<i class="bi bi-circle-fill text-primary" style="font-size:.7em;" title="{{ remainder_pct }}%"></i>
-{% elif remainder_pct >= 50 %}<i class="bi bi-circle-half text-warning" style="font-size:.7em;" title="{{ remainder_pct }}%"></i>
-{% elif remainder_pct >= 20 %}<i class="bi bi-circle-half text-secondary" style="font-size:.7em;" title="{{ remainder_pct }}%"></i>
-{% else %}<i class="bi bi-circle text-secondary" style="font-size:.7em;" title="{{ remainder_pct }}%"></i>
-{% endif %}
-{% endif %}
-{{ minutes }}m</span>
+<span class="pomodoro-area ms-1" title="共{{ todo.actual_minutes or 0 }}分钟 {{ todo.pomodoros|length }}次">
+{%- for s in todo.pomodoros -%}
+{% set pct = (s.minutes / pomo * 100)|int -%}
+{% if s.completed %}<i class="bi bi-circle-fill text-danger" style="font-size:.6em;cursor:default;" data-bs-toggle="tooltip" title="{{ s.minutes }}分钟 ✓"></i>
+{%- elif pct >= 80 %}<i class="bi bi-circle-fill text-primary" style="font-size:.6em;cursor:default;" data-bs-toggle="tooltip" title="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
+{%- elif pct >= 50 %}<i class="bi bi-circle-half text-warning" style="font-size:.6em;cursor:default;" data-bs-toggle="tooltip" title="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
+{%- elif pct >= 20 %}<i class="bi bi-circle-half text-secondary" style="font-size:.6em;cursor:default;" data-bs-toggle="tooltip" title="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
+{%- else %}<i class="bi bi-circle text-secondary" style="font-size:.6em;cursor:default;" data-bs-toggle="tooltip" title="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
+{%- endif %}
+{%- endfor -%}
+</span>
+{% elif todo.actual_minutes and todo.actual_minutes > 0 %}
+{% set pomo = pomo_min or 45 %}
+{% set full = (todo.actual_minutes // pomo) | int %}
+{% set remainder_pct = ((todo.actual_minutes % pomo) / pomo * 100) | int %}
+<span class="pomodoro-area ms-1" title="共{{ todo.actual_minutes }}分钟">
+{%- for i in range(full) %}<i class="bi bi-circle-fill text-danger" style="font-size:.6em;cursor:default;"></i>{% endfor -%}
+{%- if remainder_pct > 0 -%}
+{% if remainder_pct >= 80 %}<i class="bi bi-circle-fill text-primary" style="font-size:.6em;cursor:default;"></i>
+{%- elif remainder_pct >= 50 %}<i class="bi bi-circle-half text-warning" style="font-size:.6em;cursor:default;"></i>
+{%- elif remainder_pct >= 20 %}<i class="bi bi-circle-half text-secondary" style="font-size:.6em;cursor:default;"></i>
+{%- else %}<i class="bi bi-circle text-secondary" style="font-size:.6em;cursor:default;"></i>
+{%- endif %}
+{%- endif -%}
+</span>
 {% endif %}
 {% endmacro %}
 
@@ -46,7 +59,7 @@
     <button class="btn btn-sm py-0 px-0 {% if t.need_help %}text-danger{% else %}text-muted{% endif %} btn-block-home todo-action-btn" data-id="{{ t.id }}" title="{{ '解除阻塞' if t.need_help else '标记阻塞' }}" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;{% if t.status == 'done' %}display:none;{% endif %}">
         <i class="bi bi-{% if t.need_help %}play-circle{% else %}pause-circle{% endif %}"></i>
     </button>
-    {{ pomodoro_icons(t.actual_minutes, current_user.pomodoro_minutes) }}
+    {{ pomodoro_icons(t, current_user.pomodoro_minutes) }}
     <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" title="删除" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>
 </div>
 {% if show_comment_input %}
@@ -127,26 +140,27 @@ document.querySelectorAll('.btn-delete-home').forEach(function(btn) {
     });
 });
 
-// Timer
-document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-        var todoId = btn.dataset.id;
-        var title = btn.closest('.d-flex').querySelector('.small').textContent;
-        apiPost('/todos/' + todoId + '/timer', {}).then(function(d) {
-            if (d && d.ok) {
-                if (d.running) {
-                    btn.className = btn.className.replace('btn-outline-secondary', 'btn-success');
-                    btn.querySelector('i').className = 'bi bi-clock-fill';
-                    if (typeof enterFocusMode === 'function') enterFocusMode(todoId, title);
-                } else {
-                    btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
-                    btn.querySelector('i').className = 'bi bi-clock';
-                    if (d.minutes > 0 && typeof showToast === 'function') showToast('专注 ' + d.minutes + ' 分钟', 'info');
+// Timer — skip if homepage has its own focus mode handler
+if (typeof enterFocusMode === 'undefined') {
+    document.querySelectorAll('.btn-timer-home').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var todoId = btn.dataset.id;
+            apiPost('/todos/' + todoId + '/timer', {}).then(function(d) {
+                if (d && d.ok) {
+                    if (d.running) {
+                        btn.className = btn.className.replace('btn-outline-secondary', 'btn-success');
+                        btn.querySelector('i').className = 'bi bi-clock-fill';
+                    } else {
+                        btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
+                        btn.querySelector('i').className = 'bi bi-clock';
+                        addTomatoIcon(btn, d.minutes || 0);
+                        if (typeof showToast === 'function') showToast('专注 ' + d.minutes + ' 分钟', 'info');
+                    }
                 }
-            }
+            });
         });
     });
-});
+}
 
 // Block popover — global functions so createTodoRow can call them
 var _blockPop = document.getElementById('blockPopover');
@@ -162,6 +176,38 @@ window.showBlockPopover = function(btn, todoId) {
 };
 window.hideBlockPopover = function() { if (_blockPop) _blockPop.style.display = 'none'; };
 if (_blockPop) {
+    // @autocomplete for block reason
+    var _blockUsers = null;
+    var _blockAtList = document.getElementById('blockAtList');
+    var _blockInput = document.getElementById('blockReason');
+    _blockInput.addEventListener('input', function() {
+        var val = _blockInput.value;
+        var atIdx = val.lastIndexOf('@');
+        if (atIdx < 0 || atIdx === val.length - 1) { _blockAtList.style.display = 'none'; return; }
+        var q = val.substring(atIdx + 1).toLowerCase();
+        if (!q) { _blockAtList.style.display = 'none'; return; }
+        function showMatches(users) {
+            var html = '';
+            users.forEach(function(u) {
+                if (u.name.toLowerCase().includes(q) || (u.pinyin || '').toLowerCase().includes(q)) {
+                    html += '<div class="px-2 py-1" style="cursor:pointer;" onmousedown="event.preventDefault();fillBlockAt(\'' + u.name + '\')">' + u.name + '</div>';
+                }
+            });
+            _blockAtList.innerHTML = html;
+            _blockAtList.style.display = html ? '' : 'none';
+        }
+        if (_blockUsers) { showMatches(_blockUsers); }
+        else { fetch('/api/users').then(function(r){return r.json();}).then(function(d){ _blockUsers=d; showMatches(d); }); }
+    });
+    _blockInput.addEventListener('blur', function() { setTimeout(function(){ _blockAtList.style.display='none'; }, 200); });
+    window.fillBlockAt = function(name) {
+        var val = _blockInput.value;
+        var atIdx = val.lastIndexOf('@');
+        _blockInput.value = val.substring(0, atIdx + 1) + name + ' ';
+        _blockAtList.style.display = 'none';
+        _blockInput.focus();
+    };
+
     document.addEventListener('click', function(e) {
         if (_blockPop.style.display === 'block' && !_blockPop.contains(e.target) && !e.target.closest('.btn-block-home')) hideBlockPopover();
     });
@@ -196,7 +242,10 @@ if (_blockPop) {
         <button type="button" class="btn-close" style="font-size:.6em;" onclick="hideBlockPopover()"></button>
     </div>
     <input type="hidden" id="blockTodoId">
-    <input type="text" id="blockReason" class="form-control form-control-sm mb-1" placeholder="阻塞原因（可选），@姓名 求助">
+    <div class="position-relative">
+        <input type="text" id="blockReason" class="form-control form-control-sm mb-1" placeholder="阻塞原因，@姓名 求助" autocomplete="off">
+        <div id="blockAtList" class="position-absolute bg-white border rounded shadow-sm w-100" style="z-index:1070;display:none;max-height:120px;overflow-y:auto;font-size:.8em;"></div>
+    </div>
     <button type="button" class="btn btn-sm btn-danger w-100" id="blockConfirm">确认阻塞</button>
 </div>
 {% endmacro %}

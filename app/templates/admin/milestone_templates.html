@@ -13,26 +13,70 @@
                     <strong>{{ tpl.name }}</strong>
                     {% if tpl.description %}<span class="text-muted small ms-2">{{ tpl.description }}</span>{% endif %}
                 </div>
-                <form method="POST" class="d-inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="template_id" value="{{ tpl.id }}">
-                    <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('确定删除模板？')"><i class="bi bi-trash"></i></button>
-                </form>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-outline-primary py-0" onclick="toggleEditTpl({{ tpl.id }})"><i class="bi bi-pencil"></i></button>
+                    <form method="POST" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="template_id" value="{{ tpl.id }}">
+                        <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('确定删除模板？')"><i class="bi bi-trash"></i></button>
+                    </form>
+                </div>
             </div>
-            <div class="card-body py-2">
+            {# Read-only view #}
+            <div class="card-body py-2" id="tplView{{ tpl.id }}">
                 <table class="table table-sm mb-0">
-                    <thead><tr><th>#</th><th>里程碑名称</th><th>偏移天数</th></tr></thead>
+                    <thead><tr><th>#</th><th>里程碑名称</th><th>间隔</th><th class="text-muted">累计天数</th></tr></thead>
                     <tbody>
+                    {% set ns = namespace(prev=0) %}
                     {% for item in tpl.items %}
+                    {% set delta = item.offset_days - ns.prev %}
                     <tr>
                         <td class="text-muted">{{ loop.index }}</td>
                         <td>{{ item.name }}</td>
-                        <td class="small text-muted">+{{ item.offset_days }}天</td>
+                        <td class="small">{% if loop.first %}起点{% else %}+{{ delta }}天{% endif %}</td>
+                        <td class="small text-muted">第{{ item.offset_days }}天</td>
                     </tr>
+                    {% set ns.prev = item.offset_days %}
                     {% endfor %}
                     </tbody>
                 </table>
+            </div>
+            {# Edit form (hidden by default) #}
+            <div class="card-body py-2 d-none" id="tplEdit{{ tpl.id }}">
+                <form method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="edit">
+                    <input type="hidden" name="template_id" value="{{ tpl.id }}">
+                    <div class="mb-2">
+                        <input type="text" name="name" class="form-control form-control-sm" value="{{ tpl.name }}">
+                    </div>
+                    <div class="mb-2">
+                        <input type="text" name="description" class="form-control form-control-sm" value="{{ tpl.description or '' }}" placeholder="描述">
+                    </div>
+                    <div id="editItems{{ tpl.id }}">
+                    {% set ns2 = namespace(prev=0) %}
+                    {% for item in tpl.items %}
+                    {% set delta = item.offset_days - ns2.prev %}
+                    <div class="input-group input-group-sm mb-1 tpl-drag-row">
+                        <span class="input-group-text tpl-drag-handle" style="cursor:grab;" draggable="true"><i class="bi bi-grip-vertical"></i></span>
+                        <input type="text" name="item_name" class="form-control" value="{{ item.name }}">
+                        <input type="text" name="item_offset" class="form-control" style="max-width:80px;" value="{% if loop.first %}0{% else %}+{{ delta }}天{% endif %}">
+                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>
+                    </div>
+                    {% set ns2.prev = item.offset_days %}
+                    {% endfor %}
+                    </div>
+                    <div class="d-flex gap-1 mb-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addTplItemTo('editItems{{ tpl.id }}')"><i class="bi bi-plus"></i> 添加</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="bumpLastOffsetIn('editItems{{ tpl.id }}', 7)">+7天</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="bumpLastOffsetIn('editItems{{ tpl.id }}', 30)">+30天</button>
+                    </div>
+                    <div class="d-flex gap-1">
+                        <button type="submit" class="btn btn-sm btn-primary">保存</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleEditTpl({{ tpl.id }})">取消</button>
+                    </div>
+                </form>
             </div>
         </div>
         {% else %}
@@ -53,10 +97,14 @@
                     <div class="mb-2">
                         <input type="text" name="description" class="form-control form-control-sm" placeholder="描述（可选）">
                     </div>
-                    <label class="form-label small">里程碑项</label>
+                    <label class="form-label small">里程碑项 <span class="text-muted">（间隔相对上一个里程碑）</span></label>
                     <div id="tplItems"></div>
-                    <button type="button" class="btn btn-outline-secondary btn-sm mb-2" onclick="addTplItem()"><i class="bi bi-plus"></i> 添加里程碑</button>
-                    <div class="form-text mb-2">偏移天数：从项目开始日算起的天数，用于自动计算截止日期</div>
+                    <div class="d-flex gap-1 mb-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="addTplItem()"><i class="bi bi-plus"></i> 添加</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="bumpLastOffset(7)">+7天</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="bumpLastOffset(30)">+30天</button>
+                    </div>
+                    <div class="form-text mb-2">间隔：相对上一个里程碑的天数</div>
                     <button type="submit" class="btn btn-sm btn-primary">创建模板</button>
                 </form>
             </div>
@@ -67,13 +115,16 @@
 
 {% block extra_js %}
 <script>
-function addTplItem(name, offset) {
-    var div = document.getElementById('tplItems');
+function addTplItem(name, offset) { addTplItemTo('tplItems', name, offset); }
+
+function addTplItemTo(containerId, name, offset) {
+    var div = document.getElementById(containerId);
     var row = document.createElement('div');
     row.className = 'input-group input-group-sm mb-1 tpl-drag-row';
+    var isFirst = div.querySelectorAll('.tpl-drag-row').length === 0;
     row.innerHTML = '<span class="input-group-text tpl-drag-handle" style="cursor:grab;" draggable="true"><i class="bi bi-grip-vertical"></i></span>'
         + '<input type="text" name="item_name" class="form-control" placeholder="里程碑名称" value="' + (name || '') + '">'
-        + '<input type="number" name="item_offset" class="form-control" style="max-width:80px;" placeholder="天数" value="' + (offset || 0) + '" min="0">'
+        + '<input type="text" name="item_offset" class="form-control" style="max-width:80px;" placeholder="' + (isFirst ? '起点' : '+1w') + '" value="' + (offset || (isFirst ? '0' : '')) + '">'
         + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>';
     initTplDrag(row);
     div.appendChild(row);
@@ -101,7 +152,43 @@ function initTplDrag(row) {
     });
 }
 
-// Init drag for the first default row
+function bumpLastOffset(days) { bumpLastOffsetIn('tplItems', days); }
+
+function _daysToLabel(days) {
+    return '+' + days + '天';
+}
+
+function bumpLastOffsetIn(containerId, days) {
+    var rows = document.querySelectorAll('#' + containerId + ' .tpl-drag-row');
+    if (!rows.length) {
+        // Empty list: create first row with offset
+        addTplItemTo(containerId, '', _daysToLabel(days));
+        return;
+    }
+    var lastInput = rows[rows.length - 1].querySelector('input[name="item_offset"]');
+    if (!lastInput) return;
+    // If last row's name is empty and offset is empty/0, just set it (first click scenario)
+    var lastNameInput = rows[rows.length - 1].querySelector('input[name="item_name"]');
+    var lastName = lastNameInput ? lastNameInput.value.trim() : '';
+    var curVal = lastInput.value.trim();
+    if (!lastName && (!curVal || curVal === '0')) {
+        lastInput.value = _daysToLabel(days);
+        return;
+    }
+    // Otherwise bump existing value
+    var curDays = parseInt(curVal.replace('+', '').replace('天', '')) || 0;
+    lastInput.value = _daysToLabel(curDays + days);
+}
+
+function toggleEditTpl(id) {
+    var view = document.getElementById('tplView' + id);
+    var edit = document.getElementById('tplEdit' + id);
+    view.classList.toggle('d-none');
+    edit.classList.toggle('d-none');
+    // Init drag handles for edit form
+    edit.querySelectorAll('.tpl-drag-row').forEach(initTplDrag);
+}
+
 document.querySelectorAll('.tpl-drag-row').forEach(initTplDrag);
 </script>
 {% endblock %}

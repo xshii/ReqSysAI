@@ -4,9 +4,17 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h4>需求管理</h4>
-    <a href="{{ url_for('requirement.requirement_create') }}" class="btn btn-primary btn-sm">
-        <i class="bi bi-plus-lg"></i> 创建需求
-    </a>
+    <div class="d-flex gap-2 align-items-center">
+        <a href="{{ url_for('requirement.export_csv', project_id=cur_project or '') }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出</a>
+        <form method="POST" action="{{ url_for('requirement.import_csv') }}" enctype="multipart/form-data" id="csvImportForm" class="d-none">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="csv_file" accept=".csv" onchange="this.form.submit();">
+        </form>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.querySelector('#csvImportForm input[type=file]').click()"><i class="bi bi-upload"></i> 导入</button>
+        <a href="{{ url_for('requirement.requirement_create') }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg"></i> 创建需求
+        </a>
+    </div>
 </div>
 
 <!-- Search + Filters -->

@@ -8,7 +8,7 @@
     <h4 class="mb-0">团队 Todo <span class="text-muted small">{{ today.strftime('%Y-%m-%d') }}</span></h4>
     {% if ai_enabled %}
     <button class="btn btn-sm btn-outline-info" id="btnStandup" onclick="genStandup()">
-        <i class="bi bi-megaphone"></i> 站会摘要
+        <i class="bi bi-robot"></i> 站会摘要
     </button>
     {% endif %}
 </div>
@@ -319,23 +319,18 @@ document.querySelectorAll('.comment-input').forEach(function(inp) {
 /* Standup */
 function genStandup() {
     var btn = document.getElementById('btnStandup');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 生成中...';
+    var loading = aiLoading(btn, '生成中');
     fetch('/api/daily-standup', {method: 'POST'})
     .then(function(r) { return r.json(); })
     .then(function(d) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-megaphone"></i> 站会摘要';
+        loading.stop();
         if (d && d.ok) {
             document.getElementById('standupContent').innerHTML = d.html;
             document.getElementById('standupPanel').classList.remove('d-none');
         } else {
             alert(d && d.error ? d.error : '生成失败');
         }
-    }).catch(function() {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-megaphone"></i> 站会摘要';
-    });
+    }).catch(function() { loading.stop(); });
 }
 </script>
 {% endblock %}

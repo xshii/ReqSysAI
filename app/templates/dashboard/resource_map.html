@@ -7,8 +7,10 @@
 <!-- Controls -->
 <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
     <!-- Period -->
-    <a href="?period=week&week={{ offset }}&mode={{ mode }}" class="btn btn-sm {{ 'btn-primary' if period == 'week' else 'btn-outline-secondary' }}">近一周</a>
-    <a href="?period=month&mode={{ mode }}" class="btn btn-sm {{ 'btn-primary' if period == 'month' else 'btn-outline-secondary' }}">近一月</a>
+    <a href="?period=last_week&mode={{ mode }}" class="btn btn-sm {{ 'btn-primary' if period == 'last_week' else 'btn-outline-secondary' }}">上一周</a>
+    <a href="?period=week&week={{ offset }}&mode={{ mode }}" class="btn btn-sm {{ 'btn-primary' if period == 'week' else 'btn-outline-secondary' }}">本周</a>
+    <a href="?period=last_month&mode={{ mode }}" class="btn btn-sm {{ 'btn-primary' if period == 'last_month' else 'btn-outline-secondary' }}">上个月</a>
+    <a href="?period=month&mode={{ mode }}" class="btn btn-sm {{ 'btn-primary' if period == 'month' else 'btn-outline-secondary' }}">本月</a>
     <a href="?period=3month&mode={{ mode }}" class="btn btn-sm {{ 'btn-primary' if period == '3month' else 'btn-outline-secondary' }}">近三月</a>
 
     <span class="border-start ms-1 ps-2"></span>

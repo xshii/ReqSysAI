@@ -22,7 +22,7 @@ class Requirement(db.Model):
     start_date = db.Column(db.Date, nullable=True)
     due_date = db.Column(db.Date, nullable=True)
     parent_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=True)
-    source = db.Column(db.String(50), nullable=True)
+    source = db.Column(db.String(50), nullable=True)  # 需求类型: analysis/coding/testing
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -61,6 +61,16 @@ class Requirement(db.Model):
     }
     PRIORITY_LABELS = {k: v[0] for k, v in _PRIORITY_META.items()}
     PRIORITY_COLORS = {k: v[1] for k, v in _PRIORITY_META.items()}
+
+    SOURCE_LABELS = {
+        'analysis': '分析',
+        'coding': '编码',
+        'testing': '测试',
+    }
+
+    @property
+    def source_label(self):
+        return self.SOURCE_LABELS.get(self.source, self.source or '')
 
     ALLOWED_TRANSITIONS = {
         'pending_review': ['pending_dev', 'closed'],

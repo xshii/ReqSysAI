@@ -17,7 +17,7 @@ from app.extensions import db
 from app.models.user import User, Role, Group
 from app.models.project import MilestoneTemplate, MilestoneTemplateItem
 from app.services.ai import check_ollama_status
-from app.services.prompts import get_all_prompts, save_all_prompts, LABELS as PROMPT_LABELS, DEFAULTS as PROMPT_DEFAULTS
+from app.services.prompts import get_all_prompts, save_all_prompts, save_prompt, LABELS as PROMPT_LABELS
 from app.models.ip_request import IPChangeRequest
 from app.utils.pinyin import to_pinyin
 
@@ -360,46 +360,6 @@ def group_export_csv():
 
 # ---- Milestone templates ----
 
-@admin_bp.route('/milestone-templates', methods=['GET', 'POST'])
-@admin_required
-def milestone_template_list():
-
-    if request.method == 'POST':
-        action = request.form.get('action')
-        if action == 'create':
-            name = request.form.get('name', '').strip()
-            if not name:
-                flash('请输入模板名称', 'danger')
-            elif MilestoneTemplate.query.filter_by(name=name).first():
-                flash(f'模板 {name} 已存在', 'warning')
-            else:
-                tpl = MilestoneTemplate(
-                    name=name,
-                    description=request.form.get('description', '').strip() or None,
-                )
-                # Parse milestone items
-                item_names = request.form.getlist('item_name')
-                item_offsets = request.form.getlist('item_offset')
-                for i, iname in enumerate(item_names):
-                    iname = iname.strip()
-                    if iname:
-                        offset = int(item_offsets[i]) if i < len(item_offsets) and item_offsets[i] else 0
-                        tpl.items.append(MilestoneTemplateItem(name=iname, offset_days=offset, sort_order=i))
-                db.session.add(tpl)
-                db.session.commit()
-                flash(f'模板 {name} 已创建', 'success')
-        elif action == 'delete':
-            tpl_id = request.form.get('template_id', type=int)
-            tpl = db.session.get(MilestoneTemplate, tpl_id) if tpl_id else None
-            if tpl:
-                db.session.delete(tpl)
-                db.session.commit()
-                flash(f'模板 {tpl.name} 已删除', 'success')
-        return redirect(url_for('admin.milestone_template_list'))
-
-    templates = MilestoneTemplate.query.order_by(MilestoneTemplate.name).all()
-    return render_template('admin/milestone_templates.html', templates=templates)
-
 
 # ---- AI Model management ----
 
@@ -482,7 +442,6 @@ def ai_model_list():
                            openai_models=openai_models, openai_err=openai_err,
                            default_prompt=default_prompt,
                            prompts=prompts, prompt_labels=PROMPT_LABELS,
-                           prompt_defaults=PROMPT_DEFAULTS,
                            ai_provider=ai_provider,
                            ollama_base_url=current_app.config.get('OLLAMA_BASE_URL', ''),
                            ollama_ssh_enabled=current_app.config.get('OLLAMA_SSH_ENABLED', False),
@@ -637,7 +596,7 @@ def ai_prompt_list():
     prompts = get_all_prompts()
     return render_template('admin/ai_prompts.html',
                            prompts=prompts, prompt_labels=PROMPT_LABELS,
-                           prompt_defaults=PROMPT_DEFAULTS)
+                           prompt_defaults={})
 
 
 @admin_bp.route('/ai-models/save-prompts', methods=['POST'])
@@ -645,7 +604,7 @@ def ai_prompt_list():
 def ai_model_save_prompts():
     """Save AI prompt overrides to prompts.yml."""
     prompts = {}
-    for key in PROMPT_DEFAULTS:
+    for key in PROMPT_LABELS:
         val = request.form.get(f'prompt_{key}', '').strip()
         if val:
             prompts[key] = val

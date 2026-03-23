@@ -17,12 +17,9 @@
             · 创建人：{{ meeting.creator.name }}
         </div>
     </div>
-    <form method="POST" action="{{ url_for('project.meeting_extract', project_id=project.id, meeting_id=meeting.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-primary btn-sm" id="btnExtract">
-            <i class="bi bi-robot"></i> AI 提取
-        </button>
-    </form>
+    <button class="btn btn-primary btn-sm" id="btnExtract" onclick="doExtract()">
+        <i class="bi bi-robot"></i> AI 提取遗留问题
+    </button>
 </div>
 
 <div class="row">
@@ -61,9 +58,9 @@
                 </div>
                 {% endif %}
 
-                <!-- Todos -->
+                <!-- 遗留问题（采纳后作为低风险创建） -->
                 {% if ai_data.todos %}
-                <h6 class="text-info"><i class="bi bi-list-task"></i> 待办</h6>
+                <h6 class="text-warning"><i class="bi bi-exclamation-circle"></i> 遗留问题</h6>
                 <div class="mb-3">
                     {% for t in ai_data.todos %}
                     <div class="form-check mb-1">
@@ -72,6 +69,7 @@
                         <label class="form-check-label">
                             {{ t.title }}
                             {% if t.assignee %}<span class="badge bg-light text-dark">{{ t.assignee }}</span>{% endif %}
+                            <span class="badge bg-secondary" style="font-size:.6em;">→ 风险</span>
                         </label>
                     </div>
                     {% endfor %}
@@ -132,6 +130,21 @@
 
 {% block extra_js %}
 <script>
+function doExtract() {
+    var btn = document.getElementById('btnExtract');
+    var loading = aiLoading(btn, '提取中');
+    fetch('{{ url_for("project.meeting_extract", project_id=project.id, meeting_id=meeting.id) }}', {
+        method: 'POST',
+        headers: {'X-CSRFToken': '{{ csrf_token() }}'},
+    }).then(function(r) {
+        loading.stop();
+        location.reload();
+    }).catch(function() {
+        loading.stop();
+        alert('提取失败');
+    });
+}
+
 function applySelected() {
     var items = document.querySelectorAll('.ai-item:checked');
     if (items.length === 0) {

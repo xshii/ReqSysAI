@@ -55,7 +55,7 @@ def index():
             Todo.status == TODO_STATUS_TODO,
             db.and_(Todo.status == TODO_STATUS_DONE, Todo.done_date == today),
         )
-    ).options(joinedload(Todo.items), joinedload(Todo.requirements), joinedload(Todo.children), joinedload(Todo.comments))\
+    ).options(joinedload(Todo.items), joinedload(Todo.requirements), joinedload(Todo.children), joinedload(Todo.comments), joinedload(Todo.pomodoros))\
      .order_by(db.case((Todo.status == TODO_STATUS_TODO, 0), else_=1), Todo.sort_order).all()
     todo_total = len(my_todos)
     todo_done = sum(1 for t in my_todos if t.status == TODO_STATUS_DONE)
@@ -172,13 +172,15 @@ def index():
     from app.models.recurring_completion import RecurringCompletion
     all_recurring = RecurringTodo.query.filter_by(user_id=current_user.id, is_active=True).all()
     recurring_due = [r for r in all_recurring if r.is_due_today()]
-    # Check completions from RecurringCompletion table
+    # Check completions: today + this week (for weekday tasks not due today)
     recurring_status = {}
     if all_recurring:
+        week_start_day = today - timedelta(days=today.weekday())
         completions = RecurringCompletion.query.filter(
             RecurringCompletion.user_id == current_user.id,
             RecurringCompletion.recurring_id.in_([r.id for r in all_recurring]),
-            RecurringCompletion.completed_date == today,
+            RecurringCompletion.completed_date >= week_start_day,
+            RecurringCompletion.completed_date <= today,
         ).all()
         for c in completions:
             recurring_status[c.recurring_id] = 'done'

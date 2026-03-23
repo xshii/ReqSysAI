@@ -53,7 +53,7 @@
                 <button class="btn btn-sm btn-outline-primary py-0 edit-pr-btn" data-bs-toggle="modal" data-bs-target="#editModal"
                         data-prid="{{ pr.id }}" data-category="{{ pr.category or '' }}" data-resource="{{ pr.resource }}"
                         data-repo="{{ pr.repo_path or '' }}" data-desc="{{ pr.description or '' }}"
-                        data-applicants="{{ pr.applicants or '' }}">编辑</button>
+                        data-applicants="{{ pr.applicants or '' }}" title="编辑"><i class="bi bi-pencil"></i></button>
                 {% if is_pm %}
                 <form method="POST" class="d-inline">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
