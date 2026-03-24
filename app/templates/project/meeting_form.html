@@ -14,115 +14,143 @@
     <div class="card-body">
         <form method="POST" enctype="multipart/form-data">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <div class="mb-3">
-                <label class="form-label">会议标题 <span class="text-danger">*</span></label>
-                <input type="text" name="title" class="form-control" required placeholder="例：第3周项目进度评审会">
-            </div>
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">会议日期</label>
-                    <input type="date" name="date" class="form-control" value="{{ today }}">
+            <div class="row g-2 mb-2">
+                <div class="col-md-6">
+                    <label class="form-label small mb-0">会议标题 <span class="text-danger">*</span></label>
+                    <input type="text" name="title" class="form-control form-control-sm" required placeholder="例：第3周项目进度评审会">
                 </div>
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">参会人</label>
+                <div class="col-md-3">
+                    <label class="form-label small mb-0">会议日期</label>
+                    <input type="date" name="date" class="form-control form-control-sm" value="{{ today }}">
+                </div>
+            </div>
+            <div class="row g-2 mb-2">
+                <div class="col-md-6">
+                    <label class="form-label small mb-0">与会人</label>
                     <input type="hidden" name="attendees" id="attendeesVal">
-                    <div class="border rounded p-1 d-flex flex-wrap gap-1 align-items-center" id="attendeeTags" style="min-height:38px;">
-                        <input type="text" class="border-0 flex-grow-1 small" id="attendeeInput" placeholder="输入姓名搜索添加..." autocomplete="off" style="outline:none;min-width:100px;">
+                    <div class="border rounded p-1 d-flex flex-wrap gap-1 align-items-center tag-container" id="attendeeTags" style="min-height:32px;">
+                        <input type="text" class="border-0 flex-grow-1 small tag-input" data-hidden="attendeesVal" placeholder="输入姓名搜索..." autocomplete="off" style="outline:none;min-width:80px;">
                     </div>
-                    <div class="position-relative">
-                        <div id="attendeeDropdown" class="position-absolute bg-white border rounded shadow-sm w-100" style="z-index:1000;display:none;max-height:150px;overflow-y:auto;font-size:.85em;"></div>
+                    <div class="position-relative"><div class="tag-dropdown position-absolute bg-white border rounded shadow-sm w-100" style="z-index:1000;display:none;max-height:150px;overflow-y:auto;font-size:.85em;"></div></div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small mb-0">抄送人（选填）</label>
+                    <input type="hidden" name="cc" id="ccVal">
+                    <div class="border rounded p-1 d-flex flex-wrap gap-1 align-items-center tag-container" id="ccTags" style="min-height:32px;">
+                        <input type="text" class="border-0 flex-grow-1 small tag-input" data-hidden="ccVal" placeholder="输入姓名搜索..." autocomplete="off" style="outline:none;min-width:80px;">
                     </div>
+                    <div class="position-relative"><div class="tag-dropdown position-absolute bg-white border rounded shadow-sm w-100" style="z-index:1000;display:none;max-height:150px;overflow-y:auto;font-size:.85em;"></div></div>
                 </div>
             </div>
-            <div class="mb-3">
-                <label class="form-label">会议内容</label>
-                <textarea name="content" class="form-control" rows="12" placeholder="粘贴或输入会议纪要内容..."></textarea>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">或上传 Word 文档</label>
-                <input type="file" name="docx_file" class="form-control" accept=".docx">
-                <div class="form-text">支持 .docx 格式，上传后将自动提取文本内容</div>
+            <div class="mb-2">
+                <label class="form-label small mb-0">会议内容</label>
+                <textarea name="content" class="form-control form-control-sm" rows="10" placeholder="粘贴或输入会议纪要内容..."></textarea>
             </div>
             <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary">保存</button>
-                <button type="submit" name="auto_extract" value="1" class="btn btn-outline-info"><i class="bi bi-robot"></i> 保存并润色提取遗留问题</button>
-                <a href="{{ url_for('project.meeting_list', project_id=project.id) }}" class="btn btn-outline-secondary">取消</a>
+                <button type="submit" class="btn btn-primary btn-sm">保存</button>
+                <button type="submit" name="auto_extract" value="1" class="btn btn-outline-info btn-sm"><i class="bi bi-robot"></i> 保存并润色提取遗留问题</button>
+                <a href="{{ url_for('project.meeting_list', project_id=project.id) }}" class="btn btn-outline-secondary btn-sm">取消</a>
             </div>
         </form>
     </div>
 </div>
+{% endblock %}
 
 {% block extra_js %}
 <script>
+// Reusable tag input with autocomplete + arrow key navigation
 (function() {
-    var tags = document.getElementById('attendeeTags');
-    var input = document.getElementById('attendeeInput');
-    var dropdown = document.getElementById('attendeeDropdown');
-    var hiddenVal = document.getElementById('attendeesVal');
     var _users = null;
-    var _selected = [];
-
-    function syncHidden() { hiddenVal.value = _selected.join(','); }
-
-    function addTag(name) {
-        if (_selected.indexOf(name) >= 0) return;
-        _selected.push(name);
-        var tag = document.createElement('span');
-        tag.className = 'badge bg-primary bg-opacity-75 d-flex align-items-center gap-1';
-        tag.style.fontSize = '.8em';
-        tag.innerHTML = name + ' <i class="bi bi-x" style="cursor:pointer;font-size:.9em;"></i>';
-        tag.querySelector('i').addEventListener('click', function() {
-            _selected = _selected.filter(function(n) { return n !== name; });
-            tag.remove();
-            syncHidden();
-        });
-        tags.insertBefore(tag, input);
-        syncHidden();
-        input.value = '';
-        dropdown.style.display = 'none';
-    }
-
     function loadUsers(cb) {
         if (_users) return cb(_users);
         fetch('/api/users').then(function(r) { return r.json(); }).then(function(d) { _users = d; cb(d); });
     }
 
-    input.addEventListener('input', function() {
-        var q = input.value.trim().toLowerCase();
-        if (!q) { dropdown.style.display = 'none'; return; }
-        loadUsers(function(users) {
-            var html = '';
-            users.forEach(function(u) {
-                if (_selected.indexOf(u.name) >= 0) return;
-                if (u.name.toLowerCase().includes(q) || (u.pinyin || '').toLowerCase().includes(q) || (u.employee_id || '').toLowerCase().includes(q)) {
-                    html += '<div class="px-2 py-1 attendee-opt" style="cursor:pointer;" data-name="' + u.name + '">'
-                        + u.name + ' <span class="text-muted">' + (u.employee_id || '') + '</span></div>';
-                }
+    document.querySelectorAll('.tag-input').forEach(function(input) {
+        var container = input.closest('.tag-container');
+        var dropdown = container.parentElement.querySelector('.tag-dropdown');
+        var hiddenId = input.dataset.hidden;
+        var hiddenVal = document.getElementById(hiddenId);
+        var selected = [];
+        var hlIdx = -1; // highlighted index for arrow keys
+
+        function sync() { hiddenVal.value = selected.join(','); }
+
+        function addTag(name) {
+            if (selected.indexOf(name) >= 0) return;
+            selected.push(name);
+            var tag = document.createElement('span');
+            tag.className = 'badge bg-primary bg-opacity-75 d-flex align-items-center gap-1';
+            tag.style.fontSize = '.8em';
+            tag.textContent = name;
+            var x = document.createElement('i');
+            x.className = 'bi bi-x';
+            x.style.cssText = 'cursor:pointer;font-size:.9em;';
+            x.addEventListener('click', function() {
+                selected = selected.filter(function(n) { return n !== name; });
+                tag.remove(); sync();
             });
-            if (!html && q.length >= 2) {
-                html = '<div class="px-2 py-1 attendee-opt text-muted" style="cursor:pointer;" data-name="' + q + '">添加外部人员：' + q + '</div>';
-            }
-            dropdown.innerHTML = html;
-            dropdown.style.display = html ? 'block' : 'none';
-            dropdown.querySelectorAll('.attendee-opt').forEach(function(opt) {
+            tag.appendChild(x);
+            container.insertBefore(tag, input);
+            sync(); input.value = ''; dropdown.style.display = 'none'; hlIdx = -1;
+        }
+
+        function renderDropdown(items) {
+            dropdown.innerHTML = items.map(function(item, i) {
+                return '<div class="px-2 py-1' + (i === hlIdx ? ' bg-primary bg-opacity-10' : '') + '" style="cursor:pointer;" data-name="' + item.name + '">'
+                    + item.label + '</div>';
+            }).join('');
+            dropdown.style.display = items.length ? 'block' : 'none';
+            dropdown.querySelectorAll('[data-name]').forEach(function(opt) {
                 opt.addEventListener('mousedown', function(e) { e.preventDefault(); addTag(opt.dataset.name); });
             });
-        });
-    });
-
-    input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); var v = input.value.trim(); if (v) addTag(v); }
-        if (e.key === 'Backspace' && !input.value && _selected.length) {
-            _selected.pop();
-            var lastTag = tags.querySelectorAll('.badge');
-            if (lastTag.length) lastTag[lastTag.length - 1].remove();
-            syncHidden();
         }
-    });
 
-    input.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; }, 200); });
-    tags.addEventListener('click', function() { input.focus(); });
-    syncHidden();
+        var _items = [];
+        input.addEventListener('input', function() {
+            var q = input.value.trim().toLowerCase();
+            hlIdx = -1;
+            if (!q) { dropdown.style.display = 'none'; _items = []; return; }
+            loadUsers(function(users) {
+                _items = [];
+                users.forEach(function(u) {
+                    if (selected.indexOf(u.name) >= 0) return;
+                    if (u.name.toLowerCase().includes(q) || (u.pinyin || '').toLowerCase().includes(q) || (u.employee_id || '').toLowerCase().includes(q)) {
+                        _items.push({name: u.name, label: u.name + ' <span class="text-muted">' + (u.employee_id || '') + '</span>'});
+                    }
+                });
+                if (!_items.length && q.length >= 2) {
+                    _items.push({name: q, label: '<span class="text-muted">添加：' + q + '</span>'});
+                }
+                renderDropdown(_items);
+            });
+        });
+
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (_items.length) { hlIdx = Math.min(hlIdx + 1, _items.length - 1); renderDropdown(_items); }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (_items.length) { hlIdx = Math.max(hlIdx - 1, 0); renderDropdown(_items); }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (hlIdx >= 0 && hlIdx < _items.length) { addTag(_items[hlIdx].name); _items = []; }
+                else { var v = input.value.trim(); if (v) addTag(v); }
+            } else if (e.key === 'Backspace' && !input.value && selected.length) {
+                selected.pop();
+                var badges = container.querySelectorAll('.badge');
+                if (badges.length) badges[badges.length - 1].remove();
+                sync();
+            }
+        });
+
+        input.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; hlIdx = -1; }, 200); });
+        container.addEventListener('click', function() { input.focus(); });
+
+        // Pre-fill from hidden value
+        (hiddenVal.value || '').split(',').forEach(function(n) { n = n.trim(); if (n) addTag(n); });
+    });
 })();
 </script>
 {% endblock %}

@@ -1047,6 +1047,7 @@ def meeting_create(project_id):
             title=title,
             date=datetime.strptime(meeting_date, '%Y-%m-%d').date() if meeting_date else date.today(),
             attendees=attendees,
+            cc=request.form.get('cc', '').strip() or None,
             content=content,
             created_by=current_user.id,
         )
@@ -1104,6 +1105,7 @@ def meeting_detail(project_id, meeting_id):
         if meeting_date:
             meeting.date = datetime.strptime(meeting_date, '%Y-%m-%d').date()
         meeting.attendees = request.form.get('attendees', '').strip()
+        meeting.cc = request.form.get('cc', '').strip()
         content = request.form.get('content', '').strip()
         if content:
             meeting.content = content

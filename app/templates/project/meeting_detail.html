@@ -32,15 +32,22 @@
     </div>
 </div>
 
-{# Attendees tags #}
-<div class="mb-3">
-    <label class="form-label small mb-0 text-muted">参会人</label>
-    <input type="hidden" name="attendees" id="attendeesVal" value="{{ meeting.attendees or '' }}">
-    <div class="border rounded p-1 d-flex flex-wrap gap-1 align-items-center meeting-field" id="attendeeTags" style="min-height:32px;">
-        <input type="text" class="border-0 flex-grow-1 small" id="attendeeInput" placeholder="输入姓名搜索添加..." autocomplete="off" style="outline:none;min-width:80px;" disabled>
+<div class="row g-2 mb-3">
+    <div class="col-md-6">
+        <label class="form-label small mb-0 text-muted">与会人</label>
+        <input type="hidden" name="attendees" id="attendeesVal" value="{{ meeting.attendees or '' }}">
+        <div class="border rounded p-1 d-flex flex-wrap gap-1 align-items-center meeting-field tag-container" style="min-height:32px;">
+            <input type="text" class="border-0 flex-grow-1 small tag-input meeting-field" data-hidden="attendeesVal" placeholder="输入姓名搜索..." autocomplete="off" style="outline:none;min-width:80px;" disabled>
+        </div>
+        <div class="position-relative"><div class="tag-dropdown position-absolute bg-white border rounded shadow-sm w-100" style="z-index:1000;display:none;max-height:150px;overflow-y:auto;font-size:.85em;"></div></div>
     </div>
-    <div class="position-relative">
-        <div id="attendeeDropdown" class="position-absolute bg-white border rounded shadow-sm w-100" style="z-index:1000;display:none;max-height:150px;overflow-y:auto;font-size:.85em;"></div>
+    <div class="col-md-6">
+        <label class="form-label small mb-0 text-muted">抄送人</label>
+        <input type="hidden" name="cc" id="ccVal" value="{{ meeting.cc or '' }}">
+        <div class="border rounded p-1 d-flex flex-wrap gap-1 align-items-center meeting-field tag-container" style="min-height:32px;">
+            <input type="text" class="border-0 flex-grow-1 small tag-input meeting-field" data-hidden="ccVal" placeholder="输入姓名搜索..." autocomplete="off" style="outline:none;min-width:80px;" disabled>
+        </div>
+        <div class="position-relative"><div class="tag-dropdown position-absolute bg-white border rounded shadow-sm w-100" style="z-index:1000;display:none;max-height:150px;overflow-y:auto;font-size:.85em;"></div></div>
     </div>
 </div>
 
@@ -223,63 +230,66 @@ function acceptPolish() {
     });
 }
 
-// Attendees tag input
+// Tag input with autocomplete + arrow keys (reusable for attendees + cc)
 (function() {
-    var tags = document.getElementById('attendeeTags');
-    var input = document.getElementById('attendeeInput');
-    var dropdown = document.getElementById('attendeeDropdown');
-    var hiddenVal = document.getElementById('attendeesVal');
-    var _users = null, _selected = [];
-
-    function syncHidden() { hiddenVal.value = _selected.join(','); }
-    function addTag(name) {
-        if (_selected.indexOf(name) >= 0) return;
-        _selected.push(name);
-        var tag = document.createElement('span');
-        tag.className = 'badge bg-primary bg-opacity-75 d-flex align-items-center gap-1';
-        tag.style.fontSize = '.8em';
-        tag.innerHTML = name + ' <i class="bi bi-x" style="cursor:pointer;font-size:.9em;"></i>';
-        tag.querySelector('i').addEventListener('click', function() {
-            if (_locked) return;
-            _selected = _selected.filter(function(n) { return n !== name; });
-            tag.remove(); syncHidden();
-        });
-        tags.insertBefore(tag, input);
-        syncHidden(); input.value = ''; dropdown.style.display = 'none';
-    }
+    var _users = null;
     function loadUsers(cb) {
         if (_users) return cb(_users);
         fetch('/api/users').then(function(r) { return r.json(); }).then(function(d) { _users = d; cb(d); });
     }
-    input.addEventListener('input', function() {
-        var q = input.value.trim().toLowerCase();
-        if (!q) { dropdown.style.display = 'none'; return; }
-        loadUsers(function(users) {
-            var html = '';
-            users.forEach(function(u) {
-                if (_selected.indexOf(u.name) >= 0) return;
-                if (u.name.toLowerCase().includes(q) || (u.pinyin || '').toLowerCase().includes(q) || (u.employee_id || '').toLowerCase().includes(q))
-                    html += '<div class="px-2 py-1" style="cursor:pointer;" data-name="' + u.name + '">' + u.name + ' <span class="text-muted">' + (u.employee_id || '') + '</span></div>';
-            });
-            if (!html && q.length >= 2)
-                html = '<div class="px-2 py-1 text-muted" style="cursor:pointer;" data-name="' + q + '">添加：' + q + '</div>';
-            dropdown.innerHTML = html;
-            dropdown.style.display = html ? 'block' : 'none';
+    document.querySelectorAll('.tag-input').forEach(function(input) {
+        var container = input.closest('.tag-container');
+        var dropdown = container.parentElement.querySelector('.tag-dropdown');
+        var hiddenVal = document.getElementById(input.dataset.hidden);
+        var selected = [], hlIdx = -1, _items = [];
+        function sync() { hiddenVal.value = selected.join(','); }
+        function addTag(name) {
+            if (selected.indexOf(name) >= 0) return;
+            selected.push(name);
+            var tag = document.createElement('span');
+            tag.className = 'badge bg-primary bg-opacity-75 d-flex align-items-center gap-1';
+            tag.style.fontSize = '.8em';
+            tag.textContent = name;
+            var x = document.createElement('i');
+            x.className = 'bi bi-x'; x.style.cssText = 'cursor:pointer;font-size:.9em;';
+            x.addEventListener('click', function() { if (_locked) return; selected = selected.filter(function(n){return n!==name;}); tag.remove(); sync(); });
+            tag.appendChild(x);
+            container.insertBefore(tag, input);
+            sync(); input.value = ''; dropdown.style.display = 'none'; hlIdx = -1; _items = [];
+        }
+        function render() {
+            dropdown.innerHTML = _items.map(function(it, i) {
+                return '<div class="px-2 py-1' + (i === hlIdx ? ' bg-primary bg-opacity-10' : '') + '" style="cursor:pointer;" data-name="' + it.name + '">' + it.label + '</div>';
+            }).join('');
+            dropdown.style.display = _items.length ? 'block' : 'none';
             dropdown.querySelectorAll('[data-name]').forEach(function(opt) {
                 opt.addEventListener('mousedown', function(e) { e.preventDefault(); addTag(opt.dataset.name); });
             });
-        });
-    });
-    input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); var v = input.value.trim(); if (v) addTag(v); }
-        if (e.key === 'Backspace' && !input.value && _selected.length && !_locked) {
-            _selected.pop(); var lt = tags.querySelectorAll('.badge'); if (lt.length) lt[lt.length-1].remove(); syncHidden();
         }
+        input.addEventListener('input', function() {
+            var q = input.value.trim().toLowerCase(); hlIdx = -1;
+            if (!q) { dropdown.style.display = 'none'; _items = []; return; }
+            loadUsers(function(users) {
+                _items = [];
+                users.forEach(function(u) {
+                    if (selected.indexOf(u.name) >= 0) return;
+                    if (u.name.toLowerCase().includes(q) || (u.pinyin||'').toLowerCase().includes(q) || (u.employee_id||'').toLowerCase().includes(q))
+                        _items.push({name: u.name, label: u.name + ' <span class="text-muted">' + (u.employee_id||'') + '</span>'});
+                });
+                if (!_items.length && q.length >= 2) _items.push({name: q, label: '<span class="text-muted">添加：' + q + '</span>'});
+                render();
+            });
+        });
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown') { e.preventDefault(); if (_items.length) { hlIdx = Math.min(hlIdx+1, _items.length-1); render(); } }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); if (_items.length) { hlIdx = Math.max(hlIdx-1, 0); render(); } }
+            else if (e.key === 'Enter') { e.preventDefault(); if (hlIdx >= 0 && hlIdx < _items.length) addTag(_items[hlIdx].name); else { var v = input.value.trim(); if (v) addTag(v); } }
+            else if (e.key === 'Backspace' && !input.value && selected.length && !_locked) { selected.pop(); var b = container.querySelectorAll('.badge'); if (b.length) b[b.length-1].remove(); sync(); }
+        });
+        input.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; hlIdx = -1; }, 200); });
+        container.addEventListener('click', function() { if (!_locked) input.focus(); });
+        (hiddenVal.value || '').split(',').forEach(function(n) { n = n.trim(); if (n) addTag(n); });
     });
-    input.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; }, 200); });
-    tags.addEventListener('click', function() { if (!_locked) input.focus(); });
-    // Pre-fill
-    (hiddenVal.value || '').split(',').forEach(function(n) { n = n.trim(); if (n) addTag(n); });
 })();
 
 // Auto-extract
