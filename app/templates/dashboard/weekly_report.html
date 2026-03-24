@@ -71,14 +71,16 @@
 
 <!-- Row 1: Title -->
 <div class="report-header">{{ report_data.project_name }} 周报（{{ monday.strftime('%m-%d') }} ~ {{ sunday.strftime('%m-%d') }}）</div>
-{% if report_data.get('project_goal') %}
-<div class="text-muted small text-center mb-1" style="font-size:.8em;">项目目标：{{ report_data.project_goal }}</div>
-{% endif %}
 
 <!-- Row 2: Publisher / Reviewer -->
 <div class="report-meta">
     发布人：{{ current_user.name }}　｜　审核人：{{ report_data.reviewer }}
 </div>
+{% if report_data.get('project_goal') %}
+<div class="report-meta" style="border-bottom:none;padding-top:0;">
+    项目目标：{{ report_data.project_goal }}
+</div>
+{% endif %}
 
 <!-- Row 3: Milestones (timeline) -->
 {% if report_data.milestones %}
@@ -465,8 +467,10 @@ function exportEml() {
     if (headerEl) rows += '<tr><td style="background:#1e3a5f;color:#fff;text-align:center;padding:18px 24px;font-size:16px;font-weight:700;letter-spacing:2px;">' + headerEl.textContent + '</td></tr>';
 
     // Meta
-    var metaEl = el.querySelector('.report-meta');
-    if (metaEl) rows += '<tr><td style="background:#f0f4f8;text-align:center;padding:8px 20px;font-size:12px;color:#64748b;border-bottom:1px solid #e2e8f0;">' + metaEl.textContent + '</td></tr>';
+    var metaEls = el.querySelectorAll('.report-meta');
+    metaEls.forEach(function(m) {
+        rows += '<tr><td style="background:#f0f4f8;text-align:center;padding:6px 20px;font-size:12px;color:#64748b;">' + m.textContent.trim() + '</td></tr>';
+    });
 
     // Sections
     el.querySelectorAll('.report-section').forEach(function(sec) {
