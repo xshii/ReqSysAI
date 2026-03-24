@@ -198,6 +198,8 @@ def _do_csv_import(text, require_group=False):
 
     for i, row in enumerate(reader, start=2):
         uid = (row.get('ID') or '').strip() if has_id else ''
+        if uid == '0':
+            continue  # Skip demo row
         name = (row.get('姓名') or '').strip()
         eid = (row.get('工号') or '').strip().lower()
         group = (row.get('小组') or '').strip() or None
@@ -347,6 +349,7 @@ def group_export_csv():
     buf.write('\ufeff')  # BOM for Excel
     writer = csv.writer(buf)
     writer.writerow(['ID', '姓名', '工号', '小组', '角色'])
+    writer.writerow([0, '张三', 'a00123456', '研发一组', 'DE;TE（多角色用分号隔开，此行为格式示例，导入时自动跳过）'])
     for u in users:
         role_names = ';'.join(r.name for r in u.roles if r.name not in hidden)
         writer.writerow([u.id, u.name, u.employee_id, u.group or '', role_names])

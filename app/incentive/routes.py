@@ -336,10 +336,10 @@ def import_csv():
         title = g['title']
         if not title:
             continue
-        # Skip if ID matches existing record
+        # Skip if ID matches existing; or by title + nominees + month
         try:
             existing_id = int(key)
-            if existing_id > 0 and Incentive.query.get(existing_id):
+            if existing_id > 0 and db.session.get(Incentive, existing_id):
                 continue
         except (ValueError, TypeError):
             pass
@@ -377,6 +377,24 @@ def import_csv():
                     nominee_users.append(u)
                 else:
                     ext_names.append(name)
+
+        # Dedup by nominee names + award month
+        nominee_names = sorted(u.name for u in nominee_users) + sorted(ext_names)
+        if nominee_names and month_str:
+            from app.models.incentive import incentive_nominees
+            existing = Incentive.query.filter(
+                Incentive.title == title,
+                Incentive.reviewed_at >= reviewed_at.replace(day=1),
+                Incentive.reviewed_at < (reviewed_at.replace(day=28) + timedelta(days=4)).replace(day=1),
+            ).all()
+            for ex in existing:
+                ex_names = sorted(ex.all_nominee_names)
+                if ex_names == nominee_names:
+                    break
+            else:
+                existing = []
+            if existing:
+                continue
 
         inc = Incentive(
             title=title, description=title, category=category,
