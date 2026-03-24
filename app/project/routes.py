@@ -1053,6 +1053,8 @@ def meeting_create(project_id):
         db.session.add(meeting)
         db.session.commit()
         flash(f'会议纪要「{meeting.title}」创建成功', 'success')
+        if request.form.get('auto_extract') == '1':
+            return redirect(url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id, auto_extract=1))
         return redirect(url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id))
     return render_template('project/meeting_form.html', project=project)
 

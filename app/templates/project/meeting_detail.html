@@ -189,5 +189,9 @@ function applySelected() {
         btn.innerHTML = '<i class="bi bi-check2-all"></i> 一键创建选中项';
     });
 }
+// Auto-extract if redirected with auto_extract=1
+if (new URLSearchParams(window.location.search).get('auto_extract') === '1') {
+    setTimeout(doExtract, 500);
+}
 </script>
 {% endblock %}
