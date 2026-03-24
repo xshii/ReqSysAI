@@ -506,6 +506,7 @@ def import_csv():
 
     # First pass: create requirements (skip parent linking)
     created = []
+    skipped = 0
     number_to_req = {}
     for row in reader:
         if (row.get('ID') or '').strip() == '0':
@@ -581,6 +582,7 @@ def import_csv():
             if desc:
                 existing.description = desc
             number_to_req[number] = existing
+            skipped += 1
             continue
 
         req = Requirement(
@@ -644,5 +646,8 @@ def import_csv():
                 req.parent_id = parent.id
 
     db.session.commit()
-    flash(f'导入成功，新建 {len(created)} 条需求', 'success')
+    msg = f'导入成功，新建 {len(created)} 条需求'
+    if skipped:
+        msg += f'，跳过 {skipped} 条重复'
+    flash(msg, 'success')
     return redirect(url_for('requirement.requirement_list'))

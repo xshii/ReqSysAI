@@ -345,6 +345,7 @@ def import_csv():
 
     cat_reverse = {v: k for k, v in Incentive.CATEGORY_LABELS.items()}
     created = 0
+    skipped = 0
     for key, g in groups.items():
         title = g['title']
         if not title:
@@ -353,6 +354,7 @@ def import_csv():
         try:
             existing_id = int(key)
             if existing_id > 0 and db.session.get(Incentive, existing_id):
+                skipped += 1
                 continue
         except (ValueError, TypeError):
             pass
@@ -407,6 +409,7 @@ def import_csv():
             else:
                 existing = []
             if existing:
+                skipped += 1
                 continue
 
         # Resolve submitter
@@ -437,7 +440,10 @@ def import_csv():
         created += 1
 
     db.session.commit()
-    flash(f'导入完成：{created} 条激励', 'success')
+    msg = f'导入完成：{created} 条激励'
+    if skipped:
+        msg += f'，跳过 {skipped} 条重复'
+    flash(msg, 'success')
     return redirect(url_for('incentive.index'))
 
 
@@ -1201,6 +1207,7 @@ def fund_import_csv():
         return redirect(url_for('incentive.fund_list'))
 
     created = 0
+    skipped = 0
     for row in reader:
         if (row.get('ID') or '').strip() == '0':
             continue  # Skip demo row
@@ -1225,6 +1232,7 @@ def fund_import_csv():
             # Update existing
             existing.total_amount = amt
             existing.note = note or existing.note
+            skipped += 1
             continue
         fund = IncentiveFund(
             name=name, source=source, total_amount=amt,
@@ -1239,5 +1247,8 @@ def fund_import_csv():
         created += 1
 
     db.session.commit()
-    flash(f'导入完成：{created} 条资金', 'success')
+    msg = f'导入完成：{created} 条资金'
+    if skipped:
+        msg += f'，跳过 {skipped} 条重复'
+    flash(msg, 'success')
     return redirect(url_for('incentive.fund_list'))

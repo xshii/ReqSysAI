@@ -530,6 +530,7 @@ def risk_import_csv(project_id):
     status_rev = {v: k for k, v in Risk.STATUS_LABELS.items()}
     user_map = {u.name: u.id for u in User.query.filter_by(is_active=True).all()}
     created = 0
+    skipped = 0
     for row in reader:
         if (row.get('ID') or '').strip() == '0':
             continue
@@ -539,6 +540,7 @@ def risk_import_csv(project_id):
         rid = (row.get('ID') or '').strip()
         try:
             if rid and int(rid) > 0 and db.session.get(Risk, int(rid)):
+                skipped += 1
                 continue
         except ValueError:
             pass
@@ -570,7 +572,10 @@ def risk_import_csv(project_id):
         db.session.add(risk)
         created += 1
     db.session.commit()
-    flash(f'导入完成：{created} 条风险', 'success')
+    msg = f'导入完成：{created} 条风险'
+    if skipped:
+        msg += f'，跳过 {skipped} 条重复'
+    flash(msg, 'success')
     return redirect(url_for('project.risk_list', project_id=project_id))
 
 

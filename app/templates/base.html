@@ -424,7 +424,7 @@
             if (isOpen()) {
                 localStorage.removeItem(MGR_KEY);
                 localStorage.removeItem(MGR_TS_KEY);
-                applyView(false);
+                location.reload();
                 return;
             }
             // Show password modal
@@ -460,8 +460,7 @@
             }
             localStorage.setItem(MGR_KEY, '1');
             localStorage.setItem(MGR_TS_KEY, String(Date.now()));
-            applyView(true);
-            bootstrap.Modal.getInstance(document.getElementById('mgrPwdModal')).hide();
+            location.reload();
             }
         };
 
