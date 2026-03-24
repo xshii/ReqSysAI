@@ -264,36 +264,6 @@ function filterTeamPerson(uid) {
 
 /* @mention autocomplete */
 var _allUsers = [{% for u in all_users %}{name:'{{ u.name }}',py:'{{ u.pinyin or "" }}'}{% if not loop.last %},{% endif %}{% endfor %}];
-document.querySelectorAll('.comment-input').forEach(function(inp) {
-    var dropdown = document.createElement('div');
-    dropdown.className = 'list-group position-absolute shadow-sm';
-    dropdown.style.cssText = 'z-index:1050;max-height:120px;overflow-y:auto;display:none;font-size:.8em;';
-    inp.parentElement.style.position = 'relative';
-    inp.parentElement.appendChild(dropdown);
-    inp.addEventListener('input', function() {
-        var val = inp.value;
-        var atIdx = val.lastIndexOf('@');
-        if (atIdx < 0) { dropdown.style.display = 'none'; return; }
-        var q = val.substring(atIdx + 1).toLowerCase();
-        var html = '';
-        _allUsers.forEach(function(u) {
-            if (!q || u.name.toLowerCase().includes(q) || u.py.toLowerCase().includes(q)) {
-                html += '<a href="#" class="list-group-item list-group-item-action py-1 small" data-name="' + u.name + '">' + u.name + '</a>';
-            }
-        });
-        dropdown.innerHTML = html;
-        dropdown.style.display = html ? '' : 'none';
-        dropdown.querySelectorAll('a').forEach(function(a) {
-            a.addEventListener('mousedown', function(e) {
-                e.preventDefault();
-                inp.value = val.substring(0, atIdx + 1) + a.dataset.name + ' ';
-                dropdown.style.display = 'none';
-                inp.focus();
-            });
-        });
-    });
-    inp.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; }, 200); });
-});
 
 
 /* Standup */
