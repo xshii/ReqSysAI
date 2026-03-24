@@ -12,7 +12,7 @@ from app.constants import (
     MAX_RANT_LENGTH,
 )
 from app.models.requirement import Requirement
-from app.models.todo import Todo, TodoItem, TodoComment, todo_requirements
+from app.models.todo import Todo, TodoItem, todo_requirements
 from app.models.risk import Risk
 from app.models.incentive import Incentive
 from app.models.ai_log import AIParseLog
@@ -55,7 +55,7 @@ def index():
             Todo.status == TODO_STATUS_TODO,
             db.and_(Todo.status == TODO_STATUS_DONE, Todo.done_date == today),
         )
-    ).options(joinedload(Todo.items), joinedload(Todo.requirements), joinedload(Todo.children), joinedload(Todo.comments), joinedload(Todo.pomodoros), joinedload(Todo.parent))\
+    ).options(joinedload(Todo.items), joinedload(Todo.requirements), joinedload(Todo.children), joinedload(Todo.pomodoros), joinedload(Todo.parent))\
      .order_by(db.case((Todo.status == TODO_STATUS_TODO, 0), else_=1), Todo.sort_order).all()
     todo_total = len(my_todos)
     todo_done = sum(1 for t in my_todos if t.status == TODO_STATUS_DONE)

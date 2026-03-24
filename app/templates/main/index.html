@@ -167,7 +167,7 @@ function checkHelpAlert() {
                     </form>
                 </div>
                 <div class="collapse {% if not risk_all_done %}show{% endif %} todo-list-for-req" data-req-id="risk" id="riskTodos">
-                {% for t in risk_todos %}{{ todo_row(t, 'text-danger', show_comment_input=true) }}{% endfor %}
+                {% for t in risk_todos %}{{ todo_row(t, 'text-danger') }}{% endfor %}
                 </div>
             </div>
         </div>
@@ -963,23 +963,6 @@ function _updateProgress() {
 
 // Shared todo row JS (toggle, delete, timer, block)
 {{ todo_row_js() }}
-
-// Comment submit for risk/todo inline comments
-document.querySelectorAll('.comment-submit').forEach(function(b) {
-    b.addEventListener('click', function() {
-        var inp = b.parentElement.querySelector('.comment-input');
-        var content = inp.value.trim();
-        if (!content) return;
-        apiPost('/todos/' + b.dataset.todoId + '/comments', {content: content}).then(function(d) {
-            if (d && d.ok) location.reload();
-        });
-    });
-});
-document.querySelectorAll('.comment-input').forEach(function(inp) {
-    inp.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); inp.parentElement.querySelector('.comment-submit').click(); }
-    });
-});
 
 // Timer + Focus Mode (Pomodoro countdown)
 var POMODORO_MIN = {{ current_user.pomodoro_minutes or 45 }};

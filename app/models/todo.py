@@ -31,8 +31,6 @@ class Todo(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = db.relationship('User', backref='todos')
-    comments = db.relationship('TodoComment', backref='todo', cascade='all, delete-orphan',
-                               order_by='TodoComment.created_at')
     requirements = db.relationship('Requirement', secondary=todo_requirements, backref='todos', lazy='joined')
     parent = db.relationship('Todo', remote_side=[id], backref='children')
     items = db.relationship('TodoItem', backref='todo', cascade='all, delete-orphan',
@@ -129,19 +127,6 @@ class PomodoroSession(db.Model):
         return f'<Pomodoro {self.minutes}min {"✓" if self.completed else "✗"}>'
 
 
-class TodoComment(db.Model):
-    __tablename__ = 'todo_comments'
-
-    id = db.Column(db.Integer, primary_key=True)
-    todo_id = db.Column(db.Integer, db.ForeignKey('todos.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    content = db.Column(db.String(500), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    user = db.relationship('User', lazy='joined')
-
-    def __repr__(self):
-        return f'<TodoComment {self.id}>'
 
 
 class TodoItem(db.Model):

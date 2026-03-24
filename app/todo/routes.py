@@ -8,7 +8,7 @@ from app.todo import todo_bp
 from app.todo.forms import TodoForm
 from app.extensions import db
 from app.constants import TODO_STATUS_TODO, TODO_STATUS_DONE, REQ_INACTIVE_STATUSES
-from app.models.todo import Todo, TodoItem, TodoComment
+from app.models.todo import Todo, TodoItem
 from app.models.requirement import Requirement
 from app.models.user import User, Group
 
@@ -76,12 +76,6 @@ def edit(todo_id):
         todo.due_date = date.fromisoformat(data['due_date']) if data['due_date'] else None
     if 'category' in data:
         todo.category = data['category']
-    # Add comment if provided
-    comment_text = (data.get('comment') or '').strip()
-    if comment_text:
-        from app.models.todo import TodoComment
-        c = TodoComment(todo_id=todo.id, user_id=current_user.id, content=comment_text[:500])
-        db.session.add(c)
     db.session.commit()
     return jsonify(ok=True)
 
@@ -194,61 +188,6 @@ def toggle_block(todo_id):
     return jsonify(ok=True, blocked=todo.need_help, reason=todo.blocked_reason)
 
 
-@todo_bp.route('/<int:todo_id>/comments', methods=['GET'])
-@login_required
-def get_comments(todo_id):
-    """Get comments for a todo."""
-
-    comments = TodoComment.query.filter_by(todo_id=todo_id)\
-        .order_by(TodoComment.created_at).all()
-    return jsonify(ok=True, comments=[
-        {'id': c.id, 'user': c.user.name, 'content': c.content,
-         'time': c.created_at.strftime('%m-%d %H:%M')}
-        for c in comments
-    ])
-
-
-@todo_bp.route('/<int:todo_id>/comments', methods=['POST'])
-@login_required
-def add_comment(todo_id):
-    """Add a comment/progress update to a todo. Supports @name to create help todo."""
-    import re
-
-    data = request.get_json() or {}
-    content = (data.get('content') or '').strip()
-    if not content:
-        return jsonify(ok=False, msg='内容不能为空')
-    todo = db.get_or_404(Todo, todo_id)
-    c = TodoComment(todo_id=todo_id, user_id=current_user.id, content=content[:500])
-    db.session.add(c)
-
-    # Parse @mention — create a help todo for the mentioned person
-    helper_name = None
-    at_match = re.search(r'@(\S+)', content)
-    if at_match:
-        target = at_match.group(1)
-        helper = User.query.filter(
-            db.or_(User.name == target, User.pinyin.ilike(f'{target}%'))
-        ).filter_by(is_active=True).first()
-        if helper and helper.id != current_user.id:
-            clean = re.sub(r'@\S+', '', content).strip()
-            help_title = clean or todo.title
-            help_todo = Todo(
-                user_id=helper.id, title=help_title,
-                due_date=date.today() + timedelta(days=7), category='team', source='help',
-                parent_id=todo.id, requirements=list(todo.requirements))
-            help_todo.items.append(TodoItem(title=help_title, sort_order=0))
-            db.session.add(help_todo)
-            helper_name = helper.name
-
-    db.session.commit()
-    result = {
-        'id': c.id, 'user': c.user.name, 'content': c.content,
-        'time': c.created_at.strftime('%m-%d %H:%M'),
-    }
-    if helper_name:
-        result['helper'] = helper_name
-    return jsonify(ok=True, comment=result)
 
 
 # ---- Sub-items ----
@@ -517,7 +456,7 @@ def team():
     ).options(
         joinedload(Todo.requirements), joinedload(Todo.parent),
         joinedload(Todo.children), joinedload(Todo.items),
-        joinedload(Todo.comments), joinedload(Todo.pomodoros),
+        joinedload(Todo.pomodoros),
     ).order_by(
         db.case((Todo.status == TODO_STATUS_TODO, 0), else_=1),
         Todo.sort_order,

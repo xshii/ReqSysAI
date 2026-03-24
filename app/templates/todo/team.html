@@ -62,7 +62,7 @@
                         <span class="badge bg-danger" style="font-size:.6em;">风险</span>
                         <span class="badge bg-secondary bg-opacity-50" style="font-size:.5em;">{{ ud.risk_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ ud.risk_todos|length }}</span>
                     </div>
-                    {% for t in ud.risk_todos %}{{ todo_row(t, 'text-danger', show_comment_input=true) }}{% endfor %}
+                    {% for t in ud.risk_todos %}{{ todo_row(t, 'text-danger', ) }}{% endfor %}
                 </div>
                 {% endif %}
 
@@ -77,7 +77,7 @@
                         {% if r.due_date and r.due_date < today %}<span class="badge bg-danger" style="font-size:.55em;">超期</span>{% endif %}
                         <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="small fw-bold text-primary text-decoration-none" style="overflow:hidden;text-overflow:ellipsis;">{{ r.number }} {{ r.title }}</a>
                     </div>
-                    {% for t in r_todos %}{{ todo_row(t, show_comment_input=true) }}{% endfor %}
+                    {% for t in r_todos %}{{ todo_row(t, ) }}{% endfor %}
                 </div>
                 {% endif %}
                 {% endfor %}
@@ -89,7 +89,7 @@
                         <span class="badge bg-secondary" style="font-size:.6em;">团队</span>
                         <span class="badge bg-secondary bg-opacity-50" style="font-size:.5em;">{{ ud.team_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ ud.team_todos|length }}</span>
                     </div>
-                    {% for t in ud.team_todos %}{{ todo_row(t, show_comment_input=true) }}{% endfor %}
+                    {% for t in ud.team_todos %}{{ todo_row(t, ) }}{% endfor %}
                 </div>
                 {% endif %}
             {% else %}
@@ -295,25 +295,6 @@ document.querySelectorAll('.comment-input').forEach(function(inp) {
     inp.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; }, 200); });
 });
 
-/* Comment submit */
-document.querySelectorAll('.comment-submit').forEach(function(b) {
-    b.addEventListener('click', function() {
-        var inp = b.parentElement.querySelector('.comment-input');
-        var content = inp.value.trim();
-        if (!content) return;
-        fetch('/todos/' + b.dataset.todoId + '/comments', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({content: content})
-        }).then(function(r) { return r.json(); })
-        .then(function(d) { if (d.ok) location.reload(); });
-    });
-});
-document.querySelectorAll('.comment-input').forEach(function(inp) {
-    inp.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); inp.parentElement.querySelector('.comment-submit').click(); }
-    });
-});
 
 /* Standup */
 function genStandup() {
