@@ -443,7 +443,7 @@
             document.getElementById('mgrPwdSubmitLabel').textContent = saved ? '确认' : '设置密码';
             new bootstrap.Modal(modal).show();
             setTimeout(function() { input.focus(); }, 300);
-        };
+        }
 
         window.mgrPwdSubmit = function() {
             var input = document.getElementById('mgrPwdInput');
@@ -451,21 +451,23 @@
             var val = input.value;
             var saved = getSavedPwd();
             if (!saved) {
-                // Setting new password
                 if (!val || val.length < 6 || val.length > 15) {
-                    errEl.textContent = '密码长度需6-15位'; return;
+                    errEl.textContent = '密码长度需6-15位';
+                    return;
                 }
                 localStorage.setItem(MGR_PWD_KEY, val);
                 errEl.textContent = '';
             } else {
                 if (val !== saved) {
-                    errEl.innerHTML = '密码错误 <a href="{{ url_for("auth.profile") }}" class="text-danger">去重置</a>'; input.value = ''; input.focus(); return;
+                    errEl.innerHTML = '密码错误 <a href="{{ url_for("auth.profile") }}" class="text-danger">去重置</a>';
+                    input.value = '';
+                    input.focus();
+                    return;
                 }
             }
             localStorage.setItem(MGR_KEY, '1');
             localStorage.setItem(MGR_TS_KEY, String(Date.now()));
             location.reload();
-            }
         };
 
         // Bind eye button click
