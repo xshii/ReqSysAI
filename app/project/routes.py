@@ -962,13 +962,8 @@ def permission_list(project_id):
                 flash('已删除', 'success')
         elif action == 'apply':
             item_ids = request.form.getlist('item_id')
-            apply_for = request.form.get('apply_for', 'self')
             reason = request.form.get('reason', '').strip()
-            if apply_for == 'self':
-                py = to_pinyin(current_user.name).split()[-1] if current_user.name else ''
-                people_text = f"{current_user.name}({py}) {current_user.employee_id or ''}"
-            else:
-                people_text = request.form.get('people_list', '').strip()
+            people_text = request.form.get('people_list', '').strip()
             if not people_text:
                 flash('请填写申请人', 'warning')
                 return redirect(url_for('project.permission_list', project_id=project_id))

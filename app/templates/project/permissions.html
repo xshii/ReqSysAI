@@ -235,30 +235,15 @@
                         </div>
                         <a href="#" class="small text-primary" onclick="document.querySelectorAll('#applyModal input[name=item_id]').forEach(function(c){c.checked=true});return false;">全选</a>
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label small fw-bold">为谁申请：</label>
-                        <div class="d-flex gap-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="apply_for" value="self" id="applyForSelf" checked onchange="document.getElementById('otherFields').style.display='none'">
-                                <label class="form-check-label small" for="applyForSelf">为自己（{{ my_pinyin_name }}）</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="apply_for" value="other" id="applyForOther" onchange="document.getElementById('otherFields').style.display=''">
-                                <label class="form-check-label small" for="applyForOther">为他人</label>
-                            </div>
-                        </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">内部搜索</label>
+                        <div class="col-9">{{ user_picker('_user_search', all_users, mode='text', placeholder='搜索姓名/工号，点击添加') }}</div>
                     </div>
-                    <div id="otherFields" style="display:none;">
-                        <div class="row mb-2">
-                            <label class="col-3 col-form-label col-form-label-sm">内部搜索</label>
-                            <div class="col-9">{{ user_picker('_user_search', all_users, mode='text', placeholder='搜索姓名/工号，点击添加到下方') }}</div>
-                        </div>
-                        <div class="row mb-2">
-                            <label class="col-3 col-form-label col-form-label-sm">人员列表 *</label>
-                            <div class="col-9">
-                                <textarea name="people_list" id="peopleList" class="form-control form-control-sm" rows="4" placeholder="每行一人，格式：姓名(拼音) 工号&#10;如：&#10;张三(zhangsan) a00123456&#10;李四(lisi) b00654321"></textarea>
-                                <div class="text-muted small mt-1">每行一人，支持批量粘贴</div>
-                            </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">申请人 *</label>
+                        <div class="col-9">
+                            <textarea name="people_list" id="peopleList" class="form-control form-control-sm" rows="3" placeholder="每行一人：姓名(拼音) 工号">{{ my_pinyin_name }} {{ current_user.employee_id or '' }}</textarea>
+                            <div class="text-muted small mt-1">每行一人，支持批量粘贴</div>
                         </div>
                     </div>
                     <div class="row mb-2">
