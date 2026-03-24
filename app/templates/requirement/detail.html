@@ -42,9 +42,9 @@
                         <td>{{ c.title }}</td>
                         <td><span class="badge bg-{{ c.status_color }}">{{ c.status_label }}</span></td>
                         <td>{{ c.assignee_display }}</td>
-                        <td>
+                        <td class="sub-req-actions" data-req-id="{{ c.id }}">
                             {% for s in c.allowed_next_statuses %}
-                            <form method="POST" action="{{ url_for('requirement.requirement_status', req_id=c.id) }}" class="d-inline">
+                            <form method="POST" action="{{ url_for('requirement.requirement_status', req_id=c.id) }}" class="d-inline sub-status-form">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" name="status" value="{{ s }}" class="btn btn-sm py-0 px-1 btn-outline-{{ c.STATUS_COLORS[s].split()[0] }}" style="font-size:.75em;">→{{ c.STATUS_LABELS[s] }}</button>
                             </form>
@@ -142,4 +142,51 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    // Status meta for rebuilding buttons after AJAX update
+    var STATUS_LABELS = {{ req.STATUS_LABELS | tojson }};
+    var STATUS_COLORS = {{ req.STATUS_COLORS | tojson }};
+    var TRANSITIONS  = {{ req.ALLOWED_TRANSITIONS | tojson }};
+
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.sub-status-form button[name="status"]');
+        if (!btn) return;
+        e.preventDefault();
+        var form = btn.closest('.sub-status-form');
+        var td   = btn.closest('.sub-req-actions');
+        var reqId = td.dataset.reqId;
+        var newStatus = btn.value;
+        btn.disabled = true;
+
+        apiPost('/requirements/' + reqId + '/status-api', {status: newStatus})
+        .then(function(d) {
+            if (!d.ok) { showToast(d.msg || '操作失败', 'danger'); btn.disabled = false; return; }
+            showToast('已变更为「' + d.label + '」', 'success');
+            // Update badge in status column (3rd td)
+            var tr = td.closest('tr');
+            var badgeTd = tr.children[2];
+            var color = STATUS_COLORS[d.status] || 'secondary';
+            badgeTd.innerHTML = '<span class="badge bg-' + color + '">' + d.label + '</span>';
+            // Rebuild action buttons for new allowed transitions
+            var nexts = TRANSITIONS[d.status] || [];
+            td.innerHTML = '';
+            nexts.forEach(function(s) {
+                var f = document.createElement('form');
+                f.method = 'POST';
+                f.action = '/requirements/' + reqId + '/status';
+                f.className = 'd-inline sub-status-form';
+                var csrf = document.querySelector('meta[name="csrf-token"]');
+                f.innerHTML = '<input type="hidden" name="csrf_token" value="' + (csrf ? csrf.content : '') + '">'
+                    + '<button type="submit" name="status" value="' + s + '" class="btn btn-sm py-0 px-1 btn-outline-' + (STATUS_COLORS[s] || 'secondary').split(' ')[0] + '" style="font-size:.75em;">→' + (STATUS_LABELS[s] || s) + '</button>';
+                td.appendChild(f);
+            });
+        })
+        .catch(function() { showToast('网络错误', 'danger'); btn.disabled = false; });
+    });
+})();
+</script>
 {% endblock %}

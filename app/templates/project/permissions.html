@@ -71,7 +71,7 @@
                 {% else %}<span class="badge bg-light text-muted">0</span>{% endif %}
             </td>
             <td class="text-nowrap">
-                <form method="POST" class="d-inline">
+                <form method="POST" class="d-inline quick-apply-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="quick_apply">
                     <input type="hidden" name="item_id" value="{{ item.id }}">
@@ -318,6 +318,58 @@ document.addEventListener('click', function(e) {
         var icon = btn.querySelector('i');
         icon.className = 'bi bi-check text-success';
         setTimeout(function() { icon.className = 'bi bi-clipboard'; }, 800);
+    });
+});
+
+// Quick-apply via AJAX
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.quick-apply-form button[type="submit"]');
+    if (!btn) return;
+    e.preventDefault();
+    var form = btn.closest('.quick-apply-form');
+    var formData = new FormData(form);
+    btn.disabled = true;
+    var origHtml = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    fetch(form.action || window.location.href, {
+        method: 'POST',
+        body: formData,
+        redirect: 'follow'
+    }).then(function(r) {
+        // The server always redirects back; a successful fetch means it worked
+        if (r.ok || r.redirected) {
+            // Parse the response HTML to check for flash messages
+            return r.text().then(function(html) {
+                var alreadyExists = html.indexOf('已在申请列表中') !== -1;
+                if (alreadyExists) {
+                    showToast('已在申请列表中', 'info');
+                } else {
+                    showToast('已申请成功', 'success');
+                    // Update the applicant count badge in the same row
+                    var tr = form.closest('tr');
+                    var countTd = tr.children[4]; // 5th column: 申请人数
+                    var badge = countTd.querySelector('.badge');
+                    if (badge) {
+                        var cur = parseInt(badge.textContent) || 0;
+                        badge.textContent = cur + 1;
+                        badge.className = 'badge bg-secondary';
+                    } else {
+                        countTd.innerHTML = '<span class="badge bg-secondary">1</span>';
+                    }
+                }
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            });
+        } else {
+            showToast('操作失败', 'danger');
+            btn.disabled = false;
+            btn.innerHTML = origHtml;
+        }
+    }).catch(function() {
+        showToast('网络错误', 'danger');
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
     });
 });
 

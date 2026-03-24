@@ -66,8 +66,11 @@
                     {% if r.children %}
                     <div class="sub-reqs" style="display:none;border-top:1px solid #e9ecef;margin-top:6px;padding-top:4px;">
                         {% for c in r.children %}
-                        <div class="d-flex justify-content-between align-items-center" style="font-size:.7em;padding:1px 0;">
-                            <span class="{{ 'text-decoration-line-through text-muted' if c.status in ('done','closed') else '' }}">{{ c.title }}</span>
+                        <div class="d-flex justify-content-between align-items-center sub-req-item" draggable="true" data-id="{{ c.id }}"
+                             style="font-size:.7em;padding:2px 4px;cursor:grab;border-radius:3px;"
+                             ondragstart="onDragStart(event, this)"
+                             onmouseover="this.style.background='#f0f4f8'" onmouseout="this.style.background=''">
+                            <span class="{{ 'text-decoration-line-through text-muted' if c.status in ('done','closed') else '' }}">↳ {{ c.title }}</span>
                             <span class="badge bg-{{ c.status_color }}" style="font-size:.85em;">{{ c.status_label }}</span>
                         </div>
                         {% endfor %}
