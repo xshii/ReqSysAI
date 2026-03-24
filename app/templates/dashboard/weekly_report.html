@@ -110,8 +110,7 @@
             <!-- Triangles + Labels -->
             <div class="d-flex" style="margin:0 8px;">
                 {% for ms in report_data.milestones %}
-                {% set ms_done = ms.status == 'completed' or (ms.due_date and ms.due_date < report_data.today) %}
-                {% set c = '#10b981' if ms_done else '#1e3a5f' %}
+                {% set c = '#1e3a5f' %}
                 <div class="text-center" style="flex:1 0 0;min-width:80px;">
                     <div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:10px solid {{ c }};margin:0 auto;"></div>
                     <div style="margin-top:3px;">

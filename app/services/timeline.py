@@ -99,8 +99,7 @@ def generate_timeline_image(milestones, today=None, width=760):
     # Milestones
     for i, m in enumerate(ms_with_date):
         x = positions[i]
-        done = m.get('status') == 'completed' or m['due_date'] < today
-        color = COLOR_DONE if done else COLOR_ACTIVE
+        color = COLOR_ACTIVE  # unified dark blue
 
         # Triangle marker
         if rows[i] == 0:
