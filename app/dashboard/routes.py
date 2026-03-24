@@ -391,11 +391,13 @@ def weekly_report():
         result, _ = call_ollama(prompt)
         ai_analysis = {
             'summary': '数据不足，无法生成摘要',
+            'highlights': [],
             'risks': [],
             'plan': [],
         }
         if isinstance(result, dict):
             ai_analysis['summary'] = result.get('summary', ai_analysis['summary'])
+            ai_analysis['highlights'] = result.get('highlights', [])
             ai_analysis['risks'] = result.get('risks', [])
             ai_analysis['plan'] = result.get('plan', [])
 
