@@ -396,10 +396,26 @@ def import_csv():
             if existing:
                 continue
 
+        # Resolve submitter
+        submitter_name = (first.get('提交人') or '').strip()
+        submitter_id = current_user.id
+        if submitter_name:
+            su = User.query.filter_by(name=submitter_name, is_active=True).first()
+            if su:
+                submitter_id = su.id
+
+        # Resolve fund
+        fund_id = None
+        fund_name = (first.get('资金池') or '').strip()
+        if fund_name:
+            fund = IncentiveFund.query.filter_by(name=fund_name).first()
+            if fund:
+                fund_id = fund.id
+
         inc = Incentive(
             title=title, description=title, category=category,
-            submitted_by=current_user.id, status='approved',
-            amount=amount, review_comment=comment,
+            submitted_by=submitter_id, status='approved',
+            amount=amount, fund_id=fund_id, review_comment=comment,
             reviewed_by=current_user.id, reviewed_at=reviewed_at,
             nominees=nominee_users,
             external_nominees=','.join(ext_names) if ext_names else None,

@@ -550,17 +550,21 @@ def risk_import_csv(project_id):
         if not due:
             due = date.today() + timedelta(days=14)
         tracker_name = (row.get('跟踪人') or '').strip()
+        status_val = status_rev.get((row.get('状态') or '').strip(), 'open')
+        resolution_text = (row.get('解决方案') or '').strip() or None
         risk = Risk(
             project_id=project_id, title=title,
             severity=severity_rev.get((row.get('严重度') or '').strip(), 'medium'),
-            status=status_rev.get((row.get('状态') or '').strip(), 'open'),
+            status=status_val,
             owner=(row.get('责任人') or '').strip() or None,
             tracker_id=user_map.get(tracker_name),
             due_date=due,
             description=(row.get('描述') or '').strip() or None,
-            resolution=(row.get('解决方案') or '').strip() or None,
+            resolution=resolution_text,
             created_by=current_user.id,
         )
+        if status_val == 'resolved' and resolution_text:
+            risk.resolved_at = datetime.utcnow()
         db.session.add(risk)
         created += 1
     db.session.commit()
