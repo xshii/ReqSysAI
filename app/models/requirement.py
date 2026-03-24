@@ -49,7 +49,6 @@ class Requirement(db.Model):
         'in_dev':         ('开发中', 'primary'),
         'in_test':        ('测试中', 'warning text-dark'),
         'done':           ('已完成', 'success'),
-        'closed':         ('已关闭', 'light text-dark border'),
     }
     STATUS_LABELS = {k: v[0] for k, v in _STATUS_META.items()}
     STATUS_COLORS = {k: v[1] for k, v in _STATUS_META.items()}
@@ -73,12 +72,11 @@ class Requirement(db.Model):
         return self.SOURCE_LABELS.get(self.source, self.source or '')
 
     ALLOWED_TRANSITIONS = {
-        'pending_review': ['pending_dev', 'closed'],
-        'pending_dev': ['in_dev', 'pending_review', 'closed'],
-        'in_dev': ['in_test', 'pending_dev', 'closed'],
-        'in_test': ['done', 'in_dev', 'closed'],
-        'done': ['closed', 'in_test'],
-        'closed': ['pending_review'],
+        'pending_review': ['pending_dev'],
+        'pending_dev': ['in_dev', 'pending_review'],
+        'in_dev': ['in_test', 'pending_dev'],
+        'in_test': ['done', 'in_dev'],
+        'done': ['in_test'],
     }
 
     @property
