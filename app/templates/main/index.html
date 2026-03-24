@@ -747,7 +747,7 @@ document.querySelectorAll('.quick-todo-form input[name="title"]').forEach(functi
     inp.addEventListener('input', function() {
         var val = inp.value;
         var atIdx = val.lastIndexOf('@');
-        if (atIdx < 0 || atIdx !== 0) { dropdown.style.display = 'none'; return; }
+        if (atIdx < 0) { dropdown.style.display = 'none'; return; }
         var query = val.substring(atIdx + 1).toLowerCase();
         loadUsers(function(users) {
             var matches = users.filter(function(u) {
@@ -763,7 +763,9 @@ document.querySelectorAll('.quick-todo-form input[name="title"]').forEach(functi
             dropdown.querySelectorAll('.user-ac-item').forEach(function(item) {
                 item.addEventListener('mousedown', function(e) {
                     e.preventDefault();
-                    inp.value = '@' + item.dataset.name + ' ';
+                    var v = inp.value;
+                    var ai = v.lastIndexOf('@');
+                    inp.value = v.substring(0, ai) + '@' + item.dataset.name + ' ';
                     dropdown.style.display = 'none';
                     inp.focus();
                 });

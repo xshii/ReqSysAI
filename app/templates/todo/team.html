@@ -263,7 +263,7 @@ function filterTeamPerson(uid) {
 })();
 
 /* @mention autocomplete */
-var _allUsers = [{% for u in all_users %}{name:'{{ u.name }}',py:'{{ u.pinyin or "" }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+var _allUsers = [{% for u in all_users %}{name:'{{ u.name }}',py:'{{ u.pinyin or "" }}',eid:'{{ u.employee_id or "" }}'}{% if not loop.last %},{% endif %}{% endfor %}];
 
 
 /* Standup */

@@ -174,8 +174,8 @@ if (_blockPop) {
         function showMatches(users) {
             var html = '';
             users.forEach(function(u) {
-                if (!q || u.name.toLowerCase().includes(q) || (u.pinyin || '').toLowerCase().includes(q)) {
-                    html += '<div class="px-2 py-1" style="cursor:pointer;" onmousedown="event.preventDefault();fillBlockAt(\'' + u.name + '\')">' + u.name + '</div>';
+                if (!q || u.name.toLowerCase().includes(q) || (u.pinyin || '').toLowerCase().includes(q) || (u.employee_id || '').toLowerCase().includes(q)) {
+                    html += '<div class="px-2 py-1" style="cursor:pointer;" onmousedown="event.preventDefault();fillBlockAt(\'' + u.name + '\')">' + u.name + ' <span style="color:#999;font-size:.85em;">' + (u.employee_id || '') + '</span></div>';
                 }
             });
             _blockAtList.innerHTML = html;
