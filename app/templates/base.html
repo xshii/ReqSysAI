@@ -19,6 +19,11 @@
                 <i class="bi bi-kanban"></i> 研发协作平台
             </a>
             <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-sm btn-outline-light d-flex align-items-center gap-1" id="navSearchBtn" style="font-size:.8em;opacity:.7;border-color:rgba(255,255,255,.3);" data-bs-toggle="modal" data-bs-target="#searchModal">
+                    <i class="bi bi-search"></i>
+                    <span class="d-none d-md-inline">搜索</span>
+                    <kbd class="d-none d-md-inline ms-1" style="font-size:.8em;opacity:.6;background:rgba(255,255,255,.15);border:none;padding:1px 5px;border-radius:3px;">⌘K</kbd>
+                </button>
                 {% if current_user.is_authenticated and (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')) %}
                 <button type="button" class="btn btn-sm border-0" id="mgrEyeBtn" title="管理视图" style="font-size:.85em;opacity:.4;color:#fff;">
                     <i class="bi bi-eye-slash" id="mgrEyeIcon"></i>
