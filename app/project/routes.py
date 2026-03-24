@@ -960,6 +960,25 @@ def permission_list(project_id):
                 db.session.delete(item)
                 db.session.commit()
                 flash('已删除', 'success')
+        elif action == 'quick_apply':
+            item = db.session.get(PermissionItem, request.form.get('item_id', type=int))
+            if item and item.project_id == project_id:
+                py = to_pinyin(current_user.name).split()[-1] if current_user.name else ''
+                name = f"{current_user.name}({py}) {current_user.employee_id or ''}".strip()
+                # Check duplicate
+                exists = PermissionApplication.query.filter(
+                    PermissionApplication.item_id == item.id,
+                    PermissionApplication.applicant_name.contains(current_user.name),
+                ).first()
+                if exists:
+                    flash('已在申请列表中', 'info')
+                else:
+                    db.session.add(PermissionApplication(
+                        item_id=item.id, applicant_name=name,
+                        submitted_by=current_user.id))
+                    db.session.commit()
+                    flash(f'已申请 {item.resource}', 'success')
+            return redirect(url_for('project.permission_list', project_id=project_id))
         elif action == 'apply':
             item_ids = request.form.getlist('item_id')
             reason = request.form.get('reason', '').strip()
@@ -990,6 +1009,16 @@ def permission_list(project_id):
                 app_record.approved_by = current_user.id
                 db.session.commit()
                 flash('已通过', 'success')
+        elif action == 'bulk_approve' and is_pm:
+            pending = PermissionApplication.query.join(PermissionItem).filter(
+                PermissionItem.project_id == project_id,
+                PermissionApplication.status == 'pending').all()
+            for a in pending:
+                a.status = 'approved'
+                a.approved_at = datetime.utcnow()
+                a.approved_by = current_user.id
+            db.session.commit()
+            flash(f'已批量通过 {len(pending)} 条', 'success')
         elif action == 'reject' and is_pm:
             app_record = db.session.get(PermissionApplication, request.form.get('app_id', type=int))
             if app_record and app_record.item.project_id == project_id:
