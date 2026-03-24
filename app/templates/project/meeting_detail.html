@@ -296,12 +296,16 @@ function acceptPolish() {
 
 // Send email via mailto:
 function sendEmail() {
+    fetch('/api/users').then(function(r) { return r.json(); }).then(function(users) {
+    var nameMap = {};
+    users.forEach(function(u) { if (u.employee_id) nameMap[u.name] = u.employee_id; });
+
     var attendees = (document.getElementById('attendeesVal').value || '').split(',').map(function(n) { return n.trim(); }).filter(Boolean);
     var cc = (document.getElementById('ccVal').value || '').split(',').map(function(n) { return n.trim(); }).filter(Boolean);
 
-    // Use Chinese names directly — Outlook resolves via Check Names (Ctrl+K)
-    var toList = attendees.join(';');
-    var ccList = cc.join(';');
+    // Use employee_id (= email prefix) for Outlook resolution
+    var toList = attendees.map(function(n) { return nameMap[n] || n; }).join(';');
+    var ccList = cc.map(function(n) { return nameMap[n] || n; }).join(';');
 
     var subject = '{{ meeting.title }}（{{ meeting.date.strftime("%Y-%m-%d") if meeting.date else "" }}）';
 
@@ -328,6 +332,7 @@ function sendEmail() {
         + '&subject=' + encodeURIComponent(subject)
         + '&body=' + encodeURIComponent(body);
     window.location.href = url;
+    });
 }
 
 // Auto-extract
