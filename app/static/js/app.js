@@ -1,4 +1,16 @@
 // ReqSysAI - Main JavaScript
+
+// Clamp date input year to 4 digits
+document.addEventListener('input', function(e) {
+    if (e.target.type === 'date' && e.target.value) {
+        var parts = e.target.value.split('-');
+        if (parts[0] && parts[0].length > 4) {
+            parts[0] = parts[0].slice(0, 4);
+            e.target.value = parts.join('-');
+        }
+    }
+}, true);
+
 document.addEventListener('DOMContentLoaded', function() {
     // Auto-dismiss alerts after 5 seconds
     var alerts = document.querySelectorAll('.alert-dismissible');
