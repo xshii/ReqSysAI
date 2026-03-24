@@ -359,10 +359,13 @@ def weekly_report():
                 lines.append(f'- [{r.number}] {r.title}（{r.status_label}）')
 
         if req_investment:
-            lines.append('\n需求投入汇总（人×天）：')
+            lines.append('\n需求投入汇总：')
             for num, inv in sorted(req_investment.items()):
                 people_list = ', '.join(sorted(inv['people']))
-                lines.append(f'- [{num}] {inv["title"]}: {len(inv["people"])}人 × {inv["days"]}天（{people_list}）')
+                # Use estimate_days from requirement if available
+                req_obj = next((r for r in all_reqs if r.number == num), None)
+                est = f'预估{req_obj.estimate_days}人天' if req_obj and req_obj.estimate_days else f'{inv["days"]}个任务'
+                lines.append(f'- [{num}] {inv["title"]}: {len(inv["people"])}人，{est}（{people_list}）')
 
         # Person stats
         all_persons = sorted(set(list(person_done.keys()) + list(person_active.keys())))
