@@ -266,10 +266,15 @@ def export_csv():
     buf = io.StringIO()
     buf.write('\ufeff')
     writer = csv.writer(buf)
-    writer.writerow(['ID', '获奖名称', '类别', '导向', '成员', '工号', '小组', '金额', '激励来源', '获奖年月', '评语'])
+    writer.writerow(['ID', '获奖名称', '类别', '导向', '提交人', '成员', '工号', '小组', '金额', '资金池', '激励来源', '获奖年月', '评语'])
+    # Demo row (ID=0)
+    writer.writerow([0, '示例奖项名称', '个人奖/团队奖', '专业/积极/超越期望/代码Clean',
+                     '提交人姓名', '张三', 'a00123456', '研发一组', 500, '资金池名称',
+                     '及时激励', '2026-03', '评语（此行为格式示例，导入时自动跳过）'])
     for inc in items:
-        common = [inc.id, inc.title, inc.award_type, inc.category_label]
-        tail = [inc.amount or '', inc.source_label, inc.reviewed_at.strftime('%Y-%m') if inc.reviewed_at else '', inc.review_comment or '']
+        fund_name = inc.fund.name if inc.fund else ''
+        common = [inc.id, inc.title, inc.award_type, inc.category_label, inc.submitter.name]
+        tail = [inc.amount or '', fund_name, inc.source_label, inc.reviewed_at.strftime('%Y-%m') if inc.reviewed_at else '', inc.review_comment or '']
         for u in inc.nominees:
             writer.writerow(common + [u.name, u.employee_id, u.group or ''] + tail)
         if inc.external_nominees:
@@ -316,6 +321,8 @@ def import_csv():
     # Group rows by ID or title (same ID = same incentive, multiple nominees)
     groups = {}
     for row in reader:
+        if (row.get('ID') or '').strip() == '0':
+            continue  # Skip demo row
         key = row.get('ID', '').strip() or row.get('获奖名称', '').strip()
         if not key:
             continue
@@ -329,6 +336,13 @@ def import_csv():
         title = g['title']
         if not title:
             continue
+        # Skip if ID matches existing record
+        try:
+            existing_id = int(key)
+            if existing_id > 0 and Incentive.query.get(existing_id):
+                continue
+        except (ValueError, TypeError):
+            pass
         first = g['rows'][0]
         category = cat_reverse.get(first.get('导向', '').strip(), 'professional')
         amount = None
@@ -1008,12 +1022,15 @@ def fund_export_csv():
     buf = io.StringIO()
     buf.write('\ufeff')
     writer = csv.writer(buf)
-    writer.writerow(['名称', '金额', '激励来源', '截止日期', '备注', '已使用', '本月使用', '使用率'])
+    writer.writerow(['ID', '名称', '金额', '激励来源', '截止日期', '备注', '已使用', '本月使用', '使用率'])
+    # Demo row (ID=0)
+    writer.writerow([0, '示例资金池', 50000, '及时激励', '2026-12-31', '备注（金额留空=公共池，此行为格式示例，导入时自动跳过）', '', '', ''])
     for f in funds:
         used = f.used_amount
         month_used = month_used_map.get(f.source, 0)
         pct = f'{round(used / f.total_amount * 100)}%' if f.has_budget else '公共池'
         writer.writerow([
+            f.id,
             f.name,
             f.total_amount if f.has_budget else '',
             f.source_label,
@@ -1130,6 +1147,8 @@ def fund_import_csv():
 
     created = 0
     for row in reader:
+        if (row.get('ID') or '').strip() == '0':
+            continue  # Skip demo row
         name = (row.get('名称') or '').strip()
         if not name:
             continue

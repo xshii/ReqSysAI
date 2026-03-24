@@ -5,6 +5,12 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4>风险问题 · {{ project.name }}</h4>
     <div class="d-flex gap-2">
+        <a href="{{ url_for('project.risk_export_csv', project_id=project.id) }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出</a>
+        <form method="POST" action="{{ url_for('project.risk_import_csv', project_id=project.id) }}" enctype="multipart/form-data" id="riskCsvForm" class="d-none">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="csv_file" accept=".csv" onchange="this.form.submit();">
+        </form>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.querySelector('#riskCsvForm input[type=file]').click()"><i class="bi bi-upload"></i> 导入</button>
         {% if ai_enabled %}<button class="btn btn-outline-warning btn-sm" id="aiScanBtn" onclick="aiRiskScan()"><i class="bi bi-robot"></i> AI 风险识别</button>{% endif %}
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg"></i> 登记风险</button>
     </div>

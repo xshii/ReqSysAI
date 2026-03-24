@@ -430,14 +430,22 @@ def export_csv():
     buf.write('\ufeff')  # BOM for Excel
     writer = csv.writer(buf)
     writer.writerow([
-        '需求编号', '层级', '需求类型', '标题', '项目', '优先级', '状态',
+        'ID', '需求编号', '层级', '需求类型', '标题', '项目', '优先级', '状态',
         '负责人', '工号', '预估工期(天)', '代码行数', '用例数',
         '开始日期', '截止日期', '父需求编号', '描述',
+    ])
+    # Demo row (id=0)
+    writer.writerow([
+        0, 'REQ-000', '需求', '编码', '示例需求标题', '项目名称', '高/中/低',
+        '待评估/待开发/开发中/测试中/已完成/已关闭',
+        '张三', 'a00123456', 5, 1000, 20,
+        '2026-01-01', '2026-03-31', '', '需求描述（此行为格式示例，导入时自动跳过）',
     ])
     for r in reqs:
         assignee_eid = r.assignee.employee_id if r.assignee else ''
         level = '子需求' if r.parent_id else '需求'
         writer.writerow([
+            r.id,
             r.number,
             level,
             r.source_label,
@@ -501,6 +509,8 @@ def import_csv():
     created = []
     number_to_req = {}
     for row in reader:
+        if (row.get('ID') or '').strip() == '0':
+            continue  # Skip demo row
         title = (row.get('标题') or '').strip()
         if not title:
             continue

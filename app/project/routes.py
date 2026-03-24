@@ -481,6 +481,91 @@ def risk_reopen(risk_id):
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
 
 
+@project_bp.route('/<int:project_id>/risks/export-csv')
+@login_required
+def risk_export_csv(project_id):
+    """Export project risks as CSV."""
+    import csv, io
+    from flask import Response
+    project = db.get_or_404(Project, project_id)
+    risks = Risk.query.filter_by(project_id=project_id).order_by(Risk.created_at).all()
+    buf = io.StringIO()
+    buf.write('\ufeff')
+    writer = csv.writer(buf)
+    writer.writerow(['ID', '标题', '严重度', '状态', '责任人', '跟踪人', '截止日期', '解决方案', '描述'])
+    writer.writerow([0, '示例风险', '高/中/低', '未解决/已解决/已关闭',
+                     '责任人', '跟踪人', '2026-06-30', '', '描述（此行为格式示例，导入时自动跳过）'])
+    for r in risks:
+        writer.writerow([r.id, r.title, r.severity_label, r.status_label,
+            r.owner or '', r.tracker.name if r.tracker else '',
+            r.due_date.isoformat() if r.due_date else '', r.resolution or '', r.description or ''])
+    return Response(buf.getvalue(), mimetype='text/csv; charset=utf-8',
+                    headers={'Content-Disposition': f'attachment; filename=risks.csv'})
+
+
+@project_bp.route('/<int:project_id>/risks/import-csv', methods=['POST'])
+@login_required
+def risk_import_csv(project_id):
+    """Import risks from CSV."""
+    import csv, io
+    project = db.get_or_404(Project, project_id)
+    file = request.files.get('csv_file')
+    if not file or not file.filename.lower().endswith('.csv'):
+        flash('请选择 CSV 文件', 'danger')
+        return redirect(url_for('project.risk_list', project_id=project_id))
+    raw = file.read()
+    for enc in ('utf-8-sig', 'gbk', 'utf-8'):
+        try:
+            text = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        flash('编码无法识别', 'danger')
+        return redirect(url_for('project.risk_list', project_id=project_id))
+    reader = csv.DictReader(io.StringIO(text))
+    severity_rev = {v: k for k, v in Risk.SEVERITY_LABELS.items()}
+    status_rev = {v: k for k, v in Risk.STATUS_LABELS.items()}
+    user_map = {u.name: u.id for u in User.query.filter_by(is_active=True).all()}
+    created = 0
+    for row in reader:
+        if (row.get('ID') or '').strip() == '0':
+            continue
+        title = (row.get('标题') or '').strip()
+        if not title:
+            continue
+        rid = (row.get('ID') or '').strip()
+        try:
+            if rid and int(rid) > 0 and db.session.get(Risk, int(rid)):
+                continue
+        except ValueError:
+            pass
+        due_str = (row.get('截止日期') or '').strip()
+        due = None
+        if due_str:
+            try:
+                due = date.fromisoformat(due_str)
+            except ValueError:
+                pass
+        if not due:
+            due = date.today() + timedelta(days=14)
+        tracker_name = (row.get('跟踪人') or '').strip()
+        risk = Risk(
+            project_id=project_id, title=title,
+            severity=severity_rev.get((row.get('严重度') or '').strip(), 'medium'),
+            status=status_rev.get((row.get('状态') or '').strip(), 'open'),
+            owner=(row.get('责任人') or '').strip() or None,
+            tracker_id=user_map.get(tracker_name),
+            due_date=due,
+            description=(row.get('描述') or '').strip() or None,
+            resolution=(row.get('解决方案') or '').strip() or None,
+            created_by=current_user.id,
+        )
+        db.session.add(risk)
+        created += 1
+    db.session.commit()
+    flash(f'导入完成：{created} 条风险', 'success')
+    return redirect(url_for('project.risk_list', project_id=project_id))
 
 
 @project_bp.route('/risks/<int:risk_id>/edit', methods=['POST'])
@@ -679,6 +764,8 @@ def member_export_csv(project_id):
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['id', '姓名', '工号', '角色'])
+    # Demo row (id=0)
+    writer.writerow([0, '张三', 'a00123456', 'DEV（可选：PM/PL/DEV/TE/QA/UI，此行为格式示例，导入时自动跳过）'])
     for m in members:
         if m.user:
             writer.writerow([m.id, m.user.name, m.user.employee_id, m.project_role])
@@ -713,6 +800,8 @@ def member_import_csv(project_id):
     reader = csv.DictReader(io.StringIO(text))
     created, updated = 0, 0
     for row in reader:
+        if (row.get('id') or '').strip() == '0':
+            continue  # Skip demo row
         name = (row.get('姓名') or '').strip()
         eid = (row.get('工号') or '').strip()
         role = (row.get('角色') or 'DEV').strip()
