@@ -1126,11 +1126,13 @@ document.addEventListener('mouseenter', function(e) {
             el.style.opacity = '0.4';
             e.dataTransfer.effectAllowed = 'move';
             _dragCollapsed = [];
+            // Disable collapse toggles during drag to prevent accidental fold/unfold
+            document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function(t) { t.setAttribute('data-drag-saved', '1'); t.removeAttribute('data-bs-toggle'); });
             // Delayed expand: collapsed sections expand when hovered 800ms during drag
             document.querySelectorAll('.todo-list-for-req.collapse:not(.show)').forEach(function(c) {
                 var parent = c.previousElementSibling || c.parentElement;
                 var _hoverTimer = null;
-                function onEnter() { _hoverTimer = setTimeout(function() { _dragCollapsed.push(c); var bs = bootstrap.Collapse.getInstance(c) || new bootstrap.Collapse(c, {toggle:false}); bs.show(); }, 800); }
+                function onEnter() { _hoverTimer = setTimeout(function() { _dragCollapsed.push(c); var bs = bootstrap.Collapse.getInstance(c) || new bootstrap.Collapse(c, {toggle:false}); bs.show(); }, 400); }
                 function onLeave() { if (_hoverTimer) { clearTimeout(_hoverTimer); _hoverTimer = null; } }
                 parent.addEventListener('dragenter', onEnter);
                 parent.addEventListener('dragleave', onLeave);
@@ -1141,6 +1143,10 @@ document.addEventListener('mouseenter', function(e) {
             el.style.opacity = '';
             dragEl = null;
             window._isDragging = false;
+            // Re-enable collapse toggles after a short delay (prevent click from firing)
+            setTimeout(function() {
+                document.querySelectorAll('[data-drag-saved]').forEach(function(t) { t.setAttribute('data-bs-toggle', 'collapse'); t.removeAttribute('data-drag-saved'); });
+            }, 100);
             document.querySelectorAll('.todo-drag-item').forEach(function(e) { e.style.borderTop = ''; e.style.borderBottom = ''; });
             document.querySelectorAll('.todo-list-for-req').forEach(function(c) { c.style.outline = ''; });
             // Re-collapse sections that were collapsed before drag
