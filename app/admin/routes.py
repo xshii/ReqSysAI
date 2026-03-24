@@ -103,6 +103,7 @@ def user_edit(user_id):
         user.pinyin = to_pinyin(form.name.data)
         user.ip_address = form.ip_address.data or f'pending-{user.employee_id}'
         user.group = form.group.data or None
+        user.manager = form.manager.data or None
         user.roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
         user.is_active = form.is_active.data
         db.session.commit()

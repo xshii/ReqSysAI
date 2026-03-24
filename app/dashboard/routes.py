@@ -341,7 +341,7 @@ def weekly_report():
                 lines.append(f'- {t.user.name}: {t.title}（{reqs_str}）')
 
         # Open risks from DB (needed for both prompt context and template)
-        risk_q = Risk.query.filter_by(status='open')
+        risk_q = Risk.query.filter_by(status='open').filter(Risk.deleted_at.is_(None))
         if cur_project_id:
             risk_q = risk_q.filter_by(project_id=cur_project_id)
         open_risks = risk_q.order_by(Risk.severity, Risk.due_date).all()
@@ -518,7 +518,7 @@ def weekly_report():
                 inv['people'].add(t.user.name)
                 inv['days'] += 1
 
-        risk_q = Risk.query.filter_by(status='open')
+        risk_q = Risk.query.filter_by(status='open').filter(Risk.deleted_at.is_(None))
         if cur_project_id:
             risk_q = risk_q.filter_by(project_id=cur_project_id)
         open_risks = risk_q.order_by(Risk.severity, Risk.due_date).all()

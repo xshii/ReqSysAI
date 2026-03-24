@@ -40,6 +40,12 @@
                         <label class="form-label">{{ form.group.label.text }}</label>
                         {{ form.group(class="form-control", placeholder="例如: 前端组") }}
                     </div>
+                    {% if form.manager is defined %}
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.manager.label.text }}</label>
+                        {{ form.manager(class="form-control", placeholder="例如: 张三 a00123456") }}
+                    </div>
+                    {% endif %}
                     <div class="mb-3">
                         <label class="form-label">{{ form.role_ids.label.text }}</label>
                         <div>

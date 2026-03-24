@@ -108,6 +108,11 @@ function checkHelpAlert() {
             <i class="bi bi-clock-fill text-success"></i> 本周专注 {{ (week_focus / 60)|round(1) }}h
         </span>
         {% endif %}
+        {% if unclosed_meeting_count %}
+        <a href="{{ url_for('project.meeting_list', project_id=display_reqs[0].project_id if display_reqs else 1) }}" class="ms-2 align-middle text-decoration-none" style="font-size:.55em;">
+            <i class="bi bi-camera-video text-warning"></i> {{ unclosed_meeting_count }}个会议未闭环
+        </a>
+        {% endif %}
     </h4>
     <div class="ms-auto d-flex gap-1">
         <button class="btn btn-sm btn-outline-secondary" id="btnDailyProgress" title="AI 生成今日进展报告">

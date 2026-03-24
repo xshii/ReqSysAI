@@ -277,6 +277,40 @@ function filterTeamPerson(uid) {
     }
 })();
 
+/* Quick-add forms: AJAX instead of page reload */
+document.querySelectorAll('.quick-todo-form').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var input = form.querySelector('input[name="title"]');
+        var title = input.value.trim();
+        if (!title) return;
+        var data = {title: title, category: 'team'};
+        var reqId = form.querySelector('input[name="req_id"]');
+        if (reqId) data.req_id = parseInt(reqId.value);
+        var userId = form.querySelector('input[name="user_id"]');
+        if (userId) data.user_id = parseInt(userId.value);
+        var catInput = form.querySelector('input[name="category"]');
+        if (catInput) data.category = catInput.value;
+        apiPost('/quick-todo', data).then(function(d) {
+            if (d && d.ok) {
+                input.value = '';
+                showToast((d.helper ? d.title + ' → ' + d.helper : d.title) + ' ✓', 'success');
+                // Insert new row visually
+                var card = form.closest('.team-user-card');
+                if (card) {
+                    var body = card.querySelector('.card-body');
+                    var row = document.createElement('div');
+                    row.className = 'd-flex align-items-center gap-1 mb-1 small todo-drag-item';
+                    row.innerHTML = '<input type="checkbox" class="form-check-input mt-0" style="min-width:14px;"> <span class="flex-grow-1">' + title.replace(/</g,'&lt;') + '</span>';
+                    body.insertBefore(row, form);
+                }
+            } else {
+                showToast('添加失败', 'danger');
+            }
+        });
+    });
+});
+
 /* Standup */
 function genStandup() {
     var btn = document.getElementById('btnStandup');

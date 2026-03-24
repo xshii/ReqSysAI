@@ -94,6 +94,7 @@ def index():
     # My related risks
     my_risks = Risk.query.filter(
         Risk.status == 'open',
+        Risk.deleted_at.is_(None),
         db.or_(Risk.tracker_id == current_user.id, Risk.created_by == current_user.id),
     ).order_by(Risk.due_date).all()
 
@@ -171,6 +172,14 @@ def index():
             Milestone.status == 'active',
         ).order_by(Milestone.due_date.asc().nullslast()).all()
 
+    # Meeting unclosed count: meetings with open (non-deleted) risks
+    from app.models.meeting import Meeting
+    unclosed_meeting_count = db.session.query(db.func.count(db.distinct(Risk.meeting_id))).filter(
+        Risk.status == 'open',
+        Risk.deleted_at.is_(None),
+        Risk.meeting_id.isnot(None),
+    ).scalar() or 0
+
     # Recurring todos + completion status (independent of daily todos)
     from app.models.recurring_todo import RecurringTodo
     from app.models.recurring_completion import RecurringCompletion
@@ -207,6 +216,7 @@ def index():
         heatmap=heatmap, heatmap_start=heatmap_start, timedelta=timedelta,
         milestones=milestones, all_recurring=all_recurring, recurring_due=recurring_due,
         recurring_status=recurring_status, week_focus=week_focus,
+        unclosed_meeting_count=unclosed_meeting_count,
     )
 
 
@@ -654,7 +664,7 @@ def daily_standup():
             lines.append(f'- [{r.number}] {r.title}（延期{days}天，{r.assignee_display}）')
 
     # Open risks
-    open_risks = Risk.query.filter_by(status='open').all()
+    open_risks = Risk.query.filter_by(status='open').filter(Risk.deleted_at.is_(None)).all()
     if open_risks:
         lines.append('\n未解决风险：')
         for r in open_risks:

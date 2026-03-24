@@ -84,7 +84,7 @@ def gather_project_data(monday, sunday, project_id=None):
     req_changes = req_changes_q.all()
 
     # Open risks
-    risk_q = Risk.query.filter_by(status='open')
+    risk_q = Risk.query.filter_by(status='open').filter(Risk.deleted_at.is_(None))
     if project_id:
         risk_q = risk_q.filter_by(project_id=project_id)
     open_risks = risk_q.order_by(Risk.severity, Risk.due_date).all()
