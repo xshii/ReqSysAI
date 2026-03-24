@@ -124,6 +124,9 @@
             </div>
         </div>
     </div>
+    {% if report_data.timeline_img %}
+    <img src="data:image/png;base64,{{ report_data.timeline_img }}" class="timeline-img" style="width:100%;max-width:760px;display:none;" alt="里程碑时间轴">
+    {% endif %}
 </div>
 {% endif %}
 
@@ -551,33 +554,35 @@ function exportEml() {
             if (d.querySelector('strong')) body += '<div style="font-size:13px;font-weight:700;margin-top:10px;margin-bottom:4px;">' + d.innerHTML + '</div>';
         });
 
-        // Milestones → horizontal timeline table (max 6 per row)
-        var msContainer = sec.querySelector('.d-flex[style*="margin:0 8px"]');
-        if (msContainer) {
-            var msItems = Array.prototype.slice.call(msContainer.querySelectorAll('.text-center'));
-            var perRow = 6;
-            for (var ri = 0; ri < msItems.length; ri += perRow) {
-                var chunk = msItems.slice(ri, ri + perRow);
-                var colW = Math.floor(100 / chunk.length) + '%';
-                // Axis line
-                body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin:' + (ri === 0 ? '6px' : '2px') + ' 0 0 0;"><tr>';
-                chunk.forEach(function() { body += '<td style="height:2px;background:#1e3a5f;"></td>'; });
-                body += '</tr></table>';
-                // Markers + labels
-                body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 4px 0;"><tr>';
-                chunk.forEach(function(ms) {
-                    var nameEl = ms.querySelector('.fw-bold');
-                    var dateEls = ms.querySelectorAll('div');
-                    var name = nameEl ? nameEl.textContent.trim() : '';
-                    var dateText = dateEls.length > 1 ? dateEls[1].textContent.trim() : '';
-                    var color = nameEl ? (nameEl.style.color || '#1e3a5f') : '#1e3a5f';
-                    body += '<td style="width:' + colW + ';text-align:center;vertical-align:top;padding:2px 3px;">'
-                        + '<div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:8px solid ' + color + ';margin:0 auto;"></div>'
-                        + '<div style="font-size:11px;font-weight:700;color:' + color + ';margin-top:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="' + name.replace(/"/g, '&quot;') + '">' + name + '</div>'
-                        + (dateText ? '<div style="font-size:10px;color:#64748b;">' + dateText + '</div>' : '')
-                        + '</td>';
-                });
-                body += '</tr></table>';
+        // Milestones → use PNG image if available, fallback to table
+        var msImg = sec.querySelector('.timeline-img');
+        if (msImg && msImg.src) {
+            body += '<img src="' + msImg.src + '" width="760" style="width:100%;max-width:760px;" alt="里程碑时间轴">';
+        } else {
+            var msContainer = sec.querySelector('.d-flex[style*="margin:0 8px"]');
+            if (msContainer) {
+                var msItems = Array.prototype.slice.call(msContainer.querySelectorAll('.text-center'));
+                var perRow = 6;
+                for (var ri = 0; ri < msItems.length; ri += perRow) {
+                    var chunk = msItems.slice(ri, ri + perRow);
+                    var colW = Math.floor(100 / chunk.length) + '%';
+                    body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin:' + (ri === 0 ? '6px' : '2px') + ' 0 0 0;"><tr>';
+                    chunk.forEach(function() { body += '<td style="height:2px;background:#1e3a5f;"></td>'; });
+                    body += '</tr></table>';
+                    body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 4px 0;"><tr>';
+                    chunk.forEach(function(ms) {
+                        var nameEl = ms.querySelector('.fw-bold');
+                        var dateEls = ms.querySelectorAll('div');
+                        var name = nameEl ? nameEl.textContent.trim() : '';
+                        var dateText = dateEls.length > 1 ? dateEls[1].textContent.trim() : '';
+                        var color = nameEl ? (nameEl.style.color || '#1e3a5f') : '#1e3a5f';
+                        body += '<td style="width:' + colW + ';text-align:center;vertical-align:top;padding:2px 3px;">'
+                            + '<div style="font-size:11px;font-weight:700;color:' + color + ';">▲ ' + name + '</div>'
+                            + (dateText ? '<div style="font-size:10px;color:#64748b;">' + dateText + '</div>' : '')
+                            + '</td>';
+                    });
+                    body += '</tr></table>';
+                }
             }
         }
 

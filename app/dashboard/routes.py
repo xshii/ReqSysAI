@@ -423,6 +423,16 @@ def weekly_report():
                 people_map[pname][rnum] = inv['days'] // max(len(inv['people']), 1)
                 people_map[pname]['_total'] += people_map[pname][rnum]
 
+        # Generate milestone timeline image (base64 PNG)
+        timeline_img = None
+        if milestones:
+            try:
+                from app.services.timeline import generate_timeline_image
+                ms_data = [{'name': m.name, 'due_date': m.due_date, 'status': m.status} for m in milestones]
+                timeline_img = generate_timeline_image(ms_data)
+            except Exception:
+                pass
+
         # Package all data for template and Excel
         sub_projects = _build_sub_projects(cur_project, monday)
 
@@ -447,6 +457,7 @@ def weekly_report():
             'people_roles': {m.display_name: m.role_label for m in ProjectMember.query.filter_by(project_id=cur_project_id).all()},
             'ai': ai_analysis,
             'sub_projects': sub_projects,
+            'timeline_img': timeline_img,
         }
 
         # Save to DB
