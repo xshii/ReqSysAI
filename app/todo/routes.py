@@ -13,6 +13,8 @@ from app.models.requirement import Requirement
 from app.models.user import User, Group
 
 
+
+
 # ---- Todo CRUD ----
 
 @todo_bp.route('/add', methods=['POST'])
@@ -54,8 +56,6 @@ def add():
 def edit(todo_id):
     """Edit todo: JSON API for title update or delete (empty title)."""
     todo = db.get_or_404(Todo, todo_id)
-    if todo.user_id != current_user.id:
-        return jsonify(ok=False), 403
     data = request.get_json()
     if not data:
         return jsonify(ok=False), 400
@@ -85,8 +85,6 @@ def edit(todo_id):
 def confirm(todo_id):
     """Mark todo as done."""
     todo = db.get_or_404(Todo, todo_id)
-    if todo.user_id != current_user.id:
-        return jsonify(ok=False), 403
     todo.status = TODO_STATUS_DONE
     todo.done_date = date.today()
     # Record timer if running
@@ -107,8 +105,6 @@ def confirm(todo_id):
 def reopen(todo_id):
     """Reopen a done todo."""
     todo = db.get_or_404(Todo, todo_id)
-    if todo.user_id != current_user.id:
-        return jsonify(ok=False), 403
     todo.status = TODO_STATUS_TODO
     todo.done_date = None
     todo.started_at = None
@@ -123,8 +119,6 @@ def reopen(todo_id):
 def timer(todo_id):
     """Start or stop focus timer."""
     todo = db.get_or_404(Todo, todo_id)
-    if todo.user_id != current_user.id:
-        return jsonify(ok=False), 403
     if todo.started_at:
         # Stop timer — save this session
         from app.models.todo import PomodoroSession
@@ -151,8 +145,6 @@ def timer(todo_id):
 def toggle_block(todo_id):
     """Toggle blocked status with optional reason."""
     todo = db.get_or_404(Todo, todo_id)
-    if todo.user_id != current_user.id:
-        return jsonify(ok=False), 403
     data = request.get_json() or {}
     if todo.need_help:
         # Unblock
@@ -198,8 +190,6 @@ def toggle_block(todo_id):
 def add_item(todo_id):
     """Add a sub-item to a todo."""
     todo = db.get_or_404(Todo, todo_id)
-    if todo.user_id != current_user.id:
-        return jsonify(ok=False), 403
     data = request.get_json()
     title = (data.get('title') or '').strip() if data else ''
     if not title:
@@ -219,8 +209,6 @@ def add_item(todo_id):
 def toggle_item(item_id):
     """Toggle a sub-item's done state."""
     item = db.get_or_404(TodoItem, item_id)
-    if item.todo.user_id != current_user.id:
-        return jsonify(ok=False), 403
     item.is_done = not item.is_done
     # Auto-complete todo if all items done; reopen if unchecked
     todo = item.todo
@@ -255,8 +243,6 @@ def toggle_item(item_id):
 def delete_item(item_id):
     """Delete a sub-item."""
     item = db.get_or_404(TodoItem, item_id)
-    if item.todo.user_id != current_user.id:
-        return jsonify(ok=False), 403
     db.session.delete(item)
     db.session.commit()
     return jsonify(ok=True)
@@ -269,8 +255,6 @@ def delete_item(item_id):
 def ask_help(todo_id):
     """Create a linked todo for helper."""
     todo = db.get_or_404(Todo, todo_id)
-    if todo.user_id != current_user.id:
-        return jsonify(ok=False, msg='只能对自己的任务求助'), 403
     data = request.get_json() or {}
     helper_id = data.get('helper_id')
     help_title = (data.get('title') or '').strip() or f'协助: {todo.title}'
@@ -305,8 +289,8 @@ def drag():
     if not data:
         return jsonify(ok=False), 400
     todo = db.session.get(Todo, data.get('id'))
-    if not todo or todo.user_id != current_user.id:
-        return jsonify(ok=False), 403
+    if not todo:
+        return jsonify(ok=False), 404
     new_status = data.get('status')
     if new_status and new_status in Todo.STATUS_LABELS:
         todo.status = new_status

@@ -53,6 +53,7 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True)
     pomodoro_minutes = db.Column(db.Integer, default=45)
     only_my_group = db.Column(db.Boolean, default=True)  # 默认只看本组
+    manager = db.Column(db.String(100), nullable=True)  # 主管，格式：姓名 工号
     last_login = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

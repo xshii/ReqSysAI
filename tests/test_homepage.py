@@ -300,8 +300,8 @@ class TestDragSort:
             assert _db.session.get(Todo, ids[1]).sort_order == 1  # A second
             assert _db.session.get(Todo, ids[2]).sort_order == 2  # B third
 
-    def test_drag_other_user_forbidden(self, client, app):
-        """不能拖拽别人的 todo"""
+    def test_drag_other_user_allowed(self, client, app):
+        """团队协作：可以操作别人的 todo"""
         with app.app_context():
             from app.models.user import User
             u2 = User.query.filter_by(employee_id='t002').first()
@@ -314,7 +314,7 @@ class TestDragSort:
             tid = t.id
 
         resp = client.post('/todos/drag', json={'id': tid, 'order': [tid]})
-        assert resp.status_code == 403
+        assert resp.status_code == 200
 
     def test_move_todo_to_team(self, client, app):
         """移动 todo 到团队分类"""

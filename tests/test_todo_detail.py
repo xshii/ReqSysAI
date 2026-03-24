@@ -93,13 +93,14 @@ class TestTodoEdit:
             from app.models.todo import Todo
             assert _db.session.get(Todo, tid) is None
 
-    def test_edit_other_user_forbidden(self, client, app):
+    def test_edit_other_user_allowed(self, client, app):
+        """团队协作：可编辑别人的todo"""
         with app.app_context():
             t = _make_todo('他人', user_id=2)
             _db.session.commit()
             tid = t.id
-        resp = client.post(f'/todos/{tid}/edit', json={'title': '改不了'})
-        assert resp.get_json()['ok'] is False
+        resp = client.post(f'/todos/{tid}/edit', json={'title': '可以改'})
+        assert resp.get_json()['ok'] is True
 
 
 # ─── 番茄钟 ─────────────────────────────────────────────────

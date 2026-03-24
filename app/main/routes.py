@@ -482,7 +482,7 @@ def move_todo():
     todo_id = data.get('todo_id')
     target_req_id = data.get('req_id')  # int or 'team'/'risk'/'personal'
     todo = db.session.get(Todo, todo_id)
-    if not todo or todo.user_id != current_user.id:
+    if not todo:
         return jsonify(ok=False)
 
     # Clear old requirements
@@ -566,11 +566,6 @@ def toggle_todo(todo_id):
     todo = db.session.get(Todo, todo_id)
     if not todo:
         return jsonify(ok=False) if request.is_json else redirect(url_for('main.index'))
-    # Allow same-group members to toggle (team collaboration)
-    if todo.user_id != current_user.id:
-        owner = db.session.get(User, todo.user_id)
-        if not owner or owner.group != current_user.group:
-            return jsonify(ok=False, msg='无权操作') if request.is_json else redirect(url_for('main.index'))
     if todo.status == TODO_STATUS_DONE:
         todo.status = TODO_STATUS_TODO
         todo.done_date = None
