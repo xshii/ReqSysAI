@@ -12,9 +12,9 @@ if __name__ == '__main__':
         if os.path.exists(f):
             with open(f, encoding='utf-8') as fp:
                 cfg.update(yaml.safe_load(fp) or {})
-    server = cfg.get('server', {})
+    app_cfg = cfg.get('app', {})
     app.run(
-        host=os.getenv('FLASK_HOST', server.get('host', '127.0.0.1')),
-        port=int(os.getenv('FLASK_PORT', server.get('port', 5001))),
+        host=os.getenv('FLASK_HOST', app_cfg.get('host', '0.0.0.0')),
+        port=int(os.getenv('FLASK_PORT', app_cfg.get('port', 5001))),
         debug=True,
     )
