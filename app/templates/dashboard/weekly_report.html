@@ -411,11 +411,32 @@ function exportEml() {
     if (!el) return;
     var defaultSubject = '{{ report_data.project_name if report_data else "" }} 项目周报（{{ monday.strftime("%m-%d") }} ~ {{ sunday.strftime("%m-%d") }}）';
     var subject = (document.getElementById('emlSubject') || {}).value || defaultSubject;
-    var html = '<html><head><style>body{font-family:Microsoft YaHei,sans-serif;font-size:14px;color:#333;}'
-        + 'table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#f1f5f9;font-weight:600;}'
-        + 'th,td{border:1px solid #e2e8f0;padding:6px 12px;}h6{background:#f8fafc;border-left:3px solid #4a6cf7;padding:8px 14px;font-size:14px;}'
-        + '.badge{padding:2px 8px;border-radius:4px;font-size:12px;}'
-        + '</style></head><body>' + el.innerHTML + '</body></html>';
+    var css = 'body{font-family:Microsoft YaHei,Segoe UI,sans-serif;font-size:14px;color:#333;margin:0;padding:20px;background:#fff;}'
+        + '.report-header{background:linear-gradient(135deg,#1e3a5f 0%,#2d5a8e 100%);color:#fff;text-align:center;padding:18px 24px;font-size:16px;font-weight:700;letter-spacing:2px;border-radius:6px 6px 0 0;}'
+        + '.report-meta{background:#f0f4f8;text-align:center;padding:8px 20px;font-size:12px;color:#64748b;border-bottom:1px solid #e2e8f0;}'
+        + '.report-section{margin-bottom:16px;}'
+        + '.report-section h6{padding:8px 14px;margin:0 0 8px 0;background:linear-gradient(90deg,#f0f4f8 0%,#fff 100%);border-left:4px solid #1e3a5f;font-size:14px;font-weight:700;color:#1e3a5f;}'
+        + '.report-section h6.risk-title{border-left-color:#dc2626;color:#dc2626;}'
+        + 'table{width:100%;border-collapse:collapse;font-size:13px;}'
+        + 'th{background:#f1f5f9;font-weight:600;color:#475569;white-space:nowrap;}'
+        + 'th,td{border:1px solid #e2e8f0;padding:6px 12px;}'
+        + 'tbody tr:nth-child(even){background:#fafbfc;}'
+        + '.row-risk{background:#fef2f2 !important;}'
+        + '.report-stats{display:flex;flex-wrap:wrap;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;margin-bottom:8px;}'
+        + '.report-stat{flex:1;min-width:70px;text-align:center;padding:12px 6px;border-right:1px solid #e2e8f0;}'
+        + '.report-stat:last-child{border-right:none;}'
+        + '.report-stat .num{font-size:22px;font-weight:700;line-height:1.2;color:#1e3a5f;}'
+        + '.report-stat .label{font-size:11px;color:#94a3b8;margin-top:2px;}'
+        + '.report-summary{background:#f8fafc;border:1px solid #e2e8f0;border-radius:4px;padding:12px 16px;font-size:13px;color:#334155;line-height:1.6;}'
+        + '.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;color:#fff;}'
+        + '.bg-success{background:#198754;}.bg-primary{background:#0d6efd;}.bg-warning{background:#ffc107;color:#333 !important;}.bg-secondary{background:#6c757d;}.bg-danger{background:#dc3545;}.bg-info{background:#0dcaf0;color:#333 !important;}.bg-dark{background:#212529;}'
+        + '.text-success{color:#198754 !important;}.text-primary{color:#0d6efd !important;}.text-warning{color:#ffc107 !important;}.text-danger{color:#dc3545 !important;}.text-secondary{color:#6c757d !important;}.text-info{color:#0dcaf0 !important;}.text-muted{color:#6c757d !important;}'
+        + '.progress{height:8px;background:#e9ecef;border-radius:4px;overflow:hidden;display:flex;}'
+        + '.progress-bar{height:100%;}'
+        + '.progress-bar.bg-success{background:#198754;}.progress-bar.bg-primary{background:#0d6efd;}.progress-bar.bg-warning{background:#ffc107;}'
+        + 'ul{margin:0;padding-left:20px;}li{margin-bottom:4px;font-size:13px;}'
+        + '.fw-bold{font-weight:700;}.small{font-size:12px;}.text-center{text-align:center;}.text-truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.d-flex{display:flex;}.mb-0{margin-bottom:0;}.mb-1{margin-bottom:4px;}.mb-2{margin-bottom:8px;}.mt-2{margin-top:8px;}.mt-3{margin-top:12px;}.ps-2{padding-left:8px;}.ps-3{padding-left:16px;}';
+    var html = '<html><head><meta charset="UTF-8"><style>' + css + '</style></head><body>' + el.innerHTML + '</body></html>';
     var boundary = 'boundary_' + Date.now();
     var headers = [
         'Subject: ' + encodeHeader(subject),
