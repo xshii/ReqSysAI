@@ -1141,7 +1141,19 @@ def meeting_extract(project_id, meeting_id):
     from app.services.prompts import get_prompt
 
     system_prompt = get_prompt('meeting_extract')
-    parsed, raw = call_ollama(meeting.content, system_prompt=system_prompt)
+    # Build full context with meeting metadata
+    context_lines = [
+        f'会议标题：{meeting.title}',
+        f'会议日期：{meeting.date.strftime("%Y-%m-%d") if meeting.date else "未知"}',
+        f'召集人：{meeting.creator.name}',
+    ]
+    if meeting.attendees:
+        context_lines.append(f'与会人：{meeting.attendees}')
+    if meeting.cc:
+        context_lines.append(f'抄送人：{meeting.cc}')
+    context_lines.append(f'\n会议内容：\n{meeting.content}')
+    full_text = '\n'.join(context_lines)
+    parsed, raw = call_ollama(full_text, system_prompt=system_prompt)
 
     if parsed is None:
         flash('AI 提取失败，请稍后重试。' + (f' ({raw})' if raw else ''), 'danger')
