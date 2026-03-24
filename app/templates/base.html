@@ -413,7 +413,7 @@
             if (btn) { btn.className = 'btn btn-sm border-0'; btn.style.fontSize = '.85em'; btn.style.opacity = open ? '1' : '.4'; btn.style.color = open ? '#ffc107' : '#fff'; }
         }
 
-        function getSavedPwd() { return localStorage.getItem(MGR_PWD_KEY) || DEFAULT_PWD; }
+        function getSavedPwd() { return localStorage.getItem(MGR_PWD_KEY) || ''; }
 
         window.toggleMgrView = function() {
             if (isOpen()) {
@@ -421,24 +421,41 @@
                 applyView(false);
                 return;
             }
-            var pwd = getSavedPwd();
-            if (pwd === DEFAULT_PWD) {
-                // First time: prompt to change password
-                var newPwd = prompt('首次使用，请设置管理视图密码（6-15位，支持字母数字符号）：');
-                if (!newPwd || newPwd.length < 6 || newPwd.length > 15) {
-                    alert('密码长度需6-15位'); return;
+            // Show password modal
+            var saved = getSavedPwd();
+            var modal = document.getElementById('mgrPwdModal');
+            var input = document.getElementById('mgrPwdInput');
+            var hint = document.getElementById('mgrPwdHint');
+            var errEl = document.getElementById('mgrPwdErr');
+            input.value = '';
+            errEl.textContent = '';
+            hint.textContent = saved ? '请输入密码' : '首次使用，请设置密码（6-15位）';
+            document.getElementById('mgrPwdSubmitLabel').textContent = saved ? '确认' : '设置密码';
+            new bootstrap.Modal(modal).show();
+            setTimeout(function() { input.focus(); }, 300);
+        };
+
+        window.mgrPwdSubmit = function() {
+            var input = document.getElementById('mgrPwdInput');
+            var errEl = document.getElementById('mgrPwdErr');
+            var val = input.value;
+            var saved = getSavedPwd();
+            if (!saved) {
+                // Setting new password
+                if (!val || val.length < 6 || val.length > 15) {
+                    errEl.textContent = '密码长度需6-15位'; return;
                 }
-                localStorage.setItem(MGR_PWD_KEY, newPwd);
-                pwd = newPwd;
-                alert('密码已设置');
+                localStorage.setItem(MGR_PWD_KEY, val);
+                errEl.textContent = '';
+            } else {
+                if (val !== saved) {
+                    errEl.innerHTML = '密码错误 <a href="{{ url_for("auth.profile") }}" class="text-danger">去重置</a>'; input.value = ''; input.focus(); return;
+                }
             }
-            var input = prompt('请输入管理视图密码：');
-            if (input === pwd) {
-                localStorage.setItem(MGR_KEY, '1');
-                localStorage.setItem(MGR_TS_KEY, String(Date.now()));
-                applyView(true);
-            } else if (input !== null) {
-                alert('密码错误');
+            localStorage.setItem(MGR_KEY, '1');
+            localStorage.setItem(MGR_TS_KEY, String(Date.now()));
+            applyView(true);
+            bootstrap.Modal.getInstance(document.getElementById('mgrPwdModal')).hide();
             }
         };
 
@@ -446,6 +463,25 @@
         applyView(isOpen());
     })();
     </script>
+    <!-- Password modal for manager view -->
+    <div class="modal fade" id="mgrPwdModal" tabindex="-1">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2"><h6 class="modal-title"><i class="bi bi-shield-lock"></i> <span id="mgrPwdHint">请输入密码</span></h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body py-3">
+                    <div class="input-group input-group-sm">
+                        <input type="password" class="form-control" id="mgrPwdInput" placeholder="密码" autocomplete="off"
+                               onkeydown="if(event.key==='Enter')mgrPwdSubmit();">
+                        <button class="btn btn-outline-secondary" type="button" onclick="var i=document.getElementById('mgrPwdInput');i.type=i.type==='password'?'text':'password';this.innerHTML=i.type==='password'?'<i class=\'bi bi-eye\'></i>':'<i class=\'bi bi-eye-slash\'></i>';"><i class="bi bi-eye"></i></button>
+                    </div>
+                    <div class="text-danger small mt-1" id="mgrPwdErr"></div>
+                </div>
+                <div class="modal-footer py-1">
+                    <button type="button" class="btn btn-sm btn-primary" onclick="mgrPwdSubmit()"><span id="mgrPwdSubmitLabel">确认</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
     {% endif %}
     {% block extra_js %}{% endblock %}
 </body>
