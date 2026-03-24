@@ -297,15 +297,30 @@ function acceptPolish() {
 // Send email via mailto:
 function sendEmail() {
     fetch('/api/users').then(function(r) { return r.json(); }).then(function(users) {
-    var nameMap = {};
-    users.forEach(function(u) { if (u.employee_id) nameMap[u.name] = u.employee_id; });
+    var nameMap = {}, mgrMap = {};
+    users.forEach(function(u) {
+        if (u.employee_id) nameMap[u.name] = u.employee_id;
+        if (u.manager) mgrMap[u.name] = u.manager;  // "姓名 工号" or just name
+    });
 
     var attendees = (document.getElementById('attendeesVal').value || '').split(',').map(function(n) { return n.trim(); }).filter(Boolean);
     var cc = (document.getElementById('ccVal').value || '').split(',').map(function(n) { return n.trim(); }).filter(Boolean);
 
-    // Use employee_id (= email prefix) for Outlook resolution
+    // Auto-CC managers of all attendees + cc people
+    var ccSet = {};
+    cc.forEach(function(n) { ccSet[nameMap[n] || n] = 1; });
+    attendees.concat(cc).forEach(function(n) {
+        var mgr = mgrMap[n];
+        if (mgr) {
+            // manager field: "姓名 工号" — extract eid if present, else use as-is
+            var parts = mgr.trim().split(/\s+/);
+            var mgrId = parts.length > 1 ? parts[parts.length - 1] : (nameMap[parts[0]] || parts[0]);
+            if (mgrId && !ccSet[mgrId]) ccSet[mgrId] = 1;
+        }
+    });
+
     var toList = attendees.map(function(n) { return nameMap[n] || n; }).join(';');
-    var ccList = cc.map(function(n) { return nameMap[n] || n; }).join(';');
+    var ccList = Object.keys(ccSet).join(';');
 
     var subject = {{ (meeting.title ~ '（' ~ (meeting.date.strftime("%Y-%m-%d") if meeting.date else "") ~ '）')|tojson }};
 

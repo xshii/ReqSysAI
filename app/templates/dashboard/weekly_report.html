@@ -38,7 +38,7 @@
                        placeholder="leader@company.com" onchange="saveEmailSettings()">
             </div>
             <div class="col-md-4">
-                <label class="form-label mb-0 fw-bold">抄送 (Cc)</label>
+                <label class="form-label mb-0 fw-bold">抄送 (Cc) <button type="button" class="btn btn-link btn-sm p-0 ms-1" style="font-size:.75em;" onclick="autoFillManager()">+主管</button></label>
                 <input type="text" id="emlCc" class="form-control form-control-sm"
                        placeholder="pm@company.com" onchange="saveEmailSettings()">
             </div>
@@ -371,6 +371,25 @@ function copyRichText() {
             'text/plain': new Blob([el.innerText], {type: 'text/plain'})
         })
     ]).then(function() { alert('已复制富文本，可直接粘贴到 Outlook'); });
+}
+
+function autoFillManager() {
+    fetch('/api/users').then(function(r) { return r.json(); }).then(function(users) {
+        var me = users.find(function(u) { return u.id === {{ current_user.id }}; });
+        if (!me || !me.manager) { showToast('未设置主管，请联系管理员在后台配置', 'warning'); return; }
+        var parts = me.manager.trim().split(/\s+/);
+        var mgrId = parts.length > 1 ? parts[parts.length - 1] : parts[0];
+        var cc = document.getElementById('emlCc');
+        var existing = cc.value.split(/[;,；，]/).map(function(s) { return s.trim(); }).filter(Boolean);
+        if (existing.indexOf(mgrId) === -1) {
+            existing.push(mgrId);
+            cc.value = existing.join(';');
+            saveEmailSettings();
+            showToast('已添加主管: ' + me.manager, 'success');
+        } else {
+            showToast('主管已在抄送列表中', 'info');
+        }
+    });
 }
 
 function saveEmailSettings() {
