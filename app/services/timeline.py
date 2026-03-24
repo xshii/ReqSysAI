@@ -99,9 +99,8 @@ def generate_timeline_image(milestones, today=None, width=760):
     # Milestones
     for i, m in enumerate(ms_with_date):
         x = positions[i]
-        done = m.get('status') == 'completed'
-        overdue = not done and m['due_date'] < today
-        color = COLOR_DONE if done else (COLOR_OVERDUE if overdue else COLOR_ACTIVE)
+        done = m.get('status') == 'completed' or m['due_date'] < today
+        color = COLOR_DONE if done else COLOR_ACTIVE
 
         # Triangle marker
         if rows[i] == 0:
