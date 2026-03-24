@@ -80,7 +80,6 @@
                     <tr><td class="text-muted">状态</td><td><span class="badge bg-{{ req.status_color }}">{{ req.status_label }}</span></td></tr>
                     <tr><td class="text-muted">优先级</td><td><span class="badge bg-{{ req.priority_color }}">{{ req.priority_label }}</span></td></tr>
                     <tr><td class="text-muted">项目</td><td><a href="{{ url_for('project.project_detail', project_id=req.project.id) }}">{{ req.project.name }}</a></td></tr>
-                    <tr><td class="text-muted">里程碑</td><td>{{ req.milestone.name if req.milestone else '-' }}</td></tr>
                     <tr><td class="text-muted">负责人</td><td>{{ req.assignee_display }}</td></tr>
                     <tr><td class="text-muted">预估</td><td>{{ req.estimate_days or '-' }} 人天</td></tr>
                     <tr><td class="text-muted">代码量</td><td>{{ req.code_lines or '-' }} 行</td></tr>
