@@ -19,9 +19,9 @@ from app.utils.upload import save_photo
 def index():
     """List incentives with status filter."""
     is_reviewer = current_user.has_role('PL', 'XM', 'LM', 'HR') or current_user.is_admin
-    has_explicit_status = 'status' in request.args
     status_filter = request.args.get('status', '')
-    if not has_explicit_status and is_reviewer and not request.args.get('q'):
+    # Only default to 'submitted' when no URL params at all (first visit)
+    if not request.args and is_reviewer:
         status_filter = 'submitted'
 
     # Ordinary users: only see own submitted items; reviewers see all
