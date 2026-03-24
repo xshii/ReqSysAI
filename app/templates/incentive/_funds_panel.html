@@ -1,5 +1,5 @@
 {# Inline fund pool panel — included in index.html when funds tab active #}
-<div class="d-flex gap-2 mb-3 align-items-center">
+<div class="d-flex gap-2 mb-3 align-items-center mgr-only">
     <form method="POST" action="{{ url_for('incentive.fund_import_csv') }}" enctype="multipart/form-data" id="fundCsvForm" class="d-none">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="file" name="csv_file" accept=".csv" onchange="this.form.submit();">

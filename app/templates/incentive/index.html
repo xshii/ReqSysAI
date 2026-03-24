@@ -88,7 +88,7 @@
     <button type="button" class="btn btn-sm btn-outline-primary" onclick="applyFilter()"><i class="bi bi-search"></i> 筛选</button>
     <span class="text-muted small">{{ items | length }} 条</span>
     {% if can_export %}
-    <div class="ms-auto d-flex gap-1">
+    <div class="ms-auto d-flex gap-1 mgr-only">
         <a href="{{ url_for('incentive.export_csv', period=period) }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出</a>
         <button class="btn btn-sm btn-outline-primary" onclick="document.getElementById('csvImportInput').click()"><i class="bi bi-upload"></i> 导入</button>
         <form method="POST" action="{{ url_for('incentive.import_csv') }}" enctype="multipart/form-data" id="csvImportForm" class="d-none">
