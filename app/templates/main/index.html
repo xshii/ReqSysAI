@@ -16,6 +16,7 @@
     50% { box-shadow: 0 0 0 6px rgba(13,202,240,.15); }
 }
 .todo-list-for-req { contain: layout style; }
+.todo-list-for-req.collapsing { transition: none !important; }
 </style>
 {% endblock %}
 
@@ -1191,6 +1192,9 @@ document.addEventListener('mouseenter', function(e) {
             var ids = [];
             targetContainer.querySelectorAll('.todo-drag-item').forEach(function(item) { ids.push(parseInt(item.dataset.todoId)); });
             apiPost('/todos/drag', {order: ids});
+            // Keep this container open (don't re-collapse after drop)
+            var idx = _dragCollapsed.indexOf(targetContainer);
+            if (idx >= 0) _dragCollapsed.splice(idx, 1);
             // Cross container: move todo to new requirement
             if (sourceContainer && sourceContainer !== targetContainer) {
                 var reqId = targetContainer.dataset.reqId;
@@ -1219,6 +1223,9 @@ document.addEventListener('mouseenter', function(e) {
             var ids = [];
             container.querySelectorAll('.todo-drag-item').forEach(function(item) { ids.push(parseInt(item.dataset.todoId)); });
             apiPost('/todos/drag', {order: ids});
+            // Keep this container open
+            var cidx = _dragCollapsed.indexOf(container);
+            if (cidx >= 0) _dragCollapsed.splice(cidx, 1);
             // Cross container: move todo
             var sourceContainer = dragEl._sourceContainer;
             if (sourceContainer && sourceContainer !== container) {
