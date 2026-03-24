@@ -260,7 +260,7 @@
 
 {% set _active_reqs = report_data.all_reqs | rejectattr('status', 'in', ['done','closed']) | list %}
 {% set _done_reqs = report_data.all_reqs | selectattr('status', 'in', ['done','closed']) | list %}
-{% set _show_all = report_data.all_reqs | length <= 10 %}
+{% set _show_all = report_data.all_reqs | length <= 30 %}
 <div class="report-section">
     <h6>八、需求列表{% if not _show_all %} <span style="font-weight:400;font-size:.8em;color:#64748b;">（进行中 {{ _active_reqs|length }} / 已完成 {{ _done_reqs|length }}）</span>{% endif %}</h6>
     <table class="report-table">
