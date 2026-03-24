@@ -192,35 +192,7 @@
     {% endif %}
 </div>
 
-<!-- Section 6: People Map -->
-{% set _roles = report_data.get('people_roles', {}) %}
-{% set _pmap = report_data.get('people_map', {}) %}
-{% if _roles or _pmap %}
-<div class="report-section">
-    <h6>六、人力地图</h6>
-    {% set _items = _roles.items()|list if _roles else [] %}
-    {% if not _items and _pmap %}{% set _items = [] %}{% for n in _pmap.keys() %}{% if _items.append((n, '')) %}{% endif %}{% endfor %}{% endif %}
-    <table class="report-table">
-        <thead><tr><th>姓名</th><th>角色</th><th>姓名</th><th>角色</th></tr></thead>
-        <tbody>
-        {% for i in range(0, _items|length, 2) %}
-        <tr>
-            <td>{{ _items[i][0] }}</td>
-            <td class="text-muted">{{ _items[i][1] }}</td>
-            {% if i + 1 < _items|length %}
-            <td>{{ _items[i+1][0] }}</td>
-            <td class="text-muted">{{ _items[i+1][1] }}</td>
-            {% else %}
-            <td></td><td></td>
-            {% endif %}
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
-
-<!-- Section 7: Requirement Stats + List -->
+<!-- Section 6: Requirement Stats + List -->
 {% if report_data.all_reqs %}
 {% set _total = report_data.all_reqs | length %}
 {% set _done = report_data.all_reqs | selectattr('status', 'in', ['done','closed']) | list | length %}
@@ -232,7 +204,7 @@
 {% for r in _overdue %}{% if r.due_date and r.due_date < report_data.today and r.status not in ('done','closed') %}{% if _overdue_count.append(1) %}{% endif %}{% endif %}{% endfor %}
 {% set _est_total = report_data.all_reqs | map(attribute='estimate_days') | select('number') | sum %}
 <div class="report-section">
-    <h6>七、需求统计</h6>
+    <h6>六、需求统计</h6>
     <div class="report-stats mb-2">
         <div class="report-stat"><div class="num">{{ _total }}</div><div class="label">总需求</div></div>
         <div class="report-stat"><div class="num text-success">{{ _done }}</div><div class="label">已完成</div></div>
@@ -251,7 +223,7 @@
 </div>
 
 <div class="report-section">
-    <h6>八、需求列表</h6>
+    <h6>七、需求列表</h6>
     <table class="report-table">
         <thead><tr><th>编号</th><th>标题</th><th>状态</th><th>负责人</th><th>预估</th><th>预期完成</th></tr></thead>
         <tbody>
@@ -264,6 +236,34 @@
             <td>{{ r.assignee_display }}</td>
             <td>{{ r.estimate_days or '-' }}</td>
             <td>{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Section 8: People Map -->
+{% set _roles = report_data.get('people_roles', {}) %}
+{% set _pmap = report_data.get('people_map', {}) %}
+{% if _roles or _pmap %}
+<div class="report-section">
+    <h6>八、人力地图</h6>
+    {% set _items = _roles.items()|list if _roles else [] %}
+    {% if not _items and _pmap %}{% set _items = [] %}{% for n in _pmap.keys() %}{% if _items.append((n, '')) %}{% endif %}{% endfor %}{% endif %}
+    <table class="report-table">
+        <thead><tr><th>姓名</th><th>角色</th><th>姓名</th><th>角色</th></tr></thead>
+        <tbody>
+        {% for i in range(0, _items|length, 2) %}
+        <tr>
+            <td>{{ _items[i][0] }}</td>
+            <td class="text-muted">{{ _items[i][1] }}</td>
+            {% if i + 1 < _items|length %}
+            <td>{{ _items[i+1][0] }}</td>
+            <td class="text-muted">{{ _items[i+1][1] }}</td>
+            {% else %}
+            <td></td><td></td>
+            {% endif %}
         </tr>
         {% endfor %}
         </tbody>
