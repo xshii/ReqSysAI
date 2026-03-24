@@ -35,12 +35,13 @@
             <div class="col-md-4">
                 <label class="form-label mb-0 fw-bold">收件人 (To)</label>
                 <input type="text" id="emlTo" class="form-control form-control-sm"
-                       placeholder="leader@company.com" onchange="saveEmailSettings()">
+                       placeholder="工号;工号 如 a00123456;b00654321" onchange="saveEmailSettings()">
+                <div class="text-muted" style="font-size:.65em;">EML为草稿模式，需在Outlook中手动填写收件人</div>
             </div>
             <div class="col-md-4">
                 <label class="form-label mb-0 fw-bold">抄送 (Cc) <button type="button" class="btn btn-link btn-sm p-0 ms-1" style="font-size:.75em;" onclick="autoFillManager()">+主管</button></label>
                 <input type="text" id="emlCc" class="form-control form-control-sm"
-                       placeholder="pm@company.com" onchange="saveEmailSettings()">
+                       placeholder="工号;工号" onchange="saveEmailSettings()">
             </div>
         </div>
     </div>
