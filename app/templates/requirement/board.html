@@ -23,6 +23,7 @@
             <option value="">全部负责人</option>
             {% for u in users %}<option value="{{ u.id }}" {% if cur_assignee == u.id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
         </select>
+        <button class="btn btn-outline-info btn-sm" id="btnToggleSub" onclick="toggleSubReqs()"><i class="bi bi-diagram-3"></i> 子需求</button>
         <a href="{{ url_for('requirement.requirement_list', project_id=cur_project or '') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list"></i> 列表</a>
     </div>
 </div>
@@ -62,6 +63,16 @@
                         <span class="text-muted" title="子需求进度">{{ r.children | selectattr('status', 'in', ['done','closed']) | list | length }}/{{ r.children | length }}</span>
                         {% endif %}
                     </div>
+                    {% if r.children %}
+                    <div class="sub-reqs" style="display:none;border-top:1px solid #e9ecef;margin-top:6px;padding-top:4px;">
+                        {% for c in r.children %}
+                        <div class="d-flex justify-content-between align-items-center" style="font-size:.7em;padding:1px 0;">
+                            <span class="{{ 'text-decoration-line-through text-muted' if c.status in ('done','closed') else '' }}">{{ c.title }}</span>
+                            <span class="badge bg-{{ c.status_color }}" style="font-size:.85em;">{{ c.status_label }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
@@ -82,6 +93,15 @@
 var csrfToken = '{{ csrf_token() }}';
 var dragId = null;
 
+var _subVisible = false;
+function toggleSubReqs() {
+    _subVisible = !_subVisible;
+    document.querySelectorAll('.sub-reqs').forEach(function(el) { el.style.display = _subVisible ? '' : 'none'; });
+    var btn = document.getElementById('btnToggleSub');
+    btn.classList.toggle('active', _subVisible);
+    btn.classList.toggle('btn-info', _subVisible);
+    btn.classList.toggle('btn-outline-info', !_subVisible);
+}
 function applyFilter() {
     var url = new URL(window.location);
     var p = document.getElementById('fProject').value;
