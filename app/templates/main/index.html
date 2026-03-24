@@ -15,6 +15,7 @@
     0%, 100% { box-shadow: 0 0 0 3px rgba(13,202,240,.35); }
     50% { box-shadow: 0 0 0 6px rgba(13,202,240,.15); }
 }
+.todo-list-for-req { contain: layout style; }
 </style>
 {% endblock %}
 
@@ -1105,10 +1106,13 @@ document.addEventListener('dragend', function() {
     if (_dragScrollTimer) { clearInterval(_dragScrollTimer); _dragScrollTimer = null; }
 });
 
-// Init Bootstrap tooltips
-document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
-    new bootstrap.Tooltip(el);
-});
+// Lazy-init Bootstrap tooltips (only on first hover, not all at once)
+document.addEventListener('mouseenter', function(e) {
+    var el = e.target.closest('[data-bs-toggle="tooltip"]');
+    if (el && !bootstrap.Tooltip.getInstance(el)) {
+        new bootstrap.Tooltip(el).show();
+    }
+}, true);
 
 // Drag-sort todos (supports cross-container move)
 (function() {
