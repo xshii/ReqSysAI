@@ -301,7 +301,8 @@ document.querySelectorAll('.quick-todo-form').forEach(function(form) {
                     var body = card.querySelector('.card-body');
                     var row = document.createElement('div');
                     row.className = 'd-flex align-items-center gap-1 mb-1 small todo-drag-item';
-                    row.innerHTML = '<input type="checkbox" class="form-check-input mt-0" style="min-width:14px;"> <span class="flex-grow-1">' + title.replace(/</g,'&lt;') + '</span>';
+                    var safe = title.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                    row.innerHTML = '<input type="checkbox" class="form-check-input mt-0" style="min-width:14px;"> <span class="flex-grow-1">' + safe + '</span>';
                     body.insertBefore(row, form);
                 }
             } else {

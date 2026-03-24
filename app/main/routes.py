@@ -173,7 +173,6 @@ def index():
         ).order_by(Milestone.due_date.asc().nullslast()).all()
 
     # Meeting unclosed count: meetings with open (non-deleted) risks
-    from app.models.meeting import Meeting
     unclosed_meeting_count = db.session.query(db.func.count(db.distinct(Risk.meeting_id))).filter(
         Risk.status == 'open',
         Risk.deleted_at.is_(None),
@@ -230,7 +229,7 @@ def quick_todo():
         title = (data.get('title') or '').strip()
         req_id = data.get('req_id')
         category = data.get('category', 'work')
-        target_uid = data.get('user_id', type=int) if isinstance(data.get('user_id'), int) else None
+        target_uid = data.get('user_id') if isinstance(data.get('user_id'), int) else None
     else:
         title = request.form.get('title', '').strip()
         req_id = request.form.get('req_id', type=int)

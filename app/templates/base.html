@@ -441,8 +441,12 @@
             errEl.textContent = '';
             hint.textContent = saved ? '请输入密码' : '首次使用，请设置密码（6-15位）';
             document.getElementById('mgrPwdSubmitLabel').textContent = saved ? '确认' : '设置密码';
-            new bootstrap.Modal(modal).show();
-            setTimeout(function() { input.focus(); }, 300);
+            var bsModal = bootstrap.Modal.getOrCreateInstance(modal);
+            bsModal.show();
+            modal.addEventListener('shown.bs.modal', function onShown() {
+                modal.removeEventListener('shown.bs.modal', onShown);
+                input.focus();
+            });
         }
 
         window.mgrPwdSubmit = function() {

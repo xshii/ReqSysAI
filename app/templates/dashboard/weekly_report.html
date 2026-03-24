@@ -391,8 +391,6 @@ function exportEml() {
     if (!el) return;
     var defaultSubject = '{{ report_data.project_name if report_data else "" }} 项目周报（{{ monday.strftime("%m-%d") }} ~ {{ sunday.strftime("%m-%d") }}）';
     var subject = (document.getElementById('emlSubject') || {}).value || defaultSubject;
-    var to = (document.getElementById('emlTo') || {}).value || '';
-    var cc = (document.getElementById('emlCc') || {}).value || '';
     var html = '<html><head><style>body{font-family:Microsoft YaHei,sans-serif;font-size:14px;color:#333;}'
         + 'table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#f1f5f9;font-weight:600;}'
         + 'th,td{border:1px solid #e2e8f0;padding:6px 12px;}h6{background:#f8fafc;border-left:3px solid #4a6cf7;padding:8px 14px;font-size:14px;}'

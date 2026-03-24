@@ -307,10 +307,10 @@ function sendEmail() {
     var toList = attendees.map(function(n) { return nameMap[n] || n; }).join(';');
     var ccList = cc.map(function(n) { return nameMap[n] || n; }).join(';');
 
-    var subject = '{{ meeting.title }}（{{ meeting.date.strftime("%Y-%m-%d") if meeting.date else "" }}）';
+    var subject = {{ (meeting.title ~ '（' ~ (meeting.date.strftime("%Y-%m-%d") if meeting.date else "") ~ '）')|tojson }};
 
-    var body = '会议标题：{{ meeting.title }}\n'
-        + '召集人：{{ meeting.creator.name }}\n'
+    var body = '会议标题：' + {{ meeting.title|tojson }} + '\n'
+        + '召集人：' + {{ meeting.creator.name|tojson }} + '\n'
         + '与会人：' + attendees.join('、') + '\n'
         + '日期：{{ meeting.date.strftime("%Y-%m-%d") if meeting.date else "" }}\n'
         + '━━━━━━━━━━━━━━━━━━━━\n\n';
@@ -323,7 +323,7 @@ function sendEmail() {
     body += '遗留问题跟踪：\n';
     body += '序号\t严重度\t标题\t责任人\t截止日期\t状态\n';
     {% for r in linked_risks %}
-    body += '{{ loop.index }}\t{{ r.severity_label }}\t{{ r.title }}\t{{ r.owner or "待定" }}\t{{ r.due_date.strftime("%Y-%m-%d") if r.due_date else "待定" }}\t{{ r.status_label }}\n';
+    body += '{{ loop.index }}\t' + {{ r.severity_label|tojson }} + '\t' + {{ r.title|tojson }} + '\t' + {{ (r.owner or "待定")|tojson }} + '\t{{ r.due_date.strftime("%Y-%m-%d") if r.due_date else "待定" }}\t' + {{ r.status_label|tojson }} + '\n';
     {% endfor %}
     {% endif %}
 
