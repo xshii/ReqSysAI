@@ -893,11 +893,23 @@ function createTodoRow(todoId, title, opts) {
     // Bind timer
     row.querySelector('.btn-timer-r').addEventListener('click', function() {
         var b = this;
+        // If already in focus mode for this todo, exit
+        if (focusTodoId == todoId && focusOverlay && focusOverlay.style.display !== 'none') {
+            exitFocusMode();
+            return;
+        }
         apiPost('/todos/' + todoId + '/timer', {}).then(function(x) {
-            if (x && x.ok && x.running) {
-                b.className = b.className.replace('btn-outline-secondary', 'btn-success');
-                b.querySelector('i').className = 'bi bi-clock-fill';
-                enterFocusMode(todoId, title);
+            if (x && x.ok) {
+                if (x.running) {
+                    b.className = b.className.replace('btn-outline-secondary', 'btn-success');
+                    b.querySelector('i').className = 'bi bi-clock-fill';
+                    enterFocusMode(todoId, title);
+                } else {
+                    b.className = b.className.replace('btn-success', 'btn-outline-secondary');
+                    b.querySelector('i').className = 'bi bi-clock';
+                    addTomatoIcon(b, x.minutes || 0);
+                    showToast('◐ 打断，' + (x.minutes || 0) + '分钟', 'info');
+                }
             }
         });
     });
@@ -1030,7 +1042,7 @@ function exitFocusMode() {
     if (!tid) return;
     apiPost('/todos/' + tid + '/timer', {}).then(function(d) {
         if (d && d.ok) {
-            var btn = document.querySelector('.btn-timer-home[data-id="' + tid + '"]');
+            var btn = document.querySelector('.btn-timer-home[data-id="' + tid + '"]') || document.querySelector('.btn-timer-r[data-id="' + tid + '"]');
             if (btn) {
                 btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
                 btn.querySelector('i').className = 'bi bi-clock';
