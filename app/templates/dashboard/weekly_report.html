@@ -551,20 +551,27 @@ function exportEml() {
             if (d.querySelector('strong')) body += '<div style="font-size:13px;font-weight:700;margin-top:10px;margin-bottom:4px;">' + d.innerHTML + '</div>';
         });
 
-        // Milestones (convert flex timeline to simple table)
+        // Milestones → vertical table (works for any count)
         var msContainer = sec.querySelector('.d-flex[style*="margin:0 8px"]');
         if (msContainer) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:6px 0;"><tr>';
-            msContainer.querySelectorAll('.text-center').forEach(function(ms) {
-                var name = ms.querySelector('.fw-bold');
-                var dateEl = ms.querySelectorAll('div')[1];
-                var color = name ? name.style.color || '#1e3a5f' : '#1e3a5f';
-                body += '<td style="text-align:center;padding:6px 4px;border:1px solid #e2e8f0;">'
-                    + '<div style="font-size:12px;font-weight:700;color:' + color + ';">▲ ' + (name ? name.textContent : '') + '</div>'
-                    + (dateEl ? '<div style="font-size:11px;color:#64748b;">' + dateEl.textContent + '</div>' : '')
-                    + '</td>';
+            var msItems = msContainer.querySelectorAll('.text-center');
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;margin:6px 0;">';
+            body += '<tr><th style="border:1px solid #e2e8f0;padding:4px 10px;background:#f1f5f9;font-weight:600;color:#475569;">里程碑</th>'
+                + '<th style="border:1px solid #e2e8f0;padding:4px 10px;background:#f1f5f9;font-weight:600;color:#475569;width:90px;">日期</th>'
+                + '<th style="border:1px solid #e2e8f0;padding:4px 10px;background:#f1f5f9;font-weight:600;color:#475569;width:60px;">状态</th></tr>';
+            msItems.forEach(function(ms) {
+                var nameEl = ms.querySelector('.fw-bold');
+                var dateEl = ms.querySelectorAll('div');
+                var name = nameEl ? nameEl.textContent.trim() : '';
+                var dateText = dateEl.length > 1 ? dateEl[1].textContent.trim() : '';
+                var color = nameEl ? (nameEl.style.color || '#1e3a5f') : '#1e3a5f';
+                var status = color === '#10b981' ? '已完成' : (color === '#dc2626' ? '已超期' : '进行中');
+                var statusBg = color === '#10b981' ? '#198754' : (color === '#dc2626' ? '#dc3545' : '#6c757d');
+                body += '<tr><td style="border:1px solid #e2e8f0;padding:4px 10px;color:' + color + ';font-weight:600;">' + name + '</td>'
+                    + '<td style="border:1px solid #e2e8f0;padding:4px 10px;color:#64748b;">' + dateText + '</td>'
+                    + '<td style="border:1px solid #e2e8f0;padding:4px 10px;text-align:center;"><span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;color:#fff;background:' + statusBg + ';">' + status + '</span></td></tr>';
             });
-            body += '</tr></table>';
+            body += '</table>';
         }
 
         // Data tables
