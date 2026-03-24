@@ -77,9 +77,7 @@
     发布人：{{ current_user.name }}　｜　审核人：{{ report_data.reviewer }}
 </div>
 {% if report_data.get('project_goal') %}
-<div class="report-meta" style="border-bottom:none;padding-top:0;">
-    项目目标：{{ report_data.project_goal }}
-</div>
+<div class="report-meta" style="border-bottom:none;padding-top:0;text-align:left;white-space:pre-line;">项目目标：{{ report_data.project_goal }}</div>
 {% endif %}
 
 <!-- Row 3: Milestones (timeline) -->
@@ -469,7 +467,9 @@ function exportEml() {
     // Meta
     var metaEls = el.querySelectorAll('.report-meta');
     metaEls.forEach(function(m) {
-        rows += '<tr><td style="background:#f0f4f8;text-align:center;padding:6px 20px;font-size:12px;color:#64748b;">' + m.textContent.trim() + '</td></tr>';
+        var align = m.style.textAlign === 'left' ? 'left' : 'center';
+        var txt = m.innerHTML.trim().replace(/\n/g, '<br>');
+        rows += '<tr><td style="background:#f0f4f8;text-align:' + align + ';padding:6px 20px;font-size:12px;color:#64748b;">' + txt + '</td></tr>';
     });
 
     // Sections
