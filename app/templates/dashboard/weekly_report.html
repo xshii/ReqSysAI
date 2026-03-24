@@ -258,19 +258,16 @@
     </div>
 </div>
 
-{% set _active_reqs = report_data.all_reqs | rejectattr('status', 'in', ['done','closed']) | list %}
-{% set _done_reqs = report_data.all_reqs | selectattr('status', 'in', ['done','closed']) | list %}
-{% set _show_all = report_data.all_reqs | length <= 30 %}
+{% set _mode_labels = {'full': '', 'diff_assignee': '仅显示父需求+责任人不同的子需求', 'parent_only': '仅显示父需求', 'priority': '按截止日期排序，优先显示延期项（前40条）'} %}
 <div class="report-section">
-    <h6>八、需求列表{% if not _show_all %} <span style="font-weight:400;font-size:.8em;color:#64748b;">（进行中 {{ _active_reqs|length }} / 已完成 {{ _done_reqs|length }}）</span>{% endif %}</h6>
+    <h6>八、需求列表{% if report_data.req_list_mode != 'full' %} <span style="font-weight:400;font-size:.75em;color:#64748b;">（{{ _mode_labels[report_data.req_list_mode] }}，共{{ report_data.req_total_with_children }}条）</span>{% endif %}</h6>
     <table class="report-table">
         <thead><tr><th>编号</th><th>标题</th><th>状态</th><th>负责人</th><th>预估</th><th>预期完成</th></tr></thead>
         <tbody>
-        {% if _show_all %}
-        {% for r in report_data.all_reqs %}
+        {% for r in report_data.display_reqs %}
         <tr>
             <td>{{ r.number }}</td>
-            <td>{{ r.title }}{% if r.children %} <span class="text-muted small">({{ r.children | selectattr('status', 'in', ['done','closed']) | list | length }}/{{ r.children | length }})</span>{% endif %}</td>
+            <td>{{ r.title }}{% if r.parent_id %} <span class="text-muted" style="font-size:.8em;">↳子</span>{% endif %}{% if r.children and report_data.req_list_mode != 'full' %} <span class="text-muted small">({{ r.children | selectattr('status', 'in', ['done','closed']) | list | length }}/{{ r.children | length }})</span>{% endif %}</td>
             <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
                 {% if r.due_date and r.due_date < report_data.today and r.status not in ('done','closed') %}<span class="badge bg-danger">超期</span>{% endif %}</td>
             <td>{{ r.assignee_display }}</td>
@@ -278,35 +275,6 @@
             <td>{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
         </tr>
         {% endfor %}
-        {% else %}
-        {# >10 reqs: only show active (sorted by due_date), done collapsed #}
-        {% for r in _active_reqs | sort(attribute='due_date') %}
-        <tr>
-            <td>{{ r.number }}</td>
-            <td>{{ r.title }}{% if r.children %} <span class="text-muted small">({{ r.children | selectattr('status', 'in', ['done','closed']) | list | length }}/{{ r.children | length }})</span>{% endif %}</td>
-            <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
-                {% if r.due_date and r.due_date < report_data.today %}<span class="badge bg-danger">超期</span>{% endif %}</td>
-            <td>{{ r.assignee_display }}</td>
-            <td>{{ r.estimate_days or '-' }}</td>
-            <td>{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
-        </tr>
-        {% endfor %}
-        {% if _done_reqs %}
-        <tr class="req-done-toggle" style="cursor:pointer;" onclick="var t=document.querySelectorAll('.req-done-row');t.forEach(function(r){r.style.display=r.style.display==='none'?'':'none';});this.querySelector('span').textContent=t[0]&&t[0].style.display==='none'?'展开':'收起';">
-            <td colspan="6" class="text-center text-muted small">已完成 {{ _done_reqs|length }} 条 <span>展开</span></td>
-        </tr>
-        {% for r in _done_reqs %}
-        <tr class="req-done-row" style="display:none;">
-            <td>{{ r.number }}</td>
-            <td class="text-muted">{{ r.title }}</td>
-            <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span></td>
-            <td class="text-muted">{{ r.assignee_display }}</td>
-            <td class="text-muted">{{ r.estimate_days or '-' }}</td>
-            <td class="text-muted">{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
-        </tr>
-        {% endfor %}
-        {% endif %}
-        {% endif %}
         </tbody>
     </table>
 </div>

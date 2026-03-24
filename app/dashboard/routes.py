@@ -433,6 +433,39 @@ def weekly_report():
             except Exception:
                 pass
 
+        # Smart requirement list: multi-tier filtering
+        display_reqs = list(all_reqs)
+        all_with_children = []
+        for r in all_reqs:
+            all_with_children.append(r)
+            all_with_children.extend(r.children or [])
+        req_list_mode = 'full'  # full / diff_assignee / parent_only / priority
+
+        if len(all_with_children) > 40:
+            # Tier 2: parent + children with different assignee
+            display_reqs = []
+            for r in all_reqs:
+                display_reqs.append(r)
+                for c in (r.children or []):
+                    if c.assignee_id != r.assignee_id:
+                        display_reqs.append(c)
+            req_list_mode = 'diff_assignee'
+
+        if len(display_reqs) > 40:
+            # Tier 3: parent only
+            display_reqs = list(all_reqs)
+            req_list_mode = 'parent_only'
+
+        if len(display_reqs) > 40:
+            # Tier 4: overdue first, then by due_date
+            today_ = date.today()
+            def _sort_key(r):
+                overdue = 0 if (r.due_date and r.due_date < today_ and r.status not in ('done', 'closed')) else 1
+                due = r.due_date or date(9999, 12, 31)
+                return (overdue, due)
+            display_reqs = sorted(display_reqs, key=_sort_key)[:40]
+            req_list_mode = 'priority'
+
         # Package all data for template and Excel
         sub_projects = _build_sub_projects(cur_project, monday)
 
@@ -444,7 +477,7 @@ def weekly_report():
             'sunday': sunday,
             'reviewer': reviewer,
             'milestones': milestones,
-            'all_reqs': all_reqs,
+            'all_reqs': all_reqs, 'display_reqs': display_reqs, 'req_list_mode': req_list_mode, 'req_total_with_children': len(all_with_children),
             'req_investment': req_investment,
             'person_done': dict(person_done),
             'person_active': dict(person_active),
@@ -586,7 +619,7 @@ def weekly_report():
             'sunday': sunday,
             'reviewer': reviewer,
             'milestones': milestones,
-            'all_reqs': all_reqs,
+            'all_reqs': all_reqs, 'display_reqs': all_reqs, 'req_list_mode': 'full', 'req_total_with_children': 0,
             'req_investment': req_investment,
             'person_done': dict(person_done),
             'person_active': dict(person_active),
