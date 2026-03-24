@@ -8,41 +8,64 @@
     </a>
 </div>
 
+<form method="POST" id="meetingForm">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <h4 class="mb-0">{{ meeting.title }}</h4>
-        <div class="text-muted small">
-            {{ meeting.date.strftime('%Y-%m-%d') }}
-            {% if meeting.attendees %} · 参会人：{{ meeting.attendees }}{% endif %}
-            · 创建人：{{ meeting.creator.name }}
+    <div class="flex-grow-1 me-3">
+        <input type="text" name="title" class="form-control form-control-sm fw-bold meeting-field" value="{{ meeting.title }}" disabled style="font-size:1.2em;border:none;background:transparent;padding:0;">
+        <div class="d-flex gap-2 align-items-center mt-1">
+            <input type="date" name="date" class="form-control form-control-sm meeting-field" value="{{ meeting.date.strftime('%Y-%m-%d') if meeting.date else '' }}" disabled style="width:auto;border:none;background:transparent;padding:0;font-size:.85em;">
+            <span class="text-muted small">创建人：{{ meeting.creator.name }}</span>
         </div>
     </div>
     <div class="d-flex gap-2">
-        <a href="{{ url_for('project.meeting_edit', project_id=project.id, meeting_id=meeting.id) }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-pencil"></i> 编辑</a>
-        <button class="btn btn-primary btn-sm" id="btnExtract" onclick="doExtract()">
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLock" onclick="toggleLock()">
+            <i class="bi bi-lock"></i> 已冻结
+        </button>
+        <button type="submit" class="btn btn-sm btn-primary d-none" id="btnSave">
+            <i class="bi bi-check-lg"></i> 保存
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" id="btnExtract" onclick="doExtract()">
             <i class="bi bi-robot"></i> AI 润色并提取遗留问题
         </button>
     </div>
 </div>
 
+{# Attendees tags #}
+<div class="mb-3">
+    <label class="form-label small mb-0 text-muted">参会人</label>
+    <input type="hidden" name="attendees" id="attendeesVal" value="{{ meeting.attendees or '' }}">
+    <div class="border rounded p-1 d-flex flex-wrap gap-1 align-items-center meeting-field" id="attendeeTags" style="min-height:32px;">
+        <input type="text" class="border-0 flex-grow-1 small" id="attendeeInput" placeholder="输入姓名搜索添加..." autocomplete="off" style="outline:none;min-width:80px;" disabled>
+    </div>
+    <div class="position-relative">
+        <div id="attendeeDropdown" class="position-absolute bg-white border rounded shadow-sm w-100" style="z-index:1000;display:none;max-height:150px;overflow-y:auto;font-size:.85em;"></div>
+    </div>
+</div>
+
 <div class="row">
-    <!-- Left: meeting content -->
+    {# Left: content #}
     <div class="col-lg-5 mb-3">
         <div class="card h-100">
-            <div class="card-header py-2"><strong>会议内容</strong></div>
-            <div class="card-body" style="white-space:pre-wrap; font-size:.9rem; max-height:70vh; overflow-y:auto;">{{ meeting.content or '（暂无内容）' }}</div>
+            <div class="card-header py-2 d-flex justify-content-between">
+                <strong>会议内容</strong>
+            </div>
+            <div class="card-body p-0">
+                <textarea name="content" class="form-control meeting-field" rows="20" disabled style="border:none;resize:vertical;font-size:.85em;">{{ meeting.content or '' }}</textarea>
+            </div>
         </div>
     </div>
 
-    {# Polished content preview #}
+    {# Polished preview #}
     {% if ai_data and ai_data.get('polished') and ai_data.polished != meeting.content %}
-    <div class="col-lg-12 mb-3">
+    <div class="col-lg-12 mb-3" id="polishPanel">
         <div class="card border-info">
             <div class="card-header py-2 bg-info bg-opacity-10 d-flex justify-content-between align-items-center">
                 <span class="fw-bold small"><i class="bi bi-robot"></i> AI 润色结果</span>
                 <div class="d-flex gap-1">
-                    <button class="btn btn-sm btn-success py-0" onclick="acceptPolish()"><i class="bi bi-check-lg"></i> 接受润色</button>
-                    <button class="btn btn-sm btn-outline-secondary py-0" onclick="this.closest('.card').remove()"><i class="bi bi-x"></i> 忽略</button>
+                    <button type="button" class="btn btn-sm btn-success py-0" onclick="acceptPolish()"><i class="bi bi-check-lg"></i> 接受润色</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="document.getElementById('polishPanel').remove()"><i class="bi bi-x"></i> 忽略</button>
                 </div>
             </div>
             <div class="card-body small" style="white-space:pre-wrap;max-height:200px;overflow-y:auto;">{{ ai_data.polished }}</div>
@@ -50,52 +73,61 @@
     </div>
     {% endif %}
 
-    <!-- Right: AI extracted items -->
+    {# Right: AI results + linked risks #}
     <div class="col-lg-7 mb-3">
+        {# Linked risks (already created from this meeting) #}
+        {% if linked_risks %}
+        <div class="card mb-3">
+            <div class="card-header py-2"><strong><i class="bi bi-shield-exclamation"></i> 关联的风险/遗留问题 ({{ linked_risks|length }})</strong></div>
+            <div class="card-body py-2">
+                {% for r in linked_risks %}
+                <div class="d-flex align-items-center gap-2 mb-1 small">
+                    <span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span>
+                    <span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
+                    <a href="{{ url_for('project.risk_list', project_id=project.id) }}?status={{ r.status }}" class="text-decoration-none flex-grow-1">{{ r.title }}</a>
+                    {% if r.tracker %}<span class="text-muted">{{ r.tracker.name }}</span>{% endif %}
+                    {% if r.due_date %}<span class="text-muted">{{ r.due_date.strftime('%m-%d') }}</span>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {# AI extract results #}
         {% if ai_data %}
         <div class="card">
             <div class="card-header py-2 d-flex justify-content-between align-items-center">
                 <strong>AI 提取结果</strong>
-                <button class="btn btn-success btn-sm" id="btnApply" onclick="applySelected()">
+                <button type="button" class="btn btn-success btn-sm" id="btnApply" onclick="applySelected()">
                     <i class="bi bi-check2-all"></i> 一键创建选中项
                 </button>
             </div>
             <div class="card-body">
-                <!-- Decisions -->
                 {% if ai_data.decisions %}
                 <h6 class="text-primary"><i class="bi bi-bookmark-check"></i> 决议</h6>
                 <div class="mb-3">
                     {% for d in ai_data.decisions %}
                     <div class="form-check mb-1">
                         <input class="form-check-input" type="checkbox" disabled checked>
-                        <label class="form-check-label">
-                            {{ d.content }}
-                            {% if d.owner %}<span class="badge bg-light text-dark">{{ d.owner }}</span>{% endif %}
-                        </label>
+                        <label class="form-check-label">{{ d.content }}{% if d.owner %} <span class="badge bg-light text-dark">{{ d.owner }}</span>{% endif %}</label>
                     </div>
                     {% endfor %}
                 </div>
                 {% endif %}
 
-                <!-- 遗留问题（采纳后作为低风险创建） -->
                 {% if ai_data.todos %}
                 <h6 class="text-warning"><i class="bi bi-exclamation-circle"></i> 遗留问题</h6>
                 <div class="mb-3">
                     {% for t in ai_data.todos %}
                     <div class="form-check mb-1">
                         <input class="form-check-input ai-item" type="checkbox" data-type="todos"
-                               data-payload='{{ {"title": t.title, "assignee": t.assignee|default("")}|tojson }}'>
-                        <label class="form-check-label">
-                            {{ t.title }}
-                            {% if t.assignee %}<span class="badge bg-light text-dark">{{ t.assignee }}</span>{% endif %}
-                            <span class="badge bg-secondary" style="font-size:.6em;">→ 风险</span>
-                        </label>
+                               data-payload='{{ {"title": t.title, "assignee": t.assignee|default(""), "deadline": t.deadline|default("")}|tojson }}'>
+                        <label class="form-check-label">{{ t.title }}{% if t.assignee %} <span class="badge bg-light text-dark">{{ t.assignee }}</span>{% endif %}{% if t.deadline %} <span class="text-muted small">{{ t.deadline }}</span>{% endif %}</label>
                     </div>
                     {% endfor %}
                 </div>
                 {% endif %}
 
-                <!-- Requirements -->
                 {% if ai_data.requirements %}
                 <h6 class="text-success"><i class="bi bi-file-earmark-text"></i> 需求</h6>
                 <div class="mb-3">
@@ -103,35 +135,27 @@
                     <div class="form-check mb-1">
                         <input class="form-check-input ai-item" type="checkbox" data-type="requirements"
                                data-payload='{{ {"title": r.title, "description": r.description|default(""), "priority": r.priority|default("medium")}|tojson }}'>
-                        <label class="form-check-label">
-                            {{ r.title }}
-                            {% if r.description %}<span class="text-muted small">- {{ r.description[:60] }}</span>{% endif %}
-                            {% if r.priority %}<span class="badge bg-{{ 'danger' if r.priority == 'high' else ('warning text-dark' if r.priority == 'medium' else 'secondary') }}">{{ r.priority }}</span>{% endif %}
-                        </label>
+                        <label class="form-check-label">{{ r.title }}{% if r.priority %} <span class="badge bg-{{ 'danger' if r.priority == 'high' else ('warning text-dark' if r.priority == 'medium' else 'secondary') }}">{{ r.priority }}</span>{% endif %}</label>
                     </div>
                     {% endfor %}
                 </div>
                 {% endif %}
 
-                <!-- Risks -->
                 {% if ai_data.risks %}
                 <h6 class="text-danger"><i class="bi bi-exclamation-triangle"></i> 风险</h6>
                 <div class="mb-3">
                     {% for r in ai_data.risks %}
                     <div class="form-check mb-1">
                         <input class="form-check-input ai-item" type="checkbox" data-type="risks"
-                               data-payload='{{ {"title": r.title, "severity": r.severity|default("medium")}|tojson }}'>
-                        <label class="form-check-label">
-                            {{ r.title }}
-                            {% if r.severity %}<span class="badge bg-{{ 'danger' if r.severity == 'high' else ('warning text-dark' if r.severity == 'medium' else 'secondary') }}">{{ r.severity }}</span>{% endif %}
-                        </label>
+                               data-payload='{{ {"title": r.title, "severity": r.severity|default("medium"), "deadline": r.deadline|default("")}|tojson }}'>
+                        <label class="form-check-label">{{ r.title }}{% if r.severity %} <span class="badge bg-{{ 'danger' if r.severity == 'high' else ('warning text-dark' if r.severity == 'medium' else 'secondary') }}">{{ r.severity }}</span>{% endif %}</label>
                     </div>
                     {% endfor %}
                 </div>
                 {% endif %}
 
                 {% if not ai_data.decisions and not ai_data.todos and not ai_data.requirements and not ai_data.risks %}
-                <div class="text-muted">AI 未从内容中提取到结构化信息</div>
+                <div class="text-muted">AI 未提取到结构化信息</div>
                 {% endif %}
             </div>
         </div>
@@ -139,75 +163,59 @@
         <div class="card">
             <div class="card-body text-center text-muted py-5">
                 <i class="bi bi-robot" style="font-size:2rem;"></i>
-                <p class="mt-2">点击「AI 提取」按钮，从会议内容中自动提取决议、待办、需求和风险</p>
+                <p class="mt-2">点击「AI 润色并提取遗留问题」按钮</p>
             </div>
         </div>
         {% endif %}
     </div>
 </div>
+</form>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+// Lock/unlock toggle
+var _locked = true;
+function toggleLock() {
+    _locked = !_locked;
+    var btn = document.getElementById('btnLock');
+    var save = document.getElementById('btnSave');
+    btn.innerHTML = _locked ? '<i class="bi bi-lock"></i> 已冻结' : '<i class="bi bi-unlock"></i> 编辑中';
+    btn.className = _locked ? 'btn btn-sm btn-outline-secondary' : 'btn btn-sm btn-warning';
+    save.classList.toggle('d-none', _locked);
+    document.querySelectorAll('.meeting-field').forEach(function(el) { el.disabled = _locked; });
+    document.getElementById('attendeeInput').disabled = _locked;
+}
+
+// AI extract
 function doExtract() {
     var btn = document.getElementById('btnExtract');
-    var loading = aiLoading(btn, '提取中');
+    var loading = aiLoading(btn, '润色提取中');
     fetch('{{ url_for("project.meeting_extract", project_id=project.id, meeting_id=meeting.id) }}', {
         method: 'POST',
         headers: {'X-CSRFToken': '{{ csrf_token() }}'},
-    }).then(function(r) {
-        loading.stop();
-        location.reload();
-    }).catch(function() {
-        loading.stop();
-        alert('AI 服务不可用，请检查 Ollama 是否启动');
-    });
+    }).then(function() { loading.stop(); location.reload(); })
+    .catch(function() { loading.stop(); alert('AI 服务不可用'); });
 }
 
+// Apply selected
 function applySelected() {
     var items = document.querySelectorAll('.ai-item:checked');
-    if (items.length === 0) {
-        alert('请先勾选要创建的项目');
-        return;
-    }
+    if (!items.length) { alert('请先勾选要创建的项目'); return; }
     var payload = {todos: [], requirements: [], risks: []};
-    items.forEach(function(cb) {
-        var type = cb.dataset.type;
-        var data = JSON.parse(cb.dataset.payload);
-        if (payload[type]) payload[type].push(data);
-    });
-
+    items.forEach(function(cb) { var t = cb.dataset.type; payload[t].push(JSON.parse(cb.dataset.payload)); });
     var btn = document.getElementById('btnApply');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 创建中...';
-
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     fetch('{{ url_for("project.meeting_apply", project_id=project.id, meeting_id=meeting.id) }}', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token() }}'
-        },
+        method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
         body: JSON.stringify(payload)
-    })
-    .then(function(resp) { return resp.json(); })
-    .then(function(data) {
-        if (data.ok) {
-            alert(data.msg);
-            // Grey out created items
-            items.forEach(function(cb) {
-                cb.disabled = true;
-                cb.closest('.form-check').classList.add('text-muted');
-            });
-        } else {
-            alert(data.msg || '创建失败');
-        }
-    })
-    .catch(function() { alert('请求失败，请重试'); })
-    .finally(function() {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-check2-all"></i> 一键创建选中项';
-    });
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) { location.reload(); } else { alert(d.msg || '创建失败'); }
+    }).catch(function() { alert('请求失败'); })
+    .finally(function() { btn.disabled = false; btn.innerHTML = '<i class="bi bi-check2-all"></i> 一键创建选中项'; });
 }
+
+// Accept polish
 function acceptPolish() {
     apiPost('{{ url_for("project.meeting_accept_polish", project_id=project.id, meeting_id=meeting.id) }}', {}).then(function(d) {
         if (d && d.ok) location.reload();
@@ -215,7 +223,66 @@ function acceptPolish() {
     });
 }
 
-// Auto-extract if redirected with auto_extract=1 (run once, then clean URL)
+// Attendees tag input
+(function() {
+    var tags = document.getElementById('attendeeTags');
+    var input = document.getElementById('attendeeInput');
+    var dropdown = document.getElementById('attendeeDropdown');
+    var hiddenVal = document.getElementById('attendeesVal');
+    var _users = null, _selected = [];
+
+    function syncHidden() { hiddenVal.value = _selected.join(','); }
+    function addTag(name) {
+        if (_selected.indexOf(name) >= 0) return;
+        _selected.push(name);
+        var tag = document.createElement('span');
+        tag.className = 'badge bg-primary bg-opacity-75 d-flex align-items-center gap-1';
+        tag.style.fontSize = '.8em';
+        tag.innerHTML = name + ' <i class="bi bi-x" style="cursor:pointer;font-size:.9em;"></i>';
+        tag.querySelector('i').addEventListener('click', function() {
+            if (_locked) return;
+            _selected = _selected.filter(function(n) { return n !== name; });
+            tag.remove(); syncHidden();
+        });
+        tags.insertBefore(tag, input);
+        syncHidden(); input.value = ''; dropdown.style.display = 'none';
+    }
+    function loadUsers(cb) {
+        if (_users) return cb(_users);
+        fetch('/api/users').then(function(r) { return r.json(); }).then(function(d) { _users = d; cb(d); });
+    }
+    input.addEventListener('input', function() {
+        var q = input.value.trim().toLowerCase();
+        if (!q) { dropdown.style.display = 'none'; return; }
+        loadUsers(function(users) {
+            var html = '';
+            users.forEach(function(u) {
+                if (_selected.indexOf(u.name) >= 0) return;
+                if (u.name.toLowerCase().includes(q) || (u.pinyin || '').toLowerCase().includes(q) || (u.employee_id || '').toLowerCase().includes(q))
+                    html += '<div class="px-2 py-1" style="cursor:pointer;" data-name="' + u.name + '">' + u.name + ' <span class="text-muted">' + (u.employee_id || '') + '</span></div>';
+            });
+            if (!html && q.length >= 2)
+                html = '<div class="px-2 py-1 text-muted" style="cursor:pointer;" data-name="' + q + '">添加：' + q + '</div>';
+            dropdown.innerHTML = html;
+            dropdown.style.display = html ? 'block' : 'none';
+            dropdown.querySelectorAll('[data-name]').forEach(function(opt) {
+                opt.addEventListener('mousedown', function(e) { e.preventDefault(); addTag(opt.dataset.name); });
+            });
+        });
+    });
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); var v = input.value.trim(); if (v) addTag(v); }
+        if (e.key === 'Backspace' && !input.value && _selected.length && !_locked) {
+            _selected.pop(); var lt = tags.querySelectorAll('.badge'); if (lt.length) lt[lt.length-1].remove(); syncHidden();
+        }
+    });
+    input.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; }, 200); });
+    tags.addEventListener('click', function() { if (!_locked) input.focus(); });
+    // Pre-fill
+    (hiddenVal.value || '').split(',').forEach(function(n) { n = n.trim(); if (n) addTag(n); });
+})();
+
+// Auto-extract
 if (new URLSearchParams(window.location.search).get('auto_extract') === '1') {
     var cleanUrl = new URL(window.location);
     cleanUrl.searchParams.delete('auto_extract');

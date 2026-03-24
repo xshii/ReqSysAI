@@ -15,6 +15,7 @@ class Risk(db.Model):
     owner = db.Column(db.String(100), nullable=True)  # 责任人（可能是外部人员，存姓名文本）
     tracker_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # 跟踪人（内部员工）
     requirement_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=True)  # 关联子需求
+    meeting_id = db.Column(db.Integer, db.ForeignKey('meetings.id'), nullable=True)  # 来源会议
     due_date = db.Column(db.Date, nullable=False)
     resolution = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -26,6 +27,7 @@ class Risk(db.Model):
     tracker = db.relationship('User', foreign_keys=[tracker_id], backref='tracked_risks')
     creator = db.relationship('User', foreign_keys=[created_by], backref='created_risks')
     requirement = db.relationship('Requirement', backref='risks')
+    meeting = db.relationship('Meeting', backref='linked_risks')
     comments = db.relationship('RiskComment', backref='risk', cascade='all, delete-orphan',
                                order_by='RiskComment.created_at')
 

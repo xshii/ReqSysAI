@@ -1091,18 +1091,38 @@ def meeting_edit(project_id, meeting_id):
     return render_template('project/meeting_edit.html', project=project, meeting=meeting)
 
 
-@project_bp.route('/<int:project_id>/meetings/<int:meeting_id>')
+@project_bp.route('/<int:project_id>/meetings/<int:meeting_id>', methods=['GET', 'POST'])
 @login_required
 def meeting_detail(project_id, meeting_id):
     project = db.get_or_404(Project, project_id)
     meeting = db.get_or_404(Meeting, meeting_id)
+
+    # POST = save edits
+    if request.method == 'POST':
+        meeting.title = request.form.get('title', '').strip() or meeting.title
+        meeting_date = request.form.get('date', '')
+        if meeting_date:
+            meeting.date = datetime.strptime(meeting_date, '%Y-%m-%d').date()
+        meeting.attendees = request.form.get('attendees', '').strip()
+        content = request.form.get('content', '').strip()
+        if content:
+            meeting.content = content
+        db.session.commit()
+        flash('会议纪要已保存', 'success')
+        return redirect(url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id))
+
     ai_data = None
     if meeting.ai_result:
         try:
             ai_data = json.loads(meeting.ai_result)
         except json.JSONDecodeError:
             ai_data = None
-    return render_template('project/meeting_detail.html', project=project, meeting=meeting, ai_data=ai_data)
+
+    # Linked risks from this meeting
+    linked_risks = Risk.query.filter_by(meeting_id=meeting.id).order_by(Risk.created_at).all()
+
+    return render_template('project/meeting_detail.html', project=project, meeting=meeting,
+                           ai_data=ai_data, linked_risks=linked_risks)
 
 
 @project_bp.route('/<int:project_id>/meetings/<int:meeting_id>/extract', methods=['POST'])
@@ -1173,6 +1193,7 @@ def meeting_apply(project_id, meeting_id):
             title=item.get('title', ''),
             severity='low',
             due_date=due,
+            meeting_id=meeting.id,
             created_by=current_user.id,
             tracker_id=assignee.id if assignee else current_user.id,
         )
@@ -1206,6 +1227,7 @@ def meeting_apply(project_id, meeting_id):
             title=item.get('title', ''),
             severity=item.get('severity', 'medium'),
             due_date=due,
+            meeting_id=meeting.id,
             created_by=current_user.id,
             tracker_id=current_user.id,
         )
