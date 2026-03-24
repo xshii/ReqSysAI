@@ -527,7 +527,7 @@ function checkHelpAlert() {
                     <i class="bi bi-heart{% if r.likes %}-fill{% endif %}"></i> <span>{{ r.likes or '' }}</span>
                 </button>
                 {% if current_user.is_admin %}
-                <button class="btn btn-sm py-0 px-1 btn-outline-secondary rant-del" data-id="{{ r.id }}"><i class="bi bi-x"></i></button>
+                <button class="btn btn-sm py-0 px-1 btn-outline-secondary rant-del mgr-only" data-id="{{ r.id }}"><i class="bi bi-x"></i></button>
                 {% endif %}
             </div>
         </div>
