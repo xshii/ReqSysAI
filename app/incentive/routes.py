@@ -268,9 +268,10 @@ def export_csv():
     writer = csv.writer(buf)
     writer.writerow(['ID', '获奖名称', '类别', '导向', '提交人', '成员', '工号', '小组', '金额', '资金池', '激励来源', '获奖年月', '评语'])
     # Demo row (ID=0)
-    writer.writerow([0, '示例奖项名称', '个人奖/团队奖', '专业/积极/超越期望/代码Clean',
-                     '提交人姓名', '张三', 'a00123456', '研发一组', 500, '资金池名称',
-                     '及时激励', '2026-03', '评语（此行为格式示例，导入时自动跳过）'])
+    writer.writerow([0, '示例奖项', '(自动)', '专业(选填)', '张三(选填)',
+                     '获奖人姓名', 'a00123456(选填)', '(自动)', '500(选填)',
+                     '资金池名(选填)', '及时激励(选填)', '2026-03(选填)',
+                     '评语(选填) 此行为格式示例，导入时自动跳过'])
     for inc in items:
         fund_name = inc.fund.name if inc.fund else ''
         common = [inc.id, inc.title, inc.award_type, inc.category_label, inc.submitter.name]
@@ -1058,7 +1059,8 @@ def fund_export_csv():
     writer = csv.writer(buf)
     writer.writerow(['ID', '名称', '金额', '激励来源', '截止日期', '备注', '已使用', '本月使用', '使用率'])
     # Demo row (ID=0)
-    writer.writerow([0, '示例资金池', 50000, '及时激励', '2026-12-31', '备注（金额留空=公共池，此行为格式示例，导入时自动跳过）', '', '', ''])
+    writer.writerow([0, '示例资金池', '50000(选填,空=公共池)', '及时激励(选填)', '2026-12-31(选填)',
+                     '备注(选填) 此行为格式示例，导入时自动跳过', '', '', ''])
     for f in funds:
         used = f.used_amount
         month_used = month_used_map.get(f.source, 0)

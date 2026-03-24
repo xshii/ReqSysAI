@@ -493,8 +493,9 @@ def risk_export_csv(project_id):
     buf.write('\ufeff')
     writer = csv.writer(buf)
     writer.writerow(['ID', '标题', '严重度', '状态', '责任人', '跟踪人', '截止日期', '解决方案', '描述'])
-    writer.writerow([0, '示例风险', '高/中/低', '未解决/已解决/已关闭',
-                     '责任人', '跟踪人', '2026-06-30', '', '描述（此行为格式示例，导入时自动跳过）'])
+    writer.writerow([0, '示例风险标题', '高(选填)', '未解决(选填)',
+                     '责任人(选填)', '跟踪人(选填)', '2026-06-30(选填)', '(选填)',
+                     '描述(选填) 此行为格式示例，导入时自动跳过'])
     for r in risks:
         writer.writerow([r.id, r.title, r.severity_label, r.status_label,
             r.owner or '', r.tracker.name if r.tracker else '',
@@ -769,7 +770,7 @@ def member_export_csv(project_id):
     writer = csv.writer(output)
     writer.writerow(['id', '姓名', '工号', '角色'])
     # Demo row (id=0)
-    writer.writerow([0, '张三', 'a00123456', 'DEV（可选：PM/PL/DEV/TE/QA/UI，此行为格式示例，导入时自动跳过）'])
+    writer.writerow([0, '张三', 'a00123456', 'DEV(选填:PM/PL/DEV/TE/QA/UI) 此行为格式示例，导入时自动跳过'])
     for m in members:
         if m.user:
             writer.writerow([m.id, m.user.name, m.user.employee_id, m.project_role])

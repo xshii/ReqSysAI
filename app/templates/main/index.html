@@ -1046,7 +1046,7 @@ function addTomatoIcon(btn, minutes) {
     tomato.setAttribute('data-bs-toggle', 'tooltip');
     tomato.setAttribute('title', minutes + '分钟 (' + pct + '%)');
     // Find or create pomodoro-area container
-    var container = btn.closest('.d-flex');
+    var container = btn.closest('.todo-drag-item') || btn.closest('.d-flex');
     var area = container.querySelector('.pomodoro-area');
     if (!area) {
         area = document.createElement('span');
