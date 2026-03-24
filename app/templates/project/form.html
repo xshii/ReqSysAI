@@ -108,9 +108,10 @@
                     </div>
                     {# Edit form (hidden) #}
                     <div class="d-none mb-2" id="tplEdit{{ tpl.id }}">
-                        <form method="POST" action="{{ url_for('project.milestone_template_action') }}{% if _tpl_next %}?next={{ _tpl_next }}{% endif %}">
+                        <form method="POST" action="{{ url_for('project.milestone_template_action') }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="action" value="edit">
+                            {% if _tpl_next %}<input type="hidden" name="next" value="{{ _tpl_next }}">{% endif %}
                             <input type="hidden" name="template_id" value="{{ tpl.id }}">
                             <div class="d-flex gap-2 mb-1">
                                 <input type="text" name="name" class="form-control form-control-sm" value="{{ tpl.name }}" style="max-width:180px;">
@@ -144,9 +145,10 @@
                     <hr class="my-2">
                     {% endif %}
                     <div class="small fw-bold mb-1">新建模板</div>
-                    <form method="POST" action="{{ url_for('project.milestone_template_action') }}{% if project is defined and project %}?next={{ url_for('project.project_edit', project_id=project.id) }}{% endif %}">
+                    <form method="POST" action="{{ url_for('project.milestone_template_action') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="create">
+                        {% if _tpl_next %}<input type="hidden" name="next" value="{{ _tpl_next }}">{% endif %}
                         <div class="d-flex gap-2 mb-1">
                             <input type="text" name="name" class="form-control form-control-sm" placeholder="模板名称" required style="max-width:180px;">
                             <input type="text" name="description" class="form-control form-control-sm" placeholder="描述（可选）">
