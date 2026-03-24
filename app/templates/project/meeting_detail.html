@@ -154,10 +154,14 @@ function doExtract() {
         headers: {'X-CSRFToken': '{{ csrf_token() }}'},
     }).then(function(r) {
         loading.stop();
-        location.reload();
+        if (r.redirected || r.ok) {
+            location.replace(r.url || location.pathname);
+        } else {
+            alert('AI 服务不可用，请稍后重试');
+        }
     }).catch(function() {
         loading.stop();
-        alert('提取失败');
+        alert('AI 服务不可用，请检查 Ollama 是否启动');
     });
 }
 
@@ -212,8 +216,11 @@ function acceptPolish() {
     });
 }
 
-// Auto-extract if redirected with auto_extract=1
+// Auto-extract if redirected with auto_extract=1 (run once, then clean URL)
 if (new URLSearchParams(window.location.search).get('auto_extract') === '1') {
+    var cleanUrl = new URL(window.location);
+    cleanUrl.searchParams.delete('auto_extract');
+    history.replaceState(null, '', cleanUrl);
     setTimeout(doExtract, 500);
 }
 </script>

@@ -1052,9 +1052,25 @@ def meeting_create(project_id):
         )
         db.session.add(meeting)
         db.session.commit()
-        flash(f'会议纪要「{meeting.title}」创建成功', 'success')
-        if request.form.get('auto_extract') == '1':
-            return redirect(url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id, auto_extract=1))
+
+        if request.form.get('auto_extract') == '1' and meeting.content:
+            # Run AI extract immediately during creation
+            from app.services.ai import call_ollama
+            from app.services.prompts import get_prompt
+            system_prompt = get_prompt('meeting_extract')
+            parsed, raw = call_ollama(meeting.content, system_prompt=system_prompt)
+            if parsed:
+                if isinstance(parsed, dict) and parsed.get('polished'):
+                    meeting.content = parsed['polished']
+                meeting.ai_result = json.dumps(parsed, ensure_ascii=False)
+                db.session.commit()
+                flash(f'会议纪要「{meeting.title}」已创建并完成 AI 润色提取', 'success')
+            else:
+                db.session.commit()
+                flash(f'会议纪要已创建，AI 润色失败（{raw or "服务不可用"}），可稍后手动提取', 'warning')
+        else:
+            flash(f'会议纪要「{meeting.title}」创建成功', 'success')
+
         return redirect(url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id))
     return render_template('project/meeting_form.html', project=project)
 
