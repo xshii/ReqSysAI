@@ -167,7 +167,7 @@ function checkHelpAlert() {
                     </form>
                 </div>
                 <div class="collapse {% if not risk_all_done %}show{% endif %} todo-list-for-req" data-req-id="risk" id="riskTodos">
-                {% for t in risk_todos %}{{ todo_row(t, 'text-danger') }}{% endfor %}
+                {% for t in risk_todos %}{{ todo_row(t, 'text-danger', show_comment_input=true) }}{% endfor %}
                 </div>
             </div>
         </div>
@@ -197,6 +197,7 @@ function checkHelpAlert() {
                 {% set recent_comments = r.comments|selectattr('created_at')|list %}
                 {% set recent_comments = [] %}
                 {% for c in r.comments %}{% if c.created_at.date() >= two_days_ago %}{% set _ = recent_comments.append(c) %}{% endif %}{% endfor %}
+                <div class="collapse {% if not r_all_done %}show{% endif %} todo-list-for-req" data-req-id="{{ r.id }}" id="reqTodos{{ r.id }}" style="min-height:24px;">
                 {% if recent_comments %}
                 <div class="ps-2 mb-1 req-comments" data-req-id="{{ r.id }}">
                     {% for c in recent_comments %}
@@ -205,7 +206,6 @@ function checkHelpAlert() {
                     {% if r.comments|length > recent_comments|length %}<a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="text-muted ps-2" style="font-size:.6em;">查看全部 {{ r.comments|length }} 条评论</a>{% endif %}
                 </div>
                 {% endif %}
-                <div class="collapse {% if not r_all_done %}show{% endif %} todo-list-for-req" data-req-id="{{ r.id }}" id="reqTodos{{ r.id }}" style="min-height:24px;">
                 {% for t in r_todos %}{{ todo_row(t) }}{% endfor %}
                 </div>
             </div>
@@ -964,6 +964,23 @@ function _updateProgress() {
 // Shared todo row JS (toggle, delete, timer, block)
 {{ todo_row_js() }}
 
+// Comment submit for risk/todo inline comments
+document.querySelectorAll('.comment-submit').forEach(function(b) {
+    b.addEventListener('click', function() {
+        var inp = b.parentElement.querySelector('.comment-input');
+        var content = inp.value.trim();
+        if (!content) return;
+        apiPost('/todos/' + b.dataset.todoId + '/comments', {content: content}).then(function(d) {
+            if (d && d.ok) location.reload();
+        });
+    });
+});
+document.querySelectorAll('.comment-input').forEach(function(inp) {
+    inp.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); inp.parentElement.querySelector('.comment-submit').click(); }
+    });
+});
+
 // Timer + Focus Mode (Pomodoro countdown)
 var POMODORO_MIN = {{ current_user.pomodoro_minutes or 45 }};
 var focusOverlay = null;
@@ -1121,13 +1138,7 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
             el._sourceContainer = el.closest('.todo-list-for-req');
             el.style.opacity = '0.4';
             e.dataTransfer.effectAllowed = 'move';
-            // Expand all collapsed sections so user can drop into them
             _dragCollapsed = [];
-            document.querySelectorAll('.todo-list-for-req.collapse:not(.show)').forEach(function(c) {
-                _dragCollapsed.push(c);
-                var bs = bootstrap.Collapse.getInstance(c) || new bootstrap.Collapse(c, {toggle: false});
-                bs.show();
-            });
         });
         el.addEventListener('dragend', function() {
             el.style.opacity = '';
