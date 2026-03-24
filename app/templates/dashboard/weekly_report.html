@@ -76,14 +76,19 @@
 <div class="report-meta">
     发布人：{{ current_user.name }}　｜　审核人：{{ report_data.reviewer }}
 </div>
+
+<!-- Section 1: Project Goal -->
 {% if report_data.get('project_goal') %}
-<div class="report-meta" style="border-bottom:none;padding-top:0;text-align:left;white-space:pre-line;">项目目标：{{ report_data.project_goal }}</div>
+<div class="report-section">
+    <h6>一、项目目标</h6>
+    <div class="report-summary" style="white-space:pre-line;">{{ report_data.project_goal }}</div>
+</div>
 {% endif %}
 
-<!-- Row 3: Milestones (timeline) -->
+<!-- Milestones -->
 {% if report_data.milestones %}
 <div class="report-section mt-3">
-    <h6>里程碑</h6>
+    <h6>二、里程碑</h6>
     <!-- Today star above axis -->
     {% set _ms_dates = report_data.milestones|selectattr('due_date')|map(attribute='due_date')|list %}
     {% if _ms_dates %}
@@ -123,7 +128,7 @@
 
 <!-- Row 4: Summary + High Risk -->
 <div class="report-section">
-    <h6>整体进展</h6>
+    <h6>三、整体进展</h6>
     <div class="report-summary">{{ ai.summary }}</div>
     {% set high_risks = report_data.open_risks | selectattr('severity', 'equalto', 'high') | list %}
     {% if high_risks %}
@@ -137,7 +142,7 @@
 <!-- Sub-project progress (parent projects only) -->
 {% if report_data.sub_projects %}
 <div class="report-section">
-    <h6>专题进展</h6>
+    <h6>四、专题进展</h6>
     <table class="report-table">
         <thead><tr><th>专题</th><th>负责人</th><th>一句话进展</th></tr></thead>
         <tbody>
@@ -155,7 +160,7 @@
 
 <!-- Row 5: Next Week Plan -->
 <div class="report-section">
-    <h6>下周计划</h6>
+    <h6>五、下周计划</h6>
     {% if ai.plan %}
     <ul class="ps-3 mb-0">
     {% for p in ai.plan %}<li>{{ p }}</li>{% endfor %}
@@ -167,7 +172,7 @@
 
 <!-- Row 6: Risks & Issues -->
 <div class="report-section">
-    <h6 class="risk-title">风险 & 问题</h6>
+    <h6 class="risk-title">六、风险 & 问题</h6>
     {% if report_data.open_risks %}
     <table class="report-table">
         <thead><tr><th>风险</th><th>严重程度</th><th>责任人</th><th>跟踪人</th><th>预计闭环</th></tr></thead>
@@ -205,7 +210,7 @@
 {% for r in _overdue %}{% if r.due_date and r.due_date < report_data.today and r.status not in ('done','closed') %}{% if _overdue_count.append(1) %}{% endif %}{% endif %}{% endfor %}
 {% set _est_total = report_data.all_reqs | map(attribute='estimate_days') | select('number') | sum %}
 <div class="report-section">
-    <h6>需求统计</h6>
+    <h6>七、需求统计</h6>
     <div class="report-stats mb-2">
         <div class="report-stat"><div class="num">{{ _total }}</div><div class="label">总需求</div></div>
         <div class="report-stat"><div class="num text-success">{{ _done }}</div><div class="label">已完成</div></div>
@@ -224,7 +229,7 @@
 </div>
 
 <div class="report-section">
-    <h6>需求列表</h6>
+    <h6>八、需求列表</h6>
     <table class="report-table">
         <thead><tr><th>编号</th><th>标题</th><th>状态</th><th>负责人</th><th>预估</th><th>预期完成</th></tr></thead>
         <tbody>
@@ -249,7 +254,7 @@
 {% set _pmap = report_data.get('people_map', {}) %}
 {% if _roles or _pmap %}
 <div class="report-section">
-    <h6>人力地图</h6>
+    <h6>九、人力地图</h6>
     {% set _items = _roles.items()|list if _roles else [] %}
     {% if not _items and _pmap %}{% set _items = [] %}{% for n in _pmap.keys() %}{% if _items.append((n, '')) %}{% endif %}{% endfor %}{% endif %}
     <table class="report-table">
