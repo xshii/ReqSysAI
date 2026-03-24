@@ -1,6 +1,8 @@
 body {
     font-family: system-ui, -apple-system, "Microsoft YaHei", sans-serif;
 }
+::placeholder { color: #bbb !important; opacity: 1; }
+::-webkit-input-placeholder { color: #bbb !important; }
 
 #wrapper {
     margin-top: 56px;
