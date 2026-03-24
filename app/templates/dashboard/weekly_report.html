@@ -376,7 +376,7 @@ function copyRichText() {
 function autoFillManager() {
     fetch('/api/users').then(function(r) { return r.json(); }).then(function(users) {
         var me = users.find(function(u) { return u.id === {{ current_user.id }}; });
-        if (!me || !me.manager) { showToast('未设置主管，请联系管理员在后台配置', 'warning'); return; }
+        if (!me || !me.manager) return;
         var parts = me.manager.trim().split(/\s+/);
         var mgrId = parts.length > 1 ? parts[parts.length - 1] : parts[0];
         var cc = document.getElementById('emlCc');
