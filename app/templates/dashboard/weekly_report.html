@@ -126,9 +126,9 @@
 </div>
 {% endif %}
 
-<!-- Row 4: Summary + High Risk -->
+<!-- Section 3: Summary + Next Week Plan (merged) -->
 <div class="report-section">
-    <h6>三、整体进展</h6>
+    <h6>三、整体进展与下周计划</h6>
     <div class="report-summary">{{ ai.summary }}</div>
     {% set high_risks = report_data.open_risks | selectattr('severity', 'equalto', 'high') | list %}
     {% if high_risks %}
@@ -137,9 +137,15 @@
         {% for r in high_risks %}{{ r.title }}{% if not loop.last %}；{% endif %}{% endfor %}
     </div>
     {% endif %}
+    {% if ai.plan %}
+    <div style="margin-top:8px;font-size:.84rem;"><strong>下周计划：</strong></div>
+    <ul class="ps-3 mb-0">
+    {% for p in ai.plan %}<li>{{ p }}</li>{% endfor %}
+    </ul>
+    {% endif %}
 </div>
 
-<!-- Sub-project progress (parent projects only) -->
+<!-- Section 4: Sub-project progress -->
 {% if report_data.sub_projects %}
 <div class="report-section">
     <h6>四、专题进展</h6>
@@ -158,21 +164,9 @@
 </div>
 {% endif %}
 
-<!-- Row 5: Next Week Plan -->
+<!-- Section 5: Risks & Issues -->
 <div class="report-section">
-    <h6>五、下周计划</h6>
-    {% if ai.plan %}
-    <ul class="ps-3 mb-0">
-    {% for p in ai.plan %}<li>{{ p }}</li>{% endfor %}
-    </ul>
-    {% else %}
-    <p class="ps-2 text-muted mb-0">暂无</p>
-    {% endif %}
-</div>
-
-<!-- Row 6: Risks & Issues -->
-<div class="report-section">
-    <h6 class="risk-title">六、风险 & 问题</h6>
+    <h6 class="risk-title">五、风险 & 问题</h6>
     {% if report_data.open_risks %}
     <table class="report-table">
         <thead><tr><th>风险</th><th>严重程度</th><th>责任人</th><th>跟踪人</th><th>预计闭环</th></tr></thead>
@@ -198,7 +192,35 @@
     {% endif %}
 </div>
 
-<!-- Row 7: Requirement Stats + List -->
+<!-- Section 6: People Map -->
+{% set _roles = report_data.get('people_roles', {}) %}
+{% set _pmap = report_data.get('people_map', {}) %}
+{% if _roles or _pmap %}
+<div class="report-section">
+    <h6>六、人力地图</h6>
+    {% set _items = _roles.items()|list if _roles else [] %}
+    {% if not _items and _pmap %}{% set _items = [] %}{% for n in _pmap.keys() %}{% if _items.append((n, '')) %}{% endif %}{% endfor %}{% endif %}
+    <table class="report-table">
+        <thead><tr><th>姓名</th><th>角色</th><th>姓名</th><th>角色</th></tr></thead>
+        <tbody>
+        {% for i in range(0, _items|length, 2) %}
+        <tr>
+            <td>{{ _items[i][0] }}</td>
+            <td class="text-muted">{{ _items[i][1] }}</td>
+            {% if i + 1 < _items|length %}
+            <td>{{ _items[i+1][0] }}</td>
+            <td class="text-muted">{{ _items[i+1][1] }}</td>
+            {% else %}
+            <td></td><td></td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- Section 7: Requirement Stats + List -->
 {% if report_data.all_reqs %}
 {% set _total = report_data.all_reqs | length %}
 {% set _done = report_data.all_reqs | selectattr('status', 'in', ['done','closed']) | list | length %}
@@ -242,34 +264,6 @@
             <td>{{ r.assignee_display }}</td>
             <td>{{ r.estimate_days or '-' }}</td>
             <td>{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
-
-<!-- Row 8: People Map -->
-{% set _roles = report_data.get('people_roles', {}) %}
-{% set _pmap = report_data.get('people_map', {}) %}
-{% if _roles or _pmap %}
-<div class="report-section">
-    <h6>九、人力地图</h6>
-    {% set _items = _roles.items()|list if _roles else [] %}
-    {% if not _items and _pmap %}{% set _items = [] %}{% for n in _pmap.keys() %}{% if _items.append((n, '')) %}{% endif %}{% endfor %}{% endif %}
-    <table class="report-table">
-        <thead><tr><th>姓名</th><th>角色</th><th>姓名</th><th>角色</th></tr></thead>
-        <tbody>
-        {% for i in range(0, _items|length, 2) %}
-        <tr>
-            <td>{{ _items[i][0] }}</td>
-            <td class="text-muted">{{ _items[i][1] }}</td>
-            {% if i + 1 < _items|length %}
-            <td>{{ _items[i+1][0] }}</td>
-            <td class="text-muted">{{ _items[i+1][1] }}</td>
-            {% else %}
-            <td></td><td></td>
-            {% endif %}
         </tr>
         {% endfor %}
         </tbody>
