@@ -1035,6 +1035,107 @@ def permission_list(project_id):
                            my_pinyin_name=my_pinyin_name, all_users=all_users)
 
 
+@project_bp.route('/<int:project_id>/permissions/export-csv')
+@login_required
+def permission_export_csv(project_id):
+    """Export permission requests as CSV."""
+    import csv, io
+    from flask import Response
+    project = db.get_or_404(Project, project_id)
+    items = PermissionRequest.query.filter_by(project_id=project_id).order_by(
+        PermissionRequest.category, PermissionRequest.resource).all()
+    buf = io.StringIO()
+    buf.write('\ufeff')
+    writer = csv.writer(buf)
+    writer.writerow(['ID', '分类', '群组', '代码仓/路径', '说明', '申请人', '状态',
+                      '登记日期', '提交审批日期', '审批通过日期'])
+    writer.writerow([0, 'SVN(示例)', 'group-xxx', 'repo/path', '权限用途说明',
+                     '张三(zhangsan) a00123456', '草稿',
+                     '2026-01-01', '', '此行为格式示例，导入时自动跳过'])
+    for pr in items:
+        writer.writerow([
+            pr.id, pr.category or '', pr.resource, pr.repo_path or '',
+            pr.description or '', pr.applicants or '', pr.status_label,
+            pr.created_at.strftime('%Y-%m-%d') if pr.created_at else '',
+            pr.submitted_at.strftime('%Y-%m-%d') if pr.submitted_at else '',
+            pr.approved_at.strftime('%Y-%m-%d') if pr.approved_at else '',
+        ])
+    return Response(buf.getvalue(), mimetype='text/csv; charset=utf-8',
+                    headers={'Content-Disposition': f'attachment; filename=permissions_{project.name}.csv'})
+
+
+@project_bp.route('/<int:project_id>/permissions/import-csv', methods=['POST'])
+@login_required
+def permission_import_csv(project_id):
+    """Import permission requests from CSV."""
+    import csv, io
+    project = db.get_or_404(Project, project_id)
+    file = request.files.get('csv_file')
+    if not file or not file.filename.lower().endswith('.csv'):
+        flash('请选择 CSV 文件', 'danger')
+        return redirect(url_for('project.permission_list', project_id=project_id))
+    raw = file.read()
+    for enc in ('utf-8-sig', 'gbk', 'utf-8'):
+        try:
+            text = raw.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        flash('编码无法识别', 'danger')
+        return redirect(url_for('project.permission_list', project_id=project_id))
+    reader = csv.DictReader(io.StringIO(text))
+    required = {'群组'}
+    if not required.issubset(set(reader.fieldnames or [])):
+        flash('CSV 缺少必填列: 群组', 'danger')
+        return redirect(url_for('project.permission_list', project_id=project_id))
+    status_rev = {v: k for k, v in PermissionRequest.STATUS_LABELS.items()}
+    created, updated = 0, 0
+    for row in reader:
+        if (row.get('ID') or '').strip() == '0':
+            continue
+        resource = (row.get('群组') or '').strip()
+        if not resource:
+            continue
+        rid = None
+        try:
+            rid = int(row.get('ID', '').strip())
+        except (ValueError, TypeError):
+            pass
+        existing = None
+        if rid:
+            existing = PermissionRequest.query.filter_by(id=rid, project_id=project_id).first()
+        if not existing:
+            existing = PermissionRequest.query.filter_by(
+                project_id=project_id, resource=resource,
+                category=(row.get('分类') or '').strip() or None).first()
+        if existing:
+            existing.repo_path = (row.get('代码仓/路径') or '').strip() or existing.repo_path
+            existing.description = (row.get('说明') or '').strip() or existing.description
+            applicants = (row.get('申请人') or '').strip()
+            if applicants:
+                existing.applicants = applicants
+            updated += 1
+        else:
+            status_str = (row.get('状态') or '').strip()
+            status = status_rev.get(status_str, 'draft')
+            pr = PermissionRequest(
+                project_id=project_id,
+                category=(row.get('分类') or '').strip() or None,
+                resource=resource,
+                repo_path=(row.get('代码仓/路径') or '').strip() or None,
+                description=(row.get('说明') or '').strip() or None,
+                applicants=(row.get('申请人') or '').strip() or None,
+                status=status,
+                submitter_id=current_user.id,
+            )
+            db.session.add(pr)
+            created += 1
+    db.session.commit()
+    flash(f'导入完成：新增 {created}，更新 {updated}', 'success')
+    return redirect(url_for('project.permission_list', project_id=project_id))
+
+
 # ---- Meeting minutes ----
 
 @project_bp.route('/<int:project_id>/meetings')

@@ -5,12 +5,25 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4>权限申请 · {{ project.name }}</h4>
     <div class="d-flex gap-2 align-items-center">
+        <input type="text" id="prSearch" class="form-control form-control-sm" style="width:160px;" placeholder="搜索..." oninput="filterPR()">
         {% if existing_categories %}
         <select id="prCatFilter" class="form-select form-select-sm" style="width:auto;" onchange="filterPR()">
             <option value="">全部分类</option>
             {% for c in existing_categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
         </select>
         {% endif %}
+        <select id="prStatusFilter" class="form-select form-select-sm" style="width:auto;" onchange="filterPR()">
+            <option value="">全部状态</option>
+            <option value="draft">草稿</option>
+            <option value="submitted">已提交审批</option>
+            <option value="approved">审批完成</option>
+        </select>
+        <a href="{{ url_for('project.permission_export_csv', project_id=project.id) }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出</a>
+        <form method="POST" action="{{ url_for('project.permission_import_csv', project_id=project.id) }}" enctype="multipart/form-data" id="prCsvForm" class="d-none">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="csv_file" accept=".csv" onchange="this.form.submit();">
+        </form>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.querySelector('#prCsvForm input[type=file]').click()"><i class="bi bi-upload"></i> 导入</button>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg"></i> 登记权限</button>
         {% if draft_resources %}
         <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#applyModal"><i class="bi bi-check2-square"></i> 申请权限</button>
@@ -33,7 +46,7 @@
             {% else %}已完成{% endif %}
         </td></tr>
         {% endif %}
-        <tr data-cat="{{ pr.category or '' }}">
+        <tr data-cat="{{ pr.category or '' }}" data-status="{{ pr.status }}">
             <td>{% if pr.category %}<span class="badge bg-info text-dark">{{ pr.category }}</span>{% else %}-{% endif %}</td>
             <td>{{ pr.resource }}</td>
             <td class="text-muted small">{{ pr.repo_path or '-' }}</td>
@@ -256,12 +269,28 @@ document.addEventListener('click', function(e) {
     const btn = e.target.closest('.edit-pr-btn');
     if (btn) setEditPR(btn);
 });
-// Category filter
+// Filter: category + status + search
 function filterPR() {
-    const sel = document.getElementById('prCatFilter');
-    const cat = sel ? sel.value : '';
-    document.querySelectorAll('table tbody tr[data-cat]').forEach(tr => {
-        tr.style.display = (!cat || tr.dataset.cat === cat) ? '' : 'none';
+    var catSel = document.getElementById('prCatFilter');
+    var cat = catSel ? catSel.value : '';
+    var statusSel = document.getElementById('prStatusFilter');
+    var st = statusSel ? statusSel.value : '';
+    var q = (document.getElementById('prSearch').value || '').trim().toLowerCase();
+    document.querySelectorAll('table tbody tr[data-cat]').forEach(function(tr) {
+        var matchCat = !cat || tr.dataset.cat === cat;
+        var matchSt = !st || tr.dataset.status === st;
+        var matchQ = !q || tr.textContent.toLowerCase().indexOf(q) !== -1;
+        tr.style.display = (matchCat && matchSt && matchQ) ? '' : 'none';
+    });
+    // Hide group headers if all rows hidden
+    document.querySelectorAll('table tbody tr.table-active').forEach(function(hdr) {
+        var next = hdr.nextElementSibling;
+        var anyVisible = false;
+        while (next && !next.classList.contains('table-active')) {
+            if (next.style.display !== 'none') anyVisible = true;
+            next = next.nextElementSibling;
+        }
+        hdr.style.display = anyVisible ? '' : 'none';
     });
 }
 // Auto-fill name+eid when internal user selected
