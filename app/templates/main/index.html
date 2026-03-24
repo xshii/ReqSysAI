@@ -1139,6 +1139,16 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
             el.style.opacity = '0.4';
             e.dataTransfer.effectAllowed = 'move';
             _dragCollapsed = [];
+            // Delayed expand: collapsed sections expand when hovered 800ms during drag
+            document.querySelectorAll('.todo-list-for-req.collapse:not(.show)').forEach(function(c) {
+                var parent = c.previousElementSibling || c.parentElement;
+                var _hoverTimer = null;
+                function onEnter() { _hoverTimer = setTimeout(function() { _dragCollapsed.push(c); var bs = bootstrap.Collapse.getInstance(c) || new bootstrap.Collapse(c, {toggle:false}); bs.show(); }, 800); }
+                function onLeave() { if (_hoverTimer) { clearTimeout(_hoverTimer); _hoverTimer = null; } }
+                parent.addEventListener('dragenter', onEnter);
+                parent.addEventListener('dragleave', onLeave);
+                c._dragCleanup = function() { parent.removeEventListener('dragenter', onEnter); parent.removeEventListener('dragleave', onLeave); onLeave(); };
+            });
         });
         el.addEventListener('dragend', function() {
             el.style.opacity = '';
@@ -1147,6 +1157,10 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
             document.querySelectorAll('.todo-drag-item').forEach(function(e) { e.style.borderTop = ''; e.style.borderBottom = ''; });
             document.querySelectorAll('.todo-list-for-req').forEach(function(c) { c.style.outline = ''; });
             // Re-collapse sections that were collapsed before drag
+            // Re-collapse + cleanup hover listeners
+            document.querySelectorAll('.todo-list-for-req').forEach(function(c) {
+                if (c._dragCleanup) { c._dragCleanup(); delete c._dragCleanup; }
+            });
             if (_dragCollapsed) {
                 _dragCollapsed.forEach(function(c) {
                     var bs = bootstrap.Collapse.getInstance(c);
