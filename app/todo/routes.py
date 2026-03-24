@@ -188,35 +188,6 @@ def toggle_block(todo_id):
     return jsonify(ok=True, blocked=todo.need_help, reason=todo.blocked_reason)
 
 
-@todo_bp.route('/<int:todo_id>/help', methods=['POST'])
-@login_required
-def add_help(todo_id):
-    """Create a help todo for @mentioned person."""
-    import re
-    data = request.get_json() or {}
-    content = (data.get('content') or '').strip()
-    if not content:
-        return jsonify(ok=False, msg='内容不能为空')
-    todo = db.get_or_404(Todo, todo_id)
-    at_match = re.search(r'@(\S+)', content)
-    if not at_match:
-        return jsonify(ok=False, msg='请输入 @姓名 来求助')
-    target = at_match.group(1)
-    helper = User.query.filter(
-        db.or_(User.name == target, User.pinyin.ilike(f'{target}%'))
-    ).filter_by(is_active=True).first()
-    if not helper or helper.id == current_user.id:
-        return jsonify(ok=False, msg=f'未找到用户 {target}')
-    clean = re.sub(r'@\S+', '', content).strip()
-    help_title = clean or todo.title
-    help_todo = Todo(
-        user_id=helper.id, title=help_title,
-        due_date=date.today() + timedelta(days=7), category='team', source='help',
-        parent_id=todo.id, requirements=list(todo.requirements))
-    help_todo.items.append(TodoItem(title=help_title, sort_order=0))
-    db.session.add(help_todo)
-    db.session.commit()
-    return jsonify(ok=True, helper=helper.name)
 
 
 

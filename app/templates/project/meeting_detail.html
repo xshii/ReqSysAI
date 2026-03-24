@@ -154,11 +154,7 @@ function doExtract() {
         headers: {'X-CSRFToken': '{{ csrf_token() }}'},
     }).then(function(r) {
         loading.stop();
-        if (r.redirected || r.ok) {
-            location.replace(r.url || location.pathname);
-        } else {
-            alert('AI 服务不可用，请稍后重试');
-        }
+        location.reload();
     }).catch(function() {
         loading.stop();
         alert('AI 服务不可用，请检查 Ollama 是否启动');
