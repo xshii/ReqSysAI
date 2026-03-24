@@ -220,13 +220,19 @@ def quick_todo():
         title = (data.get('title') or '').strip()
         req_id = data.get('req_id')
         category = data.get('category', 'work')
+        target_uid = data.get('user_id', type=int) if isinstance(data.get('user_id'), int) else None
     else:
         title = request.form.get('title', '').strip()
         req_id = request.form.get('req_id', type=int)
         category = request.form.get('category', 'work')
+        target_uid = request.form.get('user_id', type=int)
+
+    next_url = request.form.get('next') or request.args.get('next')
+    # Target user: default to current_user, allow specifying another user (for team page)
+    todo_user_id = target_uid or current_user.id
 
     if not title:
-        return jsonify(ok=False) if is_ajax else redirect(url_for('main.index'))
+        return jsonify(ok=False) if is_ajax else redirect(next_url or url_for('main.index'))
 
     if category not in ('work', 'team', 'personal', 'risk'):
         category = 'work'
@@ -276,22 +282,22 @@ def quick_todo():
                          category=category, requirements=reqs)
                 t.items.append(TodoItem(title=title, sort_order=0))
                 db.session.add(t)
-            # Also create for self
-            my_todo = Todo(user_id=current_user.id, title=title, due_date=today,
+            # Also create for the target user
+            my_todo = Todo(user_id=todo_user_id, title=title, due_date=today,
                            category=category, requirements=reqs)
             my_todo.items.append(TodoItem(title=title, sort_order=0))
             db.session.add(my_todo)
             db.session.commit()
             result = {'ok': True, 'title': title, 'todo_id': my_todo.id,
                       'helper': f'{at_target}({len(members)+1}人)', 'is_help': False}
-            return jsonify(**result) if is_ajax else redirect(url_for('main.index'))
+            return jsonify(**result) if is_ajax else redirect(next_url or url_for('main.index'))
 
         # Single person help
         helper = User.query.filter(
             db.or_(User.name == at_target, User.pinyin.ilike(f'{at_target}%'))
         ).filter_by(is_active=True).first()
         if helper and helper.id != current_user.id:
-            my_todo = Todo(user_id=current_user.id, title=title, due_date=today,
+            my_todo = Todo(user_id=todo_user_id, title=title, due_date=today,
                            category=category, source='help', requirements=reqs)
             my_todo.items.append(TodoItem(title=title, sort_order=0))
             db.session.add(my_todo)
@@ -303,17 +309,17 @@ def quick_todo():
             db.session.commit()
             result = {'ok': True, 'title': title, 'todo_id': my_todo.id,
                       'helper': helper.name, 'is_help': True}
-            return jsonify(**result) if is_ajax else redirect(url_for('main.index'))
+            return jsonify(**result) if is_ajax else redirect(next_url or url_for('main.index'))
 
     # Normal todo
     todo = Todo(
-        user_id=current_user.id, title=title, due_date=today,
+        user_id=todo_user_id, title=title, due_date=today,
         category=category, requirements=reqs,
     )
     todo.items.append(TodoItem(title=title, sort_order=0))
     db.session.add(todo)
     db.session.commit()
-    return jsonify(ok=True, title=title, todo_id=todo.id) if is_ajax else redirect(url_for('main.index'))
+    return jsonify(ok=True, title=title, todo_id=todo.id) if is_ajax else redirect(next_url or url_for('main.index'))
 
 
 @main_bp.route('/api/batch-adopt', methods=['POST'])

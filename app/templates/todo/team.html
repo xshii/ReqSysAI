@@ -81,6 +81,8 @@
                     <form method="POST" action="{{ url_for('main.quick_todo') }}" class="d-flex gap-1 ps-2 mt-1 quick-todo-form" style="max-width:400px;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="req_id" value="{{ r.id }}">
+                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                        <input type="hidden" name="next" value="{{ request.url }}">
                         <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加Todo / @人名 求助 / #评论" required style="font-size:.75em;">
                     </form>
                 </div>
@@ -97,6 +99,14 @@
                     {% for t in ud.team_todos %}{{ todo_row(t) }}{% endfor %}
                 </div>
                 {% endif %}
+                {# Quick add for this user #}
+                <form method="POST" action="{{ url_for('main.quick_todo') }}" class="d-flex gap-1 ps-2 mt-1 quick-todo-form" style="max-width:400px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="category" value="team">
+                    <input type="hidden" name="user_id" value="{{ u.id }}">
+                    <input type="hidden" name="next" value="{{ request.url }}">
+                    <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="给{{ u.name }}添加Todo / @人名 求助" required style="font-size:.75em;">
+                </form>
             {% else %}
             <div class="text-muted small text-center py-1">暂无待办</div>
             {% endif %}
