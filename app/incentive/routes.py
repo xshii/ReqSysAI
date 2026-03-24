@@ -642,11 +642,12 @@ def admin_submit():
             pass
 
     nominees = User.query.filter(User.id.in_(nominee_ids)).all()
+    fund_id = request.form.get('fund_id', type=int)
     inc = Incentive(
         title=title, description=description or title, category=category,
         photo=photo_path,
         submitted_by=current_user.id, nominees=nominees,
-        status='approved', amount=amount,
+        status='approved', amount=amount, fund_id=fund_id,
         source=request.form.get('source', 'instant'),
         review_comment=review_comment,
         reviewed_by=current_user.id, reviewed_at=reviewed_at,

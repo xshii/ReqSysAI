@@ -376,9 +376,13 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header py-2"><h6 class="modal-title">管理员录入激励</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
-                    <div class="row">
-                        <div class="col-6 mb-2">
-                            <label class="form-label small">类别</label>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small mb-0">获奖名称 *</label>
+                            <input type="text" name="title" class="form-control form-control-sm" placeholder="获奖名称" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0">类别</label>
                             <select name="category" class="form-select form-select-sm">
                                 <option value="professional">专业</option>
                                 <option value="proactive">积极</option>
@@ -386,32 +390,57 @@
                                 <option value="clean">代码Clean</option>
                             </select>
                         </div>
-                        <div class="col-6 mb-2">
-                            <label class="form-label small">激励月份</label>
-                            <input type="month" name="month" class="form-control form-control-sm" required>
-                        </div>
                     </div>
-                    <div class="mb-2"><input type="text" name="title" class="form-control form-control-sm" placeholder="获奖名称" required></div>
                     <div class="mb-2">
-                        <input type="text" class="form-control form-control-sm" placeholder="搜索姓名/工号..." oninput="filterNominees2(this)">
-                        <div class="border rounded p-2 mt-1" style="max-height:100px;overflow-y:auto;" id="nomineeList2">
+                        <label class="form-label small mb-0">事迹描述 *</label>
+                        <textarea name="description" class="form-control form-control-sm" rows="2" placeholder="详细描述事迹和贡献" required></textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small mb-0">获奖人员 *</label>
+                        <input type="text" class="form-control form-control-sm mb-1" placeholder="搜索姓名/工号..." oninput="filterNominees2(this)">
+                        <div class="border rounded p-2" style="max-height:100px;overflow-y:auto;" id="nomineeList2">
                             {% for u in users %}
                             <div class="form-check nominee-opt2" data-name="{{ u.name }}" data-pinyin="{{ u.pinyin or '' }}" data-eid="{{ u.employee_id }}"><input class="form-check-input" type="checkbox" name="nominee_ids" value="{{ u.id }}" id="an_{{ u.id }}"><label class="form-check-label small" for="an_{{ u.id }}">{{ u.name }} <span class="text-muted">{{ u.employee_id }}</span></label></div>
                             {% endfor %}
                         </div>
                     </div>
-                    <div class="row">
-                        <div class="col-4 mb-2"><input type="number" name="amount" class="form-control form-control-sm" placeholder="金额" step="50"></div>
-                        <div class="col-4 mb-2">
+                    <div class="row g-2 mb-2">
+                        <div class="col-4">
+                            <label class="form-label small mb-0">金额（元）</label>
+                            <input type="number" name="amount" class="form-control form-control-sm" placeholder="选填" step="50">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small mb-0">激励来源</label>
                             <select name="source" class="form-select form-select-sm">
                                 {% for k, v in source_labels.items() %}
                                 <option value="{{ k }}">{{ v }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-4 mb-2"><input type="file" name="photo" class="form-control form-control-sm" accept="image/*"></div>
+                        <div class="col-4">
+                            <label class="form-label small mb-0">资金池</label>
+                            <select name="fund_id" class="form-select form-select-sm">
+                                <option value="">不指定</option>
+                                {% for f in all_funds %}
+                                <option value="{{ f.id }}">{{ f.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
-                    <div class="mb-2"><textarea name="review_comment" class="form-control form-control-sm" rows="2" maxlength="150" placeholder="评语（150字）"></textarea></div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-4">
+                            <label class="form-label small mb-0">激励年月</label>
+                            <input type="month" name="month" class="form-control form-control-sm" value="{{ today.strftime('%Y-%m') }}">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small mb-0">照片</label>
+                            <input type="file" name="photo" class="form-control form-control-sm" accept="image/*">
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label small mb-0">评语</label>
+                            <input type="text" name="review_comment" class="form-control form-control-sm" maxlength="150" placeholder="选填">
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-success">录入</button></div>
             </form>
