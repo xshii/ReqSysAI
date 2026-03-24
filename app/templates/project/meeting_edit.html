@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}编辑会议纪要 · {{ project.name }} - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{{ url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id) }}" class="text-decoration-none">
+        <i class="bi bi-arrow-left"></i> 返回详情
+    </a>
+</div>
+
+<h4 class="mb-3">编辑会议纪要</h4>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+                <label class="form-label">会议标题 <span class="text-danger">*</span></label>
+                <input type="text" name="title" class="form-control" required value="{{ meeting.title }}">
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">会议日期</label>
+                    <input type="date" name="date" class="form-control" value="{{ meeting.date.strftime('%Y-%m-%d') if meeting.date else '' }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">参会人（逗号分隔）</label>
+                    <input type="text" name="attendees" class="form-control" value="{{ meeting.attendees or '' }}">
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">会议内容</label>
+                <textarea name="content" class="form-control" rows="12">{{ meeting.content or '' }}</textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">保存</button>
+                <a href="{{ url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id) }}" class="btn btn-outline-secondary">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

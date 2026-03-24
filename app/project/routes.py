@@ -1073,6 +1073,24 @@ def meeting_create(project_id):
     return render_template('project/meeting_form.html', project=project)
 
 
+@project_bp.route('/<int:project_id>/meetings/<int:meeting_id>/edit', methods=['GET', 'POST'])
+@login_required
+def meeting_edit(project_id, meeting_id):
+    project = db.get_or_404(Project, project_id)
+    meeting = db.get_or_404(Meeting, meeting_id)
+    if request.method == 'POST':
+        meeting.title = request.form.get('title', '').strip() or meeting.title
+        meeting_date = request.form.get('date', '')
+        if meeting_date:
+            meeting.date = datetime.strptime(meeting_date, '%Y-%m-%d').date()
+        meeting.attendees = request.form.get('attendees', '').strip()
+        meeting.content = request.form.get('content', '').strip()
+        db.session.commit()
+        flash('会议纪要已更新', 'success')
+        return redirect(url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id))
+    return render_template('project/meeting_edit.html', project=project, meeting=meeting)
+
+
 @project_bp.route('/<int:project_id>/meetings/<int:meeting_id>')
 @login_required
 def meeting_detail(project_id, meeting_id):
