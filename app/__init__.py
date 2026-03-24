@@ -49,9 +49,6 @@ def create_app(config_name=None):
     from app.services.event_setup import register_events
     register_events()
 
-    # Full-text search index
-    from app.services.search import init_fts
-    init_fts(app)
 
     # Template filters
     import json as _json
