@@ -279,6 +279,7 @@ def requirement_board():
 
     query = Requirement.query.filter(Requirement.parent_id.is_(None)).options(
         joinedload(Requirement.project), joinedload(Requirement.assignee),
+        joinedload(Requirement.children),
     )
     if project_id:
         query = query.filter_by(project_id=project_id)
