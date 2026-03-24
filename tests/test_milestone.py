@@ -411,10 +411,9 @@ class TestMilestoneColor:
 
         resp = client.get(f'/projects/{pid}')
         html = resp.data.decode()
-        # Should NOT have red color for overdue milestone
-        assert '#dc2626' not in html
-        # Should have the unified color
-        assert '#1e3a5f' in html
+        # Overdue milestone should show red
+        assert '#dc2626' in html
+        assert '超期' in html
 
 
 # ─── 预置模板完整性 ────────────────────────────────────────

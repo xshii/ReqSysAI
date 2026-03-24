@@ -66,13 +66,20 @@
             <div style="height:2px;background:{{ milestone_color }};margin:0 8px;"></div>
             <div class="d-flex justify-content-between" style="margin:0 8px;">
                     {% for ms in project.milestones %}
-                    {% set c = milestone_color %}
-                    <div class="text-center" style="flex:1;">
+                    {% set ms_done = ms.status == 'completed' %}
+                    {% set ms_overdue = not ms_done and ms.due_date and ms.due_date < today %}
+                    {% set c = '#10b981' if ms_done else '#dc2626' if ms_overdue else milestone_color %}
+                    <div class="text-center" style="flex:1;cursor:pointer;" title="点击标记{{ '进行中' if ms_done else '已完成' }}" onclick="document.getElementById('msToggle{{ ms.id }}').submit()">
                         <div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:12px solid {{ c }};margin:0 auto;"></div>
                         <div style="white-space:nowrap;margin-top:4px;">
-                            <div class="fw-bold" style="font-size:.85rem;color:{{ c }};">{{ ms.name }}</div>
+                            <div class="fw-bold" style="font-size:.85rem;color:{{ c }};{% if ms_done %}text-decoration:line-through;{% endif %}">{{ ms.name }}</div>
                             {% if ms.due_date %}<div style="font-size:.8rem;color:#64748b;">{{ ms.due_date.strftime('%Y-%m-%d') }}</div>{% endif %}
+                            {% if ms_done %}<div style="font-size:.65rem;color:#10b981;">✓ 已完成</div>
+                            {% elif ms_overdue %}<div style="font-size:.65rem;color:#dc2626;">超期{{ (today - ms.due_date).days }}天</div>{% endif %}
                         </div>
+                        <form id="msToggle{{ ms.id }}" method="POST" action="{{ url_for('project.milestone_toggle', ms_id=ms.id) }}" class="d-none">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        </form>
                     </div>
                     {% endfor %}
                 </div>
