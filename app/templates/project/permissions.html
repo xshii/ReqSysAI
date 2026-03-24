@@ -5,90 +5,56 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4>权限申请 · {{ project.name }}</h4>
     <div class="d-flex gap-2 align-items-center">
-        <input type="text" id="prSearch" class="form-control form-control-sm" style="width:160px;" placeholder="搜索..." oninput="filterPR()">
-        {% if existing_categories %}
-        <select id="prCatFilter" class="form-select form-select-sm" style="width:auto;" onchange="filterPR()">
-            <option value="">全部分类</option>
-            {% for c in existing_categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
-        </select>
-        {% endif %}
-        <select id="prStatusFilter" class="form-select form-select-sm" style="width:auto;" onchange="filterPR()">
-            <option value="">全部状态</option>
-            <option value="draft">草稿</option>
-            <option value="submitted">已提交审批</option>
-            <option value="approved">审批完成</option>
-        </select>
+        <input type="text" id="prSearch" class="form-control form-control-sm" style="width:140px;" placeholder="搜索..." oninput="filterAll()">
         <a href="{{ url_for('project.permission_export_csv', project_id=project.id) }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出</a>
         <form method="POST" action="{{ url_for('project.permission_import_csv', project_id=project.id) }}" enctype="multipart/form-data" id="prCsvForm" class="d-none">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="file" name="csv_file" accept=".csv" onchange="this.form.submit();">
         </form>
         <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.querySelector('#prCsvForm input[type=file]').click()"><i class="bi bi-upload"></i> 导入</button>
-        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg"></i> 登记权限</button>
-        {% if draft_resources %}
+    </div>
+</div>
+
+{# ── 权限目录 ── #}
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h6 class="mb-0"><i class="bi bi-key"></i> 权限目录</h6>
+    <div class="d-flex gap-1">
+        {% if existing_categories %}
+        <select id="prCatFilter" class="form-select form-select-sm" style="width:auto;font-size:.8em;" onchange="filterAll()">
+            <option value="">全部分类</option>
+            {% for c in existing_categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+        </select>
+        {% endif %}
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addItemModal"><i class="bi bi-plus-lg"></i> 登记权限</button>
+        {% if items %}
         <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#applyModal"><i class="bi bi-check2-square"></i> 申请权限</button>
         {% endif %}
     </div>
 </div>
-
 {% if items %}
-{% set ns = namespace(last_status='') %}
-<div class="table-responsive">
-    <table class="table table-hover small">
-        <thead class="table-light"><tr><th>分类</th><th>群组</th><th>代码仓/路径</th><th>说明</th><th>申请人</th><th>提交人</th><th>状态</th><th>登记</th><th>提交审批</th><th>审批通过</th><th>操作</th></tr></thead>
+<div class="table-responsive mb-4">
+    <table class="table table-hover small mb-0" id="itemTable">
+        <thead class="table-light"><tr><th>分类</th><th>群组</th><th>代码仓/路径</th><th>说明</th><th>申请人数</th><th>操作</th></tr></thead>
         <tbody>
-        {% for pr in items %}
-        {% if pr.status != ns.last_status %}
-        {% set ns.last_status = pr.status %}
-        <tr class="table-active"><td colspan="11" class="fw-bold small py-1">
-            {% if pr.status == 'draft' %}待提交
-            {% elif pr.status == 'submitted' %}已提交审批
-            {% else %}已完成{% endif %}
-        </td></tr>
-        {% endif %}
-        <tr data-cat="{{ pr.category or '' }}" data-status="{{ pr.status }}">
-            <td>{% if pr.category %}<span class="badge bg-info text-dark">{{ pr.category }}</span>{% else %}-{% endif %}</td>
-            <td>{{ pr.resource }}</td>
-            <td class="text-muted small">{{ pr.repo_path or '-' }}</td>
-            <td class="text-muted small">{{ pr.description or '-' }}</td>
-            <td>{% for n in pr.applicant_list %}<div class="small">{{ n }}</div>{% endfor %}{% if not pr.applicant_list %}-{% endif %}</td>
-            <td>{{ pr.submitter.name }}</td>
+        {% for item in items %}
+        <tr data-cat="{{ item.category or '' }}">
+            <td>{% if item.category %}<span class="badge bg-info text-dark">{{ item.category }}</span>{% else %}-{% endif %}</td>
+            <td>{{ item.resource }}</td>
+            <td class="text-muted">{{ item.repo_path or '-' }}</td>
+            <td class="text-muted">{{ item.description or '-' }}</td>
+            <td><span class="badge bg-secondary">{{ item.applications|length }}</span></td>
             <td>
-                {% if pr.status == 'draft' %}<span class="badge bg-secondary">草稿</span>
-                {% elif pr.status == 'submitted' %}<span class="badge bg-warning text-dark">已提交审批</span>
-                {% else %}<span class="badge bg-success">审批完成</span>{% endif %}
-            </td>
-            <td class="text-muted">{{ pr.created_at.strftime('%m-%d') }}</td>
-            <td class="text-muted">{{ pr.submitted_at.strftime('%m-%d') if pr.submitted_at else '-' }}</td>
-            <td class="text-muted">{{ pr.approved_at.strftime('%m-%d') if pr.approved_at else '-' }}</td>
-            <td>
-                {% if pr.status == 'draft' %}
-                <button class="btn btn-sm btn-outline-primary py-0 edit-pr-btn" data-bs-toggle="modal" data-bs-target="#editModal"
-                        data-prid="{{ pr.id }}" data-category="{{ pr.category or '' }}" data-resource="{{ pr.resource }}"
-                        data-repo="{{ pr.repo_path or '' }}" data-desc="{{ pr.description or '' }}"
-                        data-applicants="{{ pr.applicants or '' }}" title="编辑"><i class="bi bi-pencil"></i></button>
+                <button class="btn btn-sm btn-outline-primary py-0 edit-item-btn"
+                        data-bs-toggle="modal" data-bs-target="#editItemModal"
+                        data-id="{{ item.id }}" data-category="{{ item.category or '' }}"
+                        data-resource="{{ item.resource }}" data-repo="{{ item.repo_path or '' }}"
+                        data-desc="{{ item.description or '' }}"><i class="bi bi-pencil"></i></button>
                 {% if is_pm %}
                 <form method="POST" class="d-inline">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="submit">
-                    <input type="hidden" name="prid" value="{{ pr.id }}">
-                    <button type="submit" class="btn btn-sm btn-outline-warning py-0">提交审批</button>
-                </form>
-                {% endif %}
-                {% if pr.submitter_id == current_user.id or is_pm %}
-                <form method="POST" class="d-inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="delete">
-                    <input type="hidden" name="prid" value="{{ pr.id }}">
-                    <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('删除？')"><i class="bi bi-x"></i></button>
-                </form>
-                {% endif %}
-                {% elif pr.status == 'submitted' and is_pm %}
-                <form method="POST" class="d-inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="approve">
-                    <input type="hidden" name="prid" value="{{ pr.id }}">
-                    <button type="submit" class="btn btn-sm btn-success py-0">审批完成</button>
+                    <input type="hidden" name="action" value="delete_item">
+                    <input type="hidden" name="item_id" value="{{ item.id }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('删除权限及所有申请记录？')"><i class="bi bi-x"></i></button>
                 </form>
                 {% endif %}
             </td>
@@ -98,24 +64,88 @@
     </table>
 </div>
 {% else %}
-<div class="text-center text-muted py-5">暂无权限申请</div>
+<div class="text-center text-muted py-3 mb-4 small">暂无权限，点击"登记权限"添加</div>
 {% endif %}
 
-<!-- Add Modal -->
-<div class="modal fade" id="addModal" tabindex="-1">
+{# ── 申请记录 ── #}
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h6 class="mb-0"><i class="bi bi-person-check"></i> 申请记录</h6>
+    <select id="prStatusFilter" class="form-select form-select-sm" style="width:auto;font-size:.8em;" onchange="filterAll()">
+        <option value="">全部状态</option>
+        <option value="pending">待审批</option>
+        <option value="approved">已通过</option>
+        <option value="rejected">已拒绝</option>
+    </select>
+</div>
+{% if apps %}
+<div class="table-responsive">
+    <table class="table table-hover small mb-0" id="appTable">
+        <thead class="table-light"><tr><th>权限</th><th>分类</th><th>申请人</th><th>工号</th><th>理由</th><th>状态</th><th>申请日期</th><th>审批日期</th><th>操作</th></tr></thead>
+        <tbody>
+        {% for a in apps %}
+        <tr data-status="{{ a.status }}" data-cat="{{ a.item.category or '' }}">
+            <td>{{ a.item.resource }}</td>
+            <td>{% if a.item.category %}<span class="badge bg-info text-dark">{{ a.item.category }}</span>{% endif %}</td>
+            <td>{{ a.applicant_name }}</td>
+            <td class="text-muted">{{ a.applicant_eid or '-' }}</td>
+            <td class="text-muted">{{ a.reason or '-' }}</td>
+            <td>
+                {% if a.status == 'pending' %}<span class="badge bg-warning text-dark">待审批</span>
+                {% elif a.status == 'approved' %}<span class="badge bg-success">已通过</span>
+                {% else %}<span class="badge bg-danger">已拒绝</span>{% endif %}
+            </td>
+            <td class="text-muted">{{ a.created_at.strftime('%m-%d') }}</td>
+            <td class="text-muted">{{ a.approved_at.strftime('%m-%d') if a.approved_at else '-' }}</td>
+            <td>
+                {% if a.status == 'pending' and is_pm %}
+                <form method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="approve">
+                    <input type="hidden" name="app_id" value="{{ a.id }}">
+                    <button type="submit" class="btn btn-sm btn-success py-0">通过</button>
+                </form>
+                <form method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="reject">
+                    <input type="hidden" name="app_id" value="{{ a.id }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger py-0">拒绝</button>
+                </form>
+                {% endif %}
+                {% if a.submitted_by == current_user.id or is_pm %}
+                <form method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="delete_app">
+                    <input type="hidden" name="app_id" value="{{ a.id }}">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary py-0" onclick="return confirm('删除？')"><i class="bi bi-x"></i></button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-center text-muted py-3 small">暂无申请记录</div>
+{% endif %}
+
+{# ── Modals ── #}
+
+{# Add Item #}
+<div class="modal fade" id="addItemModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="action" value="add">
+                <input type="hidden" name="action" value="add_item">
                 <div class="modal-header py-2"><h6 class="modal-title">登记权限</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">分类</label>
                         <div class="col-9">
-                            <input type="text" name="category" id="addCat" class="form-control form-control-sm" placeholder="手动输入或点击下方快捷分类">
+                            <input type="text" name="category" id="addCat" class="form-control form-control-sm" placeholder="如：SVN / Git / DB">
                             {% if existing_categories %}
-                            <div class="mt-1">{% for c in existing_categories %}<span class="badge bg-info text-dark me-1 cat-tag" style="cursor:pointer;" onclick="document.getElementById('addCat').value='{{ c }}'">{{ c }}</span>{% endfor %}</div>
+                            <div class="mt-1">{% for c in existing_categories %}<span class="badge bg-info text-dark me-1" style="cursor:pointer;" onclick="document.getElementById('addCat').value='{{ c }}'">{{ c }}</span>{% endfor %}</div>
                             {% endif %}
                         </div>
                     </div>
@@ -125,11 +155,11 @@
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">代码仓/路径</label>
-                        <div class="col-9"><input type="text" name="repo_path" class="form-control form-control-sm" placeholder="如：gitlab/repo-x 或 dbox/path"></div>
+                        <div class="col-9"><input type="text" name="repo_path" class="form-control form-control-sm" placeholder="如：gitlab/repo-x"></div>
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">说明</label>
-                        <div class="col-9"><input type="text" name="description" class="form-control form-control-sm" placeholder="权限用途说明"></div>
+                        <div class="col-9"><input type="text" name="description" class="form-control form-control-sm" placeholder="权限用途"></div>
                     </div>
                 </div>
                 <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">登记</button></div>
@@ -138,7 +168,28 @@
     </div>
 </div>
 
-<!-- Apply Modal (unified) -->
+{# Edit Item #}
+<div class="modal fade" id="editItemModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="edit_item">
+                <input type="hidden" name="item_id" id="editItemId">
+                <div class="modal-header py-2"><h6 class="modal-title">编辑权限</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="row mb-2"><label class="col-3 col-form-label col-form-label-sm">分类</label><div class="col-9"><input type="text" name="category" id="editItemCat" class="form-control form-control-sm"></div></div>
+                    <div class="row mb-2"><label class="col-3 col-form-label col-form-label-sm">群组</label><div class="col-9"><input type="text" name="resource" id="editItemRes" class="form-control form-control-sm" required></div></div>
+                    <div class="row mb-2"><label class="col-3 col-form-label col-form-label-sm">代码仓/路径</label><div class="col-9"><input type="text" name="repo_path" id="editItemRepo" class="form-control form-control-sm"></div></div>
+                    <div class="row mb-2"><label class="col-3 col-form-label col-form-label-sm">说明</label><div class="col-9"><input type="text" name="description" id="editItemDesc" class="form-control form-control-sm"></div></div>
+                </div>
+                <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">保存</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Apply Modal #}
 {% from "_user_picker.html" import user_picker %}
 <div class="modal fade" id="applyModal" tabindex="-1">
     <div class="modal-dialog">
@@ -148,27 +199,22 @@
                 <input type="hidden" name="action" value="apply">
                 <div class="modal-header py-2"><h6 class="modal-title">申请权限</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
-                    <!-- Checklist -->
                     <div class="mb-3">
                         <label class="form-label small fw-bold">勾选需要申请的权限：</label>
                         <div class="border rounded p-2" style="max-height:200px;overflow-y:auto;">
-                        {% for pr in draft_items %}
+                        {% for item in items %}
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="prid" value="{{ pr.id }}" id="applyPr{{ pr.id }}">
-                            <label class="form-check-label small" for="applyPr{{ pr.id }}">
-                                {% if pr.category %}<span class="badge bg-info text-dark me-1">{{ pr.category }}</span>{% endif %}
-                                <strong>{{ pr.resource }}</strong>
-                                {% if pr.repo_path %}<span class="text-muted">· {{ pr.repo_path }}</span>{% endif %}
-                                {% if pr.description %}<span class="text-muted">· {{ pr.description }}</span>{% endif %}
+                            <input class="form-check-input" type="checkbox" name="item_id" value="{{ item.id }}" id="applyItem{{ item.id }}">
+                            <label class="form-check-label small" for="applyItem{{ item.id }}">
+                                {% if item.category %}<span class="badge bg-info text-dark me-1">{{ item.category }}</span>{% endif %}
+                                <strong>{{ item.resource }}</strong>
+                                {% if item.description %}<span class="text-muted">· {{ item.description }}</span>{% endif %}
                             </label>
                         </div>
                         {% endfor %}
                         </div>
-                        <div class="mt-1">
-                            <a href="#" class="small text-primary" onclick="document.querySelectorAll('#applyModal input[name=prid]').forEach(c=>c.checked=true);return false;">全选</a>
-                        </div>
+                        <a href="#" class="small text-primary" onclick="document.querySelectorAll('#applyModal input[name=item_id]').forEach(function(c){c.checked=true});return false;">全选</a>
                     </div>
-                    <!-- For whom -->
                     <div class="mb-2">
                         <label class="form-label small fw-bold">为谁申请：</label>
                         <div class="d-flex gap-3">
@@ -182,13 +228,10 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Other person fields (hidden by default) -->
                     <div id="otherFields" style="display:none;">
                         <div class="row mb-2">
                             <label class="col-3 col-form-label col-form-label-sm">内部搜索</label>
-                            <div class="col-9">
-                                {{ user_picker('_user_search', all_users, mode='text', placeholder='搜索姓名/工号...') }}
-                            </div>
+                            <div class="col-9">{{ user_picker('_user_search', all_users, mode='text', placeholder='搜索姓名/工号...') }}</div>
                         </div>
                         <div class="row mb-2">
                             <label class="col-3 col-form-label col-form-label-sm">姓名 *</label>
@@ -196,10 +239,9 @@
                         </div>
                         <div class="row mb-2">
                             <label class="col-3 col-form-label col-form-label-sm">工号</label>
-                            <div class="col-9"><input type="text" name="other_eid" id="otherEid" class="form-control form-control-sm" placeholder="工号"></div>
+                            <div class="col-9"><input type="text" name="other_eid" id="otherEid" class="form-control form-control-sm"></div>
                         </div>
                     </div>
-                    <!-- Reason -->
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">申请理由</label>
                         <div class="col-9"><input type="text" name="reason" class="form-control form-control-sm" placeholder="如：开发需要访问代码仓"></div>
@@ -210,99 +252,50 @@
         </div>
     </div>
 </div>
-
-<!-- Edit Modal -->
-<div class="modal fade" id="editModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="action" value="edit">
-                <input type="hidden" name="prid" id="editPRid">
-                <div class="modal-header py-2"><h6 class="modal-title">编辑权限申请</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">
-                    <div class="row mb-2">
-                        <label class="col-3 col-form-label col-form-label-sm">分类</label>
-                        <div class="col-9">
-                            <input type="text" name="category" id="editPRcat" class="form-control form-control-sm" placeholder="手动输入或点击下方快捷分类">
-                            {% if existing_categories %}
-                            <div class="mt-1">{% for c in existing_categories %}<span class="badge bg-info text-dark me-1 cat-tag" style="cursor:pointer;" onclick="document.getElementById('editPRcat').value='{{ c }}'">{{ c }}</span>{% endfor %}</div>
-                            {% endif %}
-                        </div>
-                    </div>
-                    <div class="row mb-2">
-                        <label class="col-3 col-form-label col-form-label-sm">群组</label>
-                        <div class="col-9"><input type="text" name="resource" id="editPRres" class="form-control form-control-sm" required></div>
-                    </div>
-                    <div class="row mb-2">
-                        <label class="col-3 col-form-label col-form-label-sm">代码仓/路径</label>
-                        <div class="col-9"><input type="text" name="repo_path" id="editPRrepo" class="form-control form-control-sm"></div>
-                    </div>
-                    <div class="row mb-2">
-                        <label class="col-3 col-form-label col-form-label-sm">说明</label>
-                        <div class="col-9"><input type="text" name="description" id="editPRdesc" class="form-control form-control-sm"></div>
-                    </div>
-                    <div class="row mb-2">
-                        <label class="col-3 col-form-label col-form-label-sm">申请人</label>
-                        <div class="col-9"><textarea name="applicants" id="editPRapp" class="form-control form-control-sm" rows="4" placeholder="每行一个申请人"></textarea></div>
-                    </div>
-                </div>
-                <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">保存</button></div>
-            </form>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-function setEditPR(btn) {
-    document.getElementById('editPRid').value = btn.dataset.prid;
-    document.getElementById('editPRcat').value = btn.dataset.category;
-    document.getElementById('editPRres').value = btn.dataset.resource;
-    document.getElementById('editPRrepo').value = btn.dataset.repo;
-    document.getElementById('editPRdesc').value = btn.dataset.desc;
-    document.getElementById('editPRapp').value = btn.dataset.applicants;
-}
-// Delegate click for edit buttons
+// Edit item
 document.addEventListener('click', function(e) {
-    const btn = e.target.closest('.edit-pr-btn');
-    if (btn) setEditPR(btn);
+    var btn = e.target.closest('.edit-item-btn');
+    if (btn) {
+        document.getElementById('editItemId').value = btn.dataset.id;
+        document.getElementById('editItemCat').value = btn.dataset.category;
+        document.getElementById('editItemRes').value = btn.dataset.resource;
+        document.getElementById('editItemRepo').value = btn.dataset.repo;
+        document.getElementById('editItemDesc').value = btn.dataset.desc;
+    }
 });
-// Filter: category + status + search
-function filterPR() {
+// User picker auto-fill
+document.addEventListener('click', function(e) {
+    var opt = e.target.closest('#applyModal .user-picker-opt');
+    if (opt) {
+        var pinyin = (opt.dataset.pinyin || '').split(' ').pop();
+        document.getElementById('otherName').value = opt.dataset.name + (pinyin ? '(' + pinyin + ')' : '');
+        document.getElementById('otherEid').value = opt.dataset.eid || '';
+    }
+});
+// Filter all
+function filterAll() {
+    var q = (document.getElementById('prSearch').value || '').trim().toLowerCase();
     var catSel = document.getElementById('prCatFilter');
     var cat = catSel ? catSel.value : '';
-    var statusSel = document.getElementById('prStatusFilter');
-    var st = statusSel ? statusSel.value : '';
-    var q = (document.getElementById('prSearch').value || '').trim().toLowerCase();
-    document.querySelectorAll('table tbody tr[data-cat]').forEach(function(tr) {
+    var stSel = document.getElementById('prStatusFilter');
+    var st = stSel ? stSel.value : '';
+    // Filter item table
+    document.querySelectorAll('#itemTable tbody tr').forEach(function(tr) {
+        var matchCat = !cat || tr.dataset.cat === cat;
+        var matchQ = !q || tr.textContent.toLowerCase().indexOf(q) !== -1;
+        tr.style.display = (matchCat && matchQ) ? '' : 'none';
+    });
+    // Filter app table
+    document.querySelectorAll('#appTable tbody tr').forEach(function(tr) {
         var matchCat = !cat || tr.dataset.cat === cat;
         var matchSt = !st || tr.dataset.status === st;
         var matchQ = !q || tr.textContent.toLowerCase().indexOf(q) !== -1;
         tr.style.display = (matchCat && matchSt && matchQ) ? '' : 'none';
     });
-    // Hide group headers if all rows hidden
-    document.querySelectorAll('table tbody tr.table-active').forEach(function(hdr) {
-        var next = hdr.nextElementSibling;
-        var anyVisible = false;
-        while (next && !next.classList.contains('table-active')) {
-            if (next.style.display !== 'none') anyVisible = true;
-            next = next.nextElementSibling;
-        }
-        hdr.style.display = anyVisible ? '' : 'none';
-    });
 }
-// Auto-fill name+eid when internal user selected
-document.addEventListener('click', function(e) {
-    const opt = e.target.closest('#applyModal .user-picker-opt');
-    if (opt) {
-        const name = opt.dataset.name;
-        const eid = opt.dataset.eid || '';
-        const pinyin = (opt.dataset.pinyin || '').split(' ').pop();
-        document.getElementById('otherName').value = name + (pinyin ? '(' + pinyin + ')' : '');
-        document.getElementById('otherEid').value = eid;
-    }
-});
 </script>
 {% endblock %}

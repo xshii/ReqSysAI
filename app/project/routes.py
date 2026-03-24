@@ -13,7 +13,7 @@ from app.models.project import Project, Milestone
 from app.models.meeting import Meeting
 from app.models.risk import Risk
 from app.models.project_member import ProjectMember
-from app.models.knowledge import Knowledge, PermissionRequest
+from app.models.knowledge import Knowledge, PermissionRequest, PermissionItem, PermissionApplication
 from app.models.user import User
 from app.utils.pinyin import to_pinyin
 
@@ -924,7 +924,7 @@ def knowledge_list(project_id):
                            existing_biz_cats=existing_biz_cats)
 
 
-# ---- Permission requests ----
+# ---- Permission management (catalog + applications) ----
 
 @project_bp.route('/<int:project_id>/permissions', methods=['GET', 'POST'])
 @login_required
@@ -934,103 +934,104 @@ def permission_list(project_id):
 
     if request.method == 'POST':
         action = request.form.get('action')
-        if action == 'add':
-            db.session.add(PermissionRequest(
+        if action == 'add_item':
+            db.session.add(PermissionItem(
                 project_id=project_id,
                 category=request.form.get('category', '').strip() or None,
                 resource=request.form.get('resource', '').strip(),
                 repo_path=request.form.get('repo_path', '').strip() or None,
                 description=request.form.get('description', '').strip() or None,
-                applicants=request.form.get('applicants', '').strip(),
-                submitter_id=current_user.id,
+                created_by=current_user.id,
             ))
             db.session.commit()
-            flash('权限申请已登记', 'success')
+            flash('权限已登记', 'success')
+        elif action == 'edit_item':
+            item = db.session.get(PermissionItem, request.form.get('item_id', type=int))
+            if item and item.project_id == project_id:
+                item.category = request.form.get('category', '').strip() or None
+                item.resource = request.form.get('resource', item.resource).strip()
+                item.repo_path = request.form.get('repo_path', '').strip() or None
+                item.description = request.form.get('description', '').strip() or None
+                db.session.commit()
+                flash('已更新', 'success')
+        elif action == 'delete_item' and is_pm:
+            item = db.session.get(PermissionItem, request.form.get('item_id', type=int))
+            if item and item.project_id == project_id:
+                db.session.delete(item)
+                db.session.commit()
+                flash('已删除', 'success')
         elif action == 'apply':
-            # Batch apply: check multiple permissions, for self or other
-            prid_list = request.form.getlist('prid')
-            apply_for = request.form.get('apply_for', 'self')  # self / other
+            item_ids = request.form.getlist('item_id')
+            apply_for = request.form.get('apply_for', 'self')
             reason = request.form.get('reason', '').strip()
             if apply_for == 'self':
                 py = to_pinyin(current_user.name).split()[-1] if current_user.name else ''
+                name = f"{current_user.name}({py})" if py else current_user.name
                 eid = current_user.employee_id or ''
-                entry = f"{current_user.name}({py}) {eid}"
             else:
-                other_name = request.form.get('other_name', '').strip()
-                other_eid = request.form.get('other_eid', '').strip()
-                entry = other_name
-                if other_eid:
-                    entry += f" {other_eid}"
-            if reason:
-                entry += f" - {reason}"
+                name = request.form.get('other_name', '').strip()
+                eid = request.form.get('other_eid', '').strip()
             count = 0
-            for prid in prid_list:
-                pr = db.session.get(PermissionRequest, int(prid))
-                if not pr or pr.project_id != project_id or pr.status != 'draft':
+            for iid in item_ids:
+                item = db.session.get(PermissionItem, int(iid))
+                if not item or item.project_id != project_id:
                     continue
-                prev = pr.applicants or ''
-                # Deduplicate by name
-                name_check = current_user.name if apply_for == 'self' else other_name
-                if name_check and name_check in prev:
+                # Deduplicate
+                exists = PermissionApplication.query.filter_by(
+                    item_id=item.id, applicant_name=name).first()
+                if exists:
                     continue
-                pr.applicants = (prev + '\n' + entry).strip() if prev else entry
+                db.session.add(PermissionApplication(
+                    item_id=item.id, applicant_name=name,
+                    applicant_eid=eid or None, reason=reason or None,
+                    submitted_by=current_user.id,
+                ))
                 count += 1
             if count:
                 db.session.commit()
                 flash(f'已申请 {count} 项权限', 'success')
             else:
                 flash('未选择权限或已在申请列表中', 'info')
-        elif action == 'edit':
-            pr = db.session.get(PermissionRequest, request.form.get('prid', type=int))
-            if pr and pr.project_id == project_id and pr.status == 'draft':
-                pr.category = request.form.get('category', '').strip() or None
-                pr.resource = request.form.get('resource', pr.resource).strip()
-                pr.repo_path = request.form.get('repo_path', '').strip() or None
-                pr.description = request.form.get('description', '').strip() or None
-                pr.applicants = request.form.get('applicants', pr.applicants).strip()
-                db.session.commit()
-                flash('已更新', 'success')
-        elif action == 'submit' and is_pm:
-            pr = db.session.get(PermissionRequest, request.form.get('prid', type=int))
-            if pr and pr.project_id == project_id and pr.status == 'draft':
-                pr.status = 'submitted'
-                pr.submitted_at = datetime.utcnow()
-                db.session.commit()
-                flash('已提交审批', 'success')
         elif action == 'approve' and is_pm:
-            pr = db.session.get(PermissionRequest, request.form.get('prid', type=int))
-            if pr and pr.project_id == project_id and pr.status == 'submitted':
-                pr.status = 'approved'
-                pr.approved_at = datetime.utcnow()
+            app_record = db.session.get(PermissionApplication, request.form.get('app_id', type=int))
+            if app_record and app_record.item.project_id == project_id:
+                app_record.status = 'approved'
+                app_record.approved_at = datetime.utcnow()
+                app_record.approved_by = current_user.id
                 db.session.commit()
-                flash('审批完成', 'success')
-        elif action == 'delete':
-            pr = db.session.get(PermissionRequest, request.form.get('prid', type=int))
-            if pr and pr.project_id == project_id and pr.status == 'draft' and (
-                    pr.submitter_id == current_user.id or is_pm):
-                db.session.delete(pr)
+                flash('已通过', 'success')
+        elif action == 'reject' and is_pm:
+            app_record = db.session.get(PermissionApplication, request.form.get('app_id', type=int))
+            if app_record and app_record.item.project_id == project_id:
+                app_record.status = 'rejected'
+                db.session.commit()
+                flash('已拒绝', 'success')
+        elif action == 'delete_app':
+            app_record = db.session.get(PermissionApplication, request.form.get('app_id', type=int))
+            if app_record and app_record.item.project_id == project_id and (
+                    app_record.submitted_by == current_user.id or is_pm):
+                db.session.delete(app_record)
                 db.session.commit()
                 flash('已删除', 'success')
         return redirect(url_for('project.permission_list', project_id=project_id))
 
-    items = PermissionRequest.query.filter_by(project_id=project_id).order_by(
-        db.case((PermissionRequest.status == 'draft', 0),
-                (PermissionRequest.status == 'submitted', 1), else_=2),
-        PermissionRequest.category, PermissionRequest.resource,
-        PermissionRequest.created_at.desc()).all()
-    # Draft items for the apply modal checklist
-    draft_items = [pr for pr in items if pr.status == 'draft']
-    draft_resources = sorted(set(pr.resource for pr in draft_items))
-    # Collect existing categories for quick-click
-    existing_categories = sorted(set(
-        pr.category for pr in items if pr.category))
-    # Current user's pinyin name for display in "为我申请"
+    # Query
+    items = PermissionItem.query.filter_by(project_id=project_id).order_by(
+        PermissionItem.category, PermissionItem.resource).all()
+    apps = PermissionApplication.query.join(PermissionItem).filter(
+        PermissionItem.project_id == project_id
+    ).order_by(
+        db.case((PermissionApplication.status == 'pending', 0),
+                (PermissionApplication.status == 'approved', 1), else_=2),
+        PermissionApplication.created_at.desc()).all()
+
+    existing_categories = sorted(set(i.category for i in items if i.category))
     py = to_pinyin(current_user.name).split()[-1] if current_user.name else ''
     my_pinyin_name = f"{current_user.name}({py})" if py else current_user.name
-    # Users for internal member search in "为他人申请"
     all_users = User.query.order_by(User.name).all()
-    return render_template('project/permissions.html', project=project, items=items,
-                           is_pm=is_pm, draft_items=draft_items, draft_resources=draft_resources,
+
+    return render_template('project/permissions.html', project=project,
+                           items=items, apps=apps, is_pm=is_pm,
                            existing_categories=existing_categories,
                            my_pinyin_name=my_pinyin_name, all_users=all_users)
 
@@ -1038,28 +1039,34 @@ def permission_list(project_id):
 @project_bp.route('/<int:project_id>/permissions/export-csv')
 @login_required
 def permission_export_csv(project_id):
-    """Export permission requests as CSV."""
+    """Export permission catalog + applications as CSV."""
     import csv, io
     from flask import Response
     project = db.get_or_404(Project, project_id)
-    items = PermissionRequest.query.filter_by(project_id=project_id).order_by(
-        PermissionRequest.category, PermissionRequest.resource).all()
+    items = PermissionItem.query.filter_by(project_id=project_id).order_by(
+        PermissionItem.category, PermissionItem.resource).all()
     buf = io.StringIO()
     buf.write('\ufeff')
     writer = csv.writer(buf)
-    writer.writerow(['ID', '分类', '群组', '代码仓/路径', '说明', '申请人', '状态',
-                      '登记日期', '提交审批日期', '审批通过日期'])
-    writer.writerow([0, 'SVN(示例)', 'group-xxx', 'repo/path', '权限用途说明',
-                     '张三(zhangsan) a00123456', '草稿',
-                     '2026-01-01', '', '此行为格式示例，导入时自动跳过'])
-    for pr in items:
-        writer.writerow([
-            pr.id, pr.category or '', pr.resource, pr.repo_path or '',
-            pr.description or '', pr.applicants or '', pr.status_label,
-            pr.created_at.strftime('%Y-%m-%d') if pr.created_at else '',
-            pr.submitted_at.strftime('%Y-%m-%d') if pr.submitted_at else '',
-            pr.approved_at.strftime('%Y-%m-%d') if pr.approved_at else '',
-        ])
+    # Sheet 1 header: permission catalog
+    writer.writerow(['权限ID', '分类', '群组', '代码仓/路径', '说明', '申请人', '工号', '申请理由', '状态', '申请日期', '审批日期'])
+    writer.writerow([0, 'SVN(示例)', 'group-xxx', 'repo/path', '权限用途', '张三(zhangsan)', 'a00123456',
+                     '开发需要', '待审批', '2026-01-01', '此行为格式示例，导入时自动跳过'])
+    for item in items:
+        if item.applications:
+            for a in item.applications:
+                writer.writerow([
+                    item.id, item.category or '', item.resource, item.repo_path or '',
+                    item.description or '', a.applicant_name, a.applicant_eid or '',
+                    a.reason or '', a.status_label,
+                    a.created_at.strftime('%Y-%m-%d') if a.created_at else '',
+                    a.approved_at.strftime('%Y-%m-%d') if a.approved_at else '',
+                ])
+        else:
+            writer.writerow([
+                item.id, item.category or '', item.resource, item.repo_path or '',
+                item.description or '', '', '', '', '', '', '',
+            ])
     return Response(buf.getvalue(), mimetype='text/csv; charset=utf-8',
                     headers={'Content-Disposition': f'attachment; filename=permissions_{project.name}.csv'})
 
@@ -1067,7 +1074,7 @@ def permission_export_csv(project_id):
 @project_bp.route('/<int:project_id>/permissions/import-csv', methods=['POST'])
 @login_required
 def permission_import_csv(project_id):
-    """Import permission requests from CSV."""
+    """Import permission catalog + applications from CSV."""
     import csv, io
     project = db.get_or_404(Project, project_id)
     file = request.files.get('csv_file')
@@ -1085,54 +1092,45 @@ def permission_import_csv(project_id):
         flash('编码无法识别', 'danger')
         return redirect(url_for('project.permission_list', project_id=project_id))
     reader = csv.DictReader(io.StringIO(text))
-    required = {'群组'}
-    if not required.issubset(set(reader.fieldnames or [])):
+    if not {'群组'}.issubset(set(reader.fieldnames or [])):
         flash('CSV 缺少必填列: 群组', 'danger')
         return redirect(url_for('project.permission_list', project_id=project_id))
-    status_rev = {v: k for k, v in PermissionRequest.STATUS_LABELS.items()}
-    created, updated = 0, 0
+    status_rev = {v: k for k, v in PermissionApplication.STATUS_LABELS.items()}
+    items_created, apps_created = 0, 0
     for row in reader:
-        if (row.get('ID') or '').strip() == '0':
+        if (row.get('权限ID') or '').strip() == '0':
             continue
         resource = (row.get('群组') or '').strip()
         if not resource:
             continue
-        rid = None
-        try:
-            rid = int(row.get('ID', '').strip())
-        except (ValueError, TypeError):
-            pass
-        existing = None
-        if rid:
-            existing = PermissionRequest.query.filter_by(id=rid, project_id=project_id).first()
-        if not existing:
-            existing = PermissionRequest.query.filter_by(
-                project_id=project_id, resource=resource,
-                category=(row.get('分类') or '').strip() or None).first()
-        if existing:
-            existing.repo_path = (row.get('代码仓/路径') or '').strip() or existing.repo_path
-            existing.description = (row.get('说明') or '').strip() or existing.description
-            applicants = (row.get('申请人') or '').strip()
-            if applicants:
-                existing.applicants = applicants
-            updated += 1
-        else:
-            status_str = (row.get('状态') or '').strip()
-            status = status_rev.get(status_str, 'draft')
-            pr = PermissionRequest(
-                project_id=project_id,
-                category=(row.get('分类') or '').strip() or None,
-                resource=resource,
+        category = (row.get('分类') or '').strip() or None
+        # Find or create item
+        item = PermissionItem.query.filter_by(
+            project_id=project_id, resource=resource, category=category).first()
+        if not item:
+            item = PermissionItem(
+                project_id=project_id, category=category, resource=resource,
                 repo_path=(row.get('代码仓/路径') or '').strip() or None,
                 description=(row.get('说明') or '').strip() or None,
-                applicants=(row.get('申请人') or '').strip() or None,
-                status=status,
-                submitter_id=current_user.id,
-            )
-            db.session.add(pr)
-            created += 1
+                created_by=current_user.id)
+            db.session.add(item)
+            db.session.flush()
+            items_created += 1
+        # Create application if applicant provided
+        applicant = (row.get('申请人') or '').strip()
+        if applicant:
+            exists = PermissionApplication.query.filter_by(
+                item_id=item.id, applicant_name=applicant).first()
+            if not exists:
+                status = status_rev.get((row.get('状态') or '').strip(), 'pending')
+                db.session.add(PermissionApplication(
+                    item_id=item.id, applicant_name=applicant,
+                    applicant_eid=(row.get('工号') or '').strip() or None,
+                    reason=(row.get('申请理由') or '').strip() or None,
+                    status=status, submitted_by=current_user.id))
+                apps_created += 1
     db.session.commit()
-    flash(f'导入完成：新增 {created}，更新 {updated}', 'success')
+    flash(f'导入完成：权限 {items_created} 条，申请 {apps_created} 条', 'success')
     return redirect(url_for('project.permission_list', project_id=project_id))
 
 
