@@ -1093,10 +1093,25 @@ def meeting_extract(project_id, meeting_id):
         flash('AI 提取失败，请稍后重试。' + (f' ({raw})' if raw else ''), 'danger')
         return redirect(url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id))
 
+    # Save AI result (polished content saved only when user accepts)
     meeting.ai_result = json.dumps(parsed, ensure_ascii=False)
     db.session.commit()
-    flash('AI 提取完成', 'success')
+    flash('AI 润色提取完成', 'success')
     return redirect(url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id))
+
+
+@project_bp.route('/<int:project_id>/meetings/<int:meeting_id>/accept-polish', methods=['POST'])
+@login_required
+def meeting_accept_polish(project_id, meeting_id):
+    """Accept AI polished content, write back to meeting.content."""
+    meeting = db.get_or_404(Meeting, meeting_id)
+    if meeting.ai_result:
+        parsed = json.loads(meeting.ai_result)
+        if parsed.get('polished'):
+            meeting.content = parsed['polished']
+            db.session.commit()
+            return jsonify(ok=True)
+    return jsonify(ok=False, msg='无润色内容')
 
 
 @project_bp.route('/<int:project_id>/meetings/<int:meeting_id>/apply', methods=['POST'])

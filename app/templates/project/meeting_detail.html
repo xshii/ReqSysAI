@@ -31,6 +31,22 @@
         </div>
     </div>
 
+    {# Polished content preview #}
+    {% if ai_data and ai_data.get('polished') and ai_data.polished != meeting.content %}
+    <div class="col-lg-12 mb-3">
+        <div class="card border-info">
+            <div class="card-header py-2 bg-info bg-opacity-10 d-flex justify-content-between align-items-center">
+                <span class="fw-bold small"><i class="bi bi-robot"></i> AI 润色结果</span>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-success py-0" onclick="acceptPolish()"><i class="bi bi-check-lg"></i> 接受润色</button>
+                    <button class="btn btn-sm btn-outline-secondary py-0" onclick="this.closest('.card').remove()"><i class="bi bi-x"></i> 忽略</button>
+                </div>
+            </div>
+            <div class="card-body small" style="white-space:pre-wrap;max-height:200px;overflow-y:auto;">{{ ai_data.polished }}</div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Right: AI extracted items -->
     <div class="col-lg-7 mb-3">
         {% if ai_data %}
@@ -189,6 +205,13 @@ function applySelected() {
         btn.innerHTML = '<i class="bi bi-check2-all"></i> 一键创建选中项';
     });
 }
+function acceptPolish() {
+    apiPost('{{ url_for("project.meeting_accept_polish", project_id=project.id, meeting_id=meeting.id) }}', {}).then(function(d) {
+        if (d && d.ok) location.reload();
+        else alert((d && d.msg) || '操作失败');
+    });
+}
+
 // Auto-extract if redirected with auto_extract=1
 if (new URLSearchParams(window.location.search).get('auto_extract') === '1') {
     setTimeout(doExtract, 500);
