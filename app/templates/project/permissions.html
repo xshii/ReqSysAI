@@ -100,11 +100,11 @@
         <tbody>
         {% for a in apps %}
         <tr data-status="{{ a.status }}" data-cat="{{ a.item.category or '' }}">
-            <td>{{ a.item.resource }}</td>
+            <td>{{ a.item.resource }} <button class="btn btn-sm py-0 px-1 btn-outline-secondary copy-btn" data-copy="{{ a.item.resource }}" title="复制群组"><i class="bi bi-clipboard"></i></button></td>
             <td>{% if a.item.category %}<span class="badge bg-info text-dark">{{ a.item.category }}</span>{% endif %}</td>
-            <td>{{ a.applicant_name }}</td>
+            <td>{{ a.applicant_name }} <button class="btn btn-sm py-0 px-1 btn-outline-secondary copy-btn" data-copy="{{ a.applicant_name.split('(')[-1].rstrip(')') if '(' in a.applicant_name else a.applicant_name }}{% if a.applicant_eid %} {{ a.applicant_eid }}{% endif %}" title="复制 拼音 工号"><i class="bi bi-clipboard"></i></button></td>
             <td class="text-muted">{{ a.applicant_eid or '-' }}</td>
-            <td class="text-muted">{{ a.reason or '-' }}</td>
+            <td class="text-muted">{{ a.reason or '-' }}{% if a.reason %} <button class="btn btn-sm py-0 px-1 btn-outline-secondary copy-btn" data-copy="{{ a.reason }}" title="复制理由"><i class="bi bi-clipboard"></i></button>{% endif %}</td>
             <td>
                 {% if a.status == 'pending' %}<span class="badge bg-warning text-dark">待审批</span>
                 {% elif a.status == 'approved' %}<span class="badge bg-success">已通过</span>
@@ -292,6 +292,17 @@ document.addEventListener('click', function(e) {
         document.getElementById('otherEid').value = opt.dataset.eid || '';
     }
 });
+// Copy buttons
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.copy-btn');
+    if (!btn) return;
+    navigator.clipboard.writeText(btn.dataset.copy).then(function() {
+        var icon = btn.querySelector('i');
+        icon.className = 'bi bi-check text-success';
+        setTimeout(function() { icon.className = 'bi bi-clipboard'; }, 800);
+    });
+});
+
 // Filter all
 function filterAll() {
     var q = (document.getElementById('prSearch').value || '').trim().toLowerCase();
