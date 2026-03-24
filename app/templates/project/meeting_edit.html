@@ -21,7 +21,7 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <label class="form-label">会议日期</label>
-                    <input type="date" name="date" class="form-control" value="{{ meeting.date.strftime('%Y-%m-%d') if meeting.date else '' }}">
+                    <input type="date" max="2099-12-31" name="date" class="form-control" value="{{ meeting.date.strftime('%Y-%m-%d') if meeting.date else '' }}">
                 </div>
                 <div class="col-md-6 mb-3">
                     <label class="form-label">参会人</label>

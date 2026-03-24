@@ -73,7 +73,7 @@
                 {% endfor %}
                 {% endif %}
             </select>
-            <input type="date" id="tplStartDate" class="form-control form-control-sm" style="max-width:140px;" title="起始日期">
+            <input type="date" max="2099-12-31" id="tplStartDate" class="form-control form-control-sm" style="max-width:140px;" title="起始日期">
             <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" onclick="loadTemplate()">导入</button>
             <button type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0" data-bs-toggle="collapse" data-bs-target="#tplManagePanel"><i class="bi bi-gear"></i></button>
             <span class="flex-grow-1"></span>
@@ -176,7 +176,7 @@
                 <div class="input-group input-group-sm mb-1 ms-drag-row">
                     <span class="input-group-text ms-drag-handle" style="cursor:grab;" draggable="true"><i class="bi bi-grip-vertical"></i></span>
                     <input type="text" name="ms_name" class="form-control" value="{{ ms.name }}">
-                    <input type="date" name="ms_date" class="form-control" style="max-width:150px;" value="{{ ms.due_date.strftime('%Y-%m-%d') if ms.due_date else '' }}">
+                    <input type="date" max="2099-12-31" name="ms_date" class="form-control" style="max-width:150px;" value="{{ ms.due_date.strftime('%Y-%m-%d') if ms.due_date else '' }}">
                     <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>
                 </div>
                 {% endfor %}
@@ -277,7 +277,7 @@ function addMs(name, dateVal) {
     row.className = 'input-group input-group-sm mb-1 ms-drag-row';
     row.innerHTML = '<span class="input-group-text ms-drag-handle" style="cursor:grab;" draggable="true"><i class="bi bi-grip-vertical"></i></span>'
         + '<input type="text" name="ms_name" class="form-control" placeholder="里程碑名称" value="' + (name || '').replace(/"/g, '&quot;') + '">'
-        + '<input type="date" name="ms_date" class="form-control" style="max-width:150px;" value="' + (dateVal || '') + '">'
+        + '<input type="date" max="2099-12-31" name="ms_date" class="form-control" style="max-width:150px;" value="' + (dateVal || '') + '">'
         + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>';
     initMsDrag(row);
     div.appendChild(row);

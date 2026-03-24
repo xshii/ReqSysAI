@@ -15,7 +15,7 @@
     <div class="flex-grow-1 me-3">
         <input type="text" name="title" class="form-control form-control-sm fw-bold meeting-field" value="{{ meeting.title }}" disabled style="font-size:1.2em;border:none;background:transparent;padding:0;">
         <div class="d-flex gap-2 align-items-center mt-1">
-            <input type="date" name="date" class="form-control form-control-sm meeting-field" value="{{ meeting.date.strftime('%Y-%m-%d') if meeting.date else '' }}" disabled style="width:auto;border:none;background:transparent;padding:0;font-size:.85em;">
+            <input type="date" max="2099-12-31" name="date" class="form-control form-control-sm meeting-field" value="{{ meeting.date.strftime('%Y-%m-%d') if meeting.date else '' }}" disabled style="width:auto;border:none;background:transparent;padding:0;font-size:.85em;">
             <span class="text-muted small">创建人：{{ meeting.creator.name }}</span>
         </div>
     </div>
