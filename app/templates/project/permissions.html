@@ -6,12 +6,28 @@
     <h4>权限申请 · {{ project.name }}</h4>
     <div class="d-flex gap-2 align-items-center">
         <input type="text" id="prSearch" class="form-control form-control-sm" style="width:140px;" placeholder="搜索..." oninput="filterAll()">
-        <a href="{{ url_for('project.permission_export_csv', project_id=project.id) }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出</a>
-        <form method="POST" action="{{ url_for('project.permission_import_csv', project_id=project.id) }}" enctype="multipart/form-data" id="prCsvForm" class="d-none">
+        <div class="dropdown">
+            <button class="btn btn-sm btn-outline-success dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-download"></i> 导出</button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item small" href="{{ url_for('project.permission_export_items', project_id=project.id) }}"><i class="bi bi-key"></i> 权限目录</a></li>
+                <li><a class="dropdown-item small" href="{{ url_for('project.permission_export_apps', project_id=project.id) }}"><i class="bi bi-person-check"></i> 申请记录</a></li>
+            </ul>
+        </div>
+        <div class="dropdown">
+            <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown"><i class="bi bi-upload"></i> 导入</button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item small" href="#" onclick="document.querySelector('#importItemsForm input[type=file]').click();return false;"><i class="bi bi-key"></i> 权限目录</a></li>
+                <li><a class="dropdown-item small" href="#" onclick="document.querySelector('#importAppsForm input[type=file]').click();return false;"><i class="bi bi-person-check"></i> 申请记录</a></li>
+            </ul>
+        </div>
+        <form method="POST" action="{{ url_for('project.permission_import_items', project_id=project.id) }}" enctype="multipart/form-data" id="importItemsForm" class="d-none">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="file" name="csv_file" accept=".csv" onchange="this.form.submit();">
         </form>
-        <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.querySelector('#prCsvForm input[type=file]').click()"><i class="bi bi-upload"></i> 导入</button>
+        <form method="POST" action="{{ url_for('project.permission_import_apps', project_id=project.id) }}" enctype="multipart/form-data" id="importAppsForm" class="d-none">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="csv_file" accept=".csv" onchange="this.form.submit();">
+        </form>
     </div>
 </div>
 

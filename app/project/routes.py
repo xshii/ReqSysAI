@@ -1036,10 +1036,10 @@ def permission_list(project_id):
                            my_pinyin_name=my_pinyin_name, all_users=all_users)
 
 
-@project_bp.route('/<int:project_id>/permissions/export-csv')
+@project_bp.route('/<int:project_id>/permissions/export-items')
 @login_required
-def permission_export_csv(project_id):
-    """Export permission catalog + applications as CSV."""
+def permission_export_items(project_id):
+    """Export permission catalog as CSV."""
     import csv, io
     from flask import Response
     project = db.get_or_404(Project, project_id)
@@ -1048,39 +1048,50 @@ def permission_export_csv(project_id):
     buf = io.StringIO()
     buf.write('\ufeff')
     writer = csv.writer(buf)
-    # Sheet 1 header: permission catalog
-    writer.writerow(['权限ID', '分类', '群组', '代码仓/路径', '说明', '申请人', '工号', '申请理由', '状态', '申请日期', '审批日期'])
-    writer.writerow([0, 'SVN(示例)', 'group-xxx', 'repo/path', '权限用途', '张三(zhangsan)', 'a00123456',
-                     '开发需要', '待审批', '2026-01-01', '此行为格式示例，导入时自动跳过'])
+    writer.writerow(['权限ID', '分类', '群组', '代码仓/路径', '说明'])
+    writer.writerow([0, 'SVN(示例)', 'group-xxx', 'repo/path', '此行为格式示例，导入时自动跳过'])
     for item in items:
-        if item.applications:
-            for a in item.applications:
-                writer.writerow([
-                    item.id, item.category or '', item.resource, item.repo_path or '',
-                    item.description or '', a.applicant_name, a.applicant_eid or '',
-                    a.reason or '', a.status_label,
-                    a.created_at.strftime('%Y-%m-%d') if a.created_at else '',
-                    a.approved_at.strftime('%Y-%m-%d') if a.approved_at else '',
-                ])
-        else:
-            writer.writerow([
-                item.id, item.category or '', item.resource, item.repo_path or '',
-                item.description or '', '', '', '', '', '', '',
-            ])
+        writer.writerow([item.id, item.category or '', item.resource,
+                         item.repo_path or '', item.description or ''])
     return Response(buf.getvalue(), mimetype='text/csv; charset=utf-8',
-                    headers={'Content-Disposition': f'attachment; filename=permissions_{project.name}.csv'})
+                    headers={'Content-Disposition': f'attachment; filename=权限目录_{project.name}.csv'})
 
 
-@project_bp.route('/<int:project_id>/permissions/import-csv', methods=['POST'])
+@project_bp.route('/<int:project_id>/permissions/export-apps')
 @login_required
-def permission_import_csv(project_id):
-    """Import permission catalog + applications from CSV."""
+def permission_export_apps(project_id):
+    """Export permission applications as CSV."""
     import csv, io
+    from flask import Response
     project = db.get_or_404(Project, project_id)
+    apps = PermissionApplication.query.join(PermissionItem).filter(
+        PermissionItem.project_id == project_id
+    ).order_by(PermissionApplication.created_at.desc()).all()
+    buf = io.StringIO()
+    buf.write('\ufeff')
+    writer = csv.writer(buf)
+    writer.writerow(['申请ID', '群组', '分类', '申请人', '工号', '申请理由', '状态', '申请日期', '审批日期'])
+    writer.writerow([0, 'group-xxx', 'SVN(示例)', '张三(zhangsan)', 'a00123456',
+                     '开发需要', '待审批', '2026-01-01', '此行为格式示例，导入时自动跳过'])
+    for a in apps:
+        writer.writerow([
+            a.id, a.item.resource, a.item.category or '',
+            a.applicant_name, a.applicant_eid or '', a.reason or '',
+            a.status_label,
+            a.created_at.strftime('%Y-%m-%d') if a.created_at else '',
+            a.approved_at.strftime('%Y-%m-%d') if a.approved_at else '',
+        ])
+    return Response(buf.getvalue(), mimetype='text/csv; charset=utf-8',
+                    headers={'Content-Disposition': f'attachment; filename=申请记录_{project.name}.csv'})
+
+
+def _read_csv(project_id):
+    """Shared CSV reading logic. Returns (reader, redirect_response)."""
+    import csv, io
     file = request.files.get('csv_file')
     if not file or not file.filename.lower().endswith('.csv'):
         flash('请选择 CSV 文件', 'danger')
-        return redirect(url_for('project.permission_list', project_id=project_id))
+        return None, redirect(url_for('project.permission_list', project_id=project_id))
     raw = file.read()
     for enc in ('utf-8-sig', 'gbk', 'utf-8'):
         try:
@@ -1090,13 +1101,22 @@ def permission_import_csv(project_id):
             continue
     else:
         flash('编码无法识别', 'danger')
-        return redirect(url_for('project.permission_list', project_id=project_id))
-    reader = csv.DictReader(io.StringIO(text))
+        return None, redirect(url_for('project.permission_list', project_id=project_id))
+    return csv.DictReader(io.StringIO(text)), None
+
+
+@project_bp.route('/<int:project_id>/permissions/import-items', methods=['POST'])
+@login_required
+def permission_import_items(project_id):
+    """Import permission catalog from CSV."""
+    db.get_or_404(Project, project_id)
+    reader, err = _read_csv(project_id)
+    if err:
+        return err
     if not {'群组'}.issubset(set(reader.fieldnames or [])):
         flash('CSV 缺少必填列: 群组', 'danger')
         return redirect(url_for('project.permission_list', project_id=project_id))
-    status_rev = {v: k for k, v in PermissionApplication.STATUS_LABELS.items()}
-    items_created, apps_created = 0, 0
+    created, updated = 0, 0
     for row in reader:
         if (row.get('权限ID') or '').strip() == '0':
             continue
@@ -1104,33 +1124,64 @@ def permission_import_csv(project_id):
         if not resource:
             continue
         category = (row.get('分类') or '').strip() or None
-        # Find or create item
-        item = PermissionItem.query.filter_by(
+        existing = PermissionItem.query.filter_by(
             project_id=project_id, resource=resource, category=category).first()
-        if not item:
-            item = PermissionItem(
+        if existing:
+            existing.repo_path = (row.get('代码仓/路径') or '').strip() or existing.repo_path
+            existing.description = (row.get('说明') or '').strip() or existing.description
+            updated += 1
+        else:
+            db.session.add(PermissionItem(
                 project_id=project_id, category=category, resource=resource,
                 repo_path=(row.get('代码仓/路径') or '').strip() or None,
                 description=(row.get('说明') or '').strip() or None,
-                created_by=current_user.id)
+                created_by=current_user.id))
+            created += 1
+    db.session.commit()
+    flash(f'权限目录导入完成：新增 {created}，更新 {updated}', 'success')
+    return redirect(url_for('project.permission_list', project_id=project_id))
+
+
+@project_bp.route('/<int:project_id>/permissions/import-apps', methods=['POST'])
+@login_required
+def permission_import_apps(project_id):
+    """Import permission applications from CSV."""
+    db.get_or_404(Project, project_id)
+    reader, err = _read_csv(project_id)
+    if err:
+        return err
+    if not {'群组', '申请人'}.issubset(set(reader.fieldnames or [])):
+        flash('CSV 缺少必填列: 群组, 申请人', 'danger')
+        return redirect(url_for('project.permission_list', project_id=project_id))
+    status_rev = {v: k for k, v in PermissionApplication.STATUS_LABELS.items()}
+    created = 0
+    for row in reader:
+        if (row.get('申请ID') or '').strip() == '0':
+            continue
+        resource = (row.get('群组') or '').strip()
+        applicant = (row.get('申请人') or '').strip()
+        if not resource or not applicant:
+            continue
+        category = (row.get('分类') or '').strip() or None
+        item = PermissionItem.query.filter_by(
+            project_id=project_id, resource=resource, category=category).first()
+        if not item:
+            item = PermissionItem(project_id=project_id, category=category,
+                                  resource=resource, created_by=current_user.id)
             db.session.add(item)
             db.session.flush()
-            items_created += 1
-        # Create application if applicant provided
-        applicant = (row.get('申请人') or '').strip()
-        if applicant:
-            exists = PermissionApplication.query.filter_by(
-                item_id=item.id, applicant_name=applicant).first()
-            if not exists:
-                status = status_rev.get((row.get('状态') or '').strip(), 'pending')
-                db.session.add(PermissionApplication(
-                    item_id=item.id, applicant_name=applicant,
-                    applicant_eid=(row.get('工号') or '').strip() or None,
-                    reason=(row.get('申请理由') or '').strip() or None,
-                    status=status, submitted_by=current_user.id))
-                apps_created += 1
+        exists = PermissionApplication.query.filter_by(
+            item_id=item.id, applicant_name=applicant).first()
+        if not exists:
+            status = status_rev.get((row.get('状态') or '').strip(), 'pending')
+            db.session.add(PermissionApplication(
+                item_id=item.id, applicant_name=applicant,
+                applicant_eid=(row.get('工号') or '').strip() or None,
+                reason=(row.get('申请理由') or '').strip() or None,
+                status=status, submitted_by=current_user.id))
+            created += 1
     db.session.commit()
-    flash(f'导入完成：权限 {items_created} 条，申请 {apps_created} 条', 'success')
+    flash(f'申请记录导入完成：新增 {created} 条', 'success')
     return redirect(url_for('project.permission_list', project_id=project_id))
 
 
