@@ -551,27 +551,34 @@ function exportEml() {
             if (d.querySelector('strong')) body += '<div style="font-size:13px;font-weight:700;margin-top:10px;margin-bottom:4px;">' + d.innerHTML + '</div>';
         });
 
-        // Milestones → vertical table (works for any count)
+        // Milestones → horizontal timeline table (max 6 per row)
         var msContainer = sec.querySelector('.d-flex[style*="margin:0 8px"]');
         if (msContainer) {
-            var msItems = msContainer.querySelectorAll('.text-center');
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;margin:6px 0;">';
-            body += '<tr><th style="border:1px solid #e2e8f0;padding:4px 10px;background:#f1f5f9;font-weight:600;color:#475569;">里程碑</th>'
-                + '<th style="border:1px solid #e2e8f0;padding:4px 10px;background:#f1f5f9;font-weight:600;color:#475569;width:90px;">日期</th>'
-                + '<th style="border:1px solid #e2e8f0;padding:4px 10px;background:#f1f5f9;font-weight:600;color:#475569;width:60px;">状态</th></tr>';
-            msItems.forEach(function(ms) {
-                var nameEl = ms.querySelector('.fw-bold');
-                var dateEl = ms.querySelectorAll('div');
-                var name = nameEl ? nameEl.textContent.trim() : '';
-                var dateText = dateEl.length > 1 ? dateEl[1].textContent.trim() : '';
-                var color = nameEl ? (nameEl.style.color || '#1e3a5f') : '#1e3a5f';
-                var status = color === '#10b981' ? '已完成' : (color === '#dc2626' ? '已超期' : '进行中');
-                var statusBg = color === '#10b981' ? '#198754' : (color === '#dc2626' ? '#dc3545' : '#6c757d');
-                body += '<tr><td style="border:1px solid #e2e8f0;padding:4px 10px;color:' + color + ';font-weight:600;">' + name + '</td>'
-                    + '<td style="border:1px solid #e2e8f0;padding:4px 10px;color:#64748b;">' + dateText + '</td>'
-                    + '<td style="border:1px solid #e2e8f0;padding:4px 10px;text-align:center;"><span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:11px;color:#fff;background:' + statusBg + ';">' + status + '</span></td></tr>';
-            });
-            body += '</table>';
+            var msItems = Array.prototype.slice.call(msContainer.querySelectorAll('.text-center'));
+            var perRow = 6;
+            for (var ri = 0; ri < msItems.length; ri += perRow) {
+                var chunk = msItems.slice(ri, ri + perRow);
+                var colW = Math.floor(100 / chunk.length) + '%';
+                // Axis line
+                body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin:' + (ri === 0 ? '6px' : '2px') + ' 0 0 0;"><tr>';
+                chunk.forEach(function() { body += '<td style="height:2px;background:#1e3a5f;"></td>'; });
+                body += '</tr></table>';
+                // Markers + labels
+                body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 4px 0;"><tr>';
+                chunk.forEach(function(ms) {
+                    var nameEl = ms.querySelector('.fw-bold');
+                    var dateEls = ms.querySelectorAll('div');
+                    var name = nameEl ? nameEl.textContent.trim() : '';
+                    var dateText = dateEls.length > 1 ? dateEls[1].textContent.trim() : '';
+                    var color = nameEl ? (nameEl.style.color || '#1e3a5f') : '#1e3a5f';
+                    body += '<td style="width:' + colW + ';text-align:center;vertical-align:top;padding:2px 3px;">'
+                        + '<div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:8px solid ' + color + ';margin:0 auto;"></div>'
+                        + '<div style="font-size:11px;font-weight:700;color:' + color + ';margin-top:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="' + name.replace(/"/g, '&quot;') + '">' + name + '</div>'
+                        + (dateText ? '<div style="font-size:10px;color:#64748b;">' + dateText + '</div>' : '')
+                        + '</td>';
+                });
+                body += '</tr></table>';
+            }
         }
 
         // Data tables
