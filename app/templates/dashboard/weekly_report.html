@@ -406,6 +406,32 @@ function saveEmailSettings() {
 })();
 
 function encodeHeader(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
+var _badgeMap = {
+    'bg-success':'background:#198754;color:#fff;','bg-primary':'background:#0d6efd;color:#fff;',
+    'bg-warning':'background:#ffc107;color:#333;','bg-secondary':'background:#6c757d;color:#fff;',
+    'bg-danger':'background:#dc3545;color:#fff;','bg-info':'background:#0dcaf0;color:#333;',
+    'bg-dark':'background:#212529;color:#fff;'
+};
+var _textMap = {
+    'text-success':'color:#198754;','text-primary':'color:#0d6efd;','text-warning':'color:#ffc107;',
+    'text-danger':'color:#dc3545;','text-secondary':'color:#6c757d;','text-muted':'color:#6c757d;',
+    'text-info':'color:#0dcaf0;','fw-bold':'font-weight:700;'
+};
+function _inlineStyles(html) {
+    // Convert badge classes to inline styles
+    html = html.replace(/<span\s+class="badge\s+([^"]+)"/g, function(m, cls) {
+        var s = 'display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;';
+        cls.split(/\s+/).forEach(function(c) { if (_badgeMap[c]) s += _badgeMap[c]; });
+        return '<span style="' + s + '"';
+    });
+    // Convert text-* and fw-bold classes
+    html = html.replace(/<span\s+class="([^"]*(?:text-|fw-)[^"]*)"/g, function(m, cls) {
+        var s = '';
+        cls.split(/\s+/).forEach(function(c) { if (_textMap[c]) s += _textMap[c]; });
+        return s ? '<span style="' + s + '"' : m;
+    });
+    return html;
+}
 function _emlSection(title, body, titleColor) {
     var c = titleColor || '#1e3a5f';
     return '<tr><td style="padding:0 0 12px 0;">'
@@ -424,7 +450,7 @@ function _emlTable(tableEl) {
         tr.querySelectorAll('th,td').forEach(function(cell) {
             var tag = cell.tagName.toLowerCase();
             var bg = tag === 'th' ? 'background:#f1f5f9;font-weight:600;color:#475569;' : '';
-            h += '<' + tag + ' style="border:1px solid #e2e8f0;padding:6px 12px;' + bg + '">' + cell.innerHTML + '</' + tag + '>';
+            h += '<' + tag + ' style="border:1px solid #e2e8f0;padding:6px 12px;' + bg + '">' + _inlineStyles(cell.innerHTML) + '</' + tag + '>';
         });
         h += '</tr>';
     });
@@ -504,7 +530,7 @@ function exportEml() {
 
         // High risk box
         sec.querySelectorAll('div[style*="fef2f2"]').forEach(function(d) {
-            body += '<div style="background:#fef2f2;border:1px solid #fecaca;padding:8px 12px;font-size:13px;margin-top:4px;">' + d.innerHTML + '</div>';
+            body += '<div style="background:#fef2f2;border:1px solid #fecaca;padding:8px 12px;font-size:13px;margin-top:4px;">' + _inlineStyles(d.innerHTML) + '</div>';
         });
 
         // Data tables
