@@ -393,19 +393,23 @@
     <script>
     (function() {
         var MGR_KEY = 'mgr_view', MGR_TS_KEY = 'mgr_view_ts', MGR_PWD_KEY = 'mgr_pwd';
-        var EXPIRE_MS = 6 * 3600 * 1000; // 6 hours
-        var DEFAULT_PWD = '88888888';
+        var EXPIRE_MS = 6 * 3600 * 1000;
 
-        function isOpen() {
+        // Page load: check with 6h expiry
+        function isOpenOnLoad() {
             if (localStorage.getItem(MGR_KEY) !== '1') return false;
             var ts = parseInt(localStorage.getItem(MGR_TS_KEY) || '0');
             if (ts && (Date.now() - ts) > EXPIRE_MS) {
-                // Auto-expire after 6 hours
                 localStorage.removeItem(MGR_KEY);
                 localStorage.removeItem(MGR_TS_KEY);
                 return false;
             }
             return true;
+        }
+
+        // Button click: only check key, no time check (manual close always works)
+        function isCurrentlyOpen() {
+            return localStorage.getItem(MGR_KEY) === '1';
         }
 
         function applyView(open) {
@@ -421,7 +425,7 @@
         function getSavedPwd() { return localStorage.getItem(MGR_PWD_KEY) || ''; }
 
         function toggleMgrView() {
-            if (isOpen()) {
+            if (isCurrentlyOpen()) {
                 localStorage.removeItem(MGR_KEY);
                 localStorage.removeItem(MGR_TS_KEY);
                 location.reload();
@@ -468,8 +472,8 @@
         var eyeBtn = document.getElementById('mgrEyeBtn');
         if (eyeBtn) eyeBtn.addEventListener('click', toggleMgrView);
 
-        // Apply on load
-        applyView(isOpen());
+        // Apply on load (with 6h expiry check)
+        applyView(isOpenOnLoad());
     })();
     </script>
     <!-- Password modal for manager view -->
