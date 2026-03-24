@@ -416,11 +416,23 @@ function bumpEditTplRow(containerId, days) {
 function addNewTplRow(name, offset) {
     var div = document.getElementById('newTplItems');
     var row = document.createElement('div');
-    row.className = 'input-group input-group-sm mb-1';
-    var isFirst = div.querySelectorAll('.input-group').length === 0;
-    row.innerHTML = '<input type="text" name="item_name" class="form-control" placeholder="里程碑名称" value="' + (name || '') + '">'
+    row.className = 'input-group input-group-sm mb-1 tpl-drag-row';
+    row.draggable = true;
+    var isFirst = div.querySelectorAll('.tpl-drag-row').length === 0;
+    row.innerHTML = '<span class="input-group-text" style="cursor:grab;padding:2px 6px;" title="拖拽排序"><i class="bi bi-grip-vertical"></i></span>'
+        + '<input type="text" name="item_name" class="form-control" placeholder="里程碑名称" value="' + (name || '') + '">'
         + '<input type="text" name="item_offset" class="form-control" style="max-width:80px;" placeholder="' + (isFirst ? '0' : '+N天') + '" value="' + (offset || (isFirst ? '0' : '')) + '">'
         + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>';
+    // Drag events
+    row.addEventListener('dragstart', function(e) { e.dataTransfer.effectAllowed = 'move'; row.style.opacity = '0.4'; row._src = true; });
+    row.addEventListener('dragend', function() { row.style.opacity = ''; row._src = false; });
+    row.addEventListener('dragover', function(e) { e.preventDefault(); if (!row._src) row.style.borderTop = '2px solid #0d6efd'; });
+    row.addEventListener('dragleave', function() { row.style.borderTop = ''; });
+    row.addEventListener('drop', function(e) {
+        e.preventDefault(); row.style.borderTop = '';
+        var dragged = div.querySelector('.tpl-drag-row[style*="opacity"]');
+        if (dragged && dragged !== row) div.insertBefore(dragged, row);
+    });
     div.appendChild(row);
 }
 function bumpNewTplRow(days) {
@@ -430,5 +442,20 @@ function bumpNewTplRow(days) {
     var cur = parseInt((lastInput.value || '0').replace(/[^0-9]/g, '')) || 0;
     lastInput.value = '+' + (cur + days) + '天';
 }
+
+// Milestone list drag-sort
+(function() {
+    var container = document.getElementById('msItems');
+    if (!container) return;
+    var dragEl = null;
+    container.querySelectorAll('.ms-drag-row').forEach(function(row) {
+        row.setAttribute('draggable', 'true');
+        row.addEventListener('dragstart', function(e) { dragEl = row; row.style.opacity = '0.4'; e.dataTransfer.effectAllowed = 'move'; });
+        row.addEventListener('dragend', function() { row.style.opacity = ''; dragEl = null; });
+        row.addEventListener('dragover', function(e) { e.preventDefault(); if (dragEl && dragEl !== row) row.style.borderTop = '2px solid #0d6efd'; });
+        row.addEventListener('dragleave', function() { row.style.borderTop = ''; });
+        row.addEventListener('drop', function(e) { e.preventDefault(); row.style.borderTop = ''; if (dragEl && dragEl !== row) container.insertBefore(dragEl, row); });
+    });
+})();
 </script>
 {% endblock %}
