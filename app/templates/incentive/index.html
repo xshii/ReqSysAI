@@ -376,13 +376,20 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header py-2"><h6 class="modal-title">管理员录入激励</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
-                    <div class="row g-2 mb-2">
-                        <div class="col-6">
-                            <label class="form-label small mb-0">获奖名称 *</label>
-                            <input type="text" name="title" class="form-control form-control-sm" placeholder="获奖名称" required>
+                    {# 描述 — 同评审modal #}
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">描述 *</label>
+                        <div class="col-9">
+                            <textarea name="description" class="form-control form-control-sm" rows="3" required placeholder="详细描述事迹和贡献"></textarea>
                         </div>
-                        <div class="col-6">
-                            <label class="form-label small mb-0">类别</label>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">获奖名称 *</label>
+                        <div class="col-9"><input type="text" name="title" class="form-control form-control-sm" required placeholder="获奖名称"></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">类别</label>
+                        <div class="col-9">
                             <select name="category" class="form-select form-select-sm">
                                 <option value="professional">专业</option>
                                 <option value="proactive">积极</option>
@@ -391,54 +398,74 @@
                             </select>
                         </div>
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label small mb-0">事迹描述 *</label>
-                        <textarea name="description" class="form-control form-control-sm" rows="2" placeholder="详细描述事迹和贡献" required></textarea>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label small mb-0">获奖人员 *</label>
-                        <input type="text" class="form-control form-control-sm mb-1" placeholder="搜索姓名/工号..." oninput="filterNominees2(this)">
-                        <div class="border rounded p-2" style="max-height:100px;overflow-y:auto;" id="nomineeList2">
-                            {% for u in users %}
-                            <div class="form-check nominee-opt2" data-name="{{ u.name }}" data-pinyin="{{ u.pinyin or '' }}" data-eid="{{ u.employee_id }}"><input class="form-check-input" type="checkbox" name="nominee_ids" value="{{ u.id }}" id="an_{{ u.id }}"><label class="form-check-label small" for="an_{{ u.id }}">{{ u.name }} <span class="text-muted">{{ u.employee_id }}</span></label></div>
-                            {% endfor %}
+                    {# 人员 #}
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">获奖人员 *</label>
+                        <div class="col-9">
+                            <input type="text" class="form-control form-control-sm mb-1" placeholder="搜索姓名/工号..." oninput="filterNominees2(this)">
+                            <div class="border rounded p-2" style="max-height:100px;overflow-y:auto;" id="nomineeList2">
+                                {% for u in users %}
+                                <div class="form-check nominee-opt2" data-name="{{ u.name }}" data-pinyin="{{ u.pinyin or '' }}" data-eid="{{ u.employee_id }}"><input class="form-check-input" type="checkbox" name="nominee_ids" value="{{ u.id }}" id="an_{{ u.id }}"><label class="form-check-label small" for="an_{{ u.id }}">{{ u.name }} <span class="text-muted">{{ u.employee_id }}</span></label></div>
+                                {% endfor %}
+                            </div>
                         </div>
                     </div>
-                    <div class="row g-2 mb-2">
-                        <div class="col-4">
-                            <label class="form-label small mb-0">金额（元）</label>
-                            <input type="number" name="amount" class="form-control form-control-sm" placeholder="选填" step="50">
-                        </div>
-                        <div class="col-4">
-                            <label class="form-label small mb-0">激励来源</label>
+                    {# 评语 #}
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">评语</label>
+                        <div class="col-9"><input type="text" name="review_comment" class="form-control form-control-sm" maxlength="150" placeholder="选填，150字以内"></div>
+                    </div>
+                    {# 金额 + 来源 + 资金池 — 同评审modal #}
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">金额（元）</label>
+                        <div class="col-9"><input type="number" name="amount" class="form-control form-control-sm" step="50" min="0" placeholder="选填"></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">激励来源</label>
+                        <div class="col-9">
                             <select name="source" class="form-select form-select-sm">
                                 {% for k, v in source_labels.items() %}
                                 <option value="{{ k }}">{{ v }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-4">
-                            <label class="form-label small mb-0">资金池</label>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">资金池</label>
+                        <div class="col-9">
                             <select name="fund_id" class="form-select form-select-sm">
-                                <option value="">不指定</option>
+                                <option value="">-- 不指定 --</option>
                                 {% for f in all_funds %}
-                                <option value="{{ f.id }}">{{ f.name }}</option>
+                                <option value="{{ f.id }}">{{ f.name }}{% if f.has_budget %} (余¥{{ '%.0f'|format(f.remaining) }}){% else %} (公共池){% endif %}</option>
                                 {% endfor %}
                             </select>
                         </div>
                     </div>
-                    <div class="row g-2 mb-2">
-                        <div class="col-4">
-                            <label class="form-label small mb-0">激励年月</label>
-                            <input type="month" name="month" class="form-control form-control-sm" value="{{ today.strftime('%Y-%m') }}">
+                    {# 年月 + 状态 + 照片 #}
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">激励年月</label>
+                        <div class="col-9"><input type="month" name="month" class="form-control form-control-sm" value="{{ today.strftime('%Y-%m') }}"></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">评审状态</label>
+                        <div class="col-9">
+                            <select name="status" class="form-select form-select-sm">
+                                <option value="approved" selected>已通过</option>
+                                <option value="submitted">待评审</option>
+                            </select>
                         </div>
-                        <div class="col-4">
-                            <label class="form-label small mb-0">照片</label>
-                            <input type="file" name="photo" class="form-control form-control-sm" accept="image/*">
-                        </div>
-                        <div class="col-4">
-                            <label class="form-label small mb-0">评语</label>
-                            <input type="text" name="review_comment" class="form-control form-control-sm" maxlength="150" placeholder="选填">
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">照片</label>
+                        <div class="col-9"><input type="file" name="photo" class="form-control form-control-sm" accept="image/*"></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">首页可见</label>
+                        <div class="col-9">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="is_public" value="1" checked>
+                                <label class="form-check-label small text-muted">勾选后在首页展示</label>
+                            </div>
                         </div>
                     </div>
                 </div>

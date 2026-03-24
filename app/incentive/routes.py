@@ -643,14 +643,20 @@ def admin_submit():
 
     nominees = User.query.filter(User.id.in_(nominee_ids)).all()
     fund_id = request.form.get('fund_id', type=int)
+    status = request.form.get('status', 'approved')
+    if status not in ('approved', 'submitted'):
+        status = 'approved'
+    is_public = 'is_public' in request.form
     inc = Incentive(
         title=title, description=description or title, category=category,
         photo=photo_path,
         submitted_by=current_user.id, nominees=nominees,
-        status='approved', amount=amount, fund_id=fund_id,
+        status=status, amount=amount, fund_id=fund_id,
+        is_public=is_public,
         source=request.form.get('source', 'instant'),
         review_comment=review_comment,
-        reviewed_by=current_user.id, reviewed_at=reviewed_at,
+        reviewed_by=current_user.id if status == 'approved' else None,
+        reviewed_at=reviewed_at if status == 'approved' else None,
     )
     db.session.add(inc)
     db.session.commit()
