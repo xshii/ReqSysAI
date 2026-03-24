@@ -1060,11 +1060,9 @@ def meeting_create(project_id):
             system_prompt = get_prompt('meeting_extract')
             parsed, raw = call_ollama(meeting.content, system_prompt=system_prompt)
             if parsed:
-                if isinstance(parsed, dict) and parsed.get('polished'):
-                    meeting.content = parsed['polished']
                 meeting.ai_result = json.dumps(parsed, ensure_ascii=False)
                 db.session.commit()
-                flash(f'会议纪要「{meeting.title}」已创建并完成 AI 润色提取', 'success')
+                flash(f'会议纪要「{meeting.title}」已创建，AI 润色提取完成，请确认润色结果', 'success')
             else:
                 db.session.commit()
                 flash(f'会议纪要已创建，AI 润色失败（{raw or "服务不可用"}），可稍后手动提取', 'warning')

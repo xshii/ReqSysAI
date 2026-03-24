@@ -33,7 +33,7 @@
 {% endmacro %}
 
 {# Unified todo row — single source of truth #}
-{% macro todo_row(t, icon_color='text-secondary') %}
+{% macro todo_row(t, icon_color='text-secondary', show_help_input=false) %}
 {% set is_help = t.children | length > 0 %}
 {% set is_emotion = t.title.startswith('[情绪跟进]') %}
 <div class="mb-1 ps-2 {% if is_emotion %}mgr-only{% endif %}">
@@ -62,6 +62,12 @@
     {{ pomodoro_icons(t, current_user.pomodoro_minutes) }}
     <button class="btn btn-sm py-0 px-0 text-muted btn-delete-home" data-id="{{ t.id }}" title="删除" data-bs-toggle="tooltip" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>
 </div>
+{% if show_help_input %}
+<div class="d-flex gap-1 ps-3 mt-1" style="max-width:400px;">
+    <input type="text" class="form-control form-control-sm py-0 help-input" data-todo-id="{{ t.id }}" placeholder="@姓名 求助" style="font-size:.75em;">
+    <button class="btn btn-sm btn-outline-secondary py-0 help-submit" data-todo-id="{{ t.id }}" style="font-size:.72em;">发</button>
+</div>
+{% endif %}
 </div>
 {% endmacro %}
 

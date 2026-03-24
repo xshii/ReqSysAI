@@ -62,7 +62,7 @@
                         <span class="badge bg-danger" style="font-size:.6em;">风险</span>
                         <span class="badge bg-secondary bg-opacity-50" style="font-size:.5em;">{{ ud.risk_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ ud.risk_todos|length }}</span>
                     </div>
-                    {% for t in ud.risk_todos %}{{ todo_row(t, 'text-danger', ) }}{% endfor %}
+                    {% for t in ud.risk_todos %}{{ todo_row(t, 'text-danger', show_help_input=true) }}{% endfor %}
                 </div>
                 {% endif %}
 
@@ -77,7 +77,7 @@
                         {% if r.due_date and r.due_date < today %}<span class="badge bg-danger" style="font-size:.55em;">超期</span>{% endif %}
                         <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="small fw-bold text-primary text-decoration-none" style="overflow:hidden;text-overflow:ellipsis;">{{ r.number }} {{ r.title }}</a>
                     </div>
-                    {% for t in r_todos %}{{ todo_row(t, ) }}{% endfor %}
+                    {% for t in r_todos %}{{ todo_row(t, show_help_input=true) }}{% endfor %}
                 </div>
                 {% endif %}
                 {% endfor %}
@@ -89,7 +89,7 @@
                         <span class="badge bg-secondary" style="font-size:.6em;">团队</span>
                         <span class="badge bg-secondary bg-opacity-50" style="font-size:.5em;">{{ ud.team_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ ud.team_todos|length }}</span>
                     </div>
-                    {% for t in ud.team_todos %}{{ todo_row(t, ) }}{% endfor %}
+                    {% for t in ud.team_todos %}{{ todo_row(t, show_help_input=true) }}{% endfor %}
                 </div>
                 {% endif %}
             {% else %}
@@ -262,8 +262,60 @@ function filterTeamPerson(uid) {
     }
 })();
 
+/* Help submit (@求助) */
+document.querySelectorAll('.help-submit').forEach(function(b) {
+    b.addEventListener('click', function() {
+        var inp = b.parentElement.querySelector('.help-input');
+        var content = inp.value.trim();
+        if (!content) return;
+        apiPost('/todos/' + b.dataset.todoId + '/help', {content: content}).then(function(d) {
+            if (d && d.ok) { inp.value = ''; if (typeof showToast === 'function') showToast('已求助 ' + d.helper, 'success'); else location.reload(); }
+            else { alert((d && d.msg) || '求助失败'); }
+        });
+    });
+});
+document.querySelectorAll('.help-input').forEach(function(inp) {
+    inp.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); inp.parentElement.querySelector('.help-submit').click(); }
+    });
+});
+
 /* @mention autocomplete */
 var _allUsers = [{% for u in all_users %}{name:'{{ u.name }}',py:'{{ u.pinyin or "" }}',eid:'{{ u.employee_id or "" }}'}{% if not loop.last %},{% endif %}{% endfor %}];
+
+// @autocomplete for help inputs
+document.querySelectorAll('.help-input').forEach(function(inp) {
+    var dropdown = document.createElement('div');
+    dropdown.className = 'list-group position-absolute shadow-sm';
+    dropdown.style.cssText = 'z-index:1050;max-height:120px;overflow-y:auto;display:none;font-size:.8em;';
+    inp.parentElement.style.position = 'relative';
+    inp.parentElement.appendChild(dropdown);
+    inp.addEventListener('input', function() {
+        var val = inp.value;
+        var atIdx = val.lastIndexOf('@');
+        if (atIdx < 0) { dropdown.style.display = 'none'; return; }
+        var q = val.substring(atIdx + 1).toLowerCase();
+        var html = '';
+        _allUsers.forEach(function(u) {
+            if (!q || u.name.toLowerCase().includes(q) || u.py.toLowerCase().includes(q) || u.eid.toLowerCase().includes(q)) {
+                html += '<a href="#" class="list-group-item list-group-item-action py-1 small" data-name="' + u.name + '">' + u.name + ' <span class="text-muted">' + u.eid + '</span></a>';
+            }
+        });
+        dropdown.innerHTML = html;
+        dropdown.style.display = html ? '' : 'none';
+        dropdown.querySelectorAll('a').forEach(function(a) {
+            a.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                var v = inp.value;
+                var ai = v.lastIndexOf('@');
+                inp.value = v.substring(0, ai) + '@' + a.dataset.name + ' ';
+                dropdown.style.display = 'none';
+                inp.focus();
+            });
+        });
+    });
+    inp.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; }, 200); });
+});
 
 
 /* Standup */

@@ -762,6 +762,8 @@ def ai_test_one():
     try:
         if provider == 'ollama':
             url = current_app.config.get('OLLAMA_BASE_URL', '').rstrip('/')
+            if not url:
+                return jsonify(ok=False, error='Ollama 未配置 API 地址')
             r = requests.post(f'{url}/api/chat', timeout=30,
                               proxies={'http': '', 'https': ''},
                               json={'model': model_name, 'messages': [{'role': 'user', 'content': 'hi'}], 'stream': False})
@@ -769,6 +771,8 @@ def ai_test_one():
             reply = r.json().get('message', {}).get('content', '')[:100]
         else:
             url = current_app.config.get('OPENAI_BASE_URL', '').rstrip('/')
+            if not url:
+                return jsonify(ok=False, error='OpenAI 未配置 API 地址')
             key = current_app.config.get('OPENAI_API_KEY', '')
             headers = {'Authorization': f'Bearer {key}'} if key else {}
             r = requests.post(f'{url}/chat/completions', headers=headers, timeout=30,

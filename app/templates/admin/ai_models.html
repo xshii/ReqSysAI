@@ -343,13 +343,14 @@ var _testCache = JSON.parse(sessionStorage.getItem('ai_test_cache') || '{}');
 
 function saveCache() { sessionStorage.setItem('ai_test_cache', JSON.stringify(_testCache)); }
 
+function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function showResult(key, ok, text, time) {
     _testCache[key] = {ok: ok, text: text, time: time || ''};
     saveCache();
     document.querySelectorAll('.model-test-result[data-key="' + key + '"]').forEach(function(el) {
         el.innerHTML = ok
-            ? '<span class="text-success"><i class="bi bi-check-circle"></i> ' + (time || '') + '</span>'
-            : '<span class="text-danger"><i class="bi bi-x-circle"></i> ' + text.substring(0, 40) + '</span>';
+            ? '<span class="text-success"><i class="bi bi-check-circle"></i> ' + esc(time || '') + '</span>'
+            : '<span class="text-danger"><i class="bi bi-x-circle"></i> ' + esc((text || '').substring(0, 40)) + '</span>';
     });
 }
 
@@ -381,8 +382,8 @@ document.querySelectorAll('.model-test-result').forEach(function(el) {
     var c = _testCache[key];
     if (c) {
         el.innerHTML = c.ok
-            ? '<span class="text-success"><i class="bi bi-check-circle"></i> ' + (c.time || '') + '</span>'
-            : '<span class="text-danger"><i class="bi bi-x-circle"></i> ' + (c.text || '').substring(0, 40) + '</span>';
+            ? '<span class="text-success"><i class="bi bi-check-circle"></i> ' + esc(c.time || '') + '</span>'
+            : '<span class="text-danger"><i class="bi bi-x-circle"></i> ' + esc((c.text || '').substring(0, 40)) + '</span>';
     }
 });
 
