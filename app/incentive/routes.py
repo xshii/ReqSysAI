@@ -1008,17 +1008,18 @@ def fund_export_csv():
     buf = io.StringIO()
     buf.write('\ufeff')
     writer = csv.writer(buf)
-    writer.writerow(['名称', '激励来源', '总金额', '已使用金额', '本月使用金额', '使用率', '截止日期', '备注'])
+    writer.writerow(['名称', '金额', '激励来源', '截止日期', '备注', '已使用', '本月使用', '使用率'])
     for f in funds:
         used = f.used_amount
         month_used = month_used_map.get(f.source, 0)
         pct = f'{round(used / f.total_amount * 100)}%' if f.has_budget else '公共池'
         writer.writerow([
-            f.name, f.source_label,
-            f.total_amount if f.has_budget else '不限额',
-            used, month_used, pct,
+            f.name,
+            f.total_amount if f.has_budget else '',
+            f.source_label,
             f.expires_at.isoformat() if f.expires_at else '',
             f.note or '',
+            used, month_used, pct,
         ])
     return Response(buf.getvalue(), mimetype='text/csv; charset=utf-8',
                     headers={'Content-Disposition': 'attachment; filename=incentive_funds.csv'})
@@ -1123,25 +1124,34 @@ def fund_import_csv():
         return redirect(url_for('incentive.fund_list'))
 
     reader = csv.DictReader(io.StringIO(text))
-    if not {'名称', '金额'}.issubset(set(reader.fieldnames or [])):
-        flash('CSV 缺少必填列：名称, 金额', 'danger')
+    if not {'名称'}.issubset(set(reader.fieldnames or [])):
+        flash('CSV 缺少必填列：名称', 'danger')
         return redirect(url_for('incentive.fund_list'))
 
     created = 0
     for row in reader:
         name = (row.get('名称') or '').strip()
+        if not name:
+            continue
         amt_str = (row.get('金额') or '').strip()
-        if not name or not amt_str:
-            continue
-        try:
-            amt = float(amt_str)
-        except ValueError:
-            continue
+        amt = None
+        if amt_str:
+            try:
+                amt = float(amt_str)
+            except ValueError:
+                pass
         src_label = (row.get('激励来源') or '').strip()
         source = source_rev.get(src_label, 'instant')
         expires = (row.get('截止日期') or '').strip()
         note = (row.get('备注') or '').strip()
 
+        # Skip if already exists (same name + source)
+        existing = IncentiveFund.query.filter_by(name=name, source=source).first()
+        if existing:
+            # Update existing
+            existing.total_amount = amt
+            existing.note = note or existing.note
+            continue
         fund = IncentiveFund(
             name=name, source=source, total_amount=amt,
             note=note or None, created_by=current_user.id,
