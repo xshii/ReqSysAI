@@ -20,7 +20,7 @@
             </a>
             <div class="d-flex align-items-center gap-2">
                 {% if current_user.is_authenticated and (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')) %}
-                <button type="button" class="btn btn-sm border-0" id="mgrEyeBtn" onclick="toggleMgrView()" title="管理视图" style="font-size:.85em;opacity:.4;color:#fff;">
+                <button type="button" class="btn btn-sm border-0" id="mgrEyeBtn" title="管理视图" style="font-size:.85em;opacity:.4;color:#fff;">
                     <i class="bi bi-eye-slash" id="mgrEyeIcon"></i>
                 </button>
                 {% endif %}
@@ -420,7 +420,7 @@
 
         function getSavedPwd() { return localStorage.getItem(MGR_PWD_KEY) || ''; }
 
-        window.toggleMgrView = function() {
+        function toggleMgrView() {
             if (isOpen()) {
                 localStorage.removeItem(MGR_KEY);
                 localStorage.removeItem(MGR_TS_KEY);
@@ -463,6 +463,10 @@
             location.reload();
             }
         };
+
+        // Bind eye button click
+        var eyeBtn = document.getElementById('mgrEyeBtn');
+        if (eyeBtn) eyeBtn.addEventListener('click', toggleMgrView);
 
         // Apply on load
         applyView(isOpen());
