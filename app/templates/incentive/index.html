@@ -62,22 +62,24 @@
         <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>已拒绝</option>
     </select>
     {% endif %}
-    <select class="form-select form-select-sm" style="width:auto;" id="periodFilter">
+    <select class="form-select form-select-sm" style="width:auto;" id="periodFilter" onchange="document.getElementById('monthYear').value='';document.getElementById('monthMonth').value='';">
+        <option value="" {% if month_filter %}selected{% endif %}>时间范围</option>
         <option value="1m" {% if period == '1m' and not month_filter %}selected{% endif %}>近1月</option>
         <option value="3m" {% if period == '3m' and not month_filter %}selected{% endif %}>近3月</option>
         <option value="6m" {% if period == '6m' and not month_filter %}selected{% endif %}>近6月</option>
         <option value="1y" {% if period == '1y' and not month_filter %}selected{% endif %}>近1年</option>
     </select>
+    <span class="text-muted small">或</span>
     {% set cur_y = (month_filter or '')[:4] %}
     {% set cur_m = (month_filter or '')[5:7] %}
-    <select class="form-select form-select-sm" style="width:90px;" id="monthYear">
-        <option value="">选年</option>
+    <select class="form-select form-select-sm" style="width:80px;" id="monthYear" onchange="if(this.value)document.getElementById('periodFilter').value='';">
+        <option value="">年</option>
         {% for y in range(today.year - 2, today.year + 1) %}
         <option value="{{ y }}" {% if cur_y == y|string %}selected{% endif %}>{{ y }}年</option>
         {% endfor %}
     </select>
-    <select class="form-select form-select-sm" style="width:72px;" id="monthMonth">
-        <option value="">选月</option>
+    <select class="form-select form-select-sm" style="width:65px;" id="monthMonth" onchange="if(this.value)document.getElementById('periodFilter').value='';">
+        <option value="">月</option>
         {% for m in range(1, 13) %}
         <option value="{{ '%02d'|format(m) }}" {% if cur_m == '%02d'|format(m) %}selected{% endif %}>{{ m }}月</option>
         {% endfor %}
@@ -164,6 +166,13 @@
                         data-inc-id="{{ inc.id }}" data-category="{{ inc.category }}"
                         data-title="{{ inc.title }}" data-desc="{{ inc.description }}"
                         data-nominee-ids="{{ inc.nominees|map(attribute='id')|list|join(',') }}"><i class="bi bi-pencil"></i> 编辑</button>
+                {% endif %}
+                {% if is_reviewer and inc.status == 'approved' %}
+                <button class="btn btn-sm mt-1 mgr-only {{ 'btn-outline-success' if inc.is_public else 'btn-outline-secondary' }}"
+                        title="{{ '点击隐藏' if inc.is_public else '点击公开' }}"
+                        onclick="apiPost('/incentive/{{ inc.id }}/toggle-public',{}).then(function(d){if(d&&d.ok)location.reload();});">
+                    <i class="bi bi-{{ 'eye' if inc.is_public else 'eye-slash' }}"></i> {{ '首页可见' if inc.is_public else '首页隐藏' }}
+                </button>
                 {% endif %}
             </div>
         </div>
@@ -461,8 +470,15 @@ function applyFilter() {
         else url.searchParams.delete('status');
     }
     var monthVal = (my && my.value && mm && mm.value) ? my.value + '-' + mm.value : '';
-    if (monthVal) { url.searchParams.set('month', monthVal); url.searchParams.delete('period'); }
-    else { url.searchParams.delete('month'); if (period) url.searchParams.set('period', period.value); }
+    if (monthVal) {
+        url.searchParams.set('month', monthVal);
+        url.searchParams.delete('period');
+    } else {
+        url.searchParams.delete('month');
+        var pv = period ? period.value : '';
+        if (pv) url.searchParams.set('period', pv);
+        else url.searchParams.set('period', '1m'); // 默认近1月
+    }
     if (search && search.value.trim()) url.searchParams.set('q', search.value.trim());
     else url.searchParams.delete('q');
     window.location = url;

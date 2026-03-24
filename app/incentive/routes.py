@@ -243,6 +243,18 @@ def review(inc_id):
     return redirect(url_for('incentive.index'))
 
 
+@incentive_bp.route('/<int:inc_id>/toggle-public', methods=['POST'])
+@login_required
+def toggle_public(inc_id):
+    """Toggle is_public for approved incentive."""
+    if not (current_user.has_role('PL', 'XM', 'HR', 'LM') or current_user.is_admin):
+        return jsonify(ok=False, msg='无权限')
+    inc = db.get_or_404(Incentive, inc_id)
+    inc.is_public = not inc.is_public
+    db.session.commit()
+    return jsonify(ok=True, is_public=inc.is_public)
+
+
 @incentive_bp.route('/export-csv')
 @login_required
 def export_csv():

@@ -492,14 +492,15 @@ def risk_export_csv(project_id):
     buf = io.StringIO()
     buf.write('\ufeff')
     writer = csv.writer(buf)
-    writer.writerow(['ID', '标题', '严重度', '状态', '责任人', '跟踪人', '截止日期', '解决方案', '描述'])
+    writer.writerow(['ID', '标题', '严重度', '状态', '责任人', '跟踪人', '截止日期', '解决方案', '描述', '进展评论'])
     writer.writerow([0, '示例风险标题', '高(选填)', '未解决(选填)',
                      '责任人(选填)', '跟踪人(选填)', '2026-06-30(选填)', '(选填)',
-                     '描述(选填) 此行为格式示例，导入时自动跳过'])
+                     '描述(选填)', '评论(选填,多条用换行) 此行为格式示例，导入时自动跳过'])
     for r in risks:
+        comments = '\n'.join(f'{c.user.name} {c.created_at.strftime("%m-%d")}：{c.content}' for c in r.comments) if r.comments else ''
         writer.writerow([r.id, r.title, r.severity_label, r.status_label,
             r.owner or '', r.tracker.name if r.tracker else '',
-            r.due_date.isoformat() if r.due_date else '', r.resolution or '', r.description or ''])
+            r.due_date.isoformat() if r.due_date else '', r.resolution or '', r.description or '', comments])
     return Response(buf.getvalue(), mimetype='text/csv; charset=utf-8',
                     headers={'Content-Disposition': f'attachment; filename=risks.csv'})
 
