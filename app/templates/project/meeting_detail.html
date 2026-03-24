@@ -29,6 +29,9 @@
         <button type="button" class="btn btn-primary btn-sm" id="btnExtract" onclick="doExtract()">
             <i class="bi bi-robot"></i> AI 润色并提取遗留问题
         </button>
+        <button type="button" class="btn btn-outline-primary btn-sm" onclick="sendEmail()">
+            <i class="bi bi-envelope"></i> 发送邮件
+        </button>
     </div>
 </div>
 
@@ -290,6 +293,47 @@ function acceptPolish() {
         (hiddenVal.value || '').split(',').forEach(function(n) { n = n.trim(); if (n) addTag(n); });
     });
 })();
+
+// Send email via mailto:
+function sendEmail() {
+    fetch('/api/users').then(function(r) { return r.json(); }).then(function(users) {
+        // Build name → "pinyin eid" map
+        var nameMap = {};
+        users.forEach(function(u) { nameMap[u.name] = (u.pinyin || u.name) + ' ' + (u.employee_id || ''); });
+
+        var attendees = (document.getElementById('attendeesVal').value || '').split(',').map(function(n) { return n.trim(); }).filter(Boolean);
+        var cc = (document.getElementById('ccVal').value || '').split(',').map(function(n) { return n.trim(); }).filter(Boolean);
+
+        var toList = attendees.map(function(n) { return nameMap[n] || n; }).join(';');
+        var ccList = cc.map(function(n) { return nameMap[n] || n; }).join(';');
+
+        var subject = '{{ meeting.title }}（{{ meeting.date.strftime("%Y-%m-%d") if meeting.date else "" }}）';
+
+        var body = '会议标题：{{ meeting.title }}\n'
+            + '召集人：{{ meeting.creator.name }}\n'
+            + '与会人：' + attendees.join('、') + '\n'
+            + '日期：{{ meeting.date.strftime("%Y-%m-%d") if meeting.date else "" }}\n'
+            + '━━━━━━━━━━━━━━━━━━━━\n\n';
+
+        var contentEl = document.querySelector('textarea[name="content"]');
+        if (contentEl && contentEl.value) body += contentEl.value + '\n';
+
+        {% if linked_risks %}
+        body += '\n━━━━━━━━━━━━━━━━━━━━\n';
+        body += '遗留问题跟踪：\n';
+        body += '序号\t严重度\t标题\t责任人\t截止日期\t状态\n';
+        {% for r in linked_risks %}
+        body += '{{ loop.index }}\t{{ r.severity_label }}\t{{ r.title }}\t{{ r.owner or "待定" }}\t{{ r.due_date.strftime("%Y-%m-%d") if r.due_date else "待定" }}\t{{ r.status_label }}\n';
+        {% endfor %}
+        {% endif %}
+
+        var url = 'mailto:' + encodeURIComponent(toList)
+            + '?cc=' + encodeURIComponent(ccList)
+            + '&subject=' + encodeURIComponent(subject)
+            + '&body=' + encodeURIComponent(body);
+        window.location.href = url;
+    });
+}
 
 // Auto-extract
 if (new URLSearchParams(window.location.search).get('auto_extract') === '1') {

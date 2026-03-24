@@ -22,6 +22,8 @@ class Risk(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     resolved_at = db.Column(db.DateTime, nullable=True)
+    deleted_at = db.Column(db.DateTime, nullable=True)  # 软删除
+    deleted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     project = db.relationship('Project', backref='risks')
     tracker = db.relationship('User', foreign_keys=[tracker_id], backref='tracked_risks')
@@ -64,11 +66,30 @@ class Risk(db.Model):
         return self.STATUS_COLORS.get(self.status, 'secondary')
 
     @property
+    def is_deleted(self):
+        return self.deleted_at is not None
+
+    @property
     def is_overdue(self):
-        return self.status == 'open' and self.due_date and self.due_date < date.today()
+        return self.status == 'open' and self.due_date and self.due_date < date.today() and not self.is_deleted
 
     def __repr__(self):
         return f'<Risk {self.title}>'
+
+
+class RiskAuditLog(db.Model):
+    """Audit log for risk changes (create/edit/delete/resolve)."""
+    __tablename__ = 'risk_audit_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    risk_id = db.Column(db.Integer, db.ForeignKey('risks.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    action = db.Column(db.String(20), nullable=False)  # created/edited/deleted/resolved/reopened
+    detail = db.Column(db.String(500), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    risk = db.relationship('Risk', backref='audit_logs')
+    user = db.relationship('User', lazy='joined')
 
 
 class RiskComment(db.Model):

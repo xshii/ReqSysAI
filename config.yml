@@ -9,6 +9,7 @@ app:
   ai_timeout: 120                   # AI 请求超时（秒）
   host: 0.0.0.0                     # 监听地址
   port: 5001                        # 监听端口
+  mail_domain: company.com          # 邮箱域名，工号@域名
 
 auth:
   sso_url: ""                       # 留空则跳过 SSO 跳转验证

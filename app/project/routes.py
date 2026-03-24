@@ -395,7 +395,7 @@ def risk_list(project_id):
     status = request.args.get('status', '')
     severity = request.args.get('severity', '')
 
-    query = Risk.query.filter_by(project_id=project_id)
+    query = Risk.query.filter_by(project_id=project_id).filter(Risk.deleted_at.is_(None))
     if status:
         query = query.filter_by(status=status)
     if severity:
@@ -454,6 +454,8 @@ def risk_resolve(risk_id):
     risk.status = 'resolved'
     risk.resolution = resolution
     risk.resolved_at = datetime.utcnow()
+    from app.models.risk import RiskAuditLog
+    db.session.add(RiskAuditLog(risk_id=risk.id, user_id=current_user.id, action='resolved', detail=resolution[:200]))
     db.session.commit()
     flash('风险已解决', 'success')
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
@@ -464,6 +466,8 @@ def risk_resolve(risk_id):
 def risk_close(risk_id):
     risk = db.get_or_404(Risk, risk_id)
     risk.status = 'closed'
+    from app.models.risk import RiskAuditLog
+    db.session.add(RiskAuditLog(risk_id=risk.id, user_id=current_user.id, action='closed'))
     db.session.commit()
     flash('风险已关闭', 'success')
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
@@ -478,6 +482,25 @@ def risk_reopen(risk_id):
     risk.resolved_at = None
     db.session.commit()
     flash('已重新打开', 'success')
+    from app.models.risk import RiskAuditLog
+    db.session.add(RiskAuditLog(risk_id=risk.id, user_id=current_user.id, action='reopened'))
+    db.session.commit()
+    return redirect(url_for('project.risk_list', project_id=risk.project_id))
+
+
+@project_bp.route('/risks/<int:risk_id>/delete', methods=['POST'])
+@login_required
+def risk_delete(risk_id):
+    """Soft delete a risk + audit log."""
+    from app.models.risk import RiskAuditLog
+    risk = db.get_or_404(Risk, risk_id)
+    risk.deleted_at = datetime.utcnow()
+    risk.deleted_by = current_user.id
+    db.session.add(RiskAuditLog(risk_id=risk.id, user_id=current_user.id, action='deleted', detail=risk.title))
+    db.session.commit()
+    if request.is_json:
+        return jsonify(ok=True)
+    flash('风险已删除', 'success')
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
 
 

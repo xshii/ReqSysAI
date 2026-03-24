@@ -103,6 +103,9 @@
                     <button type="submit" class="btn btn-sm btn-outline-warning py-0">重开</button>
                 </form>
                 {% endif %}
+                <button class="btn btn-sm btn-outline-danger py-0" onclick="if(confirm('确认删除？')){apiPost('{{ url_for('project.risk_delete', risk_id=r.id) }}',{}).then(function(d){if(d&&d.ok)location.reload();});}">
+                    <i class="bi bi-trash"></i>
+                </button>
             </td>
         </tr>
         {% endfor %}
