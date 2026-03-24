@@ -1236,6 +1236,8 @@ def meeting_apply(project_id, meeting_id):
         db.session.add(risk)
         created_counts['risks'] += 1
 
+    # Clear ai_result so the panel disappears after reload
+    meeting.ai_result = None
     db.session.commit()
 
     parts = []

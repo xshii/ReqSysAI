@@ -92,7 +92,7 @@
                     <span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span>
                     <span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
                     <a href="{{ url_for('project.risk_list', project_id=project.id) }}?status={{ r.status }}" class="text-decoration-none flex-grow-1">{{ r.title }}</a>
-                    {% if r.tracker %}<span class="text-muted">{{ r.tracker.name }}</span>{% endif %}
+                    {% if r.owner %}<span class="text-muted">{{ r.owner }}</span>{% endif %}
                     {% if r.due_date %}<span class="text-muted">{{ r.due_date.strftime('%m-%d') }}</span>{% endif %}
                 </div>
                 {% endfor %}
@@ -106,7 +106,7 @@
             <div class="card-header py-2 d-flex justify-content-between align-items-center">
                 <strong>AI 提取结果</strong>
                 <button type="button" class="btn btn-success btn-sm" id="btnApply" onclick="applySelected()">
-                    <i class="bi bi-check2-all"></i> 一键创建选中项
+                    <i class="bi bi-check2-all"></i> 采纳选中项并关闭
                 </button>
             </div>
             <div class="card-body">
@@ -208,7 +208,6 @@ function doExtract() {
 // Apply selected
 function applySelected() {
     var items = document.querySelectorAll('.ai-item:checked');
-    if (!items.length) { alert('请先勾选要创建的项目'); return; }
     var payload = {todos: [], requirements: [], risks: []};
     items.forEach(function(cb) { var t = cb.dataset.type; payload[t].push(JSON.parse(cb.dataset.payload)); });
     var btn = document.getElementById('btnApply');
@@ -219,7 +218,7 @@ function applySelected() {
     }).then(function(r) { return r.json(); }).then(function(d) {
         if (d.ok) { location.reload(); } else { alert(d.msg || '创建失败'); }
     }).catch(function() { alert('请求失败'); })
-    .finally(function() { btn.disabled = false; btn.innerHTML = '<i class="bi bi-check2-all"></i> 一键创建选中项'; });
+    .finally(function() { btn.disabled = false; btn.innerHTML = '<i class="bi bi-check2-all"></i> 采纳选中项并关闭'; });
 }
 
 // Accept polish
