@@ -185,6 +185,8 @@ def requirement_create():
         db.session.commit()
         flash(f'需求 {req.number} 创建成功', 'success')
         return redirect(url_for('requirement.requirement_detail', req_id=req.id))
+    if request.method == 'POST':
+        flash('请检查必填项（标题、截止日期）', 'danger')
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
     return render_template('requirement/form.html', form=form, title='创建需求', users=users)
 
@@ -221,6 +223,8 @@ def requirement_edit(req_id):
         db.session.commit()
         flash('需求更新成功', 'success')
         return redirect(url_for('requirement.requirement_detail', req_id=req.id))
+    if request.method == 'POST':
+        flash('请检查必填项（标题、截止日期）', 'danger')
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
     return render_template('requirement/form.html', form=form, title=f'编辑需求 - {req.number}', users=users, req=req)
 

@@ -148,7 +148,7 @@ var _subAssigneeList = document.getElementById('subAssigneeList');
 if (!_subAssigneeList) {
     _subAssigneeList = document.createElement('datalist');
     _subAssigneeList.id = 'subAssigneeList';
-    {% for u in users %}_subAssigneeList.innerHTML += '<option value="{{ u.name }}">';
+    {% for u in users %}_subAssigneeList.innerHTML += '<option value="{{ u.name }}" label="{{ u.name }} {{ u.employee_id }}">';
     {% endfor %}
     document.body.appendChild(_subAssigneeList);
 }

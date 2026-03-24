@@ -745,3 +745,37 @@ def ai_test_all():
                             'status': 'fail', 'reply': f'连接失败: {e}', 'time': '-'})
 
     return jsonify(ok=True, results=results)
+
+
+@admin_bp.route('/ai-models/test-one', methods=['POST'])
+@admin_required
+def ai_test_one():
+    """Test a single model by provider and name."""
+    import time
+    data = request.get_json(silent=True) or {}
+    provider = data.get('provider', 'ollama')
+    model_name = data.get('model', '')
+    if not model_name:
+        return jsonify(ok=False, error='缺少模型名')
+
+    t0 = time.time()
+    try:
+        if provider == 'ollama':
+            url = current_app.config.get('OLLAMA_BASE_URL', '').rstrip('/')
+            r = requests.post(f'{url}/api/chat', timeout=30,
+                              proxies={'http': '', 'https': ''},
+                              json={'model': model_name, 'messages': [{'role': 'user', 'content': 'hi'}], 'stream': False})
+            r.raise_for_status()
+            reply = r.json().get('message', {}).get('content', '')[:100]
+        else:
+            url = current_app.config.get('OPENAI_BASE_URL', '').rstrip('/')
+            key = current_app.config.get('OPENAI_API_KEY', '')
+            headers = {'Authorization': f'Bearer {key}'} if key else {}
+            r = requests.post(f'{url}/chat/completions', headers=headers, timeout=30,
+                              json={'model': model_name, 'messages': [{'role': 'user', 'content': 'hi'}], 'temperature': 0.1})
+            r.raise_for_status()
+            reply = r.json()['choices'][0]['message']['content'][:100]
+        elapsed = round(time.time() - t0, 1)
+        return jsonify(ok=True, reply=reply, time=f'{elapsed}s')
+    except Exception as e:
+        return jsonify(ok=False, error=str(e)[:200])

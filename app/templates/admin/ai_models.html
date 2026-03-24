@@ -127,7 +127,11 @@
             <tr class="{{ 'table-primary' if m.name == current_model else '' }}">
                 <td>{{ m.name }} {% if m.name == current_model %}<span class="badge bg-primary">当前</span>{% endif %}</td>
                 <td class="text-muted">{{ m.family or '-' }}</td>
-                <td>
+                <td class="text-nowrap">
+                    <button class="btn btn-sm btn-outline-success py-0 btn-test-model" data-provider="openai" data-model="{{ m.name }}" onclick="testOneModel(this)">
+                        <i class="bi bi-lightning"></i>
+                    </button>
+                    <span class="model-test-result small" data-key="openai:{{ m.name }}"></span>
                     {% if m.name != current_model %}
                     <form method="POST" action="{{ url_for('admin.ai_set_openai') }}" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -171,7 +175,7 @@
                     </thead>
                     <tbody>
                         {% for m in models %}
-                        <tr class="{{ 'table-primary' if m.name == current_model else '' }}">
+                        <tr class="{{ 'table-primary' if m.name == current_model else '' }}" id="ollama-{{ m.name|replace(':','_')|replace('.','_') }}">
                             <td>
                                 {{ m.name }}
                                 {% if m.name == current_model %}<span class="badge bg-primary">当前使用</span>{% endif %}
@@ -179,14 +183,16 @@
                             <td>{{ m.params }}</td>
                             <td>{{ m.size }}</td>
                             <td>{{ m.modified }}</td>
-                            <td>
+                            <td class="text-nowrap">
+                                <button class="btn btn-sm btn-outline-success py-0 btn-test-model" data-provider="ollama" data-model="{{ m.name }}" onclick="testOneModel(this)">
+                                    <i class="bi bi-lightning"></i>
+                                </button>
+                                <span class="model-test-result small" data-key="ollama:{{ m.name }}"></span>
                                 {% if m.name != current_model %}
                                 <form method="POST" action="{{ url_for('admin.ai_model_set_active') }}" class="d-inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <input type="hidden" name="model_name" value="{{ m.name }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-primary py-0" title="设为当前模型">
-                                        <i class="bi bi-check-lg"></i> 启用
-                                    </button>
+                                    <button type="submit" class="btn btn-sm btn-outline-primary py-0">启用</button>
                                 </form>
                                 <form method="POST" action="{{ url_for('admin.ai_model_delete') }}" class="d-inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -309,7 +315,10 @@ function testAllModels() {
         var tbody = document.getElementById('allModelsBody');
         tbody.innerHTML = '';
         data.results.forEach(function(r) {
-            var statusBadge = r.status === 'ok'
+            var key = r.provider.toLowerCase() + ':' + r.model;
+            var ok = r.status === 'ok';
+            showResult(key, ok, ok ? (r.reply || '') : (r.reply || '失败'), r.time);
+            var statusBadge = ok
                 ? '<span class="badge bg-success">可用</span>'
                 : '<span class="badge bg-danger">不可用</span>';
             tbody.innerHTML += '<tr>'
@@ -328,6 +337,54 @@ function testAllModels() {
         alert('请求失败：' + err.message);
     });
 }
+
+// ---- Per-model test + cache ----
+var _testCache = JSON.parse(sessionStorage.getItem('ai_test_cache') || '{}');
+
+function saveCache() { sessionStorage.setItem('ai_test_cache', JSON.stringify(_testCache)); }
+
+function showResult(key, ok, text, time) {
+    _testCache[key] = {ok: ok, text: text, time: time || ''};
+    saveCache();
+    document.querySelectorAll('.model-test-result[data-key="' + key + '"]').forEach(function(el) {
+        el.innerHTML = ok
+            ? '<span class="text-success"><i class="bi bi-check-circle"></i> ' + (time || '') + '</span>'
+            : '<span class="text-danger"><i class="bi bi-x-circle"></i> ' + text.substring(0, 40) + '</span>';
+    });
+}
+
+function testOneModel(btn) {
+    var provider = btn.dataset.provider;
+    var model = btn.dataset.model;
+    var key = provider + ':' + model;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    var csrf = document.querySelector('meta[name="csrf-token"]');
+    fetch('{{ url_for("admin.ai_test_one") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf ? csrf.content : ''},
+        body: JSON.stringify({provider: provider, model: model})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-lightning"></i>';
+        showResult(key, d.ok, d.ok ? (d.reply || '') : (d.error || '失败'), d.time || '');
+    }).catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-lightning"></i>';
+        showResult(key, false, '请求失败', '');
+    });
+}
+
+// Restore cached results on page load
+document.querySelectorAll('.model-test-result').forEach(function(el) {
+    var key = el.dataset.key;
+    var c = _testCache[key];
+    if (c) {
+        el.innerHTML = c.ok
+            ? '<span class="text-success"><i class="bi bi-check-circle"></i> ' + (c.time || '') + '</span>'
+            : '<span class="text-danger"><i class="bi bi-x-circle"></i> ' + (c.text || '').substring(0, 40) + '</span>';
+    }
+});
 
 // SSH toggle also shows/hides port field
 var sshToggle = document.getElementById('sshToggle');
