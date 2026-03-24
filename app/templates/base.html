@@ -22,7 +22,7 @@
                 <button type="button" class="btn btn-sm btn-outline-light d-flex align-items-center gap-1" id="navSearchBtn" style="font-size:.8em;opacity:.7;border-color:rgba(255,255,255,.3);" data-bs-toggle="modal" data-bs-target="#searchModal">
                     <i class="bi bi-search"></i>
                     <span class="d-none d-md-inline">搜索</span>
-                    <kbd class="d-none d-md-inline ms-1" style="font-size:.8em;opacity:.6;background:rgba(255,255,255,.15);border:none;padding:1px 5px;border-radius:3px;">⌘K</kbd>
+                    <kbd class="d-none d-md-inline ms-1" style="font-size:.8em;opacity:.6;background:rgba(255,255,255,.15);border:none;padding:1px 5px;border-radius:3px;">/</kbd>
                 </button>
                 {% if current_user.is_authenticated and (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')) %}
                 <button type="button" class="btn btn-sm border-0" id="mgrEyeBtn" title="管理视图" style="font-size:.85em;opacity:.4;color:#fff;">
@@ -282,10 +282,10 @@
         var timer = null, sel = -1, items = [];
 
         document.addEventListener('keydown', function(e) {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+            // Mac: Cmd+K, All: / (when not in input)
+            if ((e.metaKey && e.key === 'k') || (e.key === '/' && !e.target.closest('input,textarea,select,[contenteditable]'))) {
                 e.preventDefault();
                 modal.show();
-                setTimeout(function() { input.focus(); input.select(); }, 200);
             }
         });
 
