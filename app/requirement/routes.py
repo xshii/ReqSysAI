@@ -245,7 +245,9 @@ def requirement_status(req_id):
         from app.services.events import fire, requirement_status_changed
         fire(requirement_status_changed, requirement=req, old_status=old_status, new_status=new_status)
         flash(f'状态已更新为「{req.status_label}」', 'success')
-    return redirect(url_for('requirement.requirement_detail', req_id=req.id))
+    # If changed from parent requirement page, redirect back to parent
+    back_id = request.form.get('back_to', type=int) or req.parent_id or req.id
+    return redirect(url_for('requirement.requirement_detail', req_id=back_id))
 
 
 @requirement_bp.route('/<int:req_id>/status-api', methods=['POST'])
