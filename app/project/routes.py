@@ -966,25 +966,20 @@ def permission_list(project_id):
             reason = request.form.get('reason', '').strip()
             if apply_for == 'self':
                 py = to_pinyin(current_user.name).split()[-1] if current_user.name else ''
-                name = f"{current_user.name}({py})" if py else current_user.name
-                eid = current_user.employee_id or ''
+                people_text = f"{current_user.name}({py}) {current_user.employee_id or ''}"
             else:
-                name = request.form.get('other_name', '').strip()
-                eid = request.form.get('other_eid', '').strip()
+                people_text = request.form.get('people_list', '').strip()
+            if not people_text:
+                flash('请填写申请人', 'warning')
+                return redirect(url_for('project.permission_list', project_id=project_id))
             count = 0
             for iid in item_ids:
                 item = db.session.get(PermissionItem, int(iid))
                 if not item or item.project_id != project_id:
                     continue
-                # Deduplicate
-                exists = PermissionApplication.query.filter_by(
-                    item_id=item.id, applicant_name=name).first()
-                if exists:
-                    continue
                 db.session.add(PermissionApplication(
-                    item_id=item.id, applicant_name=name,
-                    applicant_eid=eid or None, reason=reason or None,
-                    submitted_by=current_user.id,
+                    item_id=item.id, applicant_name=people_text,
+                    reason=reason or None, submitted_by=current_user.id,
                 ))
                 count += 1
             if count:

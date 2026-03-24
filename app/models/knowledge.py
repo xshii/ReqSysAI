@@ -61,8 +61,8 @@ class PermissionApplication(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     item_id = db.Column(db.Integer, db.ForeignKey('permission_items.id'), nullable=False)
-    applicant_name = db.Column(db.String(100), nullable=False)  # 姓名(拼音) 工号
-    applicant_eid = db.Column(db.String(30), nullable=True)
+    applicant_name = db.Column(db.Text, nullable=False)  # 多人换行分隔：姓名(拼音) 工号
+    applicant_eid = db.Column(db.String(30), nullable=True)  # 单人时的工号（兼容）
     reason = db.Column(db.String(300), nullable=True)
     status = db.Column(db.String(20), default='pending')  # pending/approved/rejected
     submitted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -79,6 +79,17 @@ class PermissionApplication(db.Model):
     @property
     def status_label(self):
         return self.STATUS_LABELS.get(self.status, self.status)
+
+    @property
+    def people_list(self):
+        """拆分多人名单为列表"""
+        if not self.applicant_name:
+            return []
+        return [n.strip() for n in self.applicant_name.replace(',', '\n').split('\n') if n.strip()]
+
+    @property
+    def people_count(self):
+        return len(self.people_list)
 
 
 # Legacy model kept for migration compatibility
