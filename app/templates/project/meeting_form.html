@@ -24,8 +24,14 @@
                     <input type="date" name="date" class="form-control" value="{{ today }}">
                 </div>
                 <div class="col-md-6 mb-3">
-                    <label class="form-label">参会人（逗号分隔）</label>
-                    <input type="text" name="attendees" class="form-control" placeholder="张三, 李四, 王五">
+                    <label class="form-label">参会人</label>
+                    <input type="hidden" name="attendees" id="attendeesVal">
+                    <div class="border rounded p-1 d-flex flex-wrap gap-1 align-items-center" id="attendeeTags" style="min-height:38px;">
+                        <input type="text" class="border-0 flex-grow-1 small" id="attendeeInput" placeholder="输入姓名搜索添加..." autocomplete="off" style="outline:none;min-width:100px;">
+                    </div>
+                    <div class="position-relative">
+                        <div id="attendeeDropdown" class="position-absolute bg-white border rounded shadow-sm w-100" style="z-index:1000;display:none;max-height:150px;overflow-y:auto;font-size:.85em;"></div>
+                    </div>
                 </div>
             </div>
             <div class="mb-3">
@@ -45,4 +51,78 @@
         </form>
     </div>
 </div>
+
+{% block extra_js %}
+<script>
+(function() {
+    var tags = document.getElementById('attendeeTags');
+    var input = document.getElementById('attendeeInput');
+    var dropdown = document.getElementById('attendeeDropdown');
+    var hiddenVal = document.getElementById('attendeesVal');
+    var _users = null;
+    var _selected = [];
+
+    function syncHidden() { hiddenVal.value = _selected.join(','); }
+
+    function addTag(name) {
+        if (_selected.indexOf(name) >= 0) return;
+        _selected.push(name);
+        var tag = document.createElement('span');
+        tag.className = 'badge bg-primary bg-opacity-75 d-flex align-items-center gap-1';
+        tag.style.fontSize = '.8em';
+        tag.innerHTML = name + ' <i class="bi bi-x" style="cursor:pointer;font-size:.9em;"></i>';
+        tag.querySelector('i').addEventListener('click', function() {
+            _selected = _selected.filter(function(n) { return n !== name; });
+            tag.remove();
+            syncHidden();
+        });
+        tags.insertBefore(tag, input);
+        syncHidden();
+        input.value = '';
+        dropdown.style.display = 'none';
+    }
+
+    function loadUsers(cb) {
+        if (_users) return cb(_users);
+        fetch('/api/users').then(function(r) { return r.json(); }).then(function(d) { _users = d; cb(d); });
+    }
+
+    input.addEventListener('input', function() {
+        var q = input.value.trim().toLowerCase();
+        if (!q) { dropdown.style.display = 'none'; return; }
+        loadUsers(function(users) {
+            var html = '';
+            users.forEach(function(u) {
+                if (_selected.indexOf(u.name) >= 0) return;
+                if (u.name.toLowerCase().includes(q) || (u.pinyin || '').toLowerCase().includes(q) || (u.employee_id || '').toLowerCase().includes(q)) {
+                    html += '<div class="px-2 py-1 attendee-opt" style="cursor:pointer;" data-name="' + u.name + '">'
+                        + u.name + ' <span class="text-muted">' + (u.employee_id || '') + '</span></div>';
+                }
+            });
+            if (!html && q.length >= 2) {
+                html = '<div class="px-2 py-1 attendee-opt text-muted" style="cursor:pointer;" data-name="' + q + '">添加外部人员：' + q + '</div>';
+            }
+            dropdown.innerHTML = html;
+            dropdown.style.display = html ? 'block' : 'none';
+            dropdown.querySelectorAll('.attendee-opt').forEach(function(opt) {
+                opt.addEventListener('mousedown', function(e) { e.preventDefault(); addTag(opt.dataset.name); });
+            });
+        });
+    });
+
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); var v = input.value.trim(); if (v) addTag(v); }
+        if (e.key === 'Backspace' && !input.value && _selected.length) {
+            _selected.pop();
+            var lastTag = tags.querySelectorAll('.badge');
+            if (lastTag.length) lastTag[lastTag.length - 1].remove();
+            syncHidden();
+        }
+    });
+
+    input.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; }, 200); });
+    tags.addEventListener('click', function() { input.focus(); });
+    syncHidden();
+})();
+</script>
 {% endblock %}
