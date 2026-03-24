@@ -454,7 +454,7 @@ function checkHelpAlert() {
                             <span class="badge bg-{{ inc.category_color }}" style="font-size:.6em;">{{ inc.category_label }}</span>
                         </div>
                         <div class="text-muted text-truncate" title="{{ inc.title }}">{{ inc.title }}</div>
-                        {% if inc.review_comment %}<div class="fst-italic text-secondary text-truncate" title="{{ inc.review_comment }}">"{{ inc.review_comment[:80] }}{% if inc.review_comment | length > 80 %}...{% endif %}"</div>{% endif %}
+                        {% if inc.description and inc.description != inc.title %}<div class="text-truncate" style="font-size:.85em;" title="{{ inc.description }}">{{ inc.description[:100] }}</div>{% endif %}
                     </div>
                 </div>
                 {% endfor %}

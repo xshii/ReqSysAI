@@ -33,11 +33,11 @@
 {% if is_reviewer %}
 {% set cur_tab = request.args.get('tab', status_filter or 'submitted') %}
 <ul class="nav nav-tabs mb-3 small mgr-only">
+    <li class="nav-item"><a class="nav-link {% if cur_tab == 'all' %}active{% endif %}" href="?tab=all&status=&scope=all&period={{ period }}">全部</a></li>
     <li class="nav-item"><a class="nav-link {% if cur_tab == 'submitted' %}active{% endif %}" href="?tab=submitted&status=submitted&scope=all&period={{ period }}">待评审</a></li>
     <li class="nav-item"><a class="nav-link {% if cur_tab == 'pending' %}active{% endif %}" href="?tab=pending&status=pending&scope=all&period={{ period }}">待修改</a></li>
     <li class="nav-item"><a class="nav-link {% if cur_tab == 'approved' %}active{% endif %}" href="?tab=approved&status=approved&scope=all&period={{ period }}">已通过</a></li>
     <li class="nav-item"><a class="nav-link {% if cur_tab == 'rejected' %}active{% endif %}" href="?tab=rejected&status=rejected&scope=all&period={{ period }}">已拒绝</a></li>
-    <li class="nav-item"><a class="nav-link {% if cur_tab == 'all' %}active{% endif %}" href="?tab=all&status=&scope=all&period={{ period }}">全部</a></li>
     <li class="nav-item"><a class="nav-link {% if cur_tab == 'funds' %}active{% endif %}" href="?tab=funds&status=funds&scope=all"><i class="bi bi-bank"></i> 资金池</a></li>
     <li class="nav-item"><a class="nav-link {% if cur_tab == 'stats' %}active{% endif %}" href="?tab=stats&status=stats&scope=all"><i class="bi bi-bar-chart"></i> 统计报表</a></li>
 </ul>
