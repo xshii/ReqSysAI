@@ -173,12 +173,19 @@ def index():
             Milestone.status == 'active',
         ).order_by(Milestone.due_date.asc().nullslast()).all()
 
-    # Meeting unclosed count: meetings with open (non-deleted) risks
-    unclosed_meeting_count = db.session.query(db.func.count(db.distinct(Risk.meeting_id))).filter(
-        Risk.status == 'open',
-        Risk.deleted_at.is_(None),
-        Risk.meeting_id.isnot(None),
-    ).scalar() or 0
+    # Meetings with unclosed risks — get actual meeting objects
+    from app.models.meeting import Meeting
+    unclosed_meeting_ids = [r[0] for r in db.session.query(db.distinct(Risk.meeting_id)).filter(
+        Risk.status == 'open', Risk.deleted_at.is_(None), Risk.meeting_id.isnot(None),
+    ).all()]
+    unclosed_meetings = Meeting.query.filter(Meeting.id.in_(unclosed_meeting_ids)).order_by(Meeting.date.desc()).all() if unclosed_meeting_ids else []
+    # Count open risks per meeting
+    unclosed_meeting_risks = {}
+    if unclosed_meeting_ids:
+        for mid, cnt in db.session.query(Risk.meeting_id, db.func.count(Risk.id)).filter(
+            Risk.status == 'open', Risk.deleted_at.is_(None), Risk.meeting_id.in_(unclosed_meeting_ids),
+        ).group_by(Risk.meeting_id).all():
+            unclosed_meeting_risks[mid] = cnt
 
     # Recurring todos + completion status (independent of daily todos)
     from app.models.recurring_todo import RecurringTodo
@@ -222,7 +229,7 @@ def index():
         heatmap=heatmap, heatmap_start=heatmap_start, timedelta=timedelta,
         milestones=milestones, all_recurring=all_recurring, recurring_due=recurring_due,
         recurring_status=recurring_status, week_focus=week_focus,
-        unclosed_meeting_count=unclosed_meeting_count,
+        unclosed_meetings=unclosed_meetings, unclosed_meeting_risks=unclosed_meeting_risks,
     )
 
 

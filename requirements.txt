@@ -12,3 +12,7 @@ markdown>=3.5
 requests>=2.31
 python-docx>=1.1
 Pillow
+
+# Dev dependencies
+ruff>=0.8
+bandit>=1.7
