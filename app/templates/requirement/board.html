@@ -150,46 +150,41 @@ function showToast(msg) {
     setTimeout(function() { el.style.display = 'none'; }, 3000);
 }
 
-/* Hover highlighting: parent <-> child (works for both embedded sub-reqs and independent child cards) */
+/* Hover highlighting: parent <-> child */
 function clearHighlights() {
     document.querySelectorAll('.highlight-related').forEach(function(el) { el.classList.remove('highlight-related'); });
 }
-document.addEventListener('mouseenter', function(e) {
-    var sub = e.target.closest('.sub-req-item');
-    if (sub) {
+document.querySelectorAll('.kanban-card').forEach(function(card) {
+    card.addEventListener('mouseenter', function() {
         clearHighlights();
-        var parentId = sub.dataset.parentId;
-        if (parentId) {
-            var parentCard = document.querySelector('.kanban-card[data-id="' + parentId + '"]');
-            if (parentCard) parentCard.classList.add('highlight-related');
+        /* Child card -> highlight parent */
+        if (card.dataset.parentId) {
+            var p = document.querySelector('.kanban-card[data-id="' + card.dataset.parentId + '"]');
+            if (p) p.classList.add('highlight-related');
         }
-        return;
-    }
-    var card = e.target.closest('.kanban-card');
-    if (!card) return;
-    /* Child card hovering -> highlight parent */
-    if (card.dataset.parentId) {
-        clearHighlights();
-        var parentCard = document.querySelector('.kanban-card[data-id="' + card.dataset.parentId + '"]');
-        if (parentCard) parentCard.classList.add('highlight-related');
-        return;
-    }
-    /* Parent card hovering -> highlight children */
-    if (card.dataset.children) {
-        clearHighlights();
-        card.dataset.children.split(',').forEach(function(cid) {
-            var childCard = document.querySelector('.kanban-card[data-id="' + cid + '"]');
-            if (childCard) childCard.classList.add('highlight-related');
-            document.querySelectorAll('.sub-req-item[data-id="' + cid + '"]').forEach(function(el) {
-                el.classList.add('highlight-related');
+        /* Parent card -> highlight children */
+        if (card.dataset.children) {
+            card.dataset.children.split(',').forEach(function(cid) {
+                var c = document.querySelector('.kanban-card[data-id="' + cid + '"]');
+                if (c) c.classList.add('highlight-related');
+                document.querySelectorAll('.sub-req-item[data-id="' + cid + '"]').forEach(function(el) {
+                    el.classList.add('highlight-related');
+                });
             });
-        });
-    }
-}, true);
-document.addEventListener('mouseleave', function(e) {
-    if (e.target.closest('.sub-req-item') || e.target.closest('.kanban-card')) {
+        }
+    });
+    card.addEventListener('mouseleave', clearHighlights);
+});
+/* Embedded sub-req items */
+document.querySelectorAll('.sub-req-item').forEach(function(sub) {
+    sub.addEventListener('mouseenter', function() {
         clearHighlights();
-    }
-}, true);
+        if (sub.dataset.parentId) {
+            var p = document.querySelector('.kanban-card[data-id="' + sub.dataset.parentId + '"]');
+            if (p) p.classList.add('highlight-related');
+        }
+    });
+    sub.addEventListener('mouseleave', clearHighlights);
+});
 </script>
 {% endblock %}
