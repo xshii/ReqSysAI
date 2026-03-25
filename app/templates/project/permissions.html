@@ -317,25 +317,27 @@ function appendUserToList(name, pinyin, eid) {
     var pickerInput = document.querySelector('#applyModal .user-picker-input');
     if (pickerInput) pickerInput.value = '';
 }
+// Click or Enter on picker option → append to textarea
 document.addEventListener('click', function(e) {
     var opt = e.target.closest('#applyModal .user-picker-opt');
     if (opt) appendUserToList(opt.dataset.name, opt.dataset.pinyin, opt.dataset.eid);
 });
-// Also handle Enter in picker: after selectOpt runs, append to textarea
+// Enter in picker: find best match from visible options, append to textarea
 (function() {
     var pickerInput = document.querySelector('#applyModal .user-picker-input');
     if (!pickerInput) return;
+    var wrap = pickerInput.closest('.user-picker-wrap');
+    var list = wrap.querySelector('.user-picker-list');
     pickerInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            setTimeout(function() {
-                var hidden = pickerInput.closest('.user-picker-wrap').querySelector('.user-picker-val');
-                if (hidden && hidden.value) {
-                    var name = pickerInput.value.trim();
-                    // Find matching opt for pinyin/eid
-                    var opt = pickerInput.closest('.user-picker-wrap').querySelector('.user-picker-opt[data-name="' + name + '"]');
-                    appendUserToList(name, opt ? opt.dataset.pinyin : '', opt ? opt.dataset.eid : '');
-                }
-            }, 50);
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        e.stopPropagation();
+        // Find first visible option
+        var visible = list.querySelector('.user-picker-opt:not([style*="none"])');
+        if (visible) {
+            appendUserToList(visible.dataset.name, visible.dataset.pinyin, visible.dataset.eid);
+            pickerInput.value = '';
+            list.style.display = 'none';
         }
     });
 })();
