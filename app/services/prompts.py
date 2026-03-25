@@ -27,6 +27,7 @@ LABELS = {
     'incentive_recommend': 'AI 激励推荐',
     'req_quality_check': '需求质量检查',
     'meeting_extract': '会议纪要提取',
+    'aar_extract_issues': 'AAR遗留问题提取',
 }
 
 

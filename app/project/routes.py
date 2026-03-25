@@ -1016,26 +1016,11 @@ def aar_ai_issues(project_id):
         return jsonify(ok=False, msg='请先填写目标/结果/差异分析')
 
     from app.services.ai import call_ollama
-    prompt = f"""根据以下AAR复盘内容，提取遗留问题清单。
-严格返回JSON，不要返回其他内容：
-{{"issues":[{{"title":"问题标题","severity":"high/medium/low","owner":"责任人姓名","deadline":"YYYY-MM-DD"}},{{"title":"...","severity":"...","owner":"...","deadline":"..."}}]}}
-
-AAR内容：
-目标：{goal or '未填写'}
-实际结果：{result or '未填写'}
-差异分析：{analysis or '未填写'}
-{'改进措施：' + action if action else ''}
-
-规则：
-- 从目标与实际结果的差距中提取未解决的问题
-- 从差异分析中提取根因未消除的风险
-- 如有改进措施，检查措施是否覆盖了所有问题，未覆盖的也列为遗留
-- title: 简明描述问题
-- severity: 根据影响程度判断 high/medium/low
-- owner: 从文本中提取责任人姓名，提取不到写空字符串
-- deadline: 建议解决日期，提取不到写从今天起7天后的日期
-- 没有遗留问题返回空数组 []
-- 不要编造内容，只从上述文本推演"""
+    from app.services.prompts import get_prompt
+    action_line = f'改进措施：{action}' if action else ''
+    tpl = get_prompt('aar_extract_issues')
+    prompt = tpl.format(goal=goal or '未填写', result=result or '未填写',
+                        analysis=analysis or '未填写', action_line=action_line)
 
     result_data, _ = call_ollama(prompt)
     if isinstance(result_data, dict) and 'issues' in result_data:
