@@ -305,18 +305,40 @@ document.addEventListener('click', function(e) {
         document.querySelectorAll('#applyModal input[name=item_id]').forEach(function(c) { c.checked = (c.value === itemId); });
     }
 });
-// User picker: append to textarea
+// User picker: append to textarea (click + Enter)
+function appendUserToList(name, pinyin, eid) {
+    var py = (pinyin || '').split(' ').pop();
+    var entry = name + (py ? '(' + py + ')' : '') + ' ' + (eid || '');
+    var ta = document.getElementById('peopleList');
+    var cur = ta.value.trim();
+    if (cur && cur.indexOf(name) !== -1) return;
+    ta.value = cur ? cur + '\n' + entry : entry;
+    // Clear picker input
+    var pickerInput = document.querySelector('#applyModal .user-picker-input');
+    if (pickerInput) pickerInput.value = '';
+}
 document.addEventListener('click', function(e) {
     var opt = e.target.closest('#applyModal .user-picker-opt');
-    if (opt) {
-        var pinyin = (opt.dataset.pinyin || '').split(' ').pop();
-        var entry = opt.dataset.name + (pinyin ? '(' + pinyin + ')' : '') + ' ' + (opt.dataset.eid || '');
-        var ta = document.getElementById('peopleList');
-        var cur = ta.value.trim();
-        if (cur && cur.indexOf(opt.dataset.name) !== -1) return; // dedup
-        ta.value = cur ? cur + '\n' + entry : entry;
-    }
+    if (opt) appendUserToList(opt.dataset.name, opt.dataset.pinyin, opt.dataset.eid);
 });
+// Also handle Enter in picker: after selectOpt runs, append to textarea
+(function() {
+    var pickerInput = document.querySelector('#applyModal .user-picker-input');
+    if (!pickerInput) return;
+    pickerInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            setTimeout(function() {
+                var hidden = pickerInput.closest('.user-picker-wrap').querySelector('.user-picker-val');
+                if (hidden && hidden.value) {
+                    var name = pickerInput.value.trim();
+                    // Find matching opt for pinyin/eid
+                    var opt = pickerInput.closest('.user-picker-wrap').querySelector('.user-picker-opt[data-name="' + name + '"]');
+                    appendUserToList(name, opt ? opt.dataset.pinyin : '', opt ? opt.dataset.eid : '');
+                }
+            }, 50);
+        }
+    });
+})();
 // Copy buttons
 document.addEventListener('click', function(e) {
     var btn = e.target.closest('.copy-btn');
