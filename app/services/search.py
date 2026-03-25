@@ -9,7 +9,7 @@ from app.models.todo import Todo
 from app.models.user import User
 
 
-def search(query, limit=20):
+def search(query, limit=20, current_user_id=None):
     """Search across all entities using LIKE. Returns list of dicts."""
     if not query or not query.strip():
         return []
@@ -23,8 +23,11 @@ def search(query, limit=20):
         results.append({'type': 'requirement', 'id': r.id,
                         'title': f'[{r.number}] {r.title}', 'extra': r.status})
 
-    # Todos (recent, not ancient)
-    for t in Todo.query.filter(Todo.title.like(q)).order_by(Todo.id.desc()).limit(limit).all():
+    # Todos (recent, only current user's todos)
+    todo_q = Todo.query.filter(Todo.title.like(q))
+    if current_user_id:
+        todo_q = todo_q.filter(Todo.user_id == current_user_id)
+    for t in todo_q.order_by(Todo.id.desc()).limit(limit).all():
         results.append({'type': 'todo', 'id': t.id,
                         'title': t.title, 'extra': t.status})
 

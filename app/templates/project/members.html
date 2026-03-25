@@ -6,102 +6,84 @@
     <h4>成员管理 · {{ project.name }}</h4>
 </div>
 
-<div class="row">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="table-responsive">
-                <table class="table table-hover mb-0 small">
-                    <thead class="table-light">
-                        <tr>{% if is_pm %}<th style="width:30px;">关键</th>{% endif %}<th>成员</th><th>工号</th><th>项目角色</th>{% if can_edit %}<th>操作</th>{% endif %}</tr>
-                    </thead>
-                    <tbody>
-                    {% for m in members %}
-                    <tr>
-                        {% if is_pm %}
-                        <td>
-                            <form method="POST" class="d-inline">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="action" value="toggle_key">
-                                <input type="hidden" name="member_id" value="{{ m.id }}">
-                                <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent"><i class="bi bi-{{ 'star-fill text-warning' if m.is_key else 'star text-muted' }}"></i></button>
-                            </form>
-                        </td>
-                        {% endif %}
-                        <td>{{ m.display_name }}{% if not m.user %} <span class="badge bg-secondary" style="font-size:.6em;">外部</span>{% endif %}</td>
-                        <td class="text-muted">{{ m.display_eid or '-' }}</td>
-                        <td>
-                            {% if can_edit %}
-                            <form method="POST" class="d-inline">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="action" value="role">
-                                <input type="hidden" name="member_id" value="{{ m.id }}">
-                                <select name="project_role" class="form-select form-select-sm py-0" style="width:auto;" onchange="this.form.submit()">
-                                    {% for k, v in roles.items() %}
-                                    <option value="{{ k }}" {% if m.project_role == k %}selected{% endif %}>{{ v }}</option>
-                                    {% endfor %}
-                                </select>
-                            </form>
-                            {% else %}
-                            <span class="badge bg-secondary">{{ m.role_label }}</span>
-                            {% endif %}
-                        </td>
-                        {% if can_edit %}
-                        <td>
-                            <form method="POST" class="d-inline">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="action" value="remove">
-                                <input type="hidden" name="member_id" value="{{ m.id }}">
-                                <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('移除该成员？')"><i class="bi bi-x"></i></button>
-                            </form>
-                        </td>
-                        {% endif %}
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="5" class="text-center text-muted py-3">暂无成员</td></tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+{% if can_edit %}
+{# Add member form — same layout as editing tab #}
+<form method="POST" class="mb-3">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="add">
+    <div class="d-flex gap-2 align-items-end flex-wrap">
+        <div>
+            <label class="form-label small mb-0">成员</label>
+            {% from "_user_picker.html" import user_picker %}
+            {{ user_picker('member_name', available, mode='text', placeholder='搜索姓名或输入外部成员', size='sm') }}
         </div>
-    </div>
-
-    <div class="col-md-4">
-        {% if can_edit %}
-        <div class="card">
-            <div class="card-header py-2">添加成员</div>
-            <div class="card-body py-2">
-                <form method="POST">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="add">
-                    {% from "_user_picker.html" import user_picker %}
-                    <div class="mb-2">
-                        <label class="form-label small">系统用户</label>
-                        {{ user_picker('user_id', available, mode='id', placeholder='搜索姓名/工号...') }}
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label small">或外部成员</label>
-                        <div class="row g-1">
-                            <div class="col-7"><input type="text" name="external_name" class="form-control form-control-sm" placeholder="姓名"></div>
-                            <div class="col-5"><input type="text" name="external_eid" class="form-control form-control-sm" placeholder="工号"></div>
-                        </div>
-                    </div>
-                    <div class="row mb-2">
-                        <div class="col-7">
-                            <select name="project_role" class="form-select form-select-sm">
-                                {% for k, v in roles.items() %}
-                                <option value="{{ k }}">{{ v }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-5">
-                            <input type="text" name="custom_role" class="form-control form-control-sm" placeholder="自定义角色">
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-sm btn-primary w-100">添加</button>
-                </form>
-            </div>
+        <div>
+            <label class="form-label small mb-0">角色</label>
+            <input type="text" name="project_role" class="form-control form-control-sm" list="roleOptions" placeholder="选择或输入" style="max-width:120px;" value="DEV">
+            <datalist id="roleOptions">
+                {% for k, v in roles.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+            </datalist>
         </div>
-        {% endif %}
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-plus"></i> 添加</button>
     </div>
+</form>
+<div class="d-flex gap-2 mt-2 mb-2">
+    <a href="{{ url_for('project.member_export_csv', project_id=project.id) }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出CSV</a>
+    <form method="POST" action="{{ url_for('project.member_import_csv', project_id=project.id) }}" enctype="multipart/form-data" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="btn btn-sm btn-outline-primary mb-0"><i class="bi bi-upload"></i> 导入CSV <input type="file" name="csv_file" accept=".csv" hidden onchange="this.form.submit()"></label>
+    </form>
 </div>
+{% endif %}
+
+{# Member list #}
+{% if members %}
+<table class="table table-sm">
+    <thead><tr><th>成员</th><th>角色</th><th>关键</th>{% if can_edit %}<th></th>{% endif %}</tr></thead>
+    <tbody>
+    {% for m in members %}
+    <tr>
+        <td class="small">{{ m.display_name }}{% if m.user and m.user.group %} <span class="text-muted">({{ m.user.group }})</span>{% endif %}{% if not m.user %} <span class="badge bg-secondary" style="font-size:.6em;">外部</span>{% endif %}</td>
+        <td>
+            {% if can_edit %}
+            <form method="POST" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="role">
+                <input type="hidden" name="member_id" value="{{ m.id }}">
+                <input type="text" name="project_role" class="form-control form-control-sm d-inline" list="roleOptions{{ m.id }}" style="max-width:90px;" value="{{ m.project_role }}" onchange="this.form.submit()">
+                <datalist id="roleOptions{{ m.id }}">
+                    {% for k, v in roles.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                </datalist>
+            </form>
+            {% else %}
+            <span class="badge bg-secondary">{{ m.role_label }}</span>
+            {% endif %}
+        </td>
+        <td>
+            <form method="POST" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="toggle_key">
+                <input type="hidden" name="member_id" value="{{ m.id }}">
+                <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent">
+                    <i class="bi bi-{{ 'star-fill text-warning' if m.is_key else 'star text-muted' }}"></i>
+                </button>
+            </form>
+        </td>
+        {% if can_edit %}
+        <td>
+            <form method="POST" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="remove">
+                <input type="hidden" name="member_id" value="{{ m.id }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('移除该成员？')"><i class="bi bi-x"></i></button>
+            </form>
+        </td>
+        {% endif %}
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="text-muted small">暂无成员</div>
+{% endif %}
 {% endblock %}

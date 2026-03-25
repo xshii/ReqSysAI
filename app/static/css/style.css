@@ -3,6 +3,8 @@ body {
 }
 ::placeholder { color: #bbb !important; opacity: 1; }
 ::-webkit-input-placeholder { color: #bbb !important; }
+#navSearchInput::placeholder { color: rgba(255,255,255,.5) !important; }
+#navSearchInput::-webkit-input-placeholder { color: rgba(255,255,255,.5) !important; }
 
 #wrapper {
     margin-top: 56px;

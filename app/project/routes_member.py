@@ -63,8 +63,11 @@ def member_list(project_id):
     all_users = User.query.filter_by(is_active=True).order_by(User.name).all()
     member_ids = {m.user_id for m in members}
     available = [u for u in all_users if u.id not in member_ids]
+    is_pm = project.owner_id == current_user.id or current_user.is_admin
+    can_edit = is_pm  # same permission
     return render_template('project/members.html', project=project, members=members,
-                           available=available, roles=ProjectMember.DEFAULT_ROLES)
+                           available=available, roles=ProjectMember.DEFAULT_ROLES,
+                           is_pm=is_pm, can_edit=can_edit)
 
 
 # ---- Member CSV import/export ----

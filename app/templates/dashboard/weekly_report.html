@@ -381,8 +381,14 @@ function saveEmailSettings() {
 (function() {
     var s = document.getElementById('emlSubject'), t = document.getElementById('emlTo'), c = document.getElementById('emlCc');
     if (s) s.value = localStorage.getItem('proj_weekly_eml_subject') || '';
-    if (t) t.value = localStorage.getItem('proj_weekly_eml_to') || '';
-    if (c) c.value = localStorage.getItem('proj_weekly_eml_cc') || '';
+    if (t) {
+        var savedTo = localStorage.getItem('proj_weekly_eml_to') || '';
+        t.value = savedTo || {{ (default_to or '')|tojson }};
+    }
+    if (c) {
+        var savedCc = localStorage.getItem('proj_weekly_eml_cc') || '';
+        c.value = savedCc || {{ (default_cc or '')|tojson }};
+    }
 })();
 
 function encodeHeader(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }

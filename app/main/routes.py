@@ -600,7 +600,7 @@ def api_search():
     q = request.args.get('q', '').strip()
     if not q:
         return jsonify(ok=True, results=[])
-    results = search(q)
+    results = search(q, current_user_id=current_user.id)
     # Add URLs for each result
     url_map = {
         'requirement': lambda r: url_for('requirement.requirement_detail', req_id=int(r['id'])),

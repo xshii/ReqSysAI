@@ -19,11 +19,14 @@
                 <i class="bi bi-kanban"></i> {{ site_name }}
             </a>
             <div class="d-flex align-items-center gap-2">
-                <button type="button" class="btn btn-sm btn-outline-light d-flex align-items-center gap-1" id="navSearchBtn" style="font-size:.8em;opacity:.7;border-color:rgba(255,255,255,.3);" data-bs-toggle="modal" data-bs-target="#searchModal">
-                    <i class="bi bi-search"></i>
-                    <span class="d-none d-md-inline">搜索</span>
-                    <kbd class="d-none d-md-inline ms-1" style="font-size:.8em;opacity:.6;background:rgba(255,255,255,.15);border:none;padding:1px 5px;border-radius:3px;">/</kbd>
-                </button>
+                <div class="position-relative" id="navSearchWrap" style="width:220px;">
+                    <input type="text" id="navSearchInput" class="form-control form-control-sm" placeholder="搜索... (/ 快捷键)" autocomplete="off"
+                           style="font-size:.82em;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;padding-right:28px;"
+                           onfocus="showSearchDropdown()" oninput="onNavSearchInput()">
+                    <i class="bi bi-search position-absolute" style="right:8px;top:50%;transform:translateY(-50%);color:rgba(255,255,255,.5);font-size:.8em;pointer-events:none;"></i>
+                    <div id="navSearchDropdown" class="position-absolute bg-white border rounded shadow-sm mt-1" style="display:none;width:360px;max-height:50vh;overflow-y:auto;z-index:9999;right:0;font-size:.85em;">
+                    </div>
+                </div>
                 {% if current_user.is_authenticated and (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')) %}
                 <button type="button" class="btn btn-sm border-0" id="mgrEyeBtn" title="管理视图" style="font-size:.85em;opacity:.4;color:#fff;">
                     <i class="bi bi-eye-slash" id="mgrEyeIcon"></i>
@@ -157,12 +160,6 @@
                         </a>
                     </li>
                     <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}">
-                        <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.aar_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
-                           href="{{ url_for('project.aar_list', project_id=p.id) }}">
-                            AAR复盘
-                        </a>
-                    </li>
-                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.permission_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('project.permission_list', project_id=p.id) }}">
                             权限申请
@@ -253,19 +250,7 @@
     {% block public_content %}{% endblock %}
     {% endif %}
 
-    {% if current_user.is_authenticated %}
-    <!-- Global Search Modal (Cmd+K) -->
-    <div class="modal fade" id="searchModal" tabindex="-1">
-        <div class="modal-dialog modal-dialog-scrollable" style="margin-top:10vh;">
-            <div class="modal-content">
-                <div class="modal-body p-2">
-                    <input type="text" id="searchInput" class="form-control border-0 shadow-none" placeholder="搜索需求、Todo、项目、人员..." autocomplete="off" style="font-size:1.1em;">
-                    <div id="searchResults" class="mt-2" style="max-height:50vh;overflow-y:auto;"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
+    {# Search is now inline in navbar #}
 
     <!-- Image Lightbox -->
     <div class="modal fade" id="imgLightbox" tabindex="-1">
@@ -282,39 +267,81 @@
     {% if current_user.is_authenticated %}
     <script>
     (function() {
-        var modal = new bootstrap.Modal(document.getElementById('searchModal'));
-        var input = document.getElementById('searchInput');
-        var results = document.getElementById('searchResults');
+        var SEARCH_HISTORY_KEY = 'nav_search_history';
+        var MAX_HISTORY = 3;
+        var input = document.getElementById('navSearchInput');
+        var dropdown = document.getElementById('navSearchDropdown');
         var timer = null, sel = -1, items = [];
 
+        function getHistory() {
+            try { return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]'); } catch(e) { return []; }
+        }
+        function saveHistory(q) {
+            var h = getHistory().filter(function(s) { return s !== q; });
+            h.unshift(q);
+            if (h.length > MAX_HISTORY) h = h.slice(0, MAX_HISTORY);
+            localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(h));
+        }
+        function removeHistory(q) {
+            var h = getHistory().filter(function(s) { return s !== q; });
+            localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(h));
+        }
+
+        function renderHistory() {
+            var h = getHistory();
+            if (!h.length) { dropdown.innerHTML = '<div class="text-muted small text-center py-2">输入关键词搜索</div>'; return; }
+            var html = '<div class="text-muted small fw-bold px-2 py-1 bg-light">最近搜索</div>';
+            h.forEach(function(s) {
+                html += '<div class="d-flex align-items-center px-2 py-1 search-history-item" style="cursor:pointer;">'
+                    + '<span class="flex-grow-1 small text-dark search-history-text">' + s + '</span>'
+                    + '<button class="btn btn-sm p-0 border-0 text-muted search-history-del" data-q="' + s.replace(/"/g,'&quot;') + '" title="删除" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>'
+                    + '</div>';
+            });
+            dropdown.innerHTML = html;
+        }
+
+        window.showSearchDropdown = function() {
+            var q = input.value.trim();
+            if (!q) { renderHistory(); }
+            dropdown.style.display = '';
+        };
+
+        window.onNavSearchInput = function() {
+            clearTimeout(timer);
+            var q = input.value.trim();
+            if (!q) { renderHistory(); dropdown.style.display = ''; return; }
+            timer = setTimeout(doSearch, 300);
+        };
+
+        // Keyboard: / to focus
         document.addEventListener('keydown', function(e) {
-            // Mac: Cmd+K, All: / (when not in input)
             if ((e.metaKey && e.key === 'k') || (e.key === '/' && !e.target.closest('input,textarea,select,[contenteditable]'))) {
                 e.preventDefault();
-                modal.show();
+                input.focus();
             }
-        });
-
-        input.addEventListener('input', function() {
-            clearTimeout(timer);
-            timer = setTimeout(doSearch, 300);
         });
 
         input.addEventListener('keydown', function(e) {
             if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, items.length - 1); highlight(); }
             else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); highlight(); }
-            else if (e.key === 'Enter' && sel >= 0 && items[sel]) { window.location = items[sel].dataset.url; }
+            else if (e.key === 'Enter') {
+                if (sel >= 0 && items[sel]) { window.location = items[sel].dataset.url; }
+                else { var q = input.value.trim(); if (q) doSearch(); }
+            }
+            else if (e.key === 'Escape') { dropdown.style.display = 'none'; input.blur(); }
         });
 
         function doSearch() {
             var q = input.value.trim();
-            if (!q) { results.innerHTML = '<div class="text-muted small text-center py-3">输入关键词搜索</div>'; return; }
-            results.innerHTML = '<div class="text-center py-2"><span class="spinner-border spinner-border-sm"></span></div>';
+            if (!q) return;
+            dropdown.style.display = '';
+            dropdown.innerHTML = '<div class="text-center py-2"><span class="spinner-border spinner-border-sm"></span></div>';
+            saveHistory(q);
             fetch('/api/search?q=' + encodeURIComponent(q))
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
                     if (!d.ok || !d.results.length) {
-                        results.innerHTML = '<div class="text-muted small text-center py-3">无结果</div>';
+                        dropdown.innerHTML = '<div class="text-muted small text-center py-3">无结果</div>';
                         items = []; sel = -1; return;
                     }
                     var html = '';
@@ -332,8 +359,8 @@
                                 + '</a>';
                         });
                     }
-                    results.innerHTML = html;
-                    items = results.querySelectorAll('.search-item');
+                    dropdown.innerHTML = html;
+                    items = dropdown.querySelectorAll('.search-item');
                     sel = -1;
                 });
         }
@@ -345,8 +372,29 @@
             if (sel >= 0 && items[sel]) items[sel].scrollIntoView({block: 'nearest'});
         }
 
-        document.getElementById('searchModal').addEventListener('shown.bs.modal', function() { input.focus(); });
-        document.getElementById('searchModal').addEventListener('hidden.bs.modal', function() { input.value = ''; results.innerHTML = ''; sel = -1; });
+        // Close dropdown on click outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#navSearchWrap')) {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        // Handle clicks on history items and delete buttons
+        dropdown.addEventListener('click', function(e) {
+            var delBtn = e.target.closest('.search-history-del');
+            if (delBtn) {
+                e.stopPropagation();
+                removeHistory(delBtn.dataset.q);
+                renderHistory();
+                return;
+            }
+            var histItem = e.target.closest('.search-history-item');
+            if (histItem) {
+                var text = histItem.querySelector('.search-history-text').textContent;
+                input.value = text;
+                doSearch();
+            }
+        });
     })();
     </script>
     {% endif %}

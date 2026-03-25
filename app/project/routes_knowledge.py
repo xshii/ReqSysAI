@@ -58,10 +58,12 @@ def knowledge_list(project_id):
     existing_biz_cats = sorted(set(
         k.biz_category for k in items if k.biz_category))
     aars = AAR.query.filter_by(project_id=project_id).order_by(AAR.date.desc()).all()
+    milestones = project.milestones
     return render_template('project/knowledge.html', project=project, items=items, aars=aars,
                            trigger_labels=AAR.TRIGGER_LABELS, ai_enabled=current_app.config.get('AI_ENABLED'),
                            link_types=Knowledge.LINK_TYPES,
-                           existing_biz_cats=existing_biz_cats)
+                           existing_biz_cats=existing_biz_cats,
+                           milestones=milestones, today=date.today())
 
 
 # ---- AAR (After Action Review) ----

@@ -217,6 +217,37 @@ def stats_export():
                      as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
+def _compute_default_recipients(cur_project_id):
+    """Compute default To (member employee_ids) and Cc (risk owners' managers)."""
+    default_to = ''
+    default_cc = ''
+    if not cur_project_id:
+        return default_to, default_cc
+
+    # To: all project members' employee_ids
+    members = ProjectMember.query.filter_by(project_id=cur_project_id).all()
+    to_eids = []
+    for m in members:
+        if m.user and m.user.employee_id:
+            to_eids.append(m.user.employee_id)
+    default_to = ';'.join(to_eids)
+
+    # Cc: risk owners' managers
+    open_risks = Risk.query.filter_by(project_id=cur_project_id, status='open')\
+        .filter(Risk.deleted_at.is_(None)).all()
+    cc_eids = set()
+    for r in open_risks:
+        if r.owner_id:
+            owner_user = db.session.get(User, r.owner_id)
+            if owner_user and owner_user.manager:
+                parts = owner_user.manager.strip().split()
+                mgr_eid = parts[-1] if len(parts) > 1 else parts[0]
+                if mgr_eid:
+                    cc_eids.add(mgr_eid)
+    default_cc = ';'.join(sorted(cc_eids))
+    return default_to, default_cc
+
+
 @dashboard_bp.route('/weekly-report', methods=['GET', 'POST'])
 @login_required
 def weekly_report():
@@ -517,10 +548,12 @@ def weekly_report():
             db.session.add(saved)
         db.session.commit()
 
+        _def_to, _def_cc = _compute_default_recipients(cur_project_id)
         return render_template('dashboard/weekly_report.html',
             report_data=report_data, saved_report=saved,
             monday=monday, sunday=sunday, offset=offset,
             cur_project=cur_project, cur_project_id=cur_project_id or 0,
+            default_to=_def_to, default_cc=_def_cc,
         )
 
     # GET: check if saved report exists, and load full DB data
@@ -638,16 +671,20 @@ def weekly_report():
             'sub_projects': sub_projects,
         }
 
+        _def_to, _def_cc = _compute_default_recipients(cur_project_id)
         return render_template('dashboard/weekly_report.html',
             report_data=report_data, saved_report=saved,
             monday=monday, sunday=sunday, offset=offset,
             cur_project=cur_project, cur_project_id=cur_project_id or 0,
+            default_to=_def_to, default_cc=_def_cc,
         )
 
+    _def_to, _def_cc = _compute_default_recipients(cur_project_id)
     return render_template('dashboard/weekly_report.html',
         report_data=None, saved_report=None,
         monday=monday, sunday=sunday, offset=offset,
         cur_project=cur_project, cur_project_id=cur_project_id or 0,
+        default_to=_def_to, default_cc=_def_cc,
     )
 
 
