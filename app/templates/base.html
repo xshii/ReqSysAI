@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{% if notif_count is defined and notif_count > 0 %}({{ notif_count }}) {% endif %}{% block title %}研发协作平台{% endblock %}</title>
+    <title>{% if notif_count is defined and notif_count > 0 %}({{ notif_count }}) {% endif %}{% block title %}{{ site_name }}{% endblock %}</title>
     <link href="{{ url_for('static', filename='vendor/css/bootstrap.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='vendor/css/bootstrap-icons.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
@@ -16,7 +16,7 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
         <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('main.index') }}">
-                <i class="bi bi-kanban"></i> 研发协作平台
+                <i class="bi bi-kanban"></i> {{ site_name }}
             </a>
             <div class="d-flex align-items-center gap-2">
                 <button type="button" class="btn btn-sm btn-outline-light d-flex align-items-center gap-1" id="navSearchBtn" style="font-size:.8em;opacity:.7;border-color:rgba(255,255,255,.3);" data-bs-toggle="modal" data-bs-target="#searchModal">

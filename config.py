@@ -35,6 +35,7 @@ class Config:
     PERMANENT_SESSION_LIFETIME = _yml.get('app', {}).get('session_timeout', 600)
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
+    SITE_NAME = _yml.get('app', {}).get('site_name', '研发协作平台')
 
     # Auth
     SSO_URL = _yml.get('auth', {}).get('sso_url', '')

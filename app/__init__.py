@@ -99,12 +99,6 @@ def create_app(config_name=None):
                 Requirement.due_date < today,
             ).count()
             notif_count = notif_risks + notif_overdue_reqs
-            if current_user.is_team_manager:
-                from app.models.incentive import Incentive
-                notif_count += Incentive.query.filter_by(status='pending').count()
-            if current_user.is_admin:
-                from app.models.ip_request import IPChangeRequest
-                notif_count += IPChangeRequest.query.filter_by(status='pending').count()
             # Help todos assigned to me (someone asked me for help)
             from app.models.todo import Todo
             notif_help = Todo.query.filter(
@@ -120,9 +114,11 @@ def create_app(config_name=None):
             return dict(sidebar_groups=groups, sidebar_cur_group=cur_group,
                         sidebar_projects=projects, sidebar_followed_ids=followed_ids,
                         notif_count=notif_count,
-                        ai_enabled=app.config.get('AI_ENABLED', True))
+                        ai_enabled=app.config.get('AI_ENABLED', True),
+                        site_name=app.config.get('SITE_NAME', '研发协作平台'))
         return dict(sidebar_groups=[], sidebar_cur_group='', sidebar_projects=[],
-                    sidebar_followed_ids=set(), notif_count=0)
+                    sidebar_followed_ids=set(), notif_count=0,
+                    site_name=app.config.get('SITE_NAME', '研发协作平台'))
 
     return app
 
