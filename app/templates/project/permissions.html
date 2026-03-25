@@ -328,16 +328,27 @@ document.addEventListener('click', function(e) {
     if (!pickerInput) return;
     var wrap = pickerInput.closest('.user-picker-wrap');
     var list = wrap.querySelector('.user-picker-list');
+    var selIdx = -1;
+    function getVisible() { return Array.prototype.slice.call(list.querySelectorAll('.user-picker-opt:not([style*="none"])')); }
+    function highlightIdx() {
+        var opts = getVisible();
+        opts.forEach(function(o, i) { o.style.background = i === selIdx ? '#e8f0fe' : ''; });
+        if (selIdx >= 0 && opts[selIdx]) opts[selIdx].scrollIntoView({block: 'nearest'});
+    }
+    pickerInput.addEventListener('input', function() { selIdx = -1; });
     pickerInput.addEventListener('keydown', function(e) {
+        var opts = getVisible();
+        if (e.key === 'ArrowDown') { e.preventDefault(); selIdx = Math.min(selIdx + 1, opts.length - 1); highlightIdx(); return; }
+        if (e.key === 'ArrowUp') { e.preventDefault(); selIdx = Math.max(selIdx - 1, 0); highlightIdx(); return; }
         if (e.key !== 'Enter') return;
         e.preventDefault();
         e.stopPropagation();
-        // Find first visible option
-        var visible = list.querySelector('.user-picker-opt:not([style*="none"])');
-        if (visible) {
-            appendUserToList(visible.dataset.name, visible.dataset.pinyin, visible.dataset.eid);
+        var target = (selIdx >= 0 && opts[selIdx]) ? opts[selIdx] : opts[0];
+        if (target) {
+            appendUserToList(target.dataset.name, target.dataset.pinyin, target.dataset.eid);
             pickerInput.value = '';
             list.style.display = 'none';
+            selIdx = -1;
         }
     });
 })();
