@@ -218,6 +218,42 @@ def requirement_edit(req_id):
         req.code_lines = form.code_lines.data
         req.test_cases = form.test_cases.data
         req.source = form.source.data or req.source
+        # Handle new sub-requirements (same as create)
+        sub_titles = request.form.getlist('sub_title')
+        sub_types = request.form.getlist('sub_type')
+        sub_days = request.form.getlist('sub_days')
+        sub_assignees = request.form.getlist('sub_assignee')
+        sub_est_lines = request.form.getlist('sub_est_lines')
+        sub_est_cases = request.form.getlist('sub_est_cases')
+        for i, st in enumerate(sub_titles):
+            st = st.strip()
+            if not st:
+                continue
+            sub_type = sub_types[i] if i < len(sub_types) else 'coding'
+            try:
+                days = float(sub_days[i]) if i < len(sub_days) and sub_days[i] else None
+            except (ValueError, IndexError):
+                days = None
+            assignee_name_sub = sub_assignees[i].strip() if i < len(sub_assignees) else ''
+            a_id_sub, a_name_sub = _resolve_assignee(assignee_name_sub) if assignee_name_sub else (None, None)
+            try:
+                est_lines = int(sub_est_lines[i]) if i < len(sub_est_lines) and sub_est_lines[i] else None
+            except (ValueError, IndexError):
+                est_lines = None
+            try:
+                est_cases = int(sub_est_cases[i]) if i < len(sub_est_cases) and sub_est_cases[i] else None
+            except (ValueError, IndexError):
+                est_cases = None
+            sub = Requirement(
+                number=Requirement.generate_number(),
+                title=st, project_id=req.project_id, priority=req.priority,
+                assignee_id=a_id_sub, assignee_name=a_name_sub,
+                estimate_days=days,
+                code_lines=est_lines if sub_type == 'coding' else None,
+                test_cases=est_cases if sub_type == 'testing' else None,
+                parent_id=req.id, source=sub_type, created_by=current_user.id,
+            )
+            db.session.add(sub)
         _log_activity(req, 'edited', '编辑了需求')
         db.session.commit()
         flash('需求更新成功', 'success')
