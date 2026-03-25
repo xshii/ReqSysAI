@@ -164,6 +164,21 @@ def aar_ai_issues(project_id):
     return jsonify(ok=False, msg='AI 提取失败')
 
 
+@project_bp.route('/<int:project_id>/aar/<int:aar_id>/save-action', methods=['POST'])
+@login_required
+def aar_save_action(project_id, aar_id):
+    """Save AI-generated action back to AAR."""
+    aar = db.session.get(AAR, aar_id)
+    if aar and aar.project_id == project_id:
+        data = request.get_json() or {}
+        action_text = data.get('action', '').strip()
+        if action_text and not aar.action:
+            aar.action = action_text
+            db.session.commit()
+            return jsonify(ok=True)
+    return jsonify(ok=False)
+
+
 @project_bp.route('/<int:project_id>/aar/adopt-risks', methods=['POST'])
 @login_required
 def aar_adopt_risks(project_id):

@@ -217,7 +217,7 @@
             <button class="btn btn-sm btn-outline-info ai-issues-btn"
                     data-goal="{{ aar.goal or '' }}" data-result="{{ aar.result or '' }}"
                     data-analysis="{{ aar.analysis or '' }}" data-action="{{ aar.action or '' }}"
-                    data-target="issuesArea{{ aar.id }}"><i class="bi bi-robot"></i> AI提取遗留问题</button>
+                    data-target="issuesArea{{ aar.id }}" data-aar-id="{{ aar.id }}"><i class="bi bi-robot"></i> AI提取遗留问题</button>
             {% endif %}
             <button class="btn btn-sm btn-outline-primary edit-aar-btn" data-bs-toggle="modal" data-bs-target="#editAarModal"
                     data-id="{{ aar.id }}" data-title="{{ aar.title }}" data-trigger="{{ aar.trigger }}"
@@ -510,6 +510,7 @@ document.addEventListener('click', function(e) {
     var orig = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    var aarId = btn.dataset.aarId;
     _aiIssues(btn.dataset.goal, btn.dataset.result, btn.dataset.analysis, btn.dataset.action,
         function(d) {
             btn.disabled = false; btn.innerHTML = orig;
@@ -517,6 +518,10 @@ document.addEventListener('click', function(e) {
             if (d && d.ok) {
                 _lastIssues = d.issues || [];
                 _renderIssues(d.issues, area, true, d.action);
+                // Auto-save AI action to AAR if empty
+                if (d.action && aarId) {
+                    apiPost('/projects/{{ project.id }}/aar/' + aarId + '/save-action', {action: d.action});
+                }
             } else { showToast(d.msg || 'AI 提取失败', 'danger'); }
         }
     );
@@ -553,10 +558,12 @@ document.addEventListener('click', function(e) {
     apiPost('{{ url_for("project.aar_adopt_risks", project_id=project.id) }}', {issues: [issue]})
     .then(function(d) {
         if (d && d.ok && d.created > 0) {
-            btn.innerHTML = '<i class="bi bi-check text-success"></i>';
+            var tr = btn.closest('tr');
+            if (tr) tr.style.opacity = '0.4';
+            btn.closest('td').innerHTML = '<span class="text-success small">已采纳</span>';
             showToast('已采纳: ' + (issue.title || ''), 'success');
         } else if (d && d.created === 0) {
-            btn.innerHTML = '<i class="bi bi-dash text-muted"></i>';
+            btn.closest('td').innerHTML = '<span class="text-muted small">已存在</span>';
             showToast('已存在', 'info');
         } else { showToast('失败', 'danger'); btn.disabled = false; btn.innerHTML = '<i class="bi bi-check"></i>'; }
     });
