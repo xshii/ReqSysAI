@@ -139,12 +139,37 @@ def permission_list(project_id):
     # Query
     items = PermissionItem.query.filter_by(project_id=project_id).order_by(
         PermissionItem.category, PermissionItem.resource).all()
-    apps = PermissionApplication.query.join(PermissionItem).filter(
+    raw_apps = PermissionApplication.query.join(PermissionItem).filter(
         PermissionItem.project_id == project_id
     ).order_by(
         db.case((PermissionApplication.status == 'pending', 0),
                 (PermissionApplication.status == 'approved', 1), else_=2),
         PermissionApplication.created_at.desc()).all()
+
+    # Merge pending apps for same permission item
+    apps = []
+    pending_by_item = {}  # item_id → merged app
+    for a in raw_apps:
+        if a.status == 'pending':
+            key = a.item_id
+            if key in pending_by_item:
+                merged = pending_by_item[key]
+                # Merge people (dedup by full entry)
+                existing_people = set(merged.applicant_name.split('\n'))
+                for p in a.people_list:
+                    if p not in existing_people:
+                        merged.applicant_name += '\n' + p
+                # Merge reasons
+                if a.reason and a.reason not in (merged.reason or ''):
+                    merged.reason = ((merged.reason or '') + '；' + a.reason).lstrip('；')
+                # Track merged IDs for bulk operations
+                merged._merged_ids = getattr(merged, '_merged_ids', [merged.id]) + [a.id]
+            else:
+                a._merged_ids = [a.id]
+                pending_by_item[key] = a
+                apps.append(a)
+        else:
+            apps.append(a)
 
     existing_categories = sorted(set(i.category for i in items if i.category))
     all_users = User.query.order_by(User.name).all()
