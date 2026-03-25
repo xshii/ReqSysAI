@@ -246,6 +246,11 @@
                     data-participants="{{ aar.participants or '' }}" data-goal="{{ aar.goal or '' }}"
                     data-result="{{ aar.result or '' }}" data-analysis="{{ aar.analysis or '' }}"
                     data-action="{{ aar.action or '' }}" data-status="{{ aar.status }}"><i class="bi bi-pencil"></i> 编辑</button>
+            <button class="btn btn-sm btn-outline-success export-aar-eml"
+                    data-title="{{ aar.title }}" data-date="{{ aar.date.strftime('%Y-%m-%d') if aar.date else '' }}"
+                    data-participants="{{ aar.participants or '' }}"
+                    data-goal="{{ aar.goal or '' }}" data-result="{{ aar.result or '' }}"
+                    data-analysis="{{ aar.analysis or '' }}" data-action="{{ aar.action or '' }}"><i class="bi bi-envelope-arrow-up"></i> 导出Outlook</button>
             <form method="POST" action="{{ url_for('project.aar_list', project_id=project.id) }}" class="d-inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="delete">
@@ -606,6 +611,59 @@ function filterAAR() {
         c.style.display = (!t || c.dataset.trigger === t) ? '' : 'none';
     });
 }
+
+// AAR EML export
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.export-aar-eml');
+    if (!btn) return;
+    var title = btn.dataset.title || 'AAR复盘';
+    var aarDate = btn.dataset.date || '';
+    var participants = btn.dataset.participants || '';
+    var goal = btn.dataset.goal || '';
+    var result = btn.dataset.result || '';
+    var analysis = btn.dataset.analysis || '';
+    var action = btn.dataset.action || '';
+    var defaultTo = {{ (aar_default_to or '')|tojson }};
+    var defaultCc = {{ (aar_default_cc or '')|tojson }};
+
+    var subject = title + (aarDate ? '（' + aarDate + '）' : '');
+    var body = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,sans-serif;font-size:14px;color:#333;">';
+    // To/Cc
+    body += '<div style="font-size:12px;color:#64748b;margin-bottom:12px;">';
+    if (defaultTo) body += '<b>To:</b> ' + defaultTo + '<br>';
+    if (defaultCc) body += '<b>Cc:</b> ' + defaultCc + '<br>';
+    body += '</div>';
+    // Content
+    body += '<h3 style="color:#1e3a5f;">' + title + '</h3>';
+    if (aarDate) body += '<div style="color:#64748b;font-size:12px;">日期：' + aarDate + '</div>';
+    if (participants) body += '<div style="color:#64748b;font-size:12px;">参与人：' + participants + '</div>';
+    body += '<hr style="border:1px solid #e2e8f0;">';
+    body += '<h4 style="color:#0d6efd;">1. 目标</h4><p>' + (goal || '-') + '</p>';
+    body += '<h4 style="color:#198754;">2. 实际结果</h4><p>' + (result || '-') + '</p>';
+    body += '<h4 style="color:#ffc107;">3. 差异分析</h4><p>' + (analysis || '-') + '</p>';
+    body += '<h4 style="color:#dc3545;">4. 改进措施</h4><p>' + (action || '-') + '</p>';
+    body += '</body></html>';
+
+    function encodeH(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
+    var boundary = 'boundary_' + Date.now();
+    var eml = [
+        'Subject: ' + encodeH(subject),
+        'MIME-Version: 1.0',
+        'Content-Type: multipart/alternative; boundary="' + boundary + '"',
+        'X-Unsent: 1',
+        '', '--' + boundary,
+        'Content-Type: text/html; charset=UTF-8',
+        'Content-Transfer-Encoding: base64',
+        '', btoa(unescape(encodeURIComponent(body))).match(/.{1,76}/g).join('\n'),
+        '', '--' + boundary + '--',
+    ].join('\r\n');
+    var blob = new Blob([eml], {type: 'message/rfc822'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = subject + '.eml';
+    a.click();
+    URL.revokeObjectURL(a.href);
+});
 
 // Auto-switch to AAR tab if hash is #aar
 if (window.location.hash === '#aar') {

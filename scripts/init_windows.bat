@@ -28,9 +28,6 @@ echo [INFO] 初始化数据库...
 set FLASK_APP=app:create_app
 python scripts\init_db.py
 
-echo [INFO] 标记迁移版本...
-flask db stamp head
-
 echo.
 echo [OK] 初始化完成！运行 scripts\run_windows.bat 启动平台
 pause

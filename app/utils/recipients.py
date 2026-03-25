@@ -55,6 +55,10 @@ def compute_default_recipients(cur_project_id):
             all_user_ids.add(r.tracker_id)
         if r.owner_id:
             all_user_ids.add(r.owner_id)
+    # Include current user
+    from flask_login import current_user as _cu
+    if _cu.is_authenticated:
+        all_user_ids.add(_cu.id)
     for uid in all_user_ids:
         u = db.session.get(User, uid)
         if u and u.manager:
@@ -127,6 +131,10 @@ def compute_meeting_recipients(project_id, meeting):
 
     default_to = ';'.join(sorted(to_set))
 
+    # Include current user's manager
+    from flask_login import current_user as _cu2
+    if _cu2.is_authenticated:
+        all_user_ids.add(_cu2.id)
     # Cc: all above people's managers
     cc_eids = set()
     for uid in all_user_ids:
