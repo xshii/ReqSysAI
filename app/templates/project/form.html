@@ -271,6 +271,19 @@
 
 {% block extra_js %}
 <script>
+// Sync basic info fields to milestone form hidden inputs before submit
+document.querySelectorAll('#tabMilestone form').forEach(function(f) {
+    f.addEventListener('submit', function() {
+        var basicForm = document.querySelector('#tabBasic form');
+        if (!basicForm) return;
+        var nameInput = basicForm.querySelector('[name="name"]');
+        var descInput = basicForm.querySelector('[name="description"]');
+        var parentInput = basicForm.querySelector('[name="parent_id"]');
+        f.querySelector('input[name="name"]').value = nameInput ? nameInput.value : '';
+        f.querySelector('input[name="description"]').value = descInput ? descInput.value : '';
+        f.querySelector('input[name="parent_id"]').value = parentInput ? parentInput.value : '0';
+    });
+});
 function addMs(name, dateVal) {
     var div = document.getElementById('msItems');
     var row = document.createElement('div');
