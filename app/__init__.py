@@ -95,7 +95,7 @@ def create_app(config_name=None):
                 db.or_(Risk.tracker_id == current_user.id, Risk.owner_id == current_user.id),
             ).all()
             alerts_count = sum(1 for r in my_reqs_nav if r.due_date and r.due_date < today) \
-                + sum(1 for r in my_risks_nav if r.due_date and r.due_date <= today)
+                + sum(1 for r in my_risks_nav if r.is_overdue)
             # Help todos
             from app.models.todo import Todo
             help_count = Todo.query.filter(
