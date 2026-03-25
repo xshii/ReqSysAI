@@ -87,7 +87,9 @@ def create_app(config_name=None):
             today = date.today()
             notif_risks = Risk.query.filter(
                 Risk.status == 'open',
-                db.or_(Risk.tracker_id == current_user.id, Risk.created_by == current_user.id),
+                Risk.deleted_at.is_(None),
+                db.or_(Risk.tracker_id == current_user.id, Risk.created_by == current_user.id,
+                       Risk.owner_id == current_user.id),
                 Risk.due_date <= today,
             ).count()
             notif_overdue_reqs = Requirement.query.filter(
