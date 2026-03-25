@@ -786,3 +786,20 @@ def ai_test_one():
         return jsonify(ok=True, reply=reply, time=f'{elapsed}s')
     except Exception as e:
         return jsonify(ok=False, error=str(e)[:200])
+
+
+@admin_bp.route('/audit-logs')
+@admin_required
+def audit_logs():
+    from app.models.audit import AuditLog
+    page = request.args.get('page', 1, type=int)
+    entity_type = request.args.get('type', '')
+    action = request.args.get('action', '')
+    q = AuditLog.query
+    if entity_type:
+        q = q.filter_by(entity_type=entity_type)
+    if action:
+        q = q.filter_by(action=action)
+    pagination = q.order_by(AuditLog.created_at.desc()).paginate(page=page, per_page=50, error_out=False)
+    return render_template('admin/audit_logs.html', pagination=pagination, logs=pagination.items,
+                           cur_type=entity_type, cur_action=action)

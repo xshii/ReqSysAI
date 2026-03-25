@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}审计日志 - 研发协作平台{% endblock %}
+
+{% block content %}
+{% include "admin/_tabs.html" %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>审计日志</h4>
+    <div class="d-flex gap-2">
+        <select class="form-select form-select-sm" style="width:auto;" onchange="location.href='?type='+this.value+'&action={{ cur_action }}'">
+            <option value="">全部类型</option>
+            {% for t in ['requirement','risk','user','permission','incentive','todo','meeting'] %}
+            <option value="{{ t }}" {% if cur_type == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+        </select>
+        <select class="form-select form-select-sm" style="width:auto;" onchange="location.href='?type={{ cur_type }}&action='+this.value">
+            <option value="">全部操作</option>
+            {% for a in ['create','delete','soft_delete','update','approve','reject','status_change'] %}
+            <option value="{{ a }}" {% if cur_action == a %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+{% if logs %}
+<div class="table-responsive">
+    <table class="table table-hover small">
+        <thead class="table-light">
+            <tr><th>时间</th><th>操作人</th><th>操作</th><th>类型</th><th>对象</th><th>详情</th><th>IP</th></tr>
+        </thead>
+        <tbody>
+        {% for log in logs %}
+        <tr>
+            <td class="text-muted text-nowrap">{{ log.created_at.strftime('%m-%d %H:%M') if log.created_at else '-' }}</td>
+            <td>{{ log.user.name if log.user else '-' }}</td>
+            <td><span class="badge bg-{{ 'danger' if log.action in ('delete','soft_delete','reject') else ('success' if log.action == 'approve' else 'secondary') }}">{{ log.action_label }}</span></td>
+            <td><span class="badge bg-info text-dark">{{ log.entity_type }}</span></td>
+            <td>{{ log.entity_title or '-' }}</td>
+            <td class="text-muted" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;">{{ log.detail or '-' }}</td>
+            <td class="text-muted">{{ log.ip_address or '-' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if pagination.pages > 1 %}
+<nav>
+    <ul class="pagination pagination-sm justify-content-center">
+        {% if pagination.has_prev %}
+        <li class="page-item"><a class="page-link" href="?page={{ pagination.prev_num }}&type={{ cur_type }}&action={{ cur_action }}">上一页</a></li>
+        {% endif %}
+        {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+        {% if p %}
+        <li class="page-item {% if p == pagination.page %}active{% endif %}"><a class="page-link" href="?page={{ p }}&type={{ cur_type }}&action={{ cur_action }}">{{ p }}</a></li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">...</span></li>
+        {% endif %}
+        {% endfor %}
+        {% if pagination.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ pagination.next_num }}&type={{ cur_type }}&action={{ cur_action }}">下一页</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<div class="text-center text-muted py-5">暂无审计日志</div>
+{% endif %}
+{% endblock %}
