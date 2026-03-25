@@ -435,7 +435,7 @@ def weekly_report():
                 from app.services.timeline import generate_timeline_image
                 ms_data = [{'name': m.name, 'due_date': m.due_date, 'status': m.status} for m in milestones]
                 timeline_img = generate_timeline_image(ms_data)
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
 
         # Smart requirement list: multi-tier filtering
@@ -1278,7 +1278,7 @@ def resource_map():
 
     user_project_days = defaultdict(float)
     for uid, dates in user_date_proj_count.items():
-        for dt, proj_counts in dates.items():
+        for _dt, proj_counts in dates.items():
             day_total = sum(proj_counts.values())
             if day_total <= 0:
                 continue
@@ -1290,7 +1290,7 @@ def resource_map():
 
     # Per-user total days
     user_total = defaultdict(float)
-    for (uid, pid), d in user_project_days.items():
+    for (uid, _pid), d in user_project_days.items():
         user_total[uid] += d
 
     # Load expected_ratio from ProjectMember
@@ -1406,7 +1406,7 @@ def resource_map_export():
 
     user_project_days = defaultdict(float)
     for uid, dates_data in user_date_proj_count.items():
-        for dt, proj_counts in dates_data.items():
+        for _dt, proj_counts in dates_data.items():
             day_total = sum(proj_counts.values())
             if day_total <= 0:
                 continue
@@ -1416,7 +1416,7 @@ def resource_map_export():
     project_ids = sorted(set(pid for (_, pid) in user_project_days))
     projects = {p.id: p for p in Project.query.filter(Project.id.in_(project_ids)).all()} if project_ids else {}
     user_total = defaultdict(float)
-    for (uid, pid), d in user_project_days.items():
+    for (uid, _pid), d in user_project_days.items():
         user_total[uid] += d
 
     buf = io.StringIO()
@@ -1605,7 +1605,7 @@ def emotion_delete(scan_date):
         from flask import abort
         abort(403)
     from app.models.emotion import EmotionRecord
-    deleted = EmotionRecord.query.filter_by(scan_date=scan_date).delete()
+    _ = EmotionRecord.query.filter_by(scan_date=scan_date).delete()
     db.session.commit()
     flash(f'已删除 {scan_date} 的记录', 'success')
     return redirect(url_for('dashboard.emotion_predict'))

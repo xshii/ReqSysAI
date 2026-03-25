@@ -265,7 +265,7 @@ def project_detail(project_id):
             from app.services.timeline import generate_timeline_image
             ms_data = [{'name': m.name, 'due_date': m.due_date, 'status': m.status} for m in project.milestones]
             timeline_img = generate_timeline_image(ms_data)
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
     return render_template('project/detail.html', project=project, today=today,

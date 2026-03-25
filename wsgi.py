@@ -15,7 +15,7 @@ if __name__ == '__main__':
                 cfg.update(yaml.safe_load(fp) or {})
     app_cfg = cfg.get('app', {})
     app.run(
-        host=os.getenv('FLASK_HOST', app_cfg.get('host', '0.0.0.0')),
+        host=os.getenv('FLASK_HOST', app_cfg.get('host', '0.0.0.0')),  # noqa: S104
         port=int(os.getenv('FLASK_PORT', app_cfg.get('port', 5001))),
         debug=True,
     )

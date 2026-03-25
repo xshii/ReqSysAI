@@ -377,7 +377,7 @@ class TestQuickTodo:
 
     def test_add_personal_todo(self, client, app):
         """添加个人 todo"""
-        resp = client.post('/quick-todo', json={
+        _ = client.post('/quick-todo', json={
             'title': '读书30分钟', 'category': 'personal',
         })
         assert client.post('/quick-todo', json={
@@ -509,7 +509,7 @@ class TestOverdueEdgeCases:
     def test_today_created_no_overdue(self, client, app):
         """今天创建的 todo 没有超期标记"""
         with app.app_context():
-            t = _create_todo('今天的', 'todo')
+            _ = _create_todo('今天的', 'todo')
             _db.session.commit()
 
         html = client.get('/').data.decode()

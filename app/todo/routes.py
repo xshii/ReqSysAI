@@ -474,7 +474,7 @@ def team():
             user_done.setdefault(t.user_id, []).append(t)
 
     # Build display_reqs for each user
-    for uid, ud in user_data.items():
+    for _uid, ud in user_data.items():
         ud['display_reqs'] = sorted(ud['_req_map'].values(),
             key=lambda r: (r.due_date or date(2099,1,1), r.priority))
         ud['todo_total'] = len(ud['todos'])

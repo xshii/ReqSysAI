@@ -29,7 +29,7 @@ def seed():
         ]:
             try:
                 db.session.execute(text(sql))
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
         db.session.commit()
 

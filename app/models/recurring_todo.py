@@ -100,13 +100,10 @@ class RecurringTodo(db.Model):
         elif self.cycle == 'monthly':
             # Find most recent past period day this month
             past_diffs = []
-            has_future = False
             for p in self.monthly_periods:
                 target = self._period_day(p)
                 if today.day > target:
                     past_diffs.append(today.day - target)
-                else:
-                    has_future = True
             if past_diffs:
                 return min(past_diffs)  # days since the most recent past period
             # All periods are still upcoming this month — not overdue

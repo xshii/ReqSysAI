@@ -307,8 +307,8 @@ class TestRecurringEdgeCases:
             _db.session.commit()
             rid = r.id
 
-        resp = client.post(f'/recurring-todos/{rid}/delete',
-                           headers={'X-Requested-With': 'XMLHttpRequest'})
+        _ = client.post(f'/recurring-todos/{rid}/delete',
+                        headers={'X-Requested-With': 'XMLHttpRequest'})
         with app.app_context():
             from app.models.recurring_todo import RecurringTodo
             assert RecurringTodo.query.get(rid) is not None  # should NOT be deleted

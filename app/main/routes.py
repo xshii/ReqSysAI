@@ -740,9 +740,6 @@ def daily_progress():
     from app.models.risk import Risk
 
     today = date.today()
-    yesterday = today - timedelta(days=1)
-    if today.weekday() == 0:
-        yesterday = today - timedelta(days=3)
 
     # Only business todos (risk + requirement linked), not team/personal
     all_biz = Todo.query.filter(

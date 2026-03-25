@@ -38,8 +38,8 @@ def _ensure_ssh_tunnel():
     # Try to establish SSH tunnel in background
     logger.info('SSH tunnel not found, establishing via %s ...', ssh_host)
     try:
-        subprocess.Popen(
-            ['ssh', '-f', '-N', '-L', f'{local_port}:127.0.0.1:{local_port}', ssh_host],
+        subprocess.Popen(  # noqa: S603
+            ['ssh', '-f', '-N', '-L', f'{local_port}:127.0.0.1:{local_port}', ssh_host],  # noqa: S607
             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
         )
         # Wait briefly for tunnel to establish
@@ -222,7 +222,7 @@ def parse_requirement(text, project_id=None):
             exp = '、'.join(r[0][:15] for r in recent) if recent else '无近期记录'
             role_str = f'，角色：{role}' if role else ''
             team_lines.append(f'- {u.name}（{u.group or ""}{role_str}）：负责 {active_reqs} 个需求，进行中 {active_todos} 个todo，经验：{exp}')
-    except Exception:
+    except Exception:  # noqa: S110
         pass
     context = text
     if team_lines:
@@ -265,7 +265,7 @@ def parse_requirement(text, project_id=None):
                 cross_result, _ = call_ollama(cross_prompt)
                 if isinstance(cross_result, dict):
                     result['cross_project'] = cross_result
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
     return result, raw

@@ -61,7 +61,7 @@ def create_app(config_name=None):
         from flask_login import current_user
         if current_user.is_authenticated:
             from app.models.project import Project
-            from app.models.user import Group, User
+            from app.models.user import Group
             all_groups = Group.query.order_by(Group.name).all()
             # Default: only own group. User can toggle only_my_group=False in profile to see all.
             if current_user.only_my_group:

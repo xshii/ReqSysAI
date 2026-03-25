@@ -103,7 +103,7 @@ def member_import_csv(project_id):
     """Import project members from CSV. Headers: id,姓名,工号,角色"""
     import csv
     import io
-    project = db.get_or_404(Project, project_id)
+    _ = db.get_or_404(Project, project_id)
 
     file = request.files.get('csv_file')
     if not file or not file.filename:

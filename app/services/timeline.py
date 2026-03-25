@@ -15,7 +15,7 @@ def _cache_key(milestones, today, width):
     for m in sorted(milestones, key=lambda x: str(x.get('due_date', ''))):
         parts.append(f"{m.get('name')}|{m.get('due_date')}|{m.get('status')}")
     raw = f"{today}|{width}|{'||'.join(parts)}"
-    return hashlib.md5(raw.encode()).hexdigest()
+    return hashlib.md5(raw.encode()).hexdigest()  # noqa: S324
 
 
 # Colors
@@ -68,9 +68,6 @@ def generate_timeline_image(milestones, today=None, width=760):
     pad_top = 30
     axis_y = pad_top + 20
     marker_h = 10
-    label_y = axis_y + marker_h + 4
-    date_y = label_y + 16
-    row_height = 70
     usable_w = width - 2 * pad_x
 
     # Filter milestones with dates, sort by date

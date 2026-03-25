@@ -15,7 +15,7 @@ def log_audit(action, entity_type, entity_id=None, entity_title=None, detail=Non
     ip = None
     try:
         ip = flask_request.remote_addr
-    except Exception:
+    except Exception:  # noqa: S110
         pass
     db.session.add(AuditLog(
         user_id=uid, action=action, entity_type=entity_type,

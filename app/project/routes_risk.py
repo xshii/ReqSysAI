@@ -146,7 +146,7 @@ def risk_export_csv(project_id):
     import io
 
     from flask import Response
-    project = db.get_or_404(Project, project_id)
+    _ = db.get_or_404(Project, project_id)
     risks = Risk.query.filter_by(project_id=project_id).order_by(Risk.created_at).all()
     buf = io.StringIO()
     buf.write('\ufeff')
@@ -170,7 +170,7 @@ def risk_import_csv(project_id):
     """Import risks from CSV."""
     import csv
     import io
-    project = db.get_or_404(Project, project_id)
+    _ = db.get_or_404(Project, project_id)
     file = request.files.get('csv_file')
     if not file or not file.filename.lower().endswith('.csv'):
         flash('请选择 CSV 文件', 'danger')
@@ -297,7 +297,6 @@ def risk_ai_scan(project_id):
 
     # Existing risks (to avoid duplicates)
     existing_risks = Risk.query.filter_by(project_id=project_id, status='open').all()
-    existing_titles = [r.title for r in existing_risks]
 
     # Build context
     lines = [f'项目：{project.name}，当前日期：{today}\n']

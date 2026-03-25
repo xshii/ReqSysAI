@@ -208,7 +208,7 @@ def gather_week_stats(monday, sunday, group=None, project_id=None):
 
     user_project_days = defaultdict(float)
     for uid, date_projects in user_date_projects.items():
-        for dt, pids in date_projects.items():
+        for _dt, pids in date_projects.items():
             share = 1.0 / len(pids) if pids else 0
             for pid in pids:
                 user_project_days[(uid, pid)] += share

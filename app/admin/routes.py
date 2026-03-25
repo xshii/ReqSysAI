@@ -194,7 +194,6 @@ def _do_csv_import(text, require_group=False):
         return
 
     has_id = 'ID' in fields
-    hidden = set(current_app.config.get('HIDDEN_ROLES', []) + ['Admin'])
     created, updated, skipped = 0, 0, 0
     new_groups = set()
     errors = []

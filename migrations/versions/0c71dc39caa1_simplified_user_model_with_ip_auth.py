@@ -1,7 +1,7 @@
 """simplified user model with ip auth
 
 Revision ID: 0c71dc39caa1
-Revises: 
+Revises:
 Create Date: 2026-03-18 16:20:11.887014
 
 """
