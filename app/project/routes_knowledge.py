@@ -154,8 +154,11 @@ def aar_ai_issues(project_id):
                         analysis=analysis or '未填写', action_line=action_line)
 
     result_data, _ = call_ollama(prompt)
+    # AI may return {"issues":[...]} or just [...]
     if isinstance(result_data, dict) and 'issues' in result_data:
         return jsonify(ok=True, issues=result_data['issues'])
+    if isinstance(result_data, list):
+        return jsonify(ok=True, issues=result_data)
     return jsonify(ok=False, msg='AI 提取失败')
 
 
