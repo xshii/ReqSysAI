@@ -263,7 +263,7 @@
     </div>
 
     <script src="{{ url_for('static', filename='vendor/js/bootstrap.bundle.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v={{ range(10000,99999)|random }}"></script>
     {% if current_user.is_authenticated %}
     <script>
     (function() {

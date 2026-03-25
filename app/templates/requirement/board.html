@@ -154,13 +154,14 @@ function showToast(msg) {
 function clearHighlights() {
     document.querySelectorAll('.highlight-related').forEach(function(el) { el.classList.remove('highlight-related'); });
 }
-document.querySelectorAll('.kanban-card').forEach(function(card) {
+var _cards = document.querySelectorAll('.kanban-card');
+_cards.forEach(function(card) {
     card.addEventListener('mouseenter', function() {
         clearHighlights();
         /* Child card -> highlight parent */
         if (card.dataset.parentId) {
             var p = document.querySelector('.kanban-card[data-id="' + card.dataset.parentId + '"]');
-            if (p) p.classList.add('highlight-related');
+            if (p) { p.classList.add('highlight-related'); }
         }
         /* Parent card -> highlight children */
         if (card.dataset.children) {
