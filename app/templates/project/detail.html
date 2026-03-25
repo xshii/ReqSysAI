@@ -46,39 +46,12 @@
 {# Milestone timeline — top position #}
 {% if project.milestones %}
 <div class="card mb-3 border-0 shadow-sm">
-    <div class="card-body py-2">
-        {% set _ms_dates = project.milestones|selectattr('due_date')|map(attribute='due_date')|list %}
-        {% if _ms_dates %}
-        {% set _ms_min = _ms_dates|min %}
-        {% set _ms_max = _ms_dates|max %}
-        {% set _ms_range = (_ms_max - _ms_min).days or 1 %}
-        {% set _today_pos = ((today - _ms_min).days / _ms_range * 100) %}
-        {% if _today_pos >= 0 and _today_pos <= 100 %}
-        <div style="position:relative;height:22px;margin:0 8px;">
-            <div style="position:absolute;left:{{ _today_pos }}%;transform:translateX(-50%);text-align:center;line-height:1;">
-                <div style="color:#dc2626;font-size:10px;font-weight:bold;">今天</div>
-                <div style="width:2px;height:8px;background:#dc2626;margin:0 auto;"></div>
-            </div>
-        </div>
+    <div class="card-body py-2 text-center">
+        {% if timeline_img %}
+        <img src="data:image/png;base64,{{ timeline_img }}" style="width:100%;max-width:760px;" alt="里程碑时间轴">
+        {% else %}
+        <div class="text-muted small">里程碑无日期数据</div>
         {% endif %}
-        {% endif %}
-        <div style="overflow-x:auto;min-width:{{ project.milestones|length * 110 }}px;">
-            <div style="height:2px;background:{{ milestone_color }};margin:0 8px;"></div>
-            <div class="d-flex justify-content-between" style="margin:0 8px;">
-                    {% for ms in project.milestones %}
-                    {% set ms_done = ms.status == 'completed' or (ms.due_date and ms.due_date < today) %}
-                    {% set c = milestone_color %}
-                    <div class="text-center" style="flex:1;">
-                        <div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:12px solid {{ c }};margin:0 auto;"></div>
-                        <div style="white-space:nowrap;margin-top:4px;">
-                            <div class="fw-bold" style="font-size:.85rem;color:{{ c }};">{{ ms.name }}</div>
-                            {% if ms.due_date %}<div style="font-size:.8rem;color:#64748b;">{{ ms.due_date.strftime('%Y-%m-%d') }}</div>{% endif %}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 {% endif %}

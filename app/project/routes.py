@@ -261,11 +261,21 @@ def project_detail(project_id):
             todo_requirements.c.requirement_id.in_(req_ids)
         ).options(joinedload(Todo.user)).order_by(Todo.done_date.desc()).limit(10).all()
 
+    # Generate milestone timeline image
+    timeline_img = None
+    if project.milestones:
+        try:
+            from app.services.timeline import generate_timeline_image
+            ms_data = [{'name': m.name, 'due_date': m.due_date, 'status': m.status} for m in project.milestones]
+            timeline_img = generate_timeline_image(ms_data)
+        except Exception:
+            pass
+
     return render_template('project/detail.html', project=project, today=today,
                            reqs=reqs, req_total=req_total, req_done=req_done,
                            req_overdue=req_overdue, open_risks=open_risks,
                            key_members=key_members, recent_done=recent_done,
-                           milestone_color=MILESTONE_COLOR)
+                           milestone_color=MILESTONE_COLOR, timeline_img=timeline_img)
 
 
 @project_bp.route('/<int:project_id>/follow', methods=['POST'])

@@ -411,8 +411,8 @@ class TestMilestoneColor:
 
         resp = client.get(f'/projects/{pid}')
         html = resp.data.decode()
-        # Overdue milestone auto-passes, no red color, uses unified color
-        assert '#1e3a5f' in html
+        # Milestone rendered as PNG image
+        assert 'data:image/png;base64,' in html
 
 
 # ─── 预置模板完整性 ────────────────────────────────────────
