@@ -90,40 +90,12 @@
 {% if report_data.milestones %}
 <div class="report-section mt-3">
     <h6>二、里程碑</h6>
-    <!-- Today star above axis -->
-    {% set _ms_dates = report_data.milestones|selectattr('due_date')|map(attribute='due_date')|list %}
-    {% if _ms_dates %}
-    {% set _ms_min = _ms_dates|min %}
-    {% set _ms_max = _ms_dates|max %}
-    {% set _ms_range = (_ms_max - _ms_min).days or 1 %}
-    {% set _today_pos = ((report_data.today - _ms_min).days / _ms_range * 100) %}
-    {% if _today_pos >= 0 and _today_pos <= 100 %}
-    <div style="position:relative;height:18px;margin:0 8px;">
-        <div style="position:absolute;left:{{ _today_pos }}%;transform:translateX(-50%);color:#dc2626;font-size:14px;line-height:1;" title="今天 {{ report_data.today.strftime('%m-%d') }}">&#9733;</div>
-    </div>
-    {% endif %}
-    {% endif %}
-    <div style="overflow-x:auto;">
-        <div style="min-width:{{ [report_data.milestones|length * 100, 400] | max }}px;">
-            <!-- Axis line -->
-            <div style="height:2px;background:#1e3a5f;margin:0 8px;"></div>
-            <!-- Triangles + Labels -->
-            <div class="d-flex" style="margin:0 8px;">
-                {% for ms in report_data.milestones %}
-                {% set c = '#1e3a5f' %}
-                <div class="text-center" style="flex:1 0 0;min-width:80px;">
-                    <div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:10px solid {{ c }};margin:0 auto;"></div>
-                    <div style="margin-top:3px;">
-                        <div class="fw-bold text-truncate" style="font-size:.72rem;color:{{ c }};" title="{{ ms.name }}">{{ ms.name }}</div>
-                        {% if ms.due_date %}<div style="font-size:.65rem;color:#64748b;">{{ ms.due_date.strftime('%Y-%m-%d') }}</div>{% endif %}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
     {% if report_data.timeline_img %}
-    <img src="data:image/png;base64,{{ report_data.timeline_img }}" class="timeline-img" style="width:100%;max-width:760px;display:none;" alt="里程碑时间轴">
+    <div class="text-center">
+        <img src="data:image/png;base64,{{ report_data.timeline_img }}" class="timeline-img" style="width:100%;max-width:760px;" alt="里程碑时间轴">
+    </div>
+    {% else %}
+    <div class="text-muted small text-center py-2">里程碑无日期数据</div>
     {% endif %}
 </div>
 {% endif %}
@@ -553,36 +525,10 @@ function exportEml() {
             if (d.querySelector('strong')) body += '<div style="font-size:13px;font-weight:700;margin-top:10px;margin-bottom:4px;">' + d.innerHTML + '</div>';
         });
 
-        // Milestones → use PNG image if available, fallback to table
+        // Milestones → use PNG image
         var msImg = sec.querySelector('.timeline-img');
         if (msImg && msImg.src) {
             body += '<img src="' + msImg.src + '" width="760" style="width:100%;max-width:760px;" alt="里程碑时间轴">';
-        } else {
-            var msContainer = sec.querySelector('.d-flex[style*="margin:0 8px"]');
-            if (msContainer) {
-                var msItems = Array.prototype.slice.call(msContainer.querySelectorAll('.text-center'));
-                var perRow = 6;
-                for (var ri = 0; ri < msItems.length; ri += perRow) {
-                    var chunk = msItems.slice(ri, ri + perRow);
-                    var colW = Math.floor(100 / chunk.length) + '%';
-                    body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin:' + (ri === 0 ? '6px' : '2px') + ' 0 0 0;"><tr>';
-                    chunk.forEach(function() { body += '<td style="height:2px;background:#1e3a5f;"></td>'; });
-                    body += '</tr></table>';
-                    body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 4px 0;"><tr>';
-                    chunk.forEach(function(ms) {
-                        var nameEl = ms.querySelector('.fw-bold');
-                        var dateEls = ms.querySelectorAll('div');
-                        var name = nameEl ? nameEl.textContent.trim() : '';
-                        var dateText = dateEls.length > 1 ? dateEls[1].textContent.trim() : '';
-                        var color = nameEl ? (nameEl.style.color || '#1e3a5f') : '#1e3a5f';
-                        body += '<td style="width:' + colW + ';text-align:center;vertical-align:top;padding:2px 3px;">'
-                            + '<div style="font-size:11px;font-weight:700;color:' + color + ';">▲ ' + name + '</div>'
-                            + (dateText ? '<div style="font-size:10px;color:#64748b;">' + dateText + '</div>' : '')
-                            + '</td>';
-                    });
-                    body += '</tr></table>';
-                }
-            }
         }
 
         // Data tables
