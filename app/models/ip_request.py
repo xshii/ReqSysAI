@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from app.extensions import db
 
 
@@ -13,7 +11,7 @@ class IPChangeRequest(db.Model):
     status = db.Column(db.String(20), default='pending')  # pending / approved / rejected
     reviewed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     reviewed_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     user = db.relationship('User', foreign_keys=[user_id], backref='ip_requests')
     reviewer = db.relationship('User', foreign_keys=[reviewed_by])

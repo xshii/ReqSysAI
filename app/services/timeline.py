@@ -1,9 +1,22 @@
-"""Generate milestone timeline as PNG image (base64)."""
+"""Generate milestone timeline as PNG image (base64), with caching."""
 import base64
+import hashlib
 import io
+import os
 from datetime import date
 
 from PIL import Image, ImageDraw, ImageFont
+
+_cache = {}  # in-memory cache: hash → base64
+
+
+def _cache_key(milestones, today, width):
+    """Generate cache key from milestone data."""
+    parts = []
+    for m in sorted(milestones, key=lambda x: str(x.get('due_date', ''))):
+        parts.append(f"{m.get('name')}|{m.get('due_date')}|{m.get('status')}")
+    raw = f"{today}|{width}|{'||'.join(parts)}"
+    return hashlib.md5(raw.encode()).hexdigest()
 
 
 # Colors
@@ -35,10 +48,14 @@ def _get_font(size):
 
 
 def generate_timeline_image(milestones, today=None, width=760):
-    """Generate timeline PNG, return base64 string.
+    """Generate timeline PNG, return base64 string (cached).
 
     milestones: list of dicts with keys: name, due_date (date), status ('active'/'completed')
     """
+    today = today or date.today()
+    key = _cache_key(milestones, today, width)
+    if key in _cache:
+        return _cache[key]
     if not milestones or not any(m.get('due_date') for m in milestones):
         return None
 
@@ -130,4 +147,6 @@ def generate_timeline_image(milestones, today=None, width=760):
     # Export as base64 PNG
     buf = io.BytesIO()
     img.save(buf, format='PNG', optimize=True)
-    return base64.b64encode(buf.getvalue()).decode('ascii')
+    result = base64.b64encode(buf.getvalue()).decode('ascii')
+    _cache[key] = result
+    return result

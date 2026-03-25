@@ -10,7 +10,8 @@ from app.models.ai_log import AIParseLog  # noqa: F401
 from app.models.meeting import Meeting  # noqa: F401
 from app.models.ip_request import IPChangeRequest  # noqa: F401
 from app.models.project_member import ProjectMember  # noqa: F401
-from app.models.knowledge import Knowledge, PermissionRequest  # noqa: F401
+from app.models.knowledge import Knowledge, PermissionRequest, PermissionItem, PermissionApplication, AAR  # noqa: F401
 from app.models.emotion import EmotionRecord, EmotionComment  # noqa: F401
 from app.models.recurring_todo import RecurringTodo  # noqa: F401
 from app.models.recurring_completion import RecurringCompletion  # noqa: F401
+from app.models.notification import Notification  # noqa: F401

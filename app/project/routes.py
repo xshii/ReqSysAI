@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 
 from flask import render_template, redirect, url_for, flash, request, jsonify, make_response, current_app
 from flask_login import current_user
@@ -451,6 +451,13 @@ def risk_add(project_id):
         created_by=current_user.id,
     )
     db.session.add(risk)
+    # Notify owner and tracker
+    from app.services.notify import notify
+    risk_link = url_for('project.risk_list', project_id=project_id)
+    if risk.owner_id and risk.owner_id != current_user.id:
+        notify(risk.owner_id, 'risk', f'你被指定为风险「{title}」的责任人', risk_link)
+    if risk.tracker_id and risk.tracker_id != current_user.id and risk.tracker_id != risk.owner_id:
+        notify(risk.tracker_id, 'risk', f'你被指定为风险「{title}」的跟踪人', risk_link)
     db.session.commit()
     flash('风险已登记', 'success')
     return redirect(url_for('project.risk_list', project_id=project_id))
@@ -465,14 +472,14 @@ def risk_resolve(risk_id):
     if not resolution and risk.comments:
         from datetime import timedelta as _td
         latest = risk.comments[0]  # ordered desc
-        if (datetime.utcnow() - latest.created_at).total_seconds() < 86400:
+        if (datetime.now(timezone.utc).replace(tzinfo=None) - latest.created_at).total_seconds() < 86400:
             resolution = latest.content
     if not resolution:
         flash('请填写解决方案（或先添加评论）', 'danger')
         return redirect(url_for('project.risk_list', project_id=risk.project_id))
     risk.status = 'resolved'
     risk.resolution = resolution
-    risk.resolved_at = datetime.utcnow()
+    risk.resolved_at = datetime.now(timezone.utc)
     from app.models.risk import RiskAuditLog
     db.session.add(RiskAuditLog(risk_id=risk.id, user_id=current_user.id, action='resolved', detail=resolution[:200]))
     db.session.commit()
@@ -513,7 +520,7 @@ def risk_delete(risk_id):
     """Soft delete a risk + audit log."""
     from app.models.risk import RiskAuditLog
     risk = db.get_or_404(Risk, risk_id)
-    risk.deleted_at = datetime.utcnow()
+    risk.deleted_at = datetime.now(timezone.utc)
     risk.deleted_by = current_user.id
     db.session.add(RiskAuditLog(risk_id=risk.id, user_id=current_user.id, action='deleted', detail=risk.title))
     db.session.commit()
@@ -611,7 +618,7 @@ def risk_import_csv(project_id):
             created_by=current_user.id,
         )
         if status_val == 'resolved' and resolution_text:
-            risk.resolved_at = datetime.utcnow()
+            risk.resolved_at = datetime.now(timezone.utc)
         db.session.add(risk)
         created += 1
     db.session.commit()
@@ -1157,8 +1164,12 @@ def permission_list(project_id):
             app_record = db.session.get(PermissionApplication, request.form.get('app_id', type=int))
             if app_record and app_record.item.project_id == project_id:
                 app_record.status = 'approved'
-                app_record.approved_at = datetime.utcnow()
+                app_record.approved_at = datetime.now(timezone.utc)
                 app_record.approved_by = current_user.id
+                from app.services.notify import notify
+                notify(app_record.submitted_by, 'permission',
+                       f'权限申请「{app_record.item.resource}」已通过',
+                       url_for('project.permission_list', project_id=project_id))
                 db.session.commit()
                 flash('已通过', 'success')
         elif action == 'bulk_approve' and is_pm:
@@ -1167,7 +1178,7 @@ def permission_list(project_id):
                 PermissionApplication.status == 'pending').all()
             for a in pending:
                 a.status = 'approved'
-                a.approved_at = datetime.utcnow()
+                a.approved_at = datetime.now(timezone.utc)
                 a.approved_by = current_user.id
             db.session.commit()
             flash(f'已批量通过 {len(pending)} 条', 'success')

@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from app.extensions import db
 
@@ -27,8 +27,8 @@ class Todo(db.Model):
     blocked_reason = db.Column(db.String(200), nullable=True)  # 阻塞原因
     started_at = db.Column(db.DateTime, nullable=True)  # Timer start
     actual_minutes = db.Column(db.Integer, nullable=True)  # Recorded on completion
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
+    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
 
     user = db.relationship('User', backref='todos')
     requirements = db.relationship('Requirement', secondary=todo_requirements, backref='todos', lazy='joined')
@@ -106,7 +106,8 @@ class Todo(db.Model):
     def elapsed_minutes(self):
         if not self.started_at:
             return 0
-        return int((datetime.utcnow() - self.started_at).total_seconds() / 60)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        return int((now - self.started_at).total_seconds() / 60)
 
     def __repr__(self):
         return f'<Todo {self.title}>'
@@ -121,7 +122,7 @@ class PomodoroSession(db.Model):
     started_at = db.Column(db.DateTime, nullable=True)  # When timer was started
     minutes = db.Column(db.Integer, nullable=False, default=0)
     completed = db.Column(db.Boolean, default=False)  # True if full pomodoro
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     def __repr__(self):
         return f'<Pomodoro {self.minutes}min {"✓" if self.completed else "✗"}>'
@@ -137,7 +138,7 @@ class TodoItem(db.Model):
     title = db.Column(db.String(300), nullable=False)
     is_done = db.Column(db.Boolean, default=False)
     sort_order = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     def __repr__(self):
         return f'<TodoItem {self.title}>'

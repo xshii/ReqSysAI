@@ -316,6 +316,8 @@ def quick_todo():
                                category=category, source='help', parent_id=my_todo.id, requirements=reqs)
             helper_todo.items.append(TodoItem(title=title, sort_order=0))
             db.session.add(helper_todo)
+            from app.services.notify import notify
+            notify(helper.id, 'todo_help', f'{current_user.name} 向你求助：{title}', url_for('main.index'))
             db.session.commit()
             result = {'ok': True, 'title': title, 'todo_id': my_todo.id,
                       'helper': helper.name, 'is_help': True}
@@ -544,6 +546,37 @@ def api_users():
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
     return jsonify([{'id': u.id, 'name': u.name, 'pinyin': u.pinyin or '',
                       'employee_id': u.employee_id, 'manager': u.manager or ''} for u in users])
+
+
+@main_bp.route('/api/notifications')
+@login_required
+def api_notifications():
+    """Return unread notifications for current user."""
+    from app.models.notification import Notification
+    items = Notification.query.filter_by(user_id=current_user.id, is_read=False)\
+        .order_by(Notification.created_at.desc()).limit(20).all()
+    return jsonify([{
+        'id': n.id, 'type': n.type, 'type_label': n.type_label,
+        'icon': n.type_icon, 'title': n.title, 'link': n.link,
+        'time': n.created_at.strftime('%m-%d %H:%M'),
+    } for n in items])
+
+
+@main_bp.route('/api/notifications/read', methods=['POST'])
+@login_required
+def api_notifications_read():
+    """Mark notifications as read."""
+    from app.models.notification import Notification
+    data = request.get_json() or {}
+    nid = data.get('id')
+    if nid == 'all':
+        Notification.query.filter_by(user_id=current_user.id, is_read=False).update({'is_read': True})
+    elif nid:
+        n = db.session.get(Notification, int(nid))
+        if n and n.user_id == current_user.id:
+            n.is_read = True
+    db.session.commit()
+    return jsonify(ok=True)
 
 
 @main_bp.route('/api/search')

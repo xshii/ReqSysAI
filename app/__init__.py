@@ -110,6 +110,9 @@ def create_app(config_name=None):
                 Todo.status == 'todo',
             ).count()
             notif_count += notif_help
+            # Persistent notifications (unread)
+            from app.models.notification import Notification
+            notif_count += Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
 
             return dict(sidebar_groups=groups, sidebar_cur_group=cur_group,
                         sidebar_projects=projects, sidebar_followed_ids=followed_ids,

@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from app.extensions import db
 
 
@@ -15,7 +13,7 @@ class Meeting(db.Model):
     content = db.Column(db.Text, nullable=True)  # raw minutes text
     ai_result = db.Column(db.Text, nullable=True)  # JSON string of extracted items
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     project = db.relationship('Project', backref='meetings')
     creator = db.relationship('User', foreign_keys=[created_by], backref='created_meetings')

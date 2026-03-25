@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from app.extensions import db
 
 
@@ -13,8 +11,8 @@ class StandupRecord(db.Model):
     today_plan = db.Column(db.Text)
     blocker = db.Column(db.Text)
     has_blocker = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
+    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
 
     user = db.relationship('User', backref='standup_records')
 

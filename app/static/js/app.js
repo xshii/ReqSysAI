@@ -137,3 +137,37 @@ function apiPost(url, data) {
         return r.json().catch(function() { return {ok: false, msg: '响应解析失败'}; });
     });
 }
+
+// Notification dropdown
+var _notifLoaded = false;
+function loadNotifs() {
+    if (_notifLoaded) return;
+    _notifLoaded = true;
+    fetch('/api/notifications').then(function(r) { return r.json(); }).then(function(items) {
+        var list = document.getElementById('notifList');
+        if (!list) return;
+        if (!items || !items.length) {
+            list.innerHTML = '<li class="text-center text-muted small py-3">暂无新通知</li>';
+            return;
+        }
+        var h = '<li><div class="d-flex justify-content-between px-3 py-1 border-bottom"><span class="small fw-bold">通知</span>'
+            + '<a href="#" class="small text-primary" onclick="markAllRead();return false;">全部已读</a></div></li>';
+        items.forEach(function(n) {
+            h += '<li><a class="dropdown-item small py-2 notif-item" href="' + (n.link || '#') + '" data-nid="' + n.id + '">'
+                + '<i class="bi bi-' + n.icon + ' me-1 text-muted"></i>'
+                + '<span class="text-muted" style="font-size:.75em;">[' + n.type_label + ']</span> '
+                + n.title
+                + '<div class="text-muted" style="font-size:.7em;">' + n.time + '</div>'
+                + '</a></li>';
+        });
+        list.innerHTML = h;
+    });
+}
+function markAllRead() {
+    apiPost('/api/notifications/read', {id: 'all'}).then(function() {
+        var badge = document.getElementById('notifBadge');
+        if (badge) badge.style.display = 'none';
+        _notifLoaded = false;
+        loadNotifs();
+    });
+}

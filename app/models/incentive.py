@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from app.extensions import db
 
 # 被推荐人多选
@@ -51,7 +49,7 @@ class Incentive(db.Model):
 
     is_public = db.Column(db.Boolean, default=True)  # 首页对外可见
     likes = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     fund = db.relationship('IncentiveFund', backref='incentives')
     submitter = db.relationship('User', foreign_keys=[submitted_by], backref='submitted_incentives')
@@ -111,7 +109,7 @@ class IncentiveFund(db.Model):
     expires_at = db.Column(db.Date, nullable=True)  # 截止使用日期
     note = db.Column(db.String(500), nullable=True)  # 备注
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     creator = db.relationship('User', backref='created_funds')
 
@@ -165,6 +163,6 @@ class IncentiveReport(db.Model):
     period = db.Column(db.String(10), nullable=False, default='1y')  # 3m/6m/1y/all
     data = db.Column(db.Text, nullable=False)  # JSON string
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     creator = db.relationship('User', backref='incentive_reports')

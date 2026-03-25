@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from app.extensions import db
 
 
@@ -14,7 +12,7 @@ class ProjectMember(db.Model):
     project_role = db.Column(db.String(50), default='DEV')  # 支持自定义角色
     is_key = db.Column(db.Boolean, default=True)  # 关键角色标记，仅PM可见
     expected_ratio = db.Column(db.Integer, nullable=True)  # 预期投入比例(%)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     project = db.relationship('Project', backref='members')
     user = db.relationship('User', backref='project_memberships')

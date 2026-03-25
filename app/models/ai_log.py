@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from app.extensions import db
 
 
@@ -11,7 +9,7 @@ class AIParseLog(db.Model):
     raw_input = db.Column(db.Text, nullable=False)
     ai_output = db.Column(db.Text)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     creator = db.relationship('User', backref='ai_parse_logs')
 

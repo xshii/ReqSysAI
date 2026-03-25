@@ -13,7 +13,25 @@ from app.utils.pinyin import to_pinyin
 def seed():
     app = create_app()
     with app.app_context():
+        # Import all models to ensure create_all picks them up
+        import app.models.notification  # noqa
         db.create_all()
+
+        # Search performance indexes
+        from sqlalchemy import text
+        for sql in [
+            'CREATE INDEX IF NOT EXISTS idx_req_title ON requirements(title)',
+            'CREATE INDEX IF NOT EXISTS idx_todo_title ON todos(title)',
+            'CREATE INDEX IF NOT EXISTS idx_meeting_title ON meetings(title)',
+            'CREATE INDEX IF NOT EXISTS idx_risk_title ON risks(title)',
+            'CREATE INDEX IF NOT EXISTS idx_user_name ON users(name)',
+            'CREATE INDEX IF NOT EXISTS idx_aar_title ON aars(title)',
+        ]:
+            try:
+                db.session.execute(text(sql))
+            except Exception:
+                pass
+        db.session.commit()
 
         # Sync roles from config.yml
         for r in app.config.get('ROLES', []):

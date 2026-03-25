@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from app.extensions import db
 
 
@@ -14,8 +12,8 @@ class Knowledge(db.Model):
     link = db.Column(db.String(500), nullable=True)
     is_pinned = db.Column(db.Boolean, default=False)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
+    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
 
     project = db.relationship('Project', backref='knowledges')
     creator = db.relationship('User')
@@ -47,7 +45,7 @@ class PermissionItem(db.Model):
     repo_path = db.Column(db.String(300), nullable=True)
     description = db.Column(db.String(300), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     project = db.relationship('Project', backref='permission_items')
     creator = db.relationship('User')
@@ -67,7 +65,7 @@ class PermissionApplication(db.Model):
     status = db.Column(db.String(20), default='pending')  # pending/approved/rejected
     submitted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
     approved_at = db.Column(db.DateTime, nullable=True)
 
     item = db.relationship('PermissionItem', back_populates='applications')
@@ -112,8 +110,8 @@ class AAR(db.Model):
 
     status = db.Column(db.String(20), default='draft')  # draft/done
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
+    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
 
     project = db.relationship('Project', backref='aars')
     creator = db.relationship('User')
@@ -143,10 +141,10 @@ class PermissionRequest(db.Model):
     applicants = db.Column(db.Text, nullable=True)
     submitter_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     status = db.Column(db.String(20), default='draft')
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
     submitted_at = db.Column(db.DateTime, nullable=True)
     approved_at = db.Column(db.DateTime, nullable=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
 
     project = db.relationship('Project', backref='permission_requests')
     submitter = db.relationship('User')

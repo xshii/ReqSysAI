@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import date
 
 from app.extensions import db
 
@@ -20,8 +20,8 @@ class Risk(db.Model):
     due_date = db.Column(db.Date, nullable=False)
     resolution = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
+    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
     resolved_at = db.Column(db.DateTime, nullable=True)
     deleted_at = db.Column(db.DateTime, nullable=True)  # 软删除
     deleted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
@@ -88,7 +88,7 @@ class RiskAuditLog(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     action = db.Column(db.String(20), nullable=False)  # created/edited/deleted/resolved/reopened
     detail = db.Column(db.String(500), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     risk = db.relationship('Risk', backref='audit_logs')
     user = db.relationship('User', lazy='joined')
@@ -101,6 +101,6 @@ class RiskComment(db.Model):
     risk_id = db.Column(db.Integer, db.ForeignKey('risks.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     content = db.Column(db.String(500), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     user = db.relationship('User', lazy='joined')

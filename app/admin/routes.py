@@ -21,7 +21,7 @@ from app.services.prompts import get_all_prompts, save_all_prompts, save_prompt,
 from app.models.ip_request import IPChangeRequest
 from app.utils.pinyin import to_pinyin
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @admin_bp.route('/users')
@@ -133,7 +133,7 @@ def ip_request_approve(req_id):
     r = db.get_or_404(IPChangeRequest, req_id)
     r.status = 'approved'
     r.reviewed_by = current_user.id
-    r.reviewed_at = datetime.utcnow()
+    r.reviewed_at = datetime.now(timezone.utc)
     # Update user IP
     user = db.session.get(User, r.user_id)
     if user:
@@ -149,7 +149,7 @@ def ip_request_reject(req_id):
     r = db.get_or_404(IPChangeRequest, req_id)
     r.status = 'rejected'
     r.reviewed_by = current_user.id
-    r.reviewed_at = datetime.utcnow()
+    r.reviewed_at = datetime.now(timezone.utc)
     db.session.commit()
     flash('已拒绝 IP 更换申请', 'info')
     return redirect(url_for('admin.user_list'))

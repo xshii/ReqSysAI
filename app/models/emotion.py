@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import date
 
 from app.extensions import db
 
@@ -16,7 +16,7 @@ class EmotionRecord(db.Model):
     signals = db.Column(db.Text, nullable=True)  # JSON array
     suggestion = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     creator = db.relationship('User', foreign_keys=[created_by])
     comments = db.relationship('EmotionComment', backref='record', cascade='all, delete-orphan',
@@ -45,6 +45,6 @@ class EmotionComment(db.Model):
     record_id = db.Column(db.Integer, db.ForeignKey('emotion_records.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     content = db.Column(db.String(500), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     user = db.relationship('User', lazy='joined')

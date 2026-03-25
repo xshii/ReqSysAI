@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date
 
 from app.extensions import db
 
@@ -11,7 +11,7 @@ class RecurringCompletion(db.Model):
     recurring_id = db.Column(db.Integer, db.ForeignKey('recurring_todos.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     completed_date = db.Column(db.Date, nullable=False, default=date.today)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     __table_args__ = (
         db.UniqueConstraint('recurring_id', 'user_id', 'completed_date', name='uq_recurring_completion'),

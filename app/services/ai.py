@@ -119,8 +119,34 @@ def _call_ollama_api(messages, input_text):
         return None, None
 
 
+_rate_limit = {}  # user_id → [timestamps]
+RATE_LIMIT_MAX = 10  # max calls per minute per user
+RATE_LIMIT_WINDOW = 60  # seconds
+
+
+def _check_rate_limit():
+    """Return True if under limit, False if throttled."""
+    import time
+    try:
+        from flask_login import current_user
+        uid = current_user.id if current_user.is_authenticated else 0
+    except Exception:
+        uid = 0
+    now = time.time()
+    calls = _rate_limit.get(uid, [])
+    calls = [t for t in calls if now - t < RATE_LIMIT_WINDOW]
+    if len(calls) >= RATE_LIMIT_MAX:
+        return False
+    calls.append(now)
+    _rate_limit[uid] = calls
+    return True
+
+
 def call_ollama(prompt, system_prompt=None, messages=None):
     """Call AI service (Ollama or OpenAI). Returns (parsed_json, raw_text) or (None, None)."""
+    if not _check_rate_limit():
+        logger.warning('AI rate limit exceeded')
+        return None, 'AI 调用过于频繁，请稍后再试'
     if messages is None:
         messages = []
         # Use explicit system_prompt, or fall back to prompts.yml system_prompt

@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from flask_login import UserMixin
 
 from app.extensions import db
@@ -34,7 +32,7 @@ class Group(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
     is_hidden = db.Column(db.Boolean, default=False)  # 隐藏组（后台设置）
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     def __repr__(self):
         return f'<Group {self.name}>'
@@ -55,7 +53,7 @@ class User(UserMixin, db.Model):
     only_my_group = db.Column(db.Boolean, default=True)  # 默认只看本组
     manager = db.Column(db.String(100), nullable=True)  # 主管，格式：姓名 工号
     last_login = db.Column(db.DateTime)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     roles = db.relationship('Role', secondary=user_roles, backref='users', lazy='joined')
     followed_projects = db.relationship('Project', secondary=user_followed_projects, backref='followers', lazy='dynamic')

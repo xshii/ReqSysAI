@@ -1,4 +1,4 @@
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 
 from flask import render_template, redirect, url_for, flash, request, jsonify, current_app
 from flask_login import login_required, current_user
@@ -235,9 +235,9 @@ def review(inc_id):
         try:
             inc.reviewed_at = datetime.strptime(award_month + '-15', '%Y-%m-%d')
         except ValueError:
-            inc.reviewed_at = datetime.utcnow()
+            inc.reviewed_at = datetime.now(timezone.utc)
     else:
-        inc.reviewed_at = datetime.utcnow()
+        inc.reviewed_at = datetime.now(timezone.utc)
     db.session.commit()
     flash(f'已{action_labels.get(action, action)}', 'success')
     return redirect(url_for('incentive.index'))
@@ -368,7 +368,7 @@ def import_csv():
         comment = first.get('评语', '').strip()[:150]
         month_str = first.get('获奖年月', '').strip()
 
-        reviewed_at = datetime.utcnow()
+        reviewed_at = datetime.now(timezone.utc)
         if month_str:
             try:
                 reviewed_at = datetime.strptime(month_str + '-15', '%Y-%m-%d')
@@ -640,7 +640,7 @@ def admin_submit():
 
     photo_path = save_photo(request.files.get('photo'))
 
-    reviewed_at = datetime.utcnow()
+    reviewed_at = datetime.now(timezone.utc)
     if month_str:
         try:
             reviewed_at = datetime.strptime(month_str + '-15', '%Y-%m-%d')

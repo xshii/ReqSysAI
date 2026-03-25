@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from app.extensions import db
 
 
@@ -24,8 +22,8 @@ class Requirement(db.Model):
     parent_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=True)
     source = db.Column(db.String(50), nullable=True)  # 需求类型: analysis/coding/testing
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
+    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
 
     parent = db.relationship('Requirement', remote_side=[id], backref='children')
     project = db.relationship('Project', back_populates='requirements')
@@ -122,7 +120,7 @@ class Comment(db.Model):
     requirement_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     requirement = db.relationship('Requirement', back_populates='comments')
     user = db.relationship('User', backref='comments')
@@ -136,7 +134,7 @@ class Activity(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     action = db.Column(db.String(50), nullable=False)  # created/status_changed/edited/commented/task_added
     detail = db.Column(db.String(500))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=db.func.now())
 
     requirement = db.relationship('Requirement', back_populates='activities')
     user = db.relationship('User', backref='activities')
