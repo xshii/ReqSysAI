@@ -191,6 +191,7 @@ def _log_ai_call(raw_input, ai_output):
 
 def parse_requirement(text, project_id=None):
     """Parse requirement from text, with project member context for smart assign."""
+    from app.extensions import db
     from app.models.todo import Todo
     from app.models.user import User
     team_lines = []

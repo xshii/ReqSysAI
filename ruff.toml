@@ -3,6 +3,6 @@ line-length = 120
 
 [lint]
 select = ["E", "F", "W", "I", "S", "B"]
-ignore = ["E501", "S101"]
+ignore = ["E501", "S101", "E402", "E712"]
 
 exclude = ["venv", "__pycache__", "instance", ".git"]

@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 
-from flask import flash, jsonify, redirect, render_template, request, send_file, url_for
+from flask import current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
