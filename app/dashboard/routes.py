@@ -231,6 +231,11 @@ def _compute_default_recipients(cur_project_id):
         if m.user and m.user.employee_id:
             to_eids.append(m.user.employee_id)
     default_to = ';'.join(to_eids)
+    if not default_to:
+        # Fallback: use current user
+        from flask_login import current_user
+        if current_user.is_authenticated and current_user.employee_id:
+            default_to = current_user.employee_id
 
     # Cc: risk owners' managers
     open_risks = Risk.query.filter_by(project_id=cur_project_id, status='open')\
