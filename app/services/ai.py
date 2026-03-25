@@ -289,15 +289,57 @@ def extract_text_from_docx(file_storage):
 
 
 def _extract_json(text):
-    """Try to extract JSON from LLM response (may be wrapped in markdown)."""
+    """Try to extract JSON from LLM response (may be wrapped in markdown, truncated, etc.)."""
+    if not text:
+        return None
     text = text.strip()
+
+    # 1. Strip markdown code blocks
     if '```json' in text:
         text = text.split('```json', 1)[1]
+    elif '```' in text and ('{' in text or '[' in text):
+        text = text.split('```', 1)[1]
     if '```' in text:
         text = text.split('```', 1)[0]
     text = text.strip()
+
+    # 2. Direct parse
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        logger.warning('Failed to parse AI JSON output: %s', text[:200])
-        return None
+        pass
+
+    # 3. Find first { or [ and try to parse from there
+    for start_char, end_char in [('{', '}'), ('[', ']')]:
+        idx = text.find(start_char)
+        if idx >= 0:
+            # Find matching closing bracket (scan from end)
+            ridx = text.rfind(end_char)
+            if ridx > idx:
+                try:
+                    return json.loads(text[idx:ridx + 1])
+                except json.JSONDecodeError:
+                    pass
+
+    # 4. Try fixing common issues: trailing comma, single quotes
+    import re
+    cleaned = text
+    cleaned = re.sub(r',\s*([}\]])', r'\1', cleaned)  # trailing comma
+    cleaned = cleaned.replace("'", '"')  # single quotes
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    # 5. Try extracting from first { to last } (for truncated responses)
+    brace_start = text.find('{')
+    brace_end = text.rfind('}')
+    if brace_start >= 0 and brace_end > brace_start:
+        fragment = text[brace_start:brace_end + 1]
+        try:
+            return json.loads(fragment)
+        except json.JSONDecodeError:
+            pass
+
+    logger.warning('Failed to parse AI JSON output: %s', text[:200])
+    return None
