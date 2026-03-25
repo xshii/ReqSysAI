@@ -118,7 +118,7 @@ def run_tests():
         import app.services.ai as ai_module
 
         def _mock_dispatch(messages, input_text):
-            prompt = ' '.join(m.get('content', '') for m in messages)
+            prompt = ' '.join(msg.get('content', '') for msg in messages)
             result, raw = mock_call_ollama(prompt)
             if isinstance(result, (dict, list)):
                 return result, json.dumps(result, ensure_ascii=False)
