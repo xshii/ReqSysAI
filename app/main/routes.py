@@ -173,19 +173,17 @@ def index():
             Milestone.status == 'active',
         ).order_by(Milestone.due_date.asc().nullslast()).all()
 
-    # Meetings with unclosed risks — get actual meeting objects
+    # Meetings with unclosed risks — only show risks related to current user
     from app.models.meeting import Meeting
-    unclosed_meeting_ids = [r[0] for r in db.session.query(db.distinct(Risk.meeting_id)).filter(
+    my_unclosed_risks = Risk.query.filter(
         Risk.status == 'open', Risk.deleted_at.is_(None), Risk.meeting_id.isnot(None),
-    ).all()]
+        db.or_(Risk.tracker_id == current_user.id, Risk.owner_id == current_user.id, Risk.created_by == current_user.id),
+    ).all()
+    unclosed_meeting_ids = list(set(r.meeting_id for r in my_unclosed_risks))
     unclosed_meetings = Meeting.query.filter(Meeting.id.in_(unclosed_meeting_ids)).order_by(Meeting.date.desc()).all() if unclosed_meeting_ids else []
-    # Count open risks per meeting
     unclosed_meeting_risks = {}
-    if unclosed_meeting_ids:
-        for mid, cnt in db.session.query(Risk.meeting_id, db.func.count(Risk.id)).filter(
-            Risk.status == 'open', Risk.deleted_at.is_(None), Risk.meeting_id.in_(unclosed_meeting_ids),
-        ).group_by(Risk.meeting_id).all():
-            unclosed_meeting_risks[mid] = cnt
+    for r in my_unclosed_risks:
+        unclosed_meeting_risks[r.meeting_id] = unclosed_meeting_risks.get(r.meeting_id, 0) + 1
 
     # Recurring todos + completion status (independent of daily todos)
     from app.models.recurring_todo import RecurringTodo
