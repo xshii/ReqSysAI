@@ -57,9 +57,11 @@
             <td class="text-muted">{{ item.repo_path or '-' }}</td>
             <td class="text-muted">{{ item.description or '-' }}</td>
             <td>
-                {% if item.applications %}
+                {% set pending_apps = item.applications|selectattr('status', 'equalto', 'pending')|list %}
+            {% if item.applications %}
                 <a href="#" class="text-decoration-none" onclick="var d=document.getElementById('itemApps{{ item.id }}');d.style.display=d.style.display==='none'?'':'none';return false;">
-                    <span class="badge bg-secondary">{{ item.applications|length }}</span>
+                    <span class="badge bg-{{ 'warning text-dark' if pending_apps else 'secondary' }}">{{ pending_apps|length }}</span>
+                    {% if item.applications|length != pending_apps|length %}<span class="text-muted" style="font-size:.7em;">/{{ item.applications|length }}</span>{% endif %}
                 </a>
                 <div id="itemApps{{ item.id }}" style="display:none;" class="mt-1">
                     {% for a in item.applications %}
@@ -69,6 +71,9 @@
                 {% else %}<span class="badge bg-light text-muted">0</span>{% endif %}
             </td>
             <td class="text-nowrap">
+                {% if pending_apps %}
+                <span class="badge bg-warning text-dark" style="font-size:.7em;">申请中</span>
+                {% else %}
                 <form method="POST" class="d-inline quick-apply-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="quick_apply">
@@ -76,6 +81,7 @@
                     <button type="submit" class="btn btn-sm btn-outline-success py-0" data-bs-toggle="tooltip" title="为我申请"><i class="bi bi-person-plus"></i></button>
                 </form>
                 <button class="btn btn-sm btn-outline-primary py-0 apply-for-btn" data-bs-toggle="modal" data-bs-target="#applyModal" data-item-id="{{ item.id }}" title="为他人申请"><i class="bi bi-people"></i></button>
+                {% endif %}
                 <button class="btn btn-sm btn-outline-primary py-0 edit-item-btn"
                         data-bs-toggle="modal" data-bs-target="#editItemModal"
                         data-id="{{ item.id }}" data-category="{{ item.category or '' }}"
