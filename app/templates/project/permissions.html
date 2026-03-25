@@ -51,7 +51,7 @@
                 <th data-field="resource" data-sortable="true" data-filter-control="input">群组</th>
                 <th data-field="repo_path" data-sortable="true">代码仓/路径</th>
                 <th data-field="description">说明</th>
-                <th data-field="app_count" data-sortable="true">待申请人数</th>
+                <th data-field="app_count" data-sortable="true">申请中人数</th>
                 <th data-field="actions">操作</th>
             </tr>
         </thead>
@@ -437,7 +437,7 @@ document.addEventListener('click', function(e) {
                     showToast('已申请成功', 'success');
                     // Update the applicant count badge in the same row
                     var tr = form.closest('tr');
-                    var countTd = tr.children[4]; // 5th column: 待申请人数
+                    var countTd = tr.children[4]; // 5th column: 申请中人数
                     var badge = countTd.querySelector('.badge');
                     if (badge) {
                         var cur = parseInt(badge.textContent) || 0;
