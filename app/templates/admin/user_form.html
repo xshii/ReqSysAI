@@ -44,6 +44,7 @@
                     <div class="mb-3">
                         <label class="form-label">{{ form.manager.label.text }}</label>
                         {{ form.manager(class="form-control", placeholder="例如: 张三 a00123456") }}
+                        {% for e in form.manager.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
                     </div>
                     {% endif %}
                     {% if form.domain is defined %}
