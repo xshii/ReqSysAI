@@ -11,13 +11,13 @@ from app.utils.pinyin import to_pinyin
 
 
 def seed():
-    app = create_app()
-    with app.app_context():
-        # Import all models to ensure create_all picks them up
-        import app.models.notification  # noqa
-        db.create_all()
+    flask_app = create_app()
 
-        # Search performance indexes
+    # Step 1: create tables
+    with flask_app.app_context():
+        import app.models.notification  # noqa
+        import app.models.audit  # noqa
+        db.create_all()
         from sqlalchemy import text
         for sql in [
             'CREATE INDEX IF NOT EXISTS idx_req_title ON requirements(title)',
@@ -33,15 +33,15 @@ def seed():
                 pass
         db.session.commit()
 
-        # Sync roles from config.yml
-        for r in app.config.get('ROLES', []):
+    # Step 2: seed data (fresh session)
+    with flask_app.app_context():
+        # Roles
+        for r in flask_app.config.get('ROLES', []):
             name = r['name']
-            existing = Role.query.filter_by(name=name).first()
-            if existing:
-                existing.description = r.get('desc', '')
-            else:
+            if not Role.query.filter_by(name=name).first():
                 db.session.add(Role(name=name, description=r.get('desc', '')))
         db.session.commit()
+        print(f'Roles: {Role.query.count()}')
 
         # Milestone templates
         from app.constants import MILESTONE_TEMPLATES, resolve_template_offsets
@@ -54,10 +54,10 @@ def seed():
                     t.items.append(MilestoneTemplateItem(name=iname, offset_days=offset, sort_order=i))
                 db.session.add(t)
             db.session.commit()
-            print(f'Milestone templates created: {len(MILESTONE_TEMPLATES)}')
+            print(f'Milestone templates: {MilestoneTemplate.query.count()}')
 
         # Default admin
-        admin_cfg = app.config.get('ADMIN_CONFIG', {})
+        admin_cfg = flask_app.config.get('ADMIN_CONFIG', {})
         eid = admin_cfg.get('employee_id', 'a00000001')
         if not User.query.filter_by(employee_id=eid).first():
             admin_role = Role.query.filter_by(name='Admin').first()
@@ -67,7 +67,7 @@ def seed():
                 name=admin_name,
                 pinyin=to_pinyin(admin_name),
                 ip_address=admin_cfg.get('ip', '127.0.0.1'),
-                roles=[admin_role],
+                roles=[admin_role] if admin_role else [],
             )
             db.session.add(admin)
             db.session.commit()
