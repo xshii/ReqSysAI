@@ -306,22 +306,9 @@ def project_edit(project_id):
         project.name = form.name.data
         project.description = form.description.data
         project.parent_id = form.parent_id.data or None
-        # Save milestones
-        ms_names = request.form.getlist('ms_name')
-        ms_dates = request.form.getlist('ms_date')
-        Milestone.query.filter_by(project_id=project.id).delete()
-        for i, name in enumerate(ms_names):
-            name = name.strip()
-            if name:
-                due_str = ms_dates[i].strip() if i < len(ms_dates) and ms_dates[i] else ''
-                due = date.fromisoformat(due_str) if due_str else None
-                db.session.add(Milestone(
-                    project_id=project.id, name=name,
-                    due_date=due, status='active',
-                ))
         db.session.commit()
-        flash('项目更新成功', 'success')
-        return redirect(url_for('project.project_detail', project_id=project.id))
+        flash('项目信息已保存', 'success')
+        return redirect(url_for('project.project_edit', project_id=project.id))
     from app.models.project import MilestoneTemplate
     from app.models.project_member import ProjectMember
     templates = MilestoneTemplate.query.order_by(MilestoneTemplate.name).all()
@@ -333,6 +320,25 @@ def project_edit(project_id):
                            templates=templates, members=members, available=available,
                            roles=ProjectMember.DEFAULT_ROLES,
                            title=f'编辑项目 - {project.name}')
+
+
+@project_bp.route('/<int:project_id>/save-milestones', methods=['POST'])
+@login_required
+def save_milestones(project_id):
+    """Save milestones independently."""
+    project = db.get_or_404(Project, project_id)
+    ms_names = request.form.getlist('ms_name')
+    ms_dates = request.form.getlist('ms_date')
+    Milestone.query.filter_by(project_id=project.id).delete()
+    for i, name in enumerate(ms_names):
+        name = name.strip()
+        if name:
+            due_str = ms_dates[i].strip() if i < len(ms_dates) and ms_dates[i] else ''
+            due = date.fromisoformat(due_str) if due_str else None
+            db.session.add(Milestone(project_id=project.id, name=name, due_date=due, status='active'))
+    db.session.commit()
+    flash('里程碑已保存', 'success')
+    return redirect(url_for('project.project_edit', project_id=project.id) + '?tab=milestone')
 
 
 @project_bp.route('/<int:project_id>/status', methods=['POST'])

@@ -173,8 +173,7 @@ class TestProjectEdit:
             p = _make_project('里程碑保存')
             _db.session.commit()
             pid = p.id
-        resp = client.post(f'/projects/{pid}/edit', data={
-            'name': '里程碑保存', 'parent_id': '0', 'description': '',
+        resp = client.post(f'/projects/{pid}/save-milestones', data={
             'ms_name': ['Charter', 'TR1', 'GA'],
             'ms_date': ['2026-04-01', '2026-05-15', '2026-06-30'],
         }, follow_redirects=True)
@@ -194,8 +193,7 @@ class TestProjectEdit:
             p = _make_project('空日期')
             _db.session.commit()
             pid = p.id
-        resp = client.post(f'/projects/{pid}/edit', data={
-            'name': '空日期', 'parent_id': '0', 'description': '',
+        resp = client.post(f'/projects/{pid}/save-milestones', data={
             'ms_name': ['无日期里程碑'],
             'ms_date': [''],
         }, follow_redirects=True)
@@ -216,8 +214,7 @@ class TestProjectEdit:
             _db.session.commit()
             pid = p.id
         # 保存新的里程碑
-        resp = client.post(f'/projects/{pid}/edit', data={
-            'name': '覆盖旧', 'parent_id': '0', 'description': '',
+        resp = client.post(f'/projects/{pid}/save-milestones', data={
             'ms_name': ['新A', '新B'],
             'ms_date': ['2026-07-01', '2026-08-01'],
         }, follow_redirects=True)

@@ -14,8 +14,7 @@ from app.project import project_bp
 @login_required
 def member_list(project_id):
     project = db.get_or_404(Project, project_id)
-    can_edit = current_user.is_admin or current_user.has_role('PM', 'PL', 'FO')
-    if request.method == 'POST' and can_edit:
+    if request.method == 'POST':
         action = request.form.get('action')
         if action == 'add':
             member_name = request.form.get('member_name', '').strip()
@@ -51,21 +50,21 @@ def member_list(project_id):
                 m.project_role = new_role
                 db.session.commit()
                 flash('角色已更新', 'success')
-        elif action == 'toggle_key' and can_edit:
+        elif action == 'toggle_key':
             member_id = request.form.get('member_id', type=int)
             m = db.session.get(ProjectMember, member_id)
             if m and m.project_id == project_id:
                 m.is_key = not m.is_key
                 db.session.commit()
-        return redirect(url_for('project.member_list', project_id=project_id))
+        next_url = request.form.get('next') or url_for('project.member_list', project_id=project_id)
+        return redirect(next_url)
 
     members = ProjectMember.query.filter_by(project_id=project_id).all()
     all_users = User.query.filter_by(is_active=True).order_by(User.name).all()
     member_ids = {m.user_id for m in members}
     available = [u for u in all_users if u.id not in member_ids]
     return render_template('project/members.html', project=project, members=members,
-                           available=available, roles=ProjectMember.DEFAULT_ROLES, can_edit=can_edit,
-                           is_pm=can_edit)
+                           available=available, roles=ProjectMember.DEFAULT_ROLES)
 
 
 # ---- Member CSV import/export ----

@@ -18,16 +18,17 @@
 
 {# Tabs — only show member tab when editing existing project #}
 {% set is_edit = project is defined and project %}
+{% set cur_tab = request.args.get('tab', 'basic') %}
 <ul class="nav nav-tabs mb-3" role="tablist">
     <li class="nav-item">
-        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabBasic" type="button">基本信息</button>
+        <button class="nav-link{% if cur_tab == 'basic' %} active{% endif %}" data-bs-toggle="tab" data-bs-target="#tabBasic" type="button">基本信息</button>
     </li>
     <li class="nav-item">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabMilestone" type="button">里程碑</button>
+        <button class="nav-link{% if cur_tab == 'milestone' %} active{% endif %}" data-bs-toggle="tab" data-bs-target="#tabMilestone" type="button">里程碑</button>
     </li>
     {% if is_edit %}
     <li class="nav-item">
-        <button class="nav-link{% if request.args.get('tab') == 'members' %} active{% endif %}" data-bs-toggle="tab" data-bs-target="#tabMembers" type="button">
+        <button class="nav-link{% if cur_tab == 'members' %} active{% endif %}" data-bs-toggle="tab" data-bs-target="#tabMembers" type="button">
             成员 {% if members is defined %}<span class="badge bg-secondary">{{ members|length }}</span>{% endif %}
         </button>
     </li>
@@ -36,7 +37,7 @@
 
 <div class="tab-content">
     {# Tab 1: Basic info + Milestones in one form #}
-    <div class="tab-pane fade show active" id="tabBasic">
+    <div class="tab-pane fade{% if cur_tab == 'basic' %} show active{% endif %}" id="tabBasic">
         <form method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="row mb-2">
@@ -63,7 +64,7 @@
     </div>
 
     {# Tab 2: Milestones #}
-    <div class="tab-pane fade" id="tabMilestone">
+    <div class="tab-pane fade{% if cur_tab == 'milestone' %} show active{% endif %}" id="tabMilestone">
         <div class="d-flex gap-2 align-items-center flex-wrap mb-2">
             <select id="tplSelect" class="form-select form-select-sm" style="max-width:220px;">
                 <option value="">从模板导入...</option>
@@ -165,11 +166,8 @@
             </div>
 
         {# Milestone list form — separate from template management forms #}
-        <form method="POST">
+        <form method="POST" action="{{ url_for('project.save_milestones', project_id=project.id) if project else '' }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="{{ form.name.name }}" value="{{ form.name.data or '' }}">
-            <input type="hidden" name="{{ form.parent_id.name }}" value="{{ form.parent_id.data or 0 }}">
-            <input type="hidden" name="{{ form.description.name }}" value="{{ form.description.data or '' }}">
             <div id="msItems">
             {% if is_edit and project.milestones %}
                 {% for ms in project.milestones %}
@@ -188,11 +186,12 @@
 
     {# Tab 3: Members (only for editing) #}
     {% if is_edit %}
-    <div class="tab-pane fade{% if request.args.get('tab') == 'members' %} show active{% endif %}" id="tabMembers">
+    <div class="tab-pane fade{% if cur_tab == 'members' %} show active{% endif %}" id="tabMembers">
         {# Add member form #}
         <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="mb-3">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="add">
+            <input type="hidden" name="next" value="{{ url_for('project.project_edit', project_id=project.id) }}?tab=members">
             <div class="d-flex gap-2 align-items-end flex-wrap">
                 <div>
                     <label class="form-label small mb-0">成员</label>
@@ -201,11 +200,10 @@
                 </div>
                 <div>
                     <label class="form-label small mb-0">角色</label>
-                    <select name="project_role" class="form-select form-select-sm" style="max-width:100px;">
-                        {% for k, v in roles.items() %}
-                        <option value="{{ k }}">{{ v }}</option>
-                        {% endfor %}
-                    </select>
+                    <input type="text" name="project_role" class="form-control form-control-sm" list="roleOptions" placeholder="选择或输入" style="max-width:120px;" value="DEV">
+                    <datalist id="roleOptions">
+                        {% for k, v in roles.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                    </datalist>
                 </div>
                 <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-plus"></i> 添加</button>
             </div>
@@ -271,19 +269,6 @@
 
 {% block extra_js %}
 <script>
-// Sync basic info fields to milestone form hidden inputs before submit
-document.querySelectorAll('#tabMilestone form').forEach(function(f) {
-    f.addEventListener('submit', function() {
-        var basicForm = document.querySelector('#tabBasic form');
-        if (!basicForm) return;
-        var nameInput = basicForm.querySelector('[name="name"]');
-        var descInput = basicForm.querySelector('[name="description"]');
-        var parentInput = basicForm.querySelector('[name="parent_id"]');
-        f.querySelector('input[name="name"]').value = nameInput ? nameInput.value : '';
-        f.querySelector('input[name="description"]').value = descInput ? descInput.value : '';
-        f.querySelector('input[name="parent_id"]').value = parentInput ? parentInput.value : '0';
-    });
-});
 function addMs(name, dateVal) {
     var div = document.getElementById('msItems');
     var row = document.createElement('div');
