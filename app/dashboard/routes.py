@@ -671,6 +671,17 @@ def weekly_report():
             'sub_projects': sub_projects,
         }
 
+        # Generate timeline image for saved report too
+        timeline_img_saved = None
+        if milestones:
+            try:
+                from app.services.timeline import generate_timeline_image
+                ms_data = [{'name': m.name, 'due_date': m.due_date, 'status': m.status} for m in milestones]
+                timeline_img_saved = generate_timeline_image(ms_data)
+            except Exception:  # noqa: S110
+                pass
+        report_data['timeline_img'] = timeline_img_saved
+
         _def_to, _def_cc = _compute_default_recipients(cur_project_id)
         return render_template('dashboard/weekly_report.html',
             report_data=report_data, saved_report=saved,
