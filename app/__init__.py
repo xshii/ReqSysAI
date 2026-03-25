@@ -80,36 +80,33 @@ def create_app(config_name=None):
             unfollowed = [p for p in all_projects if p.id not in followed_ids]
             projects = followed + unfollowed
 
-            # Notification counts for navbar bell
+            # Notification counts for navbar bell — must match homepage bars
             from datetime import date
 
             from app.models.requirement import Requirement
             from app.models.risk import Risk
             today = date.today()
-            notif_risks = Risk.query.filter(
-                Risk.status == 'open',
-                Risk.deleted_at.is_(None),
-                db.or_(Risk.tracker_id == current_user.id, Risk.created_by == current_user.id,
-                       Risk.owner_id == current_user.id),
-                Risk.due_date <= today,
-            ).count()
-            notif_overdue_reqs = Requirement.query.filter(
-                Requirement.assignee_id == current_user.id,
-                Requirement.status.notin_(('done', 'closed')),
-                Requirement.due_date < today,
-            ).count()
-            notif_count = notif_risks + notif_overdue_reqs
-            # Help todos assigned to me (someone asked me for help)
+            # Alerts: overdue reqs + overdue risks (same as homepage)
+            my_reqs_nav = Requirement.query.filter_by(assignee_id=current_user.id)\
+                .filter(Requirement.status.notin_(('done', 'closed')),
+                        Requirement.due_date < today).all()
+            my_risks_nav = Risk.query.filter(
+                Risk.status == 'open', Risk.deleted_at.is_(None),
+                db.or_(Risk.tracker_id == current_user.id, Risk.owner_id == current_user.id),
+            ).all()
+            alerts_count = sum(1 for r in my_reqs_nav if r.due_date and r.due_date < today) \
+                + sum(1 for r in my_risks_nav if r.due_date and r.due_date <= today)
+            # Help todos
             from app.models.todo import Todo
-            notif_help = Todo.query.filter(
+            help_count = Todo.query.filter(
                 Todo.user_id == current_user.id,
                 Todo.parent_id.isnot(None),
                 Todo.status == 'todo',
             ).count()
-            notif_count += notif_help
-            # Persistent notifications (unread)
+            # Persistent notifications
             from app.models.notification import Notification
-            notif_count += Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
+            notif_persistent = Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
+            notif_count = alerts_count + help_count + notif_persistent
 
             return dict(sidebar_groups=groups, sidebar_cur_group=cur_group,
                         sidebar_projects=projects, sidebar_followed_ids=followed_ids,
