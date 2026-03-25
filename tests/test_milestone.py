@@ -2,11 +2,14 @@
 里程碑模板测试用例
 用法: python -m pytest tests/test_milestone.py -v
 """
-import os, sys
+import os
+import sys
 from datetime import date
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
+
 from app import create_app
 from app.extensions import db as _db
 
@@ -18,7 +21,7 @@ def app():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
     with app.app_context():
         _db.create_all()
-        from app.models.user import User, Role
+        from app.models.user import Role, User
         r = Role(name='Admin')
         _db.session.add(r)
         _db.session.flush()
@@ -399,7 +402,7 @@ class TestMilestoneColor:
     def test_project_detail_uses_constant(self, client, app):
         """项目详情页里程碑用统一颜色"""
         with app.app_context():
-            from app.models.project import Project, Milestone
+            from app.models.project import Milestone, Project
             p = Project(name='颜色测试', created_by=1, status='active')
             _db.session.add(p)
             _db.session.flush()

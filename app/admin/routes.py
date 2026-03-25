@@ -5,23 +5,23 @@ import os
 
 import requests
 import yaml
-from flask import render_template, redirect, url_for, flash, request, current_app, Response, jsonify
+from flask import Response, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 
 logger = logging.getLogger(__name__)
+
+from datetime import datetime, timezone
 
 from app.admin import admin_bp
 from app.admin.forms import UserCreateForm, UserEditForm
 from app.decorators import admin_required
 from app.extensions import db
-from app.models.user import User, Role, Group
-from app.models.project import MilestoneTemplate, MilestoneTemplateItem
-from app.services.ai import check_ollama_status
-from app.services.prompts import get_all_prompts, save_all_prompts, save_prompt, LABELS as PROMPT_LABELS
 from app.models.ip_request import IPChangeRequest
+from app.models.user import Group, Role, User
+from app.services.ai import check_ollama_status
+from app.services.prompts import LABELS as PROMPT_LABELS
+from app.services.prompts import get_all_prompts, save_all_prompts
 from app.utils.pinyin import to_pinyin
-
-from datetime import datetime, timezone
 
 
 @admin_bp.route('/users')

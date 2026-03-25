@@ -1,12 +1,12 @@
 """Global search — direct LIKE queries, no index needed."""
 
 from app.extensions import db
-from app.models.requirement import Requirement
-from app.models.todo import Todo
-from app.models.project import Project
-from app.models.user import User
-from app.models.risk import Risk
 from app.models.meeting import Meeting
+from app.models.project import Project
+from app.models.requirement import Requirement
+from app.models.risk import Risk
+from app.models.todo import Todo
+from app.models.user import User
 
 
 def search(query, limit=20):

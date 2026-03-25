@@ -1,23 +1,26 @@
 from datetime import date, timedelta
 
-from flask import render_template, request, redirect, url_for, jsonify
-from flask_login import login_required, current_user
+from flask import jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
-from app.main import main_bp
-from app.extensions import db
 from app.constants import (
-    TODO_STATUS_TODO, TODO_STATUS_DONE, REQ_INACTIVE_STATUSES,
-    HEATMAP_DAYS, AI_TOKEN_RATIO, MAX_RECENT_REQS_FOR_QUICK_TODO,
+    AI_TOKEN_RATIO,
+    HEATMAP_DAYS,
     MAX_RANT_LENGTH,
+    REQ_INACTIVE_STATUSES,
+    TODO_STATUS_DONE,
+    TODO_STATUS_TODO,
 )
-from app.models.requirement import Requirement
-from app.models.todo import Todo, TodoItem, todo_requirements
-from app.models.risk import Risk
-from app.models.incentive import Incentive
+from app.extensions import db
+from app.main import main_bp
 from app.models.ai_log import AIParseLog
-from app.models.user import User
+from app.models.incentive import Incentive
 from app.models.rant import Rant
+from app.models.requirement import Requirement
+from app.models.risk import Risk
+from app.models.todo import Todo, TodoItem, todo_requirements
+from app.models.user import User
 
 
 def _prev_workday(today):
@@ -186,8 +189,8 @@ def index():
         unclosed_meeting_risks[r.meeting_id] = unclosed_meeting_risks.get(r.meeting_id, 0) + 1
 
     # Recurring todos + completion status (independent of daily todos)
-    from app.models.recurring_todo import RecurringTodo
     from app.models.recurring_completion import RecurringCompletion
+    from app.models.recurring_todo import RecurringTodo
     all_recurring = RecurringTodo.query.filter_by(user_id=current_user.id, is_active=True).all()
     recurring_due = [r for r in all_recurring if r.is_due_today()]
     # Check completions: today + this week (for weekday tasks not due today)
@@ -263,7 +266,8 @@ def quick_todo():
     if title.startswith('#') and req_id:
         comment_text = title[1:].strip()
         if comment_text:
-            from app.models.requirement import Comment as ReqComment, Activity
+            from app.models.requirement import Activity
+            from app.models.requirement import Comment as ReqComment
             db.session.add(ReqComment(
                 requirement_id=req_id, user_id=current_user.id, content=comment_text,
             ))
@@ -453,8 +457,8 @@ def ai_recommend_todos():
             lines.append(f'  - {title}')
 
     # Recurring todos due today — tell AI about them, return IDs for frontend highlighting
-    from app.models.recurring_todo import RecurringTodo
     from app.models.recurring_completion import RecurringCompletion
+    from app.models.recurring_todo import RecurringTodo
     due_recurring = [r for r in RecurringTodo.query.filter_by(
         user_id=current_user.id, is_active=True).all() if r.is_due_today()]
     # Filter out already completed today
@@ -656,10 +660,11 @@ def toggle_todo(todo_id):
 @login_required
 def daily_standup():
     """Generate daily standup summary for current user's team."""
+    import markdown as md_lib
+
+    from app.models.risk import Risk
     from app.services.ai import call_ollama
     from app.services.prompts import get_prompt
-    from app.models.risk import Risk
-    import markdown as md_lib
 
     today = date.today()
     yesterday = today - timedelta(days=1)
@@ -731,8 +736,8 @@ def daily_standup():
 @login_required
 def daily_progress():
     """Generate formatted daily progress for current user."""
-    from app.models.risk import Risk
     from app.models.requirement import Requirement
+    from app.models.risk import Risk
 
     today = date.today()
     yesterday = today - timedelta(days=1)
@@ -818,7 +823,6 @@ def daily_progress():
             lines.append(f'- [{r.number}] {r.title}：完成{pct}%（{done}/{total}）{due_info}{overdue_info}')
 
     # Blocked todos + open risks → "当前问题"
-    from app.models.risk import Risk
     open_risks = Risk.query.filter(
         Risk.status == 'open',
         db.or_(Risk.tracker_id == current_user.id, Risk.created_by == current_user.id),
@@ -945,9 +949,9 @@ def recurring_delete(rid):
 @login_required
 def recurring_ai_recommend():
     """AI recommends which due recurring todos to import into today's todo."""
+    from app.models.recurring_todo import RecurringTodo
     from app.services.ai import call_ollama
     from app.services.prompts import get_prompt
-    from app.models.recurring_todo import RecurringTodo
 
     # Get today's due recurring todos
     all_recurring = RecurringTodo.query.filter_by(user_id=current_user.id, is_active=True).all()
@@ -980,8 +984,8 @@ def recurring_ai_recommend():
 @login_required
 def recurring_toggle(rid):
     """Toggle completion of a recurring todo for today (independent of daily todos)."""
-    from app.models.recurring_todo import RecurringTodo
     from app.models.recurring_completion import RecurringCompletion
+    from app.models.recurring_todo import RecurringTodo
     r = db.get_or_404(RecurringTodo, rid)
     if r.user_id != current_user.id:
         return jsonify(ok=False), 403

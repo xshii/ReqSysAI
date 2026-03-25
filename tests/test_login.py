@@ -4,11 +4,11 @@
 """
 import os
 import sys
-from datetime import date
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
+
 from app import create_app
 from app.extensions import db as _db
 
@@ -20,7 +20,7 @@ def _make_app():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
     with app.app_context():
         _db.create_all()
-        from app.models.user import User, Role
+        from app.models.user import Role, User
         r = Role(name='Admin')
         _db.session.add(r)
         _db.session.flush()

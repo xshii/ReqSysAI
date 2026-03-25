@@ -1,6 +1,6 @@
 """Idempotent seed: creates roles and default admin from config.yml."""
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -44,8 +44,8 @@ def seed():
         db.session.commit()
 
         # Milestone templates
-        from app.models.project import MilestoneTemplate, MilestoneTemplateItem
         from app.constants import MILESTONE_TEMPLATES, resolve_template_offsets
+        from app.models.project import MilestoneTemplate, MilestoneTemplateItem
         if MilestoneTemplate.query.count() == 0:
             for tpl in MILESTONE_TEMPLATES:
                 t = MilestoneTemplate(name=tpl['name'], description=tpl['description'])

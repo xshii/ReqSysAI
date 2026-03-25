@@ -1,13 +1,12 @@
 """Project member routes for the project blueprint."""
-from flask import render_template, redirect, url_for, flash, request, make_response
+from flask import flash, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from app.project import project_bp
 from app.extensions import db
 from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.user import User
-
+from app.project import project_bp
 
 # ---- Project members ----
 
@@ -75,7 +74,8 @@ def member_list(project_id):
 @login_required
 def member_export_csv(project_id):
     """Export project members as CSV."""
-    import csv, io
+    import csv
+    import io
     project = db.get_or_404(Project, project_id)
     members = ProjectMember.query.filter_by(project_id=project_id).all()
 
@@ -101,7 +101,8 @@ def member_export_csv(project_id):
 @login_required
 def member_import_csv(project_id):
     """Import project members from CSV. Headers: id,姓名,工号,角色"""
-    import csv, io
+    import csv
+    import io
     project = db.get_or_404(Project, project_id)
 
     file = request.files.get('csv_file')

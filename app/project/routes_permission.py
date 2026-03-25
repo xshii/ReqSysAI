@@ -1,16 +1,15 @@
 """Permission management routes for the project blueprint."""
 from datetime import datetime, timezone
 
-from flask import render_template, redirect, url_for, flash, request, jsonify
+from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from app.project import project_bp
 from app.extensions import db
+from app.models.knowledge import PermissionApplication, PermissionItem
 from app.models.project import Project
-from app.models.knowledge import PermissionItem, PermissionApplication
 from app.models.user import User
+from app.project import project_bp
 from app.utils.pinyin import to_pinyin
-
 
 # ---- Permission management (catalog + applications) ----
 
@@ -157,7 +156,9 @@ def permission_list(project_id):
 @login_required
 def permission_export_items(project_id):
     """Export permission catalog as CSV."""
-    import csv, io
+    import csv
+    import io
+
     from flask import Response
     project = db.get_or_404(Project, project_id)
     items = PermissionItem.query.filter_by(project_id=project_id).order_by(
@@ -178,7 +179,9 @@ def permission_export_items(project_id):
 @login_required
 def permission_export_apps(project_id):
     """Export permission applications as CSV."""
-    import csv, io
+    import csv
+    import io
+
     from flask import Response
     project = db.get_or_404(Project, project_id)
     apps = PermissionApplication.query.join(PermissionItem).filter(
@@ -204,7 +207,8 @@ def permission_export_apps(project_id):
 
 def _read_csv(project_id):
     """Shared CSV reading logic. Returns (reader, redirect_response)."""
-    import csv, io
+    import csv
+    import io
     file = request.files.get('csv_file')
     if not file or not file.filename.lower().endswith('.csv'):
         flash('请选择 CSV 文件', 'danger')

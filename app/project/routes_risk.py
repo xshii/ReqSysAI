@@ -1,17 +1,15 @@
 """Risk management routes for the project blueprint."""
-import json
-from datetime import datetime, date, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
-from flask import render_template, redirect, url_for, flash, request, jsonify
+from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from app.project import project_bp
 from app.extensions import db
 from app.models.project import Project
 from app.models.risk import Risk
 from app.models.user import User
+from app.project import project_bp
 from app.project.routes import _resolve_owner_id
-
 
 # ---- Risk management ----
 
@@ -79,7 +77,6 @@ def risk_resolve(risk_id):
     resolution = request.form.get('resolution', '').strip()
     # If no resolution provided, use latest comment from last 24h
     if not resolution and risk.comments:
-        from datetime import timedelta as _td
         latest = risk.comments[0]  # ordered desc
         if (datetime.now(timezone.utc).replace(tzinfo=None) - latest.created_at).total_seconds() < 86400:
             resolution = latest.content
@@ -145,7 +142,9 @@ def risk_delete(risk_id):
 @login_required
 def risk_export_csv(project_id):
     """Export project risks as CSV."""
-    import csv, io
+    import csv
+    import io
+
     from flask import Response
     project = db.get_or_404(Project, project_id)
     risks = Risk.query.filter_by(project_id=project_id).order_by(Risk.created_at).all()
@@ -162,14 +161,15 @@ def risk_export_csv(project_id):
             r.owner or '', r.tracker.name if r.tracker else '',
             r.due_date.isoformat() if r.due_date else '', r.resolution or '', r.description or '', comments])
     return Response(buf.getvalue(), mimetype='text/csv; charset=utf-8',
-                    headers={'Content-Disposition': f'attachment; filename=risks.csv'})
+                    headers={'Content-Disposition': 'attachment; filename=risks.csv'})
 
 
 @project_bp.route('/<int:project_id>/risks/import-csv', methods=['POST'])
 @login_required
 def risk_import_csv(project_id):
     """Import risks from CSV."""
-    import csv, io
+    import csv
+    import io
     project = db.get_or_404(Project, project_id)
     file = request.files.get('csv_file')
     if not file or not file.filename.lower().endswith('.csv'):
@@ -283,12 +283,13 @@ def risk_comment(risk_id):
 def risk_ai_scan(project_id):
     """AI scans project data to identify potential risks."""
     from datetime import date, timedelta
-    from collections import defaultdict
+
+    from sqlalchemy.orm import joinedload
+
     from app.models.requirement import Requirement
     from app.models.todo import Todo, todo_requirements
     from app.services.ai import call_ollama
     from app.services.prompts import get_prompt
-    from sqlalchemy.orm import joinedload
 
     project = db.get_or_404(Project, project_id)
     reqs = Requirement.query.filter_by(project_id=project_id).order_by(Requirement.number).all()

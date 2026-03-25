@@ -1,7 +1,6 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, SelectField, SelectMultipleField, SubmitField
+from wtforms import SelectField, SelectMultipleField, StringField, SubmitField
 from wtforms.validators import DataRequired, Length, Optional, Regexp
-
 
 EMPLOYEE_ID_RE = r'^[a-z]\d?00\d{6}$'
 EMPLOYEE_ID_MSG = '工号格式：1位小写字母 + 8~9位数字，倒数第7、8位为0，如 a00123456'

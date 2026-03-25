@@ -9,6 +9,7 @@ from datetime import date
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
+
 from app import create_app
 from app.extensions import db as _db
 
@@ -21,9 +22,9 @@ def app():
     with app.app_context():
         _db.create_all()
         # Seed minimal data
-        from app.models.user import User, Role
         from app.models.project import Project
         from app.models.requirement import Requirement
+        from app.models.user import Role, User
         admin_role = Role(name='Admin')
         _db.session.add(admin_role)
         _db.session.flush()

@@ -126,7 +126,6 @@ class RecurringTodo(db.Model):
 
     def days_until_next(self):
         """Days until next occurrence."""
-        from datetime import timedelta
         today = date.today()
         if self.cycle == 'weekly':
             days_ahead = 0 - today.weekday()  # Monday=0

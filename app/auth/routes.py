@@ -1,13 +1,13 @@
 import logging
 from datetime import datetime, timezone
 
-from flask import redirect, url_for, flash, request, session, render_template, current_app, jsonify
-from flask_login import login_user, logout_user, login_required, current_user
+from flask import current_app, flash, jsonify, redirect, render_template, request, session, url_for
+from flask_login import current_user, login_required, login_user, logout_user
 
 from app.auth import auth_bp
-from app.auth.forms import LoginForm, RegisterForm, ProfileForm
+from app.auth.forms import LoginForm, ProfileForm, RegisterForm
 from app.extensions import db, login_manager
-from app.models.user import User, Role
+from app.models.user import Role, User
 from app.utils.pinyin import to_pinyin
 
 logger = logging.getLogger(__name__)
@@ -224,10 +224,11 @@ def toggle_my_group():
 def profile_stats():
     """Personal efficiency dashboard."""
     from datetime import date, timedelta
-    from app.models.todo import Todo
-    from app.models.requirement import Requirement
+
+    from app.constants import TODO_STATUS_DONE
     from app.models.incentive import Incentive
-    from app.constants import TODO_STATUS_DONE, HEATMAP_DAYS
+    from app.models.requirement import Requirement
+    from app.models.todo import Todo
 
     today = date.today()
     uid = current_user.id
@@ -291,11 +292,13 @@ def profile_stats():
 def ai_efficiency():
     """AI analyzes personal work efficiency."""
     from datetime import date, timedelta
-    from app.models.todo import Todo
+
+    import markdown as md_lib
+
     from app.models.requirement import Requirement
+    from app.models.todo import Todo
     from app.services.ai import call_ollama
     from app.services.prompts import get_prompt
-    import markdown as md_lib
 
     today = date.today()
     uid = current_user.id
@@ -330,7 +333,7 @@ def ai_efficiency():
 
     lines = [
         f'{current_user.name}（{current_user.role_names}，{current_user.group or ""}）的工作数据：',
-        f'',
+        '',
         f'近30天：完成 {done_30d} 个任务（日均 {round(done_30d/30,1)}），专注 {focus_30d} 分钟（日均 {round(focus_30d/30)}分钟）',
         f'近7天：完成 {done_7d} 个任务（日均 {round(done_7d/7,1)}）',
         f'当前进行中 {active} 个，阻塞 {blocked} 个',
@@ -339,8 +342,8 @@ def ai_efficiency():
         f'累计代码量 {total_code} 行，测试用例 {total_tests} 个' if total_code or total_tests else '',
     ]
     # Recurring todo discipline
-    from app.models.recurring_todo import RecurringTodo
     from app.models.recurring_completion import RecurringCompletion
+    from app.models.recurring_todo import RecurringTodo
     recurring_all = RecurringTodo.query.filter_by(user_id=uid, is_active=True).all()
     if recurring_all:
         recurring_total = RecurringCompletion.query.filter(

@@ -67,7 +67,8 @@ _INCENTIVE_SOURCE_DEFAULTS = {
 }
 
 def _get_incentive_source_labels():
-    import json, os
+    import json
+    import os
     result = dict(_INCENTIVE_SOURCE_DEFAULTS)
     path = os.path.join(os.path.dirname(__file__), 'custom_sources.json')
     if os.path.exists(path):

@@ -4,9 +4,9 @@ All prompts are stored in prompts.yml (admin-editable via backend).
 This module provides read/write functions only.
 """
 import os
+
 import yaml
 from flask import current_app
-
 
 # Human-readable labels for admin UI
 LABELS = {

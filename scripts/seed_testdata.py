@@ -2,21 +2,21 @@
 用法: python scripts/seed_testdata.py [--clean]
   --clean  先清除旧测试数据再导入
 """
-import sys
 import os
-from datetime import date, timedelta, datetime
+import sys
+from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app
 from app.extensions import db
-from app.models.user import User, Role, Group
-from app.models.project import Project, Milestone
-from app.models.requirement import Requirement
-from app.models.todo import Todo, TodoItem
-from app.models.meeting import Meeting
-from app.models.risk import Risk
 from app.models.incentive import Incentive
+from app.models.meeting import Meeting
+from app.models.project import Milestone, Project
+from app.models.requirement import Requirement
+from app.models.risk import Risk
+from app.models.todo import Todo, TodoItem
+from app.models.user import Group, Role, User
 from app.utils.pinyin import to_pinyin
 
 # ── 测试数据定义 ──────────────────────────────────────────

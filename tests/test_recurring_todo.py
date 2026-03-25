@@ -4,11 +4,12 @@
 """
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
+
 from app import create_app
 from app.extensions import db as _db
 
@@ -20,7 +21,7 @@ def app():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
     with app.app_context():
         _db.create_all()
-        from app.models.user import User, Role
+        from app.models.user import Role, User
         admin_role = Role(name='Admin')
         _db.session.add(admin_role)
         _db.session.flush()
@@ -92,8 +93,9 @@ class TestRecurringModel:
         assert r.is_due_today() == (today.day == 15)
 
     def test_monthly_end(self, app):
-        from app.models.recurring_todo import RecurringTodo
         import calendar
+
+        from app.models.recurring_todo import RecurringTodo
         r = RecurringTodo(cycle='monthly', monthly_days='end')
         today = date.today()
         _, last = calendar.monthrange(today.year, today.month)
@@ -109,8 +111,9 @@ class TestRecurringModel:
 
     def test_monthly_end_not_overdue_before_end(self, app):
         """月末还没到不应该算超期"""
-        from app.models.recurring_todo import RecurringTodo
         import calendar
+
+        from app.models.recurring_todo import RecurringTodo
         r = RecurringTodo(cycle='monthly', monthly_days='end')
         today = date.today()
         _, last = calendar.monthrange(today.year, today.month)
@@ -221,8 +224,8 @@ class TestRecurringRoutes:
     def test_delete_cleans_completions(self, client, app):
         """删除周期任务时清理完成记录"""
         with app.app_context():
-            from app.models.recurring_todo import RecurringTodo
             from app.models.recurring_completion import RecurringCompletion
+            from app.models.recurring_todo import RecurringTodo
             r = RecurringTodo(user_id=1, title='delete测试', cycle='weekly')
             _db.session.add(r)
             _db.session.flush()
@@ -235,8 +238,8 @@ class TestRecurringRoutes:
                            headers={'X-Requested-With': 'XMLHttpRequest'})
         assert resp.status_code == 200
         with app.app_context():
-            from app.models.recurring_todo import RecurringTodo
             from app.models.recurring_completion import RecurringCompletion
+            from app.models.recurring_todo import RecurringTodo
             assert RecurringTodo.query.get(rid) is None
             assert RecurringCompletion.query.filter_by(recurring_id=rid).count() == 0
 
@@ -317,8 +320,8 @@ class TestRecurringStatus:
     def test_status_from_completion(self, client, app):
         """recurring_status 从 RecurringCompletion 表查询"""
         with app.app_context():
-            from app.models.recurring_todo import RecurringTodo
             from app.models.recurring_completion import RecurringCompletion
+            from app.models.recurring_todo import RecurringTodo
             r = RecurringTodo(user_id=1, title='completion状态测试', cycle='monthly', monthly_days='mid')
             _db.session.add(r)
             _db.session.flush()
@@ -368,7 +371,6 @@ class TestRecurringStatus:
         client.post(f'/recurring-todos/{rid}/toggle')
 
         with app.app_context():
-            from app.models.todo import Todo
             from app.models.recurring_completion import RecurringCompletion
             # Completion record exists
             c = RecurringCompletion.query.filter_by(recurring_id=rid).first()
@@ -390,8 +392,9 @@ class TestRecurringMonthlyPeriods:
 
     def test_end_only_not_overdue_mid_month(self, app):
         """月末还没到，不算超期"""
-        from app.models.recurring_todo import RecurringTodo
         import calendar
+
+        from app.models.recurring_todo import RecurringTodo
         r = RecurringTodo(cycle='monthly', monthly_days='end')
         today = date.today()
         _, last = calendar.monthrange(today.year, today.month)
@@ -408,8 +411,9 @@ class TestRecurringMonthlyPeriods:
 
     def test_mixed_past_and_future(self, app):
         """start(过期) + end(未到) → since_last 只看 start"""
-        from app.models.recurring_todo import RecurringTodo
         import calendar
+
+        from app.models.recurring_todo import RecurringTodo
         r = RecurringTodo(cycle='monthly', monthly_days='start,end')
         today = date.today()
         _, last = calendar.monthrange(today.year, today.month)

@@ -1,26 +1,29 @@
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 
-from flask import render_template, request, send_file, flash, redirect, url_for, jsonify
-from flask_login import login_required, current_user
+from flask import flash, jsonify, redirect, render_template, request, send_file, url_for
+from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
+from app.constants import REQ_INACTIVE_STATUSES, TODO_STATUS_DONE
 from app.dashboard import dashboard_bp
 from app.extensions import db
-from app.constants import TODO_STATUS_TODO, TODO_STATUS_DONE, REQ_INACTIVE_STATUSES
-from app.models.user import User, Role, Group
 from app.models.project import Project
 from app.models.project_member import ProjectMember
+from app.models.report import PersonalWeekly, WeeklyReport
 from app.models.requirement import Requirement
-from app.models.todo import Todo, todo_requirements
 from app.models.risk import Risk
-from app.models.report import WeeklyReport, PersonalWeekly
+from app.models.todo import Todo, todo_requirements
+from app.models.user import Group, Role, User
 from app.services.ai import call_ollama
 from app.services.prompts import get_prompt
 from app.services.statistics import (
-    week_range, gather_week_stats, gather_project_data,
-    get_reviewer, get_todo_progress, TodoProgress,
-    get_delivery_metrics, get_estimate_deviation,
+    gather_week_stats,
+    get_delivery_metrics,
+    get_estimate_deviation,
+    get_reviewer,
+    get_todo_progress,
+    week_range,
 )
 
 
@@ -155,7 +158,7 @@ def metrics():
 def stats_export():
     """Export weekly stats as Excel."""
     import openpyxl
-    from openpyxl.styles import Font, Alignment
+    from openpyxl.styles import Font
 
     offset = request.args.get('week', 0, type=int)
     cur_group = request.args.get('group', '')
@@ -416,7 +419,6 @@ def weekly_report():
             reviewer = pl_user.name if pl_user else '待定'
 
         # People map: person × requirement matrix
-        from collections import defaultdict as dd2
         people_map = {}
         people_map_reqs = sorted(req_investment.keys())
         for rnum, inv in req_investment.items():
@@ -497,7 +499,6 @@ def weekly_report():
         }
 
         # Save to DB
-        import json as json_lib
         saved = WeeklyReport.query.filter_by(project_id=cur_project_id, week_start=monday).first()
         if saved:
             saved.summary = ai_analysis['summary']
@@ -728,7 +729,7 @@ def weekly_report_freeze():
 def weekly_report_export():
     """Export weekly report as formatted Excel."""
     import openpyxl
-    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
     offset = request.args.get('week', 0, type=int)
     cur_project_id = request.args.get('project_id', type=int)
@@ -998,7 +999,6 @@ def my_day():
 
     # ---- Merged from profile_stats (个人效能) ----
     from app.models.incentive import Incentive
-    from app.constants import TODO_STATUS_DONE
     uid = current_user.id
     six_months_ago = today - timedelta(days=180)
 
@@ -1150,8 +1150,8 @@ def my_weekly():
                     lines.append(f'- [{r.number}] {r.title}（{r.status_label}{due_info}）')
 
             # Recurring todo stats this week
-            from app.models.recurring_todo import RecurringTodo
             from app.models.recurring_completion import RecurringCompletion
+            from app.models.recurring_todo import RecurringTodo
             all_recurring = RecurringTodo.query.filter_by(user_id=current_user.id, is_active=True).all()
             if all_recurring:
                 # Count how many times each recurring was due this week and how many were completed
@@ -1189,7 +1189,7 @@ def my_weekly():
 
                 if recurring_due_count > 0:
                     rate = round(recurring_done_count / recurring_due_count * 100)
-                    lines.append(f'\n周期任务执行情况：')
+                    lines.append('\n周期任务执行情况：')
                     lines.append(f'- 本周到期 {recurring_due_count} 次，完成 {recurring_done_count} 次（完成率 {rate}%）')
                     lines.append(f'- 周期任务共 {len(all_recurring)} 个：' + '、'.join(r.title for r in all_recurring))
 
@@ -1508,7 +1508,6 @@ def emotion_analyze():
         return jsonify(ok=False, msg='无权限'), 403
 
 
-    from collections import defaultdict
 
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
     today = date.today()
@@ -1564,6 +1563,7 @@ def emotion_save():
     if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
         return jsonify(ok=False), 403
     import json as json_lib
+
     from app.models.emotion import EmotionRecord
     data = request.get_json() or {}
     members = data.get('members', [])
@@ -1615,9 +1615,10 @@ def emotion_delete(scan_date):
 @login_required
 def emotion_comment(record_id):
     """Add comment to an emotion record. Supports #comment and @person for todo."""
-    from app.models.emotion import EmotionRecord, EmotionComment
-    from app.models.todo import Todo, TodoItem
     import re
+
+    from app.models.emotion import EmotionComment, EmotionRecord
+    from app.models.todo import Todo, TodoItem
 
     record = db.get_or_404(EmotionRecord, record_id)
     content = request.form.get('content', '').strip()[:500]

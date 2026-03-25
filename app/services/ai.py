@@ -174,8 +174,8 @@ def _log_ai_call(raw_input, ai_output):
         from flask_login import current_user
         if not current_user or not current_user.is_authenticated:
             return
-        from app.models.ai_log import AIParseLog
         from app.extensions import db
+        from app.models.ai_log import AIParseLog
         max_len = current_app.config.get('AI_INPUT_MAX', 5000)
         log = AIParseLog(
             input_type='api_call',
@@ -191,8 +191,8 @@ def _log_ai_call(raw_input, ai_output):
 
 def parse_requirement(text, project_id=None):
     """Parse requirement from text, with project member context for smart assign."""
-    from app.models.user import User
     from app.models.todo import Todo
+    from app.models.user import User
     team_lines = []
     try:
         if project_id:

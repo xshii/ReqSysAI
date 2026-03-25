@@ -1,4 +1,5 @@
 import os
+
 import yaml
 
 from app import create_app

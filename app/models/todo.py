@@ -2,7 +2,6 @@ from datetime import date, datetime, timedelta, timezone
 
 from app.extensions import db
 
-
 todo_requirements = db.Table('todo_requirements',
     db.Column('todo_id', db.Integer, db.ForeignKey('todos.id'), primary_key=True),
     db.Column('requirement_id', db.Integer, db.ForeignKey('requirements.id'), primary_key=True),

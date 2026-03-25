@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, SelectMultipleField, BooleanField, SubmitField
+from wtforms import BooleanField, SelectMultipleField, StringField, SubmitField
 from wtforms.validators import DataRequired, Length, Optional, Regexp
 
 EMPLOYEE_ID_RE = r'^[a-z]\d?00\d{6}$'

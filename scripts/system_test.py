@@ -1,10 +1,9 @@
 """系统级测试：mock AI 返回，走完整 Web 流程。
 用法: python scripts/system_test.py
 """
-import sys
-import os
 import json
-from unittest.mock import patch
+import os
+import sys
 from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -98,11 +97,10 @@ def run_tests():
         print(f'  ❌ {name}: {detail}')
 
     with app.app_context():
+        from app.models.meeting import Meeting
         from app.models.project import Project
         from app.models.requirement import Requirement
-        from app.models.meeting import Meeting
         from app.models.risk import Risk
-        from app.models.knowledge import AAR
         from app.models.user import User
 
         p = Project.query.first()

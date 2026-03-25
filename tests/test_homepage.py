@@ -10,6 +10,7 @@ from datetime import date, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
+
 from app import create_app
 from app.extensions import db as _db
 
@@ -21,7 +22,7 @@ def app():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
     with app.app_context():
         _db.create_all()
-        from app.models.user import User, Role
+        from app.models.user import Role, User
         admin_role = Role(name='Admin')
         _db.session.add(admin_role)
         _db.session.flush()
@@ -417,8 +418,8 @@ class TestRecurringCompletion:
     def test_toggle_undo_removes_completion(self, client, app):
         """再次点击取消完成，删除 completion 记录"""
         with app.app_context():
-            from app.models.recurring_todo import RecurringTodo
             from app.models.recurring_completion import RecurringCompletion
+            from app.models.recurring_todo import RecurringTodo
             r = RecurringTodo(user_id=1, title='取消测试', cycle='weekly', is_active=True)
             _db.session.add(r)
             _db.session.flush()
@@ -438,8 +439,8 @@ class TestRecurringCompletion:
     def test_homepage_status_from_completion(self, client, app):
         """首页周期状态从 RecurringCompletion 查询"""
         with app.app_context():
-            from app.models.recurring_todo import RecurringTodo
             from app.models.recurring_completion import RecurringCompletion
+            from app.models.recurring_todo import RecurringTodo
             r = RecurringTodo(user_id=1, title='状态来源测试', cycle='weekdays',
                               weekdays=str(date.today().weekday()), is_active=True)
             _db.session.add(r)

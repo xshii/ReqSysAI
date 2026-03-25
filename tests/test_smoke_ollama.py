@@ -4,9 +4,10 @@ Ollama AI 解析烟测试 — 依赖外部 Ollama 服务，不纳入自动回归
   pytest tests/test_smoke_ollama.py -m smoke    # 显式运行
   python tests/test_smoke_ollama.py             # 直接运行
 """
-import sys
-import os
 import json
+import os
+import sys
+
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,7 +19,7 @@ os.environ['OLLAMA_BASE_URL'] = 'http://localhost:11434'
 os.environ['OLLAMA_MODEL'] = 'macvoice'  # local qwen2 7B model
 
 from app import create_app
-from app.services.ai import parse_requirement, _extract_json
+from app.services.ai import parse_requirement
 
 app = create_app('testing')
 

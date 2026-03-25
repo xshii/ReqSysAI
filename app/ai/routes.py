@@ -1,14 +1,14 @@
-from flask import render_template, redirect, url_for, flash, request, session, jsonify, current_app
-from flask_login import current_user
+from flask import current_app, flash, jsonify, redirect, render_template, request, session, url_for
+from flask_login import current_user, login_required
 
 from app.ai import ai_bp
-from app.ai.forms import ParseTextForm, ParseDocxForm, ConfirmForm
-from flask_login import login_required
+from app.ai.forms import ConfirmForm, ParseDocxForm, ParseTextForm
 from app.extensions import db
-from app.models.project import Project
-from app.models.requirement import Requirement, Activity
 from app.models.ai_log import AIParseLog
-from app.services.ai import parse_requirement, refine_requirement, extract_text_from_docx, check_ollama_status
+from app.models.project import Project
+from app.models.requirement import Activity, Requirement
+from app.services.ai import check_ollama_status, extract_text_from_docx, parse_requirement, refine_requirement
+
 
 @ai_bp.route('/api/status')
 @login_required

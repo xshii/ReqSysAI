@@ -1,15 +1,15 @@
-from datetime import datetime, date, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
-from flask import render_template, redirect, url_for, flash, request, jsonify, current_app
-from flask_login import login_required, current_user
+from flask import current_app, flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 
-from app.incentive import incentive_bp
-from app.extensions import db
 from app.constants import MAX_COMMENT_LENGTH
+from app.extensions import db
+from app.incentive import incentive_bp
 from app.models.incentive import Incentive, IncentiveFund, IncentiveReport
-from app.models.todo import Todo
-from app.models.requirement import Requirement
 from app.models.rant import Rant
+from app.models.requirement import Requirement
+from app.models.todo import Todo
 from app.models.user import User
 from app.utils.upload import save_photo
 
@@ -265,7 +265,9 @@ def export_csv():
         flash('无权限', 'danger')
         return redirect(url_for('incentive.index'))
 
-    import csv, io
+    import csv
+    import io
+
     from flask import Response
 
     period = request.args.get('period', '1m')
@@ -310,7 +312,8 @@ def import_csv():
         flash('无权限', 'danger')
         return redirect(url_for('incentive.index'))
 
-    import csv, io
+    import csv
+    import io
     file = request.files.get('csv_file')
     if not file or not file.filename.lower().endswith('.csv'):
         flash('请选择 CSV 文件', 'danger')
@@ -398,7 +401,6 @@ def import_csv():
         # Dedup by nominee names + award month
         nominee_names = sorted(u.name for u in nominee_users) + sorted(ext_names)
         if nominee_names and month_str:
-            from app.models.incentive import incentive_nominees
             existing = Incentive.query.filter(
                 Incentive.title == title,
                 Incentive.reviewed_at >= reviewed_at.replace(day=1),
@@ -573,9 +575,9 @@ def ai_recommend_candidates():
     if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
         return jsonify(ok=False, msg='无权限'), 403
 
+
     from app.services.ai import call_ollama
     from app.services.prompts import get_prompt
-    from collections import Counter
 
     since = date.today() - timedelta(days=30)
     users = User.query.filter_by(is_active=True).all()
@@ -680,8 +682,6 @@ def _is_fund_viewer():
 
 def _build_incentive_stats(since=None):
     """Build stats data for the stats tab."""
-    from app.constants import INCENTIVE_SOURCE_LABELS
-    from app.models.incentive import incentive_nominees
 
     q = Incentive.query.filter_by(status='approved')
     if since:
@@ -1065,7 +1065,9 @@ def fund_export_csv():
         flash('无权限', 'danger')
         return redirect(url_for('incentive.index'))
 
-    import csv, io
+    import csv
+    import io
+
     from flask import Response
 
     funds = IncentiveFund.query.order_by(IncentiveFund.source, IncentiveFund.expires_at).all()
@@ -1128,7 +1130,8 @@ def fund_add_source():
         return redirect(url_for('incentive.fund_list'))
 
     # Persist to constants by writing to a simple JSON file
-    import json, os
+    import json
+    import os
     custom_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'custom_sources.json')
     existing = {}
     if os.path.exists(custom_path):
@@ -1150,7 +1153,9 @@ def fund_delete_source():
         flash('无权限', 'danger')
         return redirect(url_for('incentive.index'))
 
-    import json, os
+    import json
+    import os
+
     from app.constants import _INCENTIVE_SOURCE_DEFAULTS
     data = request.get_json(silent=True) or {}
     key = data.get('key') or request.form.get('key', '')
@@ -1183,7 +1188,9 @@ def fund_import_csv():
         flash('无权限', 'danger')
         return redirect(url_for('incentive.index'))
 
-    import csv, io
+    import csv
+    import io
+
     from app.constants import INCENTIVE_SOURCE_LABELS
     source_rev = {v: k for k, v in INCENTIVE_SOURCE_LABELS.items()}
 

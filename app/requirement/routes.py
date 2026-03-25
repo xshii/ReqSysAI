@@ -1,20 +1,19 @@
 from collections import namedtuple
 from datetime import date
 
-from flask import render_template, redirect, url_for, flash, request, jsonify
-from flask_login import login_required, current_user
+from flask import flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
 TodoProgress = namedtuple('TodoProgress', 'total done')
 
-from app.requirement import requirement_bp
-from app.requirement.forms import RequirementForm, CommentForm
-
 from app.extensions import db
 from app.models.project import Project
-from app.models.requirement import Requirement, Comment, Activity
+from app.models.requirement import Activity, Comment, Requirement
 from app.models.todo import Todo, TodoItem, todo_requirements
 from app.models.user import User
+from app.requirement import requirement_bp
+from app.requirement.forms import CommentForm, RequirementForm
 
 PER_PAGE = 20
 
@@ -377,9 +376,9 @@ def add_comment(req_id):
 @login_required
 def ai_smart_assign(req_id):
     """AI recommends best assignee for a requirement."""
+
     from app.services.ai import call_ollama
     from app.services.prompts import get_prompt
-    from collections import Counter
 
     req = db.get_or_404(Requirement, req_id)
     users = User.query.filter_by(is_active=True).all()
@@ -453,6 +452,7 @@ def export_csv():
     """Export requirements as CSV (supports project filter)."""
     import csv
     import io
+
     from flask import Response
 
     project_id = request.args.get('project_id', type=int)

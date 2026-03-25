@@ -1,21 +1,16 @@
-import json
-from datetime import datetime, date, timedelta, timezone
+from datetime import date, timedelta
 
-from flask import render_template, redirect, url_for, flash, request, jsonify, make_response, current_app
-from flask_login import current_user
+from flask import flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 
 from app.constants import MILESTONE_COLOR
-from app.project import project_bp
-from app.project.forms import ProjectForm, MilestoneForm
-from flask_login import login_required
 from app.extensions import db
-from app.models.project import Project, Milestone
-from app.models.meeting import Meeting
-from app.models.risk import Risk
+from app.models.project import Milestone, Project
 from app.models.project_member import ProjectMember
-from app.models.knowledge import Knowledge, PermissionRequest, PermissionItem, PermissionApplication, AAR
+from app.models.risk import Risk
 from app.models.user import User
-from app.utils.pinyin import to_pinyin
+from app.project import project_bp
+from app.project.forms import MilestoneForm, ProjectForm
 
 
 def _resolve_owner_id(owner_name):
@@ -77,8 +72,8 @@ def project_create():
 @login_required
 def milestone_template_action():
     """Create / edit / delete / copy milestone templates."""
-    from app.models.project import MilestoneTemplate, MilestoneTemplateItem
     from app.constants import parse_offset
+    from app.models.project import MilestoneTemplate, MilestoneTemplateItem
 
     action = request.form.get('action')
 
@@ -167,8 +162,8 @@ def api_template(tpl_id):
 @login_required
 def api_templates():
     """List / create / delete milestone templates (accessible to all users)."""
-    from app.models.project import MilestoneTemplate, MilestoneTemplateItem
     from app.constants import parse_offset
+    from app.models.project import MilestoneTemplate, MilestoneTemplateItem
 
     if request.method == 'POST':
         data = request.get_json() or {}
@@ -231,9 +226,11 @@ def api_templates():
 @login_required
 def project_detail(project_id):
     from datetime import date as d_date
+
+    from sqlalchemy.orm import joinedload
+
     from app.models.requirement import Requirement
     from app.models.todo import Todo, todo_requirements
-    from sqlalchemy.orm import joinedload
 
     project = db.get_or_404(Project, project_id)
     today = d_date.today()

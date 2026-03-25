@@ -2,7 +2,6 @@
 import base64
 import hashlib
 import io
-import os
 from datetime import date
 
 from PIL import Image, ImageDraw, ImageFont

@@ -14,14 +14,14 @@ Notes:
 - 新工号会创建用户，IP 留空占位(需首次登录时绑定)
 """
 import csv
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app
 from app.extensions import db
-from app.models.user import User, Role
+from app.models.user import Role, User
 from app.utils.pinyin import to_pinyin
 
 

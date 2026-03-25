@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Chinese name to pinyin conversion using pypinyin (offline, no network needed)."""
 
-from pypinyin import lazy_pinyin, Style
+from pypinyin import Style, lazy_pinyin
 
 
 def to_pinyin(name: str) -> str:

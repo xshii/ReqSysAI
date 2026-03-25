@@ -11,7 +11,7 @@ def create_app(config_name=None):
     app.config.from_object(config[config_name])
 
     # Initialize extensions
-    from app.extensions import db, migrate, login_manager, csrf
+    from app.extensions import csrf, db, login_manager, migrate
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
@@ -20,16 +20,16 @@ def create_app(config_name=None):
 
     # Import models so they are registered with SQLAlchemy
     from app import models  # noqa: F401
+    from app.admin import admin_bp
+    from app.ai import ai_bp
 
     # Register blueprints
     from app.auth import auth_bp
+    from app.dashboard import dashboard_bp
     from app.main import main_bp
-    from app.admin import admin_bp
     from app.project import project_bp
     from app.requirement import requirement_bp
-    from app.ai import ai_bp
     from app.todo import todo_bp
-    from app.dashboard import dashboard_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(admin_bp, url_prefix='/admin')
@@ -57,11 +57,11 @@ def create_app(config_name=None):
     # Inject sidebar groups into all templates
     @app.context_processor
     def inject_sidebar_groups():
-        from flask_login import current_user
         from flask import request as req
+        from flask_login import current_user
         if current_user.is_authenticated:
-            from app.models.user import User, Group
             from app.models.project import Project
+            from app.models.user import Group, User
             all_groups = Group.query.order_by(Group.name).all()
             # Default: only own group. User can toggle only_my_group=False in profile to see all.
             if current_user.only_my_group:
@@ -81,9 +81,10 @@ def create_app(config_name=None):
             projects = followed + unfollowed
 
             # Notification counts for navbar bell
-            from app.models.risk import Risk
-            from app.models.requirement import Requirement
             from datetime import date
+
+            from app.models.requirement import Requirement
+            from app.models.risk import Risk
             today = date.today()
             notif_risks = Risk.query.filter(
                 Risk.status == 'open',

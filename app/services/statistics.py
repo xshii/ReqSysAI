@@ -10,8 +10,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models.todo import Todo, todo_requirements
 from app.models.requirement import Requirement
+from app.models.todo import Todo, todo_requirements
 from app.models.user import User
 
 UserStat = namedtuple('UserStat', 'user created done rate')
@@ -34,8 +34,8 @@ def gather_project_data(monday, sunday, project_id=None):
     Returns a dict with all data needed by weekly report and stats.
     Single source of truth — replaces 4+ copies of this logic.
     """
-    from app.models.risk import Risk
     from app.models.project import Project
+    from app.models.risk import Risk
 
     # Todos: done + active, optionally filtered by project
     def _filter_by_project(q):

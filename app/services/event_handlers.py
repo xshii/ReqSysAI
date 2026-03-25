@@ -2,8 +2,8 @@
 
 from datetime import date
 
+from app.constants import REQ_INACTIVE_STATUSES, TODO_STATUS_DONE
 from app.extensions import db
-from app.constants import TODO_STATUS_DONE, REQ_INACTIVE_STATUSES
 
 
 def on_todo_completed(sender, todo=None, **_):
@@ -15,7 +15,7 @@ def on_todo_completed(sender, todo=None, **_):
         if req.status in REQ_INACTIVE_STATUSES:
             continue
         # Check all linked todos for this requirement
-        from app.models.todo import todo_requirements, Todo
+        from app.models.todo import Todo, todo_requirements
         pending = db.session.query(Todo.id).join(
             todo_requirements, Todo.id == todo_requirements.c.todo_id
         ).filter(

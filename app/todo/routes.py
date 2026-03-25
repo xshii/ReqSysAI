@@ -1,19 +1,16 @@
 from datetime import date, datetime, timedelta, timezone
 
-from flask import render_template, redirect, url_for, flash, request, jsonify, current_app
-from flask_login import login_required, current_user
+from flask import current_app, flash, jsonify, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
+from app.constants import REQ_INACTIVE_STATUSES, TODO_STATUS_DONE, TODO_STATUS_TODO
+from app.extensions import db
+from app.models.requirement import Requirement
+from app.models.todo import Todo, TodoItem
+from app.models.user import Group, User
 from app.todo import todo_bp
 from app.todo.forms import TodoForm
-from app.extensions import db
-from app.constants import TODO_STATUS_TODO, TODO_STATUS_DONE, REQ_INACTIVE_STATUSES
-from app.models.todo import Todo, TodoItem
-from app.models.requirement import Requirement
-from app.models.user import User, Group
-
-
-
 
 # ---- Todo CRUD ----
 

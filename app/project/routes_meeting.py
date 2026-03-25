@@ -1,18 +1,17 @@
 """Meeting minutes routes for the project blueprint."""
 import json
-from datetime import datetime, date, timedelta
+from datetime import date, datetime, timedelta
 
-from flask import render_template, redirect, url_for, flash, request, jsonify
+from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from app.project import project_bp
 from app.extensions import db
-from app.models.project import Project
 from app.models.meeting import Meeting
+from app.models.project import Project
 from app.models.risk import Risk
 from app.models.user import User
+from app.project import project_bp
 from app.project.routes import _resolve_owner_id
-
 
 # ---- Meeting minutes ----
 
