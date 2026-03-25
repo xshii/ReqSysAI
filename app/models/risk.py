@@ -73,7 +73,7 @@ class Risk(db.Model):
 
     @property
     def is_overdue(self):
-        return self.status == 'open' and self.due_date and self.due_date < date.today() and not self.is_deleted
+        return self.status == 'open' and self.due_date and self.due_date <= date.today() and not self.is_deleted
 
     def __repr__(self):
         return f'<Risk {self.title}>'

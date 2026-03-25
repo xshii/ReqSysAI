@@ -105,7 +105,7 @@ def index():
     # Alerts: overdue requirements + overdue risks
     alerts = [
         f'需求 [{r.number}] {r.title} 已超期 ({r.due_date.strftime("%m-%d")})'
-        for r in my_reqs if r.due_date and r.due_date < today
+        for r in my_reqs if r.due_date and r.due_date <= today
     ] + [
         f'风险「{r.title}」已超期 ({r.due_date.strftime("%m-%d") if r.due_date else ""})'
         for r in my_risks if r.is_overdue
