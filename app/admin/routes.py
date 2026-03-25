@@ -47,7 +47,9 @@ def user_list():
     ip_requests = IPChangeRequest.query.filter_by(status='pending')\
         .order_by(IPChangeRequest.created_at.desc()).all()
 
-    all_domains = sorted(set(u.domain for u in User.query.filter(User.domain.isnot(None), User.domain != '').all()))
+    DEFAULT_DOMAINS = ['芯片验证', '业务开发', '技术开发', '编译器', '算法', '芯片', '产品', '功能仿真', '性能仿真', '产品测试']
+    db_domains = set(u.domain for u in User.query.filter(User.domain.isnot(None), User.domain != '').all())
+    all_domains = sorted(db_domains | set(DEFAULT_DOMAINS))
     return render_template('admin/users.html', users=users, visible_roles=visible_roles,
                            all_groups=all_groups, all_group_objs=all_group_objs,
                            group_counts=group_counts, all_domains=all_domains,

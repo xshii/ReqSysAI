@@ -201,8 +201,8 @@ function exportEml() {
     if (!el) return;
     var defaultSubject = '{{ current_user.name }} 个人周报（{{ monday.strftime("%m-%d") }} ~ {{ sunday.strftime("%m-%d") }}）';
     var subject = document.getElementById('emlSubject').value || defaultSubject;
-    var to = document.getElementById('emlTo').value || '';
-    var cc = document.getElementById('emlCc').value || '';
+    var _r = getMergedRecipients(document.getElementById('emlTo').value, document.getElementById('emlCc').value);
+    var to = _r.to, cc = _r.cc;
     var css = 'body{font-family:Microsoft YaHei,sans-serif;font-size:13px;color:#333;}'
         + 'table{width:100%;border-collapse:collapse;}th{background:#f1f5f9;font-weight:600;font-size:12px;}'
         + 'th,td{border:1px solid #e2e8f0;padding:5px 10px;font-size:12px;}'

@@ -32,7 +32,7 @@
         <button type="button" class="btn btn-outline-primary btn-sm" onclick="sendEmail()">
             <i class="bi bi-envelope-arrow-up"></i> 导出Outlook
         </button>
-        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#meetingEmailSettings"><i class="bi bi-gear"></i></button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#meetingEmailSettings"><i class="bi bi-gear"></i></button>
     </div>
 </div>
 
@@ -46,15 +46,14 @@
                        placeholder="默认：会议标题（日期）" onchange="saveMeetingEmailSettings()">
             </div>
             <div class="col-md-4">
-                <label class="form-label mb-0 fw-bold">收件人 (To)</label>
+                <label class="form-label mb-0 fw-bold">额外收件人 (To)</label>
                 <input type="text" id="meetingEmlTo" class="form-control form-control-sm"
-                       placeholder="工号;工号 如 a00123456;b00654321" onchange="saveMeetingEmailSettings()">
-                <div class="text-muted" style="font-size:.65em;">EML为草稿模式，需在Outlook中手动填写收件人</div>
+                       placeholder="工号;工号（与会人+风险责任人已自动提取）" onchange="saveMeetingEmailSettings()">
             </div>
             <div class="col-md-4">
-                <label class="form-label mb-0 fw-bold">抄送 (Cc) <button type="button" class="btn btn-link btn-sm p-0 ms-1" style="font-size:.75em;" onclick="meetingAutoFillManager()">+主管</button></label>
+                <label class="form-label mb-0 fw-bold">额外抄送 (Cc) <button type="button" class="btn btn-link btn-sm p-0 ms-1" style="font-size:.75em;" onclick="meetingAutoFillManager()">+主管</button></label>
                 <input type="text" id="meetingEmlCc" class="form-control form-control-sm"
-                       placeholder="工号;工号" onchange="saveMeetingEmailSettings()">
+                       placeholder="工号;工号（主管已自动提取）" onchange="saveMeetingEmailSettings()">
             </div>
         </div>
     </div>
@@ -365,8 +364,8 @@ function meetingAutoFillManager() {
 // Send email as EML file (Outlook draft)
 function encodeHeader(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
 function sendEmail() {
-    var emlTo = (document.getElementById('meetingEmlTo').value || '').trim();
-    var emlCc = (document.getElementById('meetingEmlCc').value || '').trim();
+    var _r = getMergedRecipients((document.getElementById('meetingEmlTo').value || '').trim(), (document.getElementById('meetingEmlCc').value || '').trim());
+    var emlTo = _r.to, emlCc = _r.cc;
     var emlSubjectCustom = (document.getElementById('meetingEmlSubject').value || '').trim();
 
     var subject = emlSubjectCustom || {{ (meeting.title ~ '（' ~ (meeting.date.strftime("%Y-%m-%d") if meeting.date else "") ~ '）')|tojson }};
@@ -401,9 +400,9 @@ function sendEmail() {
     html += '<hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0;">';
     html += '<h4 style="font-size:14px;margin:0 0 8px;">遗留问题跟踪</h4>';
     html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
-    html += '<tr style="background:#f1f5f9;"><th style="border:1px solid #e2e8f0;padding:5px 10px;">序号</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">严重度</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">标题</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">责任人</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">截止日期</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">状态</th></tr>';
+    html += '<tr style="background:#f1f5f9;"><th style="border:1px solid #e2e8f0;padding:5px 10px;">序号</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">严重度</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">标题</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">责任人</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">业务领域</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">截止日期</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">状态</th></tr>';
     {% for r in linked_risks %}
-    html += '<tr><td style="border:1px solid #e2e8f0;padding:5px 10px;">{{ loop.index }}</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">' + {{ r.severity_label|tojson }} + '</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">' + {{ r.title|tojson }} + '</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">' + {{ (r.owner or "待定")|tojson }} + '</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">{{ r.due_date.strftime("%Y-%m-%d") if r.due_date else "待定" }}</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">' + {{ r.status_label|tojson }} + '</td></tr>';
+    html += '<tr><td style="border:1px solid #e2e8f0;padding:5px 10px;">{{ loop.index }}</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">' + {{ r.severity_label|tojson }} + '</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">' + {{ r.title|tojson }} + '</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">' + {{ (r.owner or "待定")|tojson }} + '</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">{{ r.owner_user.domain if r.owner_user and r.owner_user.domain else "-" }}</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">{{ r.due_date.strftime("%Y-%m-%d") if r.due_date else "待定" }}</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">' + {{ r.status_label|tojson }} + '</td></tr>';
     {% endfor %}
     html += '</table>';
     {% endif %}

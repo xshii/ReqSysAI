@@ -24,11 +24,11 @@ from app.utils.pinyin import to_pinyin
 TEST_GROUPS = ['前端组', '后端组', '测试组']
 
 TEST_USERS = [
-    {'eid': 't00000001', 'name': '张三', 'group': '后端组', 'roles': ['DE'], 'ip': '10.0.0.101', 'manager': '赵六 t00000004', 'domain': '后端开发'},
-    {'eid': 't00000002', 'name': '李四', 'group': '前端组', 'roles': ['DE'], 'ip': '10.0.0.102', 'manager': '赵六 t00000004', 'domain': '前端开发'},
-    {'eid': 't00000003', 'name': '王五', 'group': '测试组', 'roles': ['DE'], 'ip': '10.0.0.103', 'manager': '赵六 t00000004', 'domain': '测试'},
-    {'eid': 't00000004', 'name': '赵六', 'group': '后端组', 'roles': ['DE', 'PL'], 'ip': '10.0.0.104', 'manager': '管理员 a00000001', 'domain': '项目管理'},
-    {'eid': 't00000005', 'name': '孙七', 'group': '前端组', 'roles': ['DE'], 'ip': '10.0.0.105', 'manager': '赵六 t00000004', 'domain': '前端开发'},
+    {'eid': 't00000001', 'name': '张三', 'group': '后端组', 'roles': ['DE'], 'ip': '10.0.0.101', 'manager': '赵六 t00000004', 'domain': '技术开发'},
+    {'eid': 't00000002', 'name': '李四', 'group': '前端组', 'roles': ['DE'], 'ip': '10.0.0.102', 'manager': '赵六 t00000004', 'domain': '业务开发'},
+    {'eid': 't00000003', 'name': '王五', 'group': '测试组', 'roles': ['DE'], 'ip': '10.0.0.103', 'manager': '赵六 t00000004', 'domain': '产品测试'},
+    {'eid': 't00000004', 'name': '赵六', 'group': '后端组', 'roles': ['DE', 'PL'], 'ip': '10.0.0.104', 'manager': '陈总 c00990001', 'domain': '芯片验证'},
+    {'eid': 't00000005', 'name': '孙七', 'group': '前端组', 'roles': ['DE'], 'ip': '10.0.0.105', 'manager': '赵六 t00000004', 'domain': '功能仿真'},
 ]
 
 TEST_PROJECTS = [

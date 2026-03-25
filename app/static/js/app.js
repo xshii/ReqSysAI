@@ -145,19 +145,46 @@ function apiPost(url, data) {
 }
 
 // ---- Email settings: load/save from DB instead of localStorage ----
+// DB stores *extra* recipients added by user; defaults are auto-computed.
+// Settings UI shows only extras; EML export merges defaults + extras (dedup, managers first).
+function _splitEids(s) {
+    return (s || '').split(/[;,；，]/).map(function(e) { return e.trim(); }).filter(Boolean);
+}
+function _mergeEids(base, extra) {
+    var arr = _splitEids(base);
+    var seen = {};
+    arr.forEach(function(e) { seen[e] = true; });
+    _splitEids(extra).forEach(function(e) {
+        if (!seen[e]) { arr.push(e); seen[e] = true; }
+    });
+    return arr.join(';');
+}
+
+// Global store for auto-computed defaults (per page)
+var _emlDefaults = {to: '', cc: ''};
+
 function loadEmailSettings(entityType, entityId, defaults, callback) {
+    _emlDefaults = {to: defaults.to || '', cc: defaults.cc || ''};
     fetch('/api/email-settings/' + entityType + '/' + entityId)
     .then(function(r) { return r.json(); })
     .then(function(d) {
+        // Show only extras in settings UI, not auto-computed defaults
         callback({
             subject: d.subject || defaults.subject || '',
-            to: d.to || defaults.to || '',
-            cc: d.cc || defaults.cc || ''
+            to: d.to || '',
+            cc: d.cc || ''
         });
     })
-    .catch(function() { callback(defaults); });
+    .catch(function() { callback({subject: defaults.subject || '', to: '', cc: ''}); });
 }
 function saveEmailSettings(entityType, entityId, subject, to, cc) {
     apiPost('/api/email-settings/' + entityType + '/' + entityId, {subject: subject, to: to, cc: cc});
+}
+// Call this at EML export time to get merged To/Cc (defaults + extras, dedup, defaults first)
+function getMergedRecipients(extraTo, extraCc) {
+    return {
+        to: _mergeEids(_emlDefaults.to, extraTo),
+        cc: _mergeEids(_emlDefaults.cc, extraCc)
+    };
 }
 

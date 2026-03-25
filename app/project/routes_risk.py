@@ -19,23 +19,54 @@ def risk_list(project_id):
     project = db.get_or_404(Project, project_id)
     status = request.args.get('status', '')
     severity = request.args.get('severity', '')
+    domain_filter = request.args.get('domain', '')
 
     query = Risk.query.filter_by(project_id=project_id).filter(Risk.deleted_at.is_(None))
     if status:
         query = query.filter_by(status=status)
     if severity:
         query = query.filter_by(severity=severity)
-    risks = query.order_by(Risk.status, Risk.due_date).all()
+    if domain_filter:
+        if domain_filter == '未分类':
+            query = query.filter(db.or_(Risk.owner_id.is_(None),
+                                        ~Risk.owner_id.in_(db.session.query(User.id).filter(User.domain.isnot(None), User.domain != ''))))
+        else:
+            query = query.filter(Risk.owner_id.in_(db.session.query(User.id).filter_by(domain=domain_filter)))
+    severity_order = db.case({'high': 0, 'medium': 1, 'low': 2}, value=Risk.severity)
+    risks = query.order_by(severity_order, Risk.status, Risk.due_date).all()
 
     from app.models.requirement import Requirement
     reqs = Requirement.query.filter_by(project_id=project_id).order_by(Requirement.number).all()
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
+
+    # Stats for EML header
+    all_risks = Risk.query.filter_by(project_id=project_id).filter(Risk.deleted_at.is_(None)).all()
+    risk_stats = {
+        'total': len(all_risks),
+        'open': sum(1 for r in all_risks if r.status == 'open'),
+        'overdue': sum(1 for r in all_risks if r.is_overdue),
+        'high': sum(1 for r in all_risks if r.severity == 'high' and r.status == 'open'),
+        'resolved': sum(1 for r in all_risks if r.status == 'resolved'),
+        'closed': sum(1 for r in all_risks if r.status == 'closed'),
+    }
+
+    # Per-domain stats: {domain: {total, open}}
+    from collections import defaultdict
+    domain_stats = defaultdict(lambda: {'total': 0, 'open': 0})
+    for r in all_risks:
+        domain = (r.owner_user.domain if r.owner_user and r.owner_user.domain else '未分类')
+        domain_stats[domain]['total'] += 1
+        if r.status == 'open':
+            domain_stats[domain]['open'] += 1
+    # Sort: open desc, then total desc
+    domain_stats = dict(sorted(domain_stats.items(), key=lambda x: (-x[1]['open'], -x[1]['total'])))
 
     from app.utils.recipients import compute_default_recipients
     risk_to, risk_cc = compute_default_recipients(project_id)
     return render_template('project/risks.html', project=project, risks=risks,
                            reqs=reqs, users=users, today=date.today(),
                            cur_status=status, cur_severity=severity,
+                           risk_stats=risk_stats, domain_stats=domain_stats, cur_domain=domain_filter,
                            default_to=risk_to, default_cc=risk_cc)
 
 
@@ -263,6 +294,26 @@ def risk_edit(risk_id):
     db.session.commit()
     flash('风险已更新', 'success')
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
+
+
+@project_bp.route('/risks/<int:risk_id>/inline-edit', methods=['POST'])
+@login_required
+def risk_inline_edit(risk_id):
+    """Quick inline update for severity or status."""
+    risk = db.get_or_404(Risk, risk_id)
+    data = request.get_json(silent=True) or {}
+    field = data.get('field')
+    value = data.get('value', '').strip()
+    if field == 'severity' and value in ('high', 'medium', 'low'):
+        risk.severity = value
+    elif field == 'status' and value in ('open', 'resolved', 'closed'):
+        if value == 'resolved' and risk.status == 'open':
+            risk.resolved_at = datetime.now(timezone.utc)
+        risk.status = value
+    else:
+        return jsonify(ok=False, msg='无效字段或值')
+    db.session.commit()
+    return jsonify(ok=True)
 
 
 @project_bp.route('/risks/<int:risk_id>/comment', methods=['POST'])

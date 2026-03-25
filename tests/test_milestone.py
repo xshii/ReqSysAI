@@ -423,9 +423,9 @@ class TestMilestoneColor:
 class TestPresetTemplates:
     """constants.MILESTONE_TEMPLATES 预置模板数据完整"""
 
-    def test_four_templates(self):
+    def test_template_count(self):
         from app.constants import MILESTONE_TEMPLATES
-        assert len(MILESTONE_TEMPLATES) == 4
+        assert len(MILESTONE_TEMPLATES) == 2
 
     def test_all_have_items(self):
         from app.constants import MILESTONE_TEMPLATES

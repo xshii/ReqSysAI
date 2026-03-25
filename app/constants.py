@@ -153,33 +153,6 @@ MILESTONE_TEMPLATES = [
         ],
     },
     {
-        'name': '敏捷迭代（2周Sprint）',
-        'description': '标准Scrum 2周迭代里程碑',
-        'items': [
-            ('Sprint Planning', 0),
-            ('开发完成', 8),
-            ('Code Review', 1),
-            ('测试完成', 3),
-            ('Sprint Review', 1),
-            ('Sprint Retro', 1),
-        ],
-    },
-    {
-        'name': '瀑布模型',
-        'description': '传统瀑布式开发里程碑',
-        'items': [
-            ('需求基线化', 0),
-            ('概要设计评审', '+2w'),
-            ('详细设计评审', '+2w'),
-            ('编码完成', '+1m'),
-            ('单元测试', '+1w'),
-            ('集成测试', '+1w'),
-            ('系统测试', '+2w'),
-            ('UAT验收', '+1w'),
-            ('上线部署', '+1w'),
-        ],
-    },
-    {
         'name': '简单项目（3阶段）',
         'description': '小型项目快速交付',
         'items': [

@@ -121,7 +121,13 @@
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">参与人</label>
-                        <div class="col-9"><input type="text" name="participants" class="form-control form-control-sm" placeholder="逗号分隔，如：张三,李四,王五"></div>
+                        <div class="col-9">
+                            <input type="hidden" name="participants" id="addParticipantsVal" value="">
+                            <div class="border rounded p-1 d-flex flex-wrap gap-1 align-items-center tag-container" style="min-height:32px;">
+                                <input type="text" class="border-0 flex-grow-1 small tag-input" data-hidden="addParticipantsVal" placeholder="输入姓名搜索..." autocomplete="off" style="outline:none;min-width:80px;">
+                            </div>
+                            <div class="position-relative"><div class="tag-dropdown position-absolute bg-white border rounded shadow-sm w-100" style="z-index:1050;display:none;max-height:150px;overflow-y:auto;font-size:.85em;"></div></div>
+                        </div>
                     </div>
                     <hr class="my-2">
                     <div class="mb-2">
@@ -186,7 +192,13 @@
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">参与人</label>
-                        <div class="col-9"><input type="text" name="participants" id="editAarParticipants" class="form-control form-control-sm"></div>
+                        <div class="col-9">
+                            <input type="hidden" name="participants" id="editAarParticipants" value="">
+                            <div class="border rounded p-1 d-flex flex-wrap gap-1 align-items-center tag-container" id="editParticipantsContainer" style="min-height:32px;">
+                                <input type="text" class="border-0 flex-grow-1 small tag-input" data-hidden="editAarParticipants" placeholder="输入姓名搜索..." autocomplete="off" style="outline:none;min-width:80px;">
+                            </div>
+                            <div class="position-relative"><div class="tag-dropdown position-absolute bg-white border rounded shadow-sm w-100" style="z-index:1050;display:none;max-height:150px;overflow-y:auto;font-size:.85em;"></div></div>
+                        </div>
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">状态</label>
@@ -224,6 +236,84 @@
 
 {% block extra_js %}
 <script>
+// Tag input with autocomplete (reusable for participants)
+var _userCache = null;
+function _loadUsers(cb) {
+    if (_userCache) return cb(_userCache);
+    fetch('/api/users').then(function(r) { return r.json(); }).then(function(d) { _userCache = d; cb(d); });
+}
+
+function initTagInput(input) {
+    var container = input.closest('.tag-container');
+    var dropdown = container.parentElement.querySelector('.tag-dropdown');
+    var hiddenVal = document.getElementById(input.dataset.hidden);
+    var selected = [], hlIdx = -1, _items = [];
+
+    function sync() { hiddenVal.value = selected.join(','); }
+    function addTag(name) {
+        if (selected.indexOf(name) >= 0) return;
+        selected.push(name);
+        var tag = document.createElement('span');
+        tag.className = 'badge bg-primary bg-opacity-75 d-flex align-items-center gap-1';
+        tag.style.fontSize = '.8em';
+        tag.textContent = name;
+        var x = document.createElement('i');
+        x.className = 'bi bi-x'; x.style.cssText = 'cursor:pointer;font-size:.9em;';
+        x.addEventListener('click', function() { selected = selected.filter(function(n){return n!==name;}); tag.remove(); sync(); });
+        tag.appendChild(x);
+        container.insertBefore(tag, input);
+        sync(); input.value = ''; dropdown.style.display = 'none'; hlIdx = -1; _items = [];
+    }
+    function render() {
+        dropdown.innerHTML = _items.map(function(it, i) {
+            return '<div class="px-2 py-1' + (i === hlIdx ? ' bg-primary bg-opacity-10' : '') + '" style="cursor:pointer;" data-name="' + it.name + '">' + it.label + '</div>';
+        }).join('');
+        dropdown.style.display = _items.length ? 'block' : 'none';
+        dropdown.querySelectorAll('[data-name]').forEach(function(opt) {
+            opt.addEventListener('mousedown', function(e) { e.preventDefault(); addTag(opt.dataset.name); });
+        });
+    }
+    input.addEventListener('input', function() {
+        var q = input.value.trim().toLowerCase(); hlIdx = -1;
+        if (!q) { dropdown.style.display = 'none'; _items = []; return; }
+        _loadUsers(function(users) {
+            _items = [];
+            users.forEach(function(u) {
+                if (selected.indexOf(u.name) >= 0) return;
+                if (u.name.toLowerCase().includes(q) || (u.pinyin||'').toLowerCase().includes(q) || (u.employee_id||'').toLowerCase().includes(q))
+                    _items.push({name: u.name, label: u.name + ' <span class="text-muted">' + (u.employee_id||'') + '</span>'});
+            });
+            if (!_items.length && q.length >= 2) _items.push({name: q, label: '<span class="text-muted">添加：' + q + '</span>'});
+            render();
+        });
+    });
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); if (_items.length) { hlIdx = Math.min(hlIdx+1, _items.length-1); render(); } }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); if (_items.length) { hlIdx = Math.max(hlIdx-1, 0); render(); } }
+        else if (e.key === 'Enter') { e.preventDefault(); if (hlIdx >= 0 && hlIdx < _items.length) addTag(_items[hlIdx].name); else { var v = input.value.trim(); if (v) addTag(v); } }
+        else if (e.key === 'Backspace' && !input.value && selected.length) { selected.pop(); var b = container.querySelectorAll('.badge'); if (b.length) b[b.length-1].remove(); sync(); }
+    });
+    input.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; hlIdx = -1; }, 200); });
+    container.addEventListener('click', function() { input.focus(); });
+
+    // Init from hidden value
+    (hiddenVal.value || '').split(',').forEach(function(n) { n = n.trim(); if (n) addTag(n); });
+
+    // Expose methods for external use
+    input._tagClear = function() {
+        selected = [];
+        container.querySelectorAll('.badge').forEach(function(b) { b.remove(); });
+        sync();
+    };
+    input._tagLoad = function(val) {
+        input._tagClear();
+        (val || '').split(',').forEach(function(n) { n = n.trim(); if (n) addTag(n); });
+    };
+}
+
+// Init all tag inputs
+document.querySelectorAll('.tag-input').forEach(initTagInput);
+
 // Toggle milestone select vs text input based on trigger type
 function toggleMsSelect(val, msSelectId) {
     var ms = document.getElementById(msSelectId);
@@ -243,7 +333,8 @@ document.addEventListener('click', function(e) {
     document.getElementById('editAarTrigger').value = btn.dataset.trigger;
     document.getElementById('editAarTriggerRef').value = btn.dataset.triggerRef;
     document.getElementById('editAarDate').value = btn.dataset.date;
-    document.getElementById('editAarParticipants').value = btn.dataset.participants;
+    var editTagInput = document.querySelector('#editParticipantsContainer .tag-input');
+    if (editTagInput && editTagInput._tagLoad) editTagInput._tagLoad(btn.dataset.participants);
     document.getElementById('editAarGoal').value = btn.dataset.goal;
     document.getElementById('editAarResult').value = btn.dataset.result;
     document.getElementById('editAarAnalysis').value = btn.dataset.analysis;

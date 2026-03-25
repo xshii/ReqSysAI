@@ -42,17 +42,59 @@
     <a href="?severity=low" class="btn btn-sm {% if cur_severity == 'low' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">低</a>
 </div>
 
+<!-- Stats cards -->
+<div class="d-flex gap-2 mb-3 flex-wrap" id="riskStats">
+    <div class="border rounded px-3 py-2 text-center bg-light">
+        <div class="fw-bold" style="font-size:1.3em;">{{ risk_stats.total }}</div>
+        <div class="text-muted small">总计</div>
+    </div>
+    <div class="border rounded px-3 py-2 text-center {{ 'border-danger' if risk_stats.open else '' }}">
+        <div class="fw-bold text-danger" style="font-size:1.3em;">{{ risk_stats.open }}</div>
+        <div class="text-muted small">未解决</div>
+    </div>
+    <div class="border rounded px-3 py-2 text-center {{ 'border-danger' if risk_stats.overdue else '' }}">
+        <div class="fw-bold text-danger" style="font-size:1.3em;">{{ risk_stats.overdue }}</div>
+        <div class="text-muted small">超期</div>
+    </div>
+    <div class="border rounded px-3 py-2 text-center">
+        <div class="fw-bold text-warning" style="font-size:1.3em;">{{ risk_stats.high }}</div>
+        <div class="text-muted small">高危未解决</div>
+    </div>
+    <div class="border rounded px-3 py-2 text-center">
+        <div class="fw-bold text-success" style="font-size:1.3em;">{{ risk_stats.resolved }}</div>
+        <div class="text-muted small">已解决</div>
+    </div>
+    <div class="border rounded px-3 py-2 text-center">
+        <div class="fw-bold text-secondary" style="font-size:1.3em;">{{ risk_stats.closed }}</div>
+        <div class="text-muted small">已关闭</div>
+    </div>
+</div>
+
+{% if domain_stats %}
+<div class="d-flex gap-2 mb-3 flex-wrap" id="domainStats">
+    {% for domain, ds in domain_stats.items() %}
+    <a href="?domain={{ domain }}" class="text-decoration-none border rounded px-2 py-1 small {{ 'border-primary bg-primary bg-opacity-10' if cur_domain == domain else '' }}" style="cursor:pointer;">
+        <span class="fw-bold {{ 'text-danger' if ds.open else 'text-success' }}">{{ ds.open }}/{{ ds.total }}</span>
+        <span class="text-muted ms-1">{{ domain }}</span>
+    </a>
+    {% endfor %}
+    {% if cur_domain %}
+    <a href="?status={{ cur_status }}&severity={{ cur_severity }}" class="text-decoration-none small text-muted"><i class="bi bi-x-circle"></i> 清除领域筛选</a>
+    {% endif %}
+</div>
+{% endif %}
+
 {% if risks %}
 <div class="table-responsive">
-    <table class="table table-hover">
+    <table class="table table-hover" id="riskTable">
         <thead class="table-light">
             <tr>
                 <th>风险</th>
                 <th>严重程度</th>
                 <th>状态</th>
                 <th>责任人</th>
+                <th>业务领域</th>
                 <th>跟踪人</th>
-                <th>关联需求</th>
                 <th>提出</th>
                 <th>预计闭环</th>
                 <th>操作</th>
@@ -88,8 +130,8 @@
                 {% if r.is_overdue %}<span class="badge bg-danger">超期</span>{% endif %}
             </td>
             <td>{{ r.owner or '-' }}</td>
+            <td class="small text-muted">{{ r.owner_user.domain if r.owner_user and r.owner_user.domain else '-' }}</td>
             <td>{{ r.tracker.name if r.tracker else '-' }}</td>
-            <td>{% if r.requirement %}<span class="small">{{ r.requirement.number }}</span>{% else %}-{% endif %}</td>
             <td class="small text-muted">{{ r.created_at.strftime('%m-%d') }}</td>
             <td class="small">
                 {{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}
@@ -313,22 +355,133 @@ function riskAutoFillManager() {
     });
 }
 function exportRiskEml() {
-    var to = document.getElementById('riskTo').value || '';
-    var cc = document.getElementById('riskCc').value || '';
+    var _r = getMergedRecipients(document.getElementById('riskTo').value, document.getElementById('riskCc').value);
+    var to = _r.to, cc = _r.cc;
     var subject = '{{ project.name }} 风险通报（{{ today.strftime("%Y-%m-%d") }}）';
+    var S = 'border:1px solid #e2e8f0;';
 
-    var body = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,sans-serif;font-size:14px;color:#333;">';
+    var rows = '';
+
+    // ── Header banner ──
+    rows += '<tr><td style="background:#1e3a5f;color:#fff;text-align:center;padding:18px 24px;font-size:16px;font-weight:700;letter-spacing:2px;">'
+        + subject + '</td></tr>';
+
+    // ── To/Cc ──
     if (to || cc) {
-        body += '<div style="font-size:12px;color:#64748b;margin-bottom:12px;">';
-        if (to) body += '<b>To:</b> ' + to + '<br>';
-        if (cc) body += '<b>Cc:</b> ' + cc + '<br>';
-        body += '</div>';
+        var rc = '';
+        if (to) rc += '<b>To:</b> ' + to + '&nbsp;&nbsp;';
+        if (cc) rc += '<b>Cc:</b> ' + cc;
+        rows += '<tr><td style="background:#f0f4f8;padding:6px 20px;font-size:11px;color:#64748b;">' + rc + '</td></tr>';
     }
-    body += '<h3 style="color:#1e3a5f;">' + subject + '</h3>';
-    // Build risk table from page
-    var table = document.querySelector('.table');
-    if (table) body += '<div>' + table.outerHTML + '</div>';
-    body += '</body></html>';
+
+    // ── Section: 总体概况 ──
+    var stats = document.getElementById('riskStats');
+    if (stats) {
+        var statsHtml = '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>';
+        stats.querySelectorAll('.border').forEach(function(card) {
+            var num = card.querySelector('.fw-bold');
+            var label = card.querySelector('.small');
+            var color = '#1e3a5f';
+            if (num.classList.contains('text-danger')) color = '#dc3545';
+            else if (num.classList.contains('text-warning')) color = '#e67e22';
+            else if (num.classList.contains('text-success')) color = '#198754';
+            else if (num.classList.contains('text-secondary')) color = '#6c757d';
+            statsHtml += '<td style="text-align:center;padding:14px 6px;' + S + '">'
+                + '<div style="font-size:24px;font-weight:700;color:' + color + ';">' + (num ? num.textContent.trim() : '') + '</div>'
+                + '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + (label ? label.textContent.trim() : '') + '</div></td>';
+        });
+        statsHtml += '</tr></table>';
+        rows += '<tr><td style="padding:16px 20px;">'
+            + '<div style="font-size:13px;font-weight:700;color:#1e3a5f;border-left:4px solid #1e3a5f;padding-left:10px;margin-bottom:10px;">总体概况</div>'
+            + statsHtml + '</td></tr>';
+    }
+
+    // ── Section: 各领域风险分布 ──
+    var domainStats = document.getElementById('domainStats');
+    if (domainStats) {
+        var tags = domainStats.querySelectorAll('a.border');
+        if (tags.length) {
+            var dHtml = '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;">'
+                + '<tr style="background:#f8fafc;"><th style="' + S + 'padding:7px 12px;text-align:left;color:#475569;">业务领域</th>'
+                + '<th style="' + S + 'padding:7px 12px;text-align:center;color:#475569;width:120px;">未闭环 / 总数</th></tr>';
+            tags.forEach(function(tag) {
+                var num = tag.querySelector('.fw-bold');
+                var label = tag.querySelector('.text-muted');
+                var isRed = num && num.classList.contains('text-danger');
+                var c = isRed ? '#dc3545' : '#198754';
+                var bg = isRed ? 'background:#fef2f2;' : '';
+                dHtml += '<tr><td style="' + S + 'padding:6px 12px;' + bg + '">' + (label ? label.textContent.trim() : '') + '</td>'
+                    + '<td style="' + S + 'padding:6px 12px;text-align:center;font-weight:700;color:' + c + ';' + bg + '">' + (num ? num.textContent.trim() : '') + '</td></tr>';
+            });
+            dHtml += '</table>';
+            rows += '<tr><td style="padding:0 20px 16px;">'
+                + '<div style="font-size:13px;font-weight:700;color:#1e3a5f;border-left:4px solid #1e3a5f;padding-left:10px;margin-bottom:10px;">各领域风险分布</div>'
+                + dHtml + '</td></tr>';
+        }
+    }
+
+    // ── Section: 风险明细 ──
+    var table = document.getElementById('riskTable');
+    if (table) {
+        var hdrStyle = S + 'padding:7px 10px;font-size:11px;font-weight:600;color:#475569;background:#f8fafc;white-space:nowrap;';
+        var cellStyle = S + 'padding:6px 10px;font-size:12px;vertical-align:top;';
+        var riskHtml = '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">';
+        // Build header (skip last col = action)
+        var ths = table.querySelectorAll('thead th');
+        riskHtml += '<tr>';
+        for (var i = 0; i < ths.length - 1; i++) riskHtml += '<th style="' + hdrStyle + '">' + ths[i].textContent.trim() + '</th>';
+        riskHtml += '</tr>';
+        // Build rows
+        var sevColors = {高:'#dc3545',中:'#e67e22',低:'#6c757d'};
+        var statusColors = {'未解决':'#dc3545','已解决':'#198754','已关闭':'#6c757d'};
+        table.querySelectorAll('tbody tr').forEach(function(tr) {
+            var tds = tr.querySelectorAll('td');
+            var isOverdue = tr.classList.contains('table-danger');
+            var rowBg = isOverdue ? 'background:#fef2f2;' : '';
+            riskHtml += '<tr>';
+            for (var j = 0; j < tds.length - 1; j++) {
+                var td = tds[j];
+                var content = '';
+                // Column-specific formatting
+                if (j === 0) {
+                    // Title: first div only (skip comments/forms)
+                    var titleDiv = td.querySelector('div');
+                    content = titleDiv ? titleDiv.textContent.trim() : td.textContent.trim();
+                    var desc = td.querySelectorAll('div.text-muted.small');
+                    if (desc.length) content += '<br><span style="color:#94a3b8;font-size:11px;">' + desc[0].textContent.trim() + '</span>';
+                    var res = td.querySelector('.text-success');
+                    if (res) content += '<br><span style="color:#198754;font-size:11px;">✓ ' + res.textContent.trim() + '</span>';
+                } else if (j === 1 || j === 2) {
+                    // Severity / Status badge
+                    var badge = td.querySelector('.badge');
+                    var text = badge ? badge.textContent.trim() : td.textContent.trim();
+                    var bc = (j === 1 ? sevColors[text] : statusColors[text]) || '#6c757d';
+                    content = '<span style="display:inline-block;padding:2px 8px;border-radius:3px;font-size:11px;color:#fff;background:' + bc + ';">' + text + '</span>';
+                    // Overdue badge
+                    var badges = td.querySelectorAll('.badge');
+                    if (badges.length > 1) content += ' <span style="display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;color:#fff;background:#dc3545;">' + badges[1].textContent.trim() + '</span>';
+                } else {
+                    content = td.textContent.trim() || '-';
+                }
+                riskHtml += '<td style="' + cellStyle + rowBg + '">' + content + '</td>';
+            }
+            riskHtml += '</tr>';
+        });
+        riskHtml += '</table>';
+        rows += '<tr><td style="padding:0 20px 16px;">'
+            + '<div style="font-size:13px;font-weight:700;color:#dc2626;border-left:4px solid #dc2626;padding-left:10px;margin-bottom:10px;">风险明细</div>'
+            + riskHtml + '</td></tr>';
+    }
+
+    // ── Footer ──
+    rows += '<tr><td style="background:#f0f4f8;text-align:center;padding:10px 20px;font-size:11px;color:#94a3b8;">'
+        + '{{ project.name }} · 风险通报 · {{ today.strftime("%Y-%m-%d") }}</td></tr>';
+
+    var html = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,Segoe UI,sans-serif;margin:0;padding:0;background:#f5f5f5;">'
+        + '<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:20px;">'
+        + '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:800px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;">'
+        + rows + '</table></td></tr></table></body></html>';
+    var body = html;
 
     function encodeH(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
     var boundary = 'boundary_' + Date.now();
@@ -418,6 +571,11 @@ document.addEventListener('click', function(e) {
     btn.disabled = true;
     btn.innerHTML = '<i class="bi bi-check"></i> 已填入';
 });
+
+function inlineRisk(riskId, field, value) {
+    apiPost('/projects/risks/' + riskId + '/inline-edit', {field: field, value: value})
+    .then(function(d) { if (d && d.ok) location.reload(); else showToast(d.msg || '更新失败', 'danger'); });
+}
 
 function setResolveId(id) {
     document.getElementById('resolveForm').action = '/projects/risks/' + id + '/resolve';

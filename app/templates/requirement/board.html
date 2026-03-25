@@ -25,7 +25,7 @@
             <option value="">全部负责人</option>
             {% for u in users %}<option value="{{ u.id }}" {% if cur_assignee == u.id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
         </select>
-        <button class="btn btn-outline-info btn-sm" id="btnToggleSub" onclick="toggleSubReqs()"><i class="bi bi-diagram-3"></i> 子需求</button>
+        <a href="?project_id={{ cur_project or '' }}&assignee_id={{ cur_assignee or '' }}&show_sub={{ '0' if show_sub else '1' }}" class="btn btn-{{ 'info' if show_sub else 'outline-info' }} btn-sm"><i class="bi bi-diagram-3"></i> 子需求</a>
         <a href="{{ url_for('requirement.requirement_list', project_id=cur_project or '') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list"></i> 列表</a>
     </div>
 </div>
@@ -42,12 +42,15 @@
         <div class="kanban-col rounded p-1 bg-light" data-status="{{ status }}"
              ondragover="onDragOver(event)" ondragenter="onDragEnter(event, this)" ondragleave="onDragLeave(this)" ondrop="onDrop(event, this)">
             {% for r in reqs %}
-            <div class="card mb-2 kanban-card shadow-sm" draggable="true" data-id="{{ r.id }}" data-status="{{ r.status }}"
+            {% set is_child = r.parent_id is not none %}
+            <div class="card mb-2 kanban-card {{ 'shadow-sm' if not is_child else 'border-start border-info border-2' }}" draggable="true" data-id="{{ r.id }}" data-status="{{ r.status }}"
+                 {% if r.parent_id %}data-parent-id="{{ r.parent_id }}"{% endif %}
                  {% if r.children %}data-children="{{ r.children | map(attribute='id') | join(',') }}"{% endif %}
                  ondragstart="onDragStart(event, this)">
                 <div class="card-body py-2 px-3">
                     <div class="d-flex justify-content-between align-items-start">
-                        <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="text-decoration-none text-dark small fw-bold">{{ r.title }}</a>
+                        {% if is_child %}<span class="text-info me-1" style="font-size:.7em;">↳</span>{% endif %}
+                        <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="text-decoration-none {{ 'text-muted' if is_child else 'text-dark' }} small {{ 'fw-bold' if not is_child else '' }}">{{ r.title }}</a>
                         <span class="badge bg-{{ r.priority_color }} ms-1" style="font-size:.65em;">{{ r.priority_label }}</span>
                     </div>
                     <div class="d-flex justify-content-between align-items-center mt-1">
@@ -66,7 +69,8 @@
                         <span class="text-muted" title="子需求进度">{{ r.children | selectattr('status', 'in', ['done','closed']) | list | length }}/{{ r.children | length }}</span>
                         {% endif %}
                     </div>
-                    {% if r.children %}
+                    {# Embedded sub-reqs only when show_sub is off (children not shown as independent cards) #}
+                    {% if r.children and not show_sub %}
                     <div class="sub-reqs" style="display:none;border-top:1px solid #e9ecef;margin-top:6px;padding-top:4px;">
                         {% for c in r.children %}
                         <div class="d-flex justify-content-between align-items-center sub-req-item" draggable="true" data-id="{{ c.id }}" data-parent-id="{{ r.id }}"
@@ -98,16 +102,8 @@
 <script>
 var csrfToken = '{{ csrf_token() }}';
 var dragId = null;
+var showSub = {{ 'true' if show_sub else 'false' }};
 
-var _subVisible = false;
-function toggleSubReqs() {
-    _subVisible = !_subVisible;
-    document.querySelectorAll('.sub-reqs').forEach(function(el) { el.style.display = _subVisible ? '' : 'none'; });
-    var btn = document.getElementById('btnToggleSub');
-    btn.classList.toggle('active', _subVisible);
-    btn.classList.toggle('btn-info', _subVisible);
-    btn.classList.toggle('btn-outline-info', !_subVisible);
-}
 function applyFilter() {
     var url = new URL(window.location);
     var p = document.getElementById('fProject').value;
@@ -154,7 +150,7 @@ function showToast(msg) {
     setTimeout(function() { el.style.display = 'none'; }, 3000);
 }
 
-/* Hover highlighting: parent <-> child */
+/* Hover highlighting: parent <-> child (works for both embedded sub-reqs and independent child cards) */
 function clearHighlights() {
     document.querySelectorAll('.highlight-related').forEach(function(el) { el.classList.remove('highlight-related'); });
 }
@@ -170,9 +166,20 @@ document.addEventListener('mouseenter', function(e) {
         return;
     }
     var card = e.target.closest('.kanban-card');
-    if (card && card.dataset.children) {
+    if (!card) return;
+    /* Child card hovering -> highlight parent */
+    if (card.dataset.parentId) {
+        clearHighlights();
+        var parentCard = document.querySelector('.kanban-card[data-id="' + card.dataset.parentId + '"]');
+        if (parentCard) parentCard.classList.add('highlight-related');
+        return;
+    }
+    /* Parent card hovering -> highlight children */
+    if (card.dataset.children) {
         clearHighlights();
         card.dataset.children.split(',').forEach(function(cid) {
+            var childCard = document.querySelector('.kanban-card[data-id="' + cid + '"]');
+            if (childCard) childCard.classList.add('highlight-related');
             document.querySelectorAll('.sub-req-item[data-id="' + cid + '"]').forEach(function(el) {
                 el.classList.add('highlight-related');
             });

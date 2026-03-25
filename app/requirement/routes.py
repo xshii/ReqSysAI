@@ -344,6 +344,8 @@ def requirement_board():
     assignee_id = request.args.get('assignee_id', type=int)
     swimlane = request.args.get('swimlane', '')  # '' or 'assignee'
 
+    show_sub = request.args.get('show_sub', '0') == '1'
+
     query = Requirement.query.filter(Requirement.parent_id.is_(None)).options(
         joinedload(Requirement.project), joinedload(Requirement.assignee),
         joinedload(Requirement.children),
@@ -355,15 +357,26 @@ def requirement_board():
 
     reqs = query.order_by(Requirement.priority, Requirement.updated_at.desc()).all()
 
+    # Collect child requirements as independent cards
+    sub_reqs = []
+    if show_sub:
+        for r in reqs:
+            for c in r.children:
+                sub_reqs.append(c)
+
     # Group by status for columns
     columns = list(Requirement._STATUS_META.keys())
     board = {s: [] for s in columns}
     for r in reqs:
         if r.status in board:
             board[r.status].append(r)
+    # Sub-reqs as independent cards in their own status columns
+    for c in sub_reqs:
+        if c.status in board:
+            board[c.status].append(c)
 
     return render_template('requirement/board.html',
-        board=board, columns=columns,
+        board=board, columns=columns, show_sub=show_sub,
         status_meta=Requirement._STATUS_META,
         projects=Project.query.filter_by(status='active').all(),
         users=User.query.filter_by(is_active=True).order_by(User.name).all(),

@@ -34,15 +34,14 @@
                        placeholder="默认：项目名 项目周报（日期）" onchange="onSaveEmailSettings()">
             </div>
             <div class="col-md-4">
-                <label class="form-label mb-0 fw-bold">收件人 (To)</label>
+                <label class="form-label mb-0 fw-bold">额外收件人 (To)</label>
                 <input type="text" id="emlTo" class="form-control form-control-sm"
-                       placeholder="工号;工号 如 a00123456;b00654321" onchange="onSaveEmailSettings()">
-                <div class="text-muted" style="font-size:.65em;">EML为草稿模式，需在Outlook中手动填写收件人</div>
+                       placeholder="工号;工号（项目成员+风险责任人已自动提取）" onchange="onSaveEmailSettings()">
             </div>
             <div class="col-md-4">
-                <label class="form-label mb-0 fw-bold">抄送 (Cc) <button type="button" class="btn btn-link btn-sm p-0 ms-1" style="font-size:.75em;" onclick="autoFillManager()">+主管</button></label>
+                <label class="form-label mb-0 fw-bold">额外抄送 (Cc) <button type="button" class="btn btn-link btn-sm p-0 ms-1" style="font-size:.75em;" onclick="autoFillManager()">+主管</button></label>
                 <input type="text" id="emlCc" class="form-control form-control-sm"
-                       placeholder="工号;工号" onchange="onSaveEmailSettings()">
+                       placeholder="工号;工号（主管已自动提取）" onchange="onSaveEmailSettings()">
             </div>
         </div>
     </div>
@@ -143,14 +142,15 @@
     <h6 class="risk-title">五、风险 & 问题</h6>
     {% if report_data.open_risks %}
     <table class="report-table">
-        <thead><tr><th>风险</th><th>严重程度</th><th>责任人</th><th>跟踪人</th><th>预计闭环</th></tr></thead>
+        <thead><tr><th>风险</th><th>严重程度</th><th>责任人</th><th>业务领域</th><th>跟踪人</th><th>预计闭环</th></tr></thead>
         <tbody>
         {% for r in report_data.open_risks %}
         <tr class="{{ 'row-risk' if r.is_overdue else '' }}">
             <td>{{ r.title }}{% if r.is_overdue %} <span class="fw-bold">(超期)</span>{% endif %}</td>
             <td>{{ r.severity_label }}</td>
-            <td>{{ r.owner or '-' }}</td>
-            <td>{{ r.tracker.name if r.tracker else '-' }}</td>
+            <td>{{ r.owner or '-' }}{% if r.owner_user %} {{ r.owner_user.employee_id }}{% endif %}</td>
+            <td>{{ r.owner_user.domain if r.owner_user and r.owner_user.domain else '-' }}</td>
+            <td>{{ r.tracker.name if r.tracker else '-' }}{% if r.tracker %} {{ r.tracker.employee_id }}{% endif %}</td>
             <td class="{{ 'text-danger fw-bold' if r.is_overdue else '' }}">{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
         </tr>
         {% endfor %}
@@ -560,8 +560,8 @@ function exportEml() {
     });
 
 
-    var to = (document.getElementById('emlTo') || {}).value || '';
-    var cc = (document.getElementById('emlCc') || {}).value || '';
+    var _r = getMergedRecipients((document.getElementById('emlTo') || {}).value, (document.getElementById('emlCc') || {}).value);
+    var to = _r.to, cc = _r.cc;
     // Prepend To/Cc as plain text in body
     var recipientBlock = '';
     if (to || cc) {

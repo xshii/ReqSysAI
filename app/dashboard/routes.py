@@ -360,7 +360,11 @@ def weekly_report():
             for r in open_risks:
                 r_days = (r.due_date - date.today()).days if r.due_date else 999
                 r_status = f'已延期{-r_days}天' if r_days < 0 else f'剩{r_days}天'
-                lines.append(f'- {r.title}（{r.severity_label}，{r_status}，跟踪人：{r.tracker.name if r.tracker else "无"}）')
+                owner_info = f'{r.owner}' if r.owner else '无'
+                if r.owner_user:
+                    owner_info += f' {r.owner_user.employee_id}'
+                tracker_info = f'{r.tracker.name} {r.tracker.employee_id}' if r.tracker else '无'
+                lines.append(f'- {r.title}（{r.severity_label}，{r_status}，责任人：{owner_info}，跟踪人：{tracker_info}）')
 
         if req_changes:
             lines.append('\n本周需求状态变更：')
@@ -413,16 +417,21 @@ def weekly_report():
             ai_analysis['risks'] = result.get('risks', [])
             ai_analysis['plan'] = result.get('plan', [])
 
-        # Reviewer: PL of current user's group; if user is PL, then XM
+        # Reviewer: PL of current user's group; if user is PL, then XM; fallback to manager
         reviewer = ''
         if current_user.has_role('PL'):
             xm_users = User.query.filter(User.is_active == True, User.group == current_user.group)\
                 .join(User.roles).filter(Role.name.in_(['XM', 'PM'])).first()
-            reviewer = xm_users.name if xm_users else '待定'
+            reviewer = xm_users.name if xm_users else ''
         else:
             pl_user = User.query.filter(User.is_active == True, User.group == current_user.group)\
                 .join(User.roles).filter(Role.name == 'PL').first()
-            reviewer = pl_user.name if pl_user else '待定'
+            reviewer = pl_user.name if pl_user else ''
+        if not reviewer and current_user.manager:
+            parts = current_user.manager.strip().split()
+            reviewer = parts[0] if parts else '待定'
+        if not reviewer:
+            reviewer = '待定'
 
         # People map: person × requirement matrix
         people_map = {}
@@ -581,16 +590,21 @@ def weekly_report():
             risk_q = risk_q.filter_by(project_id=cur_project_id)
         open_risks = risk_q.order_by(Risk.severity, Risk.due_date).all()
 
-        # Reviewer
+        # Reviewer: PL of current user's group; if user is PL, then XM; fallback to manager
         reviewer = ''
         if current_user.has_role('PL'):
             xm = User.query.filter(User.is_active == True, User.group == current_user.group)\
                 .join(User.roles).filter(Role.name.in_(['XM', 'PM'])).first()
-            reviewer = xm.name if xm else '待定'
+            reviewer = xm.name if xm else ''
         else:
             pl = User.query.filter(User.is_active == True, User.group == current_user.group)\
                 .join(User.roles).filter(Role.name == 'PL').first()
-            reviewer = pl.name if pl else '待定'
+            reviewer = pl.name if pl else ''
+        if not reviewer and current_user.manager:
+            parts = current_user.manager.strip().split()
+            reviewer = parts[0] if parts else '待定'
+        if not reviewer:
+            reviewer = '待定'
 
         # People map
         people_map = {}

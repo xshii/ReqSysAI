@@ -160,24 +160,7 @@
 {# ── Tab 2: AAR复盘 ── #}
 <div class="tab-pane fade" id="paneAAR">
 
-<!-- AAR Email Settings -->
-<div class="border rounded p-2 bg-light mb-3">
-    <div class="row g-2 small">
-        <div class="col-md-6">
-            <label class="form-label mb-0 fw-bold">收件人 (To)</label>
-            <input type="text" id="aarEmlTo" class="form-control form-control-sm"
-                   placeholder="工号;工号 如 a00123456;b00654321" onchange="saveAarEmailSettings()">
-            <div class="text-muted" style="font-size:.65em;">EML为草稿模式，需在Outlook中手动填写收件人</div>
-        </div>
-        <div class="col-md-6">
-            <label class="form-label mb-0 fw-bold">抄送 (Cc) <button type="button" class="btn btn-link btn-sm p-0 ms-1" style="font-size:.75em;" onclick="aarAutoFillManager()">+主管</button></label>
-            <input type="text" id="aarEmlCc" class="form-control form-control-sm"
-                   placeholder="工号;工号" onchange="saveAarEmailSettings()">
-        </div>
-    </div>
-</div>
-
-<div class="d-flex justify-content-end gap-2 mb-3">
+<div class="d-flex justify-content-end gap-2 mb-2">
     <select id="aarTriggerFilter" class="form-select form-select-sm" style="width:auto;" onchange="filterAAR()">
         <option value="">全部类型</option>
         {% for k, v in trigger_labels.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
@@ -187,7 +170,7 @@
 
 {% if aars %}
 {% for aar in aars %}
-<div class="card mb-3 aar-card" data-trigger="{{ aar.trigger }}">
+<div class="card mb-3 aar-card" id="aarCard{{ aar.id }}" data-trigger="{{ aar.trigger }}">
     <div class="card-header py-2 d-flex justify-content-between align-items-center">
         <div>
             <span class="badge bg-{{ 'success' if aar.status == 'done' else 'secondary' }} me-1">{{ '已完成' if aar.status == 'done' else '草稿' }}</span>
@@ -265,16 +248,40 @@
                     data-result="{{ aar.result or '' }}" data-analysis="{{ aar.analysis or '' }}"
                     data-action="{{ aar.action or '' }}" data-status="{{ aar.status }}"><i class="bi bi-pencil"></i> 编辑</button>
             <button class="btn btn-sm btn-outline-success export-aar-eml"
+                    data-aar-id="{{ aar.id }}"
                     data-title="{{ aar.title }}" data-date="{{ aar.date.strftime('%Y-%m-%d') if aar.date else '' }}"
                     data-participants="{{ aar.participants or '' }}"
                     data-goal="{{ aar.goal or '' }}" data-result="{{ aar.result or '' }}"
                     data-analysis="{{ aar.analysis or '' }}" data-action="{{ aar.action or '' }}"><i class="bi bi-envelope-arrow-up"></i> 导出Outlook</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#aarEmailSettings{{ aar.id }}"><i class="bi bi-gear"></i></button>
             <form method="POST" action="{{ url_for('project.aar_list', project_id=project.id) }}" class="d-inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="delete">
                 <input type="hidden" name="aar_id" value="{{ aar.id }}">
                 <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('删除此AAR？')"><i class="bi bi-x"></i> 删除</button>
             </form>
+        </div>
+        <!-- Per-AAR email settings -->
+        <div class="collapse mt-2" id="aarEmailSettings{{ aar.id }}">
+            <div class="border rounded p-2 bg-light">
+                <div class="row g-2 small">
+                    <div class="col-md-4">
+                        <label class="form-label mb-0 fw-bold">邮件标题</label>
+                        <input type="text" class="form-control form-control-sm aar-eml-subject" data-aar-id="{{ aar.id }}"
+                               placeholder="默认：AAR标题（日期）" onchange="saveAarEmailSettings({{ aar.id }})">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label mb-0 fw-bold">额外收件人 (To)</label>
+                        <input type="text" class="form-control form-control-sm aar-eml-to" data-aar-id="{{ aar.id }}"
+                               placeholder="工号;工号（自动提取的不需要填）" onchange="saveAarEmailSettings({{ aar.id }})">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label mb-0 fw-bold">额外抄送 (Cc)</label>
+                        <input type="text" class="form-control form-control-sm aar-eml-cc" data-aar-id="{{ aar.id }}"
+                               placeholder="工号;工号（自动提取的不需要填）" onchange="saveAarEmailSettings({{ aar.id }})">
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -630,41 +637,31 @@ function filterAAR() {
     });
 }
 
-// AAR email settings — DB save/load
-function saveAarEmailSettings() {
-    saveEmailSettings('aar', {{ project.id }},
-        '',
-        document.getElementById('aarEmlTo').value,
-        document.getElementById('aarEmlCc').value);
+// Per-AAR email settings — DB save/load
+function _aarField(aarId, cls) {
+    return document.querySelector('.' + cls + '[data-aar-id="' + aarId + '"]');
 }
+function saveAarEmailSettings(aarId) {
+    saveEmailSettings('aar', aarId,
+        (_aarField(aarId, 'aar-eml-subject') || {}).value || '',
+        (_aarField(aarId, 'aar-eml-to') || {}).value || '',
+        (_aarField(aarId, 'aar-eml-cc') || {}).value || '');
+}
+// Load settings for each AAR on page load
 (function() {
-    if (!document.getElementById('aarEmlTo')) return;
-    loadEmailSettings('aar', {{ project.id }},
-        {to: {{ (aar_default_to or '')|tojson }}, cc: {{ (aar_default_cc or '')|tojson }}},
-        function(d) {
-            document.getElementById('aarEmlTo').value = d.to || '';
-            document.getElementById('aarEmlCc').value = d.cc || '';
+    var defaults = {to: {{ (aar_default_to or '')|tojson }}, cc: {{ (aar_default_cc or '')|tojson }}};
+    document.querySelectorAll('.aar-eml-to').forEach(function(el) {
+        var aarId = el.dataset.aarId;
+        loadEmailSettings('aar', aarId, defaults, function(d) {
+            var subj = _aarField(aarId, 'aar-eml-subject');
+            var toEl = _aarField(aarId, 'aar-eml-to');
+            var ccEl = _aarField(aarId, 'aar-eml-cc');
+            if (subj) subj.value = d.subject || '';
+            if (toEl) toEl.value = d.to || '';
+            if (ccEl) ccEl.value = d.cc || '';
         });
-})();
-
-function aarAutoFillManager() {
-    fetch('/api/users').then(function(r) { return r.json(); }).then(function(users) {
-        var me = users.find(function(u) { return u.id === {{ current_user.id }}; });
-        if (!me || !me.manager) return;
-        var parts = me.manager.trim().split(/\s+/);
-        var mgrId = parts.length > 1 ? parts[parts.length - 1] : parts[0];
-        var cc = document.getElementById('aarEmlCc');
-        var existing = cc.value.split(/[;,；，]/).map(function(s) { return s.trim(); }).filter(Boolean);
-        if (existing.indexOf(mgrId) === -1) {
-            existing.push(mgrId);
-            cc.value = existing.join(';');
-            saveAarEmailSettings();
-            showToast('已添加主管: ' + me.manager, 'success');
-        } else {
-            showToast('主管已在抄送列表中', 'info');
-        }
     });
-}
+})();
 
 // AAR EML export
 document.addEventListener('click', function(e) {
@@ -677,26 +674,92 @@ document.addEventListener('click', function(e) {
     var result = btn.dataset.result || '';
     var analysis = btn.dataset.analysis || '';
     var action = btn.dataset.action || '';
-    var emlTo = (document.getElementById('aarEmlTo').value || '').trim();
-    var emlCc = (document.getElementById('aarEmlCc').value || '').trim();
+    var aarId = btn.dataset.aarId;
+    var extraTo = (_aarField(aarId, 'aar-eml-to') || {}).value || '';
+    var extraCc = (_aarField(aarId, 'aar-eml-cc') || {}).value || '';
+    var _r = getMergedRecipients(extraTo.trim(), extraCc.trim());
+    var emlTo = _r.to, emlCc = _r.cc;
+    var customSubject = (_aarField(aarId, 'aar-eml-subject') || {}).value || '';
 
-    var subject = title + (aarDate ? '（' + aarDate + '）' : '');
-    var body = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,sans-serif;font-size:14px;color:#333;">';
+    var subject = customSubject || (title + (aarDate ? '（' + aarDate + '）' : ''));
+    var S = 'border:1px solid #e2e8f0;';
+    var rows = '';
+
+    // Header
+    rows += '<tr><td style="background:#1e3a5f;color:#fff;text-align:center;padding:18px 24px;font-size:16px;font-weight:700;letter-spacing:2px;">AAR复盘 · ' + title + '</td></tr>';
+
     // To/Cc
-    body += '<div style="font-size:12px;color:#64748b;margin-bottom:12px;">';
-    if (emlTo) body += '<b>To:</b> ' + emlTo + '<br>';
-    if (emlCc) body += '<b>Cc:</b> ' + emlCc + '<br>';
-    body += '</div>';
-    // Content
-    body += '<h3 style="color:#1e3a5f;">' + title + '</h3>';
-    if (aarDate) body += '<div style="color:#64748b;font-size:12px;">日期：' + aarDate + '</div>';
-    if (participants) body += '<div style="color:#64748b;font-size:12px;">参与人：' + participants + '</div>';
-    body += '<hr style="border:1px solid #e2e8f0;">';
-    body += '<h4 style="color:#0d6efd;">1. 目标</h4><p>' + (goal || '-') + '</p>';
-    body += '<h4 style="color:#198754;">2. 实际结果</h4><p>' + (result || '-') + '</p>';
-    body += '<h4 style="color:#ffc107;">3. 差异分析</h4><p>' + (analysis || '-') + '</p>';
-    body += '<h4 style="color:#dc3545;">4. 改进措施</h4><p>' + (action || '-') + '</p>';
-    body += '</body></html>';
+    if (emlTo || emlCc) {
+        var rc = '';
+        if (emlTo) rc += '<b>To:</b> ' + emlTo + '&nbsp;&nbsp;';
+        if (emlCc) rc += '<b>Cc:</b> ' + emlCc;
+        rows += '<tr><td style="background:#f0f4f8;padding:6px 20px;font-size:11px;color:#64748b;">' + rc + '</td></tr>';
+    }
+
+    // Meta
+    var meta = '';
+    if (aarDate) meta += '日期：' + aarDate + '&nbsp;&nbsp;&nbsp;';
+    if (participants) meta += '参与人：' + participants;
+    if (meta) rows += '<tr><td style="padding:10px 20px;font-size:12px;color:#64748b;">' + meta + '</td></tr>';
+
+    // Four sections
+    var sections = [
+        {label: '1. 目标是什么', color: '#0d6efd', text: goal},
+        {label: '2. 实际发生了什么', color: '#198754', text: result},
+        {label: '3. 为什么有差异', color: '#e67e22', text: analysis},
+        {label: '4. 下次怎么改进', color: '#dc3545', text: action}
+    ];
+    sections.forEach(function(sec) {
+        rows += '<tr><td style="padding:4px 20px 12px;">'
+            + '<div style="font-size:13px;font-weight:700;color:' + sec.color + ';border-left:4px solid ' + sec.color + ';padding-left:10px;margin-bottom:6px;">' + sec.label + '</div>'
+            + '<div style="font-size:13px;line-height:1.6;white-space:pre-line;padding-left:14px;">' + (sec.text || '-') + '</div>'
+            + '</td></tr>';
+    });
+
+    // Linked risks / issues from AAR card
+    var card = document.getElementById('aarCard' + aarId);
+    if (card) {
+        var issueTable = card.querySelector('.table');
+        if (issueTable) {
+            var issueLabel = card.querySelector('.fw-bold.mb-1');
+            var hdr = issueLabel ? issueLabel.textContent.trim() : '遗留问题';
+            var cellS = S + 'padding:5px 10px;font-size:12px;';
+            var hdrS = S + 'padding:6px 10px;font-size:11px;font-weight:600;background:#f8fafc;color:#475569;';
+            var tHtml = '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">'
+                + '<tr><th style="' + hdrS + '">问题</th><th style="' + hdrS + '">状态</th><th style="' + hdrS + '">责任人</th><th style="' + hdrS + '">截止</th></tr>';
+            issueTable.querySelectorAll('tbody tr').forEach(function(tr) {
+                var tds = tr.querySelectorAll('td');
+                var isDone = tr.classList.contains('table-success');
+                if (isDone) return; // Skip closed/resolved issues
+                tHtml += '<tr>';
+                tds.forEach(function(td, i) {
+                    var badge = td.querySelector('.badge');
+                    if (badge) {
+                        var statusColors = {'未解决':'#dc3545','已解决':'#198754','已关闭':'#6c757d'};
+                        var txt = badge.textContent.trim();
+                        var bc = statusColors[txt] || '#6c757d';
+                        tHtml += '<td style="' + cellS + '"><span style="display:inline-block;padding:2px 8px;border-radius:3px;font-size:11px;color:#fff;background:' + bc + ';">' + txt + '</span></td>';
+                    } else {
+                        tHtml += '<td style="' + cellS + '">' + td.textContent.trim() + '</td>';
+                    }
+                });
+                tHtml += '</tr>';
+            });
+            tHtml += '</table>';
+            rows += '<tr><td style="padding:4px 20px 16px;">'
+                + '<div style="font-size:13px;font-weight:700;color:#1e3a5f;border-left:4px solid #1e3a5f;padding-left:10px;margin-bottom:8px;">' + hdr + '</div>'
+                + tHtml + '</td></tr>';
+        }
+    }
+
+    // Footer
+    rows += '<tr><td style="background:#f0f4f8;text-align:center;padding:10px 20px;font-size:11px;color:#94a3b8;">'
+        + 'AAR复盘 · ' + title + ' · ' + (aarDate || '') + '</td></tr>';
+
+    var body = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,Segoe UI,sans-serif;margin:0;padding:0;background:#f5f5f5;">'
+        + '<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:20px;">'
+        + '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:800px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;">'
+        + rows + '</table></td></tr></table></body></html>';
 
     function encodeH(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
     var boundary = 'boundary_' + Date.now();
