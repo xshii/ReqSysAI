@@ -159,6 +159,24 @@
 
 {# ── Tab 2: AAR复盘 ── #}
 <div class="tab-pane fade" id="paneAAR">
+
+<!-- AAR Email Settings -->
+<div class="border rounded p-2 bg-light mb-3">
+    <div class="row g-2 small">
+        <div class="col-md-6">
+            <label class="form-label mb-0 fw-bold">收件人 (To)</label>
+            <input type="text" id="aarEmlTo" class="form-control form-control-sm"
+                   placeholder="工号;工号 如 a00123456;b00654321" onchange="saveAarEmailSettings()">
+            <div class="text-muted" style="font-size:.65em;">EML为草稿模式，需在Outlook中手动填写收件人</div>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label mb-0 fw-bold">抄送 (Cc) <button type="button" class="btn btn-link btn-sm p-0 ms-1" style="font-size:.75em;" onclick="aarAutoFillManager()">+主管</button></label>
+            <input type="text" id="aarEmlCc" class="form-control form-control-sm"
+                   placeholder="工号;工号" onchange="saveAarEmailSettings()">
+        </div>
+    </div>
+</div>
+
 <div class="d-flex justify-content-end gap-2 mb-3">
     <select id="aarTriggerFilter" class="form-select form-select-sm" style="width:auto;" onchange="filterAAR()">
         <option value="">全部类型</option>
@@ -612,6 +630,42 @@ function filterAAR() {
     });
 }
 
+// AAR email settings — localStorage save/load
+function saveAarEmailSettings() {
+    localStorage.setItem('aar_eml_to', document.getElementById('aarEmlTo').value);
+    localStorage.setItem('aar_eml_cc', document.getElementById('aarEmlCc').value);
+}
+(function() {
+    var t = document.getElementById('aarEmlTo'), c = document.getElementById('aarEmlCc');
+    if (t) {
+        var savedTo = localStorage.getItem('aar_eml_to') || '';
+        t.value = savedTo || {{ (aar_default_to or '')|tojson }};
+    }
+    if (c) {
+        var savedCc = localStorage.getItem('aar_eml_cc') || '';
+        c.value = savedCc || {{ (aar_default_cc or '')|tojson }};
+    }
+})();
+
+function aarAutoFillManager() {
+    fetch('/api/users').then(function(r) { return r.json(); }).then(function(users) {
+        var me = users.find(function(u) { return u.id === {{ current_user.id }}; });
+        if (!me || !me.manager) return;
+        var parts = me.manager.trim().split(/\s+/);
+        var mgrId = parts.length > 1 ? parts[parts.length - 1] : parts[0];
+        var cc = document.getElementById('aarEmlCc');
+        var existing = cc.value.split(/[;,；，]/).map(function(s) { return s.trim(); }).filter(Boolean);
+        if (existing.indexOf(mgrId) === -1) {
+            existing.push(mgrId);
+            cc.value = existing.join(';');
+            saveAarEmailSettings();
+            showToast('已添加主管: ' + me.manager, 'success');
+        } else {
+            showToast('主管已在抄送列表中', 'info');
+        }
+    });
+}
+
 // AAR EML export
 document.addEventListener('click', function(e) {
     var btn = e.target.closest('.export-aar-eml');
@@ -623,15 +677,15 @@ document.addEventListener('click', function(e) {
     var result = btn.dataset.result || '';
     var analysis = btn.dataset.analysis || '';
     var action = btn.dataset.action || '';
-    var defaultTo = {{ (aar_default_to or '')|tojson }};
-    var defaultCc = {{ (aar_default_cc or '')|tojson }};
+    var emlTo = (document.getElementById('aarEmlTo').value || '').trim();
+    var emlCc = (document.getElementById('aarEmlCc').value || '').trim();
 
     var subject = title + (aarDate ? '（' + aarDate + '）' : '');
     var body = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,sans-serif;font-size:14px;color:#333;">';
     // To/Cc
     body += '<div style="font-size:12px;color:#64748b;margin-bottom:12px;">';
-    if (defaultTo) body += '<b>To:</b> ' + defaultTo + '<br>';
-    if (defaultCc) body += '<b>Cc:</b> ' + defaultCc + '<br>';
+    if (emlTo) body += '<b>To:</b> ' + emlTo + '<br>';
+    if (emlCc) body += '<b>Cc:</b> ' + emlCc + '<br>';
     body += '</div>';
     // Content
     body += '<h3 style="color:#1e3a5f;">' + title + '</h3>';

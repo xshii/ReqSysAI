@@ -32,6 +32,31 @@
         <button type="button" class="btn btn-outline-primary btn-sm" onclick="sendEmail()">
             <i class="bi bi-envelope-arrow-up"></i> 导出Outlook
         </button>
+        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#meetingEmailSettings"><i class="bi bi-gear"></i></button>
+    </div>
+</div>
+
+<!-- Email Settings -->
+<div class="collapse mb-3" id="meetingEmailSettings">
+    <div class="border rounded p-2 bg-light">
+        <div class="row g-2 small">
+            <div class="col-md-4">
+                <label class="form-label mb-0 fw-bold">邮件标题</label>
+                <input type="text" id="meetingEmlSubject" class="form-control form-control-sm"
+                       placeholder="默认：会议标题（日期）" onchange="saveMeetingEmailSettings()">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label mb-0 fw-bold">收件人 (To)</label>
+                <input type="text" id="meetingEmlTo" class="form-control form-control-sm"
+                       placeholder="工号;工号 如 a00123456;b00654321" onchange="saveMeetingEmailSettings()">
+                <div class="text-muted" style="font-size:.65em;">EML为草稿模式，需在Outlook中手动填写收件人</div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label mb-0 fw-bold">抄送 (Cc) <button type="button" class="btn btn-link btn-sm p-0 ms-1" style="font-size:.75em;" onclick="meetingAutoFillManager()">+主管</button></label>
+                <input type="text" id="meetingEmlCc" class="form-control form-control-sm"
+                       placeholder="工号;工号" onchange="saveMeetingEmailSettings()">
+            </div>
+        </div>
     </div>
 </div>
 
@@ -300,13 +325,52 @@ function acceptPolish() {
     });
 })();
 
+// Meeting email settings — localStorage save/load
+function saveMeetingEmailSettings() {
+    localStorage.setItem('meeting_eml_subject', document.getElementById('meetingEmlSubject').value);
+    localStorage.setItem('meeting_eml_to', document.getElementById('meetingEmlTo').value);
+    localStorage.setItem('meeting_eml_cc', document.getElementById('meetingEmlCc').value);
+}
+(function() {
+    var s = document.getElementById('meetingEmlSubject'), t = document.getElementById('meetingEmlTo'), c = document.getElementById('meetingEmlCc');
+    if (s) s.value = localStorage.getItem('meeting_eml_subject') || '';
+    if (t) {
+        var savedTo = localStorage.getItem('meeting_eml_to') || '';
+        t.value = savedTo || {{ (default_to or '')|tojson }};
+    }
+    if (c) {
+        var savedCc = localStorage.getItem('meeting_eml_cc') || '';
+        c.value = savedCc || {{ (default_cc or '')|tojson }};
+    }
+})();
+
+function meetingAutoFillManager() {
+    fetch('/api/users').then(function(r) { return r.json(); }).then(function(users) {
+        var me = users.find(function(u) { return u.id === {{ current_user.id }}; });
+        if (!me || !me.manager) return;
+        var parts = me.manager.trim().split(/\s+/);
+        var mgrId = parts.length > 1 ? parts[parts.length - 1] : parts[0];
+        var cc = document.getElementById('meetingEmlCc');
+        var existing = cc.value.split(/[;,；，]/).map(function(s) { return s.trim(); }).filter(Boolean);
+        if (existing.indexOf(mgrId) === -1) {
+            existing.push(mgrId);
+            cc.value = existing.join(';');
+            saveMeetingEmailSettings();
+            showToast('已添加主管: ' + me.manager, 'success');
+        } else {
+            showToast('主管已在抄送列表中', 'info');
+        }
+    });
+}
+
 // Send email as EML file (Outlook draft)
 function encodeHeader(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
 function sendEmail() {
-    var defaultTo = {{ (default_to or '')|tojson }};
-    var defaultCc = {{ (default_cc or '')|tojson }};
+    var emlTo = (document.getElementById('meetingEmlTo').value || '').trim();
+    var emlCc = (document.getElementById('meetingEmlCc').value || '').trim();
+    var emlSubjectCustom = (document.getElementById('meetingEmlSubject').value || '').trim();
 
-    var subject = {{ (meeting.title ~ '（' ~ (meeting.date.strftime("%Y-%m-%d") if meeting.date else "") ~ '）')|tojson }};
+    var subject = emlSubjectCustom || {{ (meeting.title ~ '（' ~ (meeting.date.strftime("%Y-%m-%d") if meeting.date else "") ~ '）')|tojson }};
 
     var attendees = (document.getElementById('attendeesVal').value || '').split(',').map(function(n) { return n.trim(); }).filter(Boolean);
 
@@ -314,10 +378,10 @@ function sendEmail() {
     var html = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,Segoe UI,sans-serif;font-size:13px;color:#333;">';
 
     // To/Cc as plain text in body first lines
-    if (defaultTo || defaultCc) {
+    if (emlTo || emlCc) {
         html += '<div style="font-size:12px;color:#64748b;margin-bottom:12px;">';
-        if (defaultTo) html += '<div><b>To:</b> ' + defaultTo + '</div>';
-        if (defaultCc) html += '<div><b>Cc:</b> ' + defaultCc + '</div>';
+        if (emlTo) html += '<div><b>To:</b> ' + emlTo + '</div>';
+        if (emlCc) html += '<div><b>Cc:</b> ' + emlCc + '</div>';
         html += '</div>';
     }
 
