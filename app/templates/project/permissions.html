@@ -311,7 +311,7 @@ function appendUserToList(name, pinyin, eid) {
     var entry = (name + ' ' + (eid || '')).trim();
     var ta = document.getElementById('peopleList');
     var cur = ta.value.trim();
-    if (cur && cur.indexOf(name) !== -1) return;
+    if (cur && cur.indexOf(entry) !== -1) return;
     ta.value = cur ? cur + '\n' + entry : entry;
     var pickerInput = document.querySelector('#applyModal .user-picker-input');
     if (pickerInput) pickerInput.value = '';
