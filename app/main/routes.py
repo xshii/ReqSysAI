@@ -562,9 +562,10 @@ def api_search():
         'user': lambda r: url_for('admin.user_list'),
         'meeting': lambda r: url_for('project.meeting_detail', project_id=r.get('project_id', 1), meeting_id=int(r['id'])),
         'risk': lambda r: url_for('project.risk_list', project_id=r.get('project_id', 1)),
+        'aar': lambda r: url_for('project.aar_list', project_id=r.get('project_id', 1)),
     }
     type_labels = {'requirement': '需求', 'todo': 'Todo', 'project': '项目',
-                   'user': '用户', 'meeting': '会议', 'risk': '风险'}
+                   'user': '用户', 'meeting': '会议', 'risk': '风险', 'aar': 'AAR复盘'}
     for r in results:
         fn = url_map.get(r['type'])
         r['url'] = fn(r) if fn else '#'

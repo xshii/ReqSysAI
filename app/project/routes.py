@@ -13,7 +13,7 @@ from app.models.project import Project, Milestone
 from app.models.meeting import Meeting
 from app.models.risk import Risk
 from app.models.project_member import ProjectMember
-from app.models.knowledge import Knowledge, PermissionRequest, PermissionItem, PermissionApplication
+from app.models.knowledge import Knowledge, PermissionRequest, PermissionItem, PermissionApplication, AAR
 from app.models.user import User
 from app.utils.pinyin import to_pinyin
 
@@ -922,6 +922,72 @@ def knowledge_list(project_id):
     return render_template('project/knowledge.html', project=project, items=items,
                            link_types=Knowledge.LINK_TYPES,
                            existing_biz_cats=existing_biz_cats)
+
+
+# ---- AAR (After Action Review) ----
+
+@project_bp.route('/<int:project_id>/aar', methods=['GET', 'POST'])
+@login_required
+def aar_list(project_id):
+    project = db.get_or_404(Project, project_id)
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'add':
+            from datetime import date as date_cls
+            date_str = request.form.get('date', '')
+            try:
+                aar_date = date_cls.fromisoformat(date_str) if date_str else date.today()
+            except ValueError:
+                aar_date = date.today()
+            db.session.add(AAR(
+                project_id=project_id,
+                title=request.form.get('title', '').strip(),
+                trigger=request.form.get('trigger', 'custom'),
+                trigger_ref=request.form.get('trigger_ref', '').strip() or None,
+                date=aar_date,
+                participants=request.form.get('participants', '').strip() or None,
+                goal=request.form.get('goal', '').strip() or None,
+                result=request.form.get('result', '').strip() or None,
+                analysis=request.form.get('analysis', '').strip() or None,
+                action=request.form.get('action_items', '').strip() or None,
+                created_by=current_user.id,
+            ))
+            db.session.commit()
+            flash('AAR 已创建', 'success')
+        elif action == 'edit':
+            aar = db.session.get(AAR, request.form.get('aar_id', type=int))
+            if aar and aar.project_id == project_id:
+                aar.title = request.form.get('title', aar.title).strip()
+                aar.trigger = request.form.get('trigger', aar.trigger)
+                aar.trigger_ref = request.form.get('trigger_ref', '').strip() or None
+                date_str = request.form.get('date', '')
+                if date_str:
+                    try:
+                        aar.date = date.fromisoformat(date_str)
+                    except ValueError:
+                        pass
+                aar.participants = request.form.get('participants', '').strip() or None
+                aar.goal = request.form.get('goal', '').strip() or None
+                aar.result = request.form.get('result', '').strip() or None
+                aar.analysis = request.form.get('analysis', '').strip() or None
+                aar.action = request.form.get('action_items', '').strip() or None
+                aar.status = request.form.get('status', aar.status)
+                db.session.commit()
+                flash('已更新', 'success')
+        elif action == 'delete':
+            aar = db.session.get(AAR, request.form.get('aar_id', type=int))
+            if aar and aar.project_id == project_id:
+                db.session.delete(aar)
+                db.session.commit()
+                flash('已删除', 'success')
+        return redirect(url_for('project.aar_list', project_id=project_id))
+
+    items = AAR.query.filter_by(project_id=project_id).order_by(AAR.date.desc()).all()
+    milestones = project.milestones
+    return render_template('project/aar.html', project=project, items=items,
+                           milestones=milestones, trigger_labels=AAR.TRIGGER_LABELS,
+                           today=date.today())
 
 
 # ---- Permission management (catalog + applications) ----

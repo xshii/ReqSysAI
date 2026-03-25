@@ -157,6 +157,12 @@
                         </a>
                     </li>
                     <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}">
+                        <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.aar_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
+                           href="{{ url_for('project.aar_list', project_id=p.id) }}">
+                            AAR复盘
+                        </a>
+                    </li>
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.permission_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('project.permission_list', project_id=p.id) }}">
                             权限申请

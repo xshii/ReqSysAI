@@ -58,4 +58,13 @@ def search(query, limit=20):
         results.append({'type': 'risk', 'id': r.id, 'project_id': r.project_id,
                         'title': r.title, 'extra': r.status})
 
+    # AAR
+    from app.models.knowledge import AAR
+    for a in AAR.query.filter(
+        db.or_(AAR.title.like(q), AAR.goal.like(q), AAR.result.like(q),
+               AAR.analysis.like(q), AAR.action.like(q))
+    ).order_by(AAR.date.desc()).limit(limit).all():
+        results.append({'type': 'aar', 'id': a.id, 'project_id': a.project_id,
+                        'title': a.title, 'extra': a.date.strftime('%Y-%m-%d') if a.date else ''})
+
     return results[:limit]

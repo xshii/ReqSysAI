@@ -92,6 +92,44 @@ class PermissionApplication(db.Model):
         return len(self.people_list)
 
 
+class AAR(db.Model):
+    """After Action Review — 复盘记录"""
+    __tablename__ = 'aars'
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    title = db.Column(db.String(300), nullable=False)
+    trigger = db.Column(db.String(50), default='milestone')  # milestone/incident/sprint/custom
+    trigger_ref = db.Column(db.String(200), nullable=True)  # 关联的里程碑/事件名称
+    date = db.Column(db.Date, nullable=False)
+    participants = db.Column(db.Text, nullable=True)  # 参与人，逗号分隔
+
+    # AAR 四要素
+    goal = db.Column(db.Text, nullable=True)       # 1. 目标是什么
+    result = db.Column(db.Text, nullable=True)      # 2. 实际发生了什么
+    analysis = db.Column(db.Text, nullable=True)    # 3. 为什么有差异
+    action = db.Column(db.Text, nullable=True)      # 4. 下次怎么改进
+
+    status = db.Column(db.String(20), default='draft')  # draft/done
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    project = db.relationship('Project', backref='aars')
+    creator = db.relationship('User')
+
+    TRIGGER_LABELS = {
+        'milestone': '里程碑',
+        'incident': '线上事故',
+        'sprint': '迭代',
+        'custom': '自定义',
+    }
+
+    @property
+    def trigger_label(self):
+        return self.TRIGGER_LABELS.get(self.trigger, self.trigger)
+
+
 # Legacy model kept for migration compatibility
 class PermissionRequest(db.Model):
     __tablename__ = 'permission_requests'

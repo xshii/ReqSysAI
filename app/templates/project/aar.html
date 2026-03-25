@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% block title %}AAR复盘 · {{ project.name }} - 研发协作平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>AAR复盘 · {{ project.name }}</h4>
+    <div class="d-flex gap-2">
+        <select id="aarTriggerFilter" class="form-select form-select-sm" style="width:auto;" onchange="filterAAR()">
+            <option value="">全部类型</option>
+            {% for k, v in trigger_labels.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addAarModal"><i class="bi bi-plus-lg"></i> 新建AAR</button>
+    </div>
+</div>
+
+{% if items %}
+{% for aar in items %}
+<div class="card mb-3 aar-card" data-trigger="{{ aar.trigger }}">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <div>
+            <span class="badge bg-{{ 'success' if aar.status == 'done' else 'secondary' }} me-1">{{ '已完成' if aar.status == 'done' else '草稿' }}</span>
+            <span class="badge bg-info text-dark me-1">{{ aar.trigger_label }}</span>
+            {% if aar.trigger_ref %}<span class="text-muted small">{{ aar.trigger_ref }}</span>{% endif %}
+        </div>
+        <span class="text-muted small">{{ aar.date.strftime('%Y-%m-%d') }} · {{ aar.creator.name }}</span>
+    </div>
+    <div class="card-body">
+        <h5 class="card-title mb-3">{{ aar.title }}</h5>
+        {% if aar.participants %}
+        <div class="text-muted small mb-2"><i class="bi bi-people"></i> {{ aar.participants }}</div>
+        {% endif %}
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="border rounded p-3 h-100">
+                    <h6 class="text-primary mb-2"><i class="bi bi-bullseye"></i> 目标是什么</h6>
+                    <div class="small" style="white-space:pre-line;">{{ aar.goal or '未填写' }}</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="border rounded p-3 h-100">
+                    <h6 class="text-success mb-2"><i class="bi bi-check-circle"></i> 实际发生了什么</h6>
+                    <div class="small" style="white-space:pre-line;">{{ aar.result or '未填写' }}</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="border rounded p-3 h-100">
+                    <h6 class="text-warning mb-2"><i class="bi bi-search"></i> 为什么有差异</h6>
+                    <div class="small" style="white-space:pre-line;">{{ aar.analysis or '未填写' }}</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="border rounded p-3 h-100">
+                    <h6 class="text-danger mb-2"><i class="bi bi-lightning"></i> 下次怎么改进</h6>
+                    <div class="small" style="white-space:pre-line;">{{ aar.action or '未填写' }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="mt-2 text-end">
+            <button class="btn btn-sm btn-outline-primary edit-aar-btn" data-bs-toggle="modal" data-bs-target="#editAarModal"
+                    data-id="{{ aar.id }}" data-title="{{ aar.title }}" data-trigger="{{ aar.trigger }}"
+                    data-trigger-ref="{{ aar.trigger_ref or '' }}" data-date="{{ aar.date.strftime('%Y-%m-%d') }}"
+                    data-participants="{{ aar.participants or '' }}" data-goal="{{ aar.goal or '' }}"
+                    data-result="{{ aar.result or '' }}" data-analysis="{{ aar.analysis or '' }}"
+                    data-action="{{ aar.action or '' }}" data-status="{{ aar.status }}"><i class="bi bi-pencil"></i> 编辑</button>
+            <form method="POST" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="aar_id" value="{{ aar.id }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('删除此AAR？')"><i class="bi bi-x"></i> 删除</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-journal-text" style="font-size:2em;"></i>
+    <div class="mt-2">暂无AAR复盘记录</div>
+    <div class="small mt-1">完成里程碑或处理完事故后，创建AAR进行复盘</div>
+</div>
+{% endif %}
+
+{# ── Add Modal ── #}
+<div class="modal fade" id="addAarModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="add">
+                <div class="modal-header py-2"><h6 class="modal-title">新建 AAR 复盘</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">标题 *</label>
+                        <div class="col-9"><input type="text" name="title" class="form-control form-control-sm" required placeholder="如：v1.0上线复盘"></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">触发类型</label>
+                        <div class="col-9 d-flex gap-2">
+                            <select name="trigger" id="addAarTrigger" class="form-select form-select-sm" style="width:auto;" onchange="toggleMsSelect(this.value, 'addMsSelect')">
+                                {% for k, v in trigger_labels.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                            </select>
+                            <select name="trigger_ref" id="addMsSelect" class="form-select form-select-sm" style="display:none;">
+                                <option value="">选择里程碑</option>
+                                {% for ms in milestones %}<option value="{{ ms.name }}">{{ ms.name }}</option>{% endfor %}
+                            </select>
+                            <input type="text" name="trigger_ref" id="addTriggerRef" class="form-control form-control-sm" placeholder="关联事件名称" style="display:none;">
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">日期</label>
+                        <div class="col-9"><input type="date" name="date" class="form-control form-control-sm" max="2099-12-31" value="{{ today.strftime('%Y-%m-%d') if today else '' }}"></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">参与人</label>
+                        <div class="col-9"><input type="text" name="participants" class="form-control form-control-sm" placeholder="逗号分隔，如：张三,李四,王五"></div>
+                    </div>
+                    <hr class="my-2">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-primary"><i class="bi bi-bullseye"></i> 1. 目标是什么</label>
+                        <textarea name="goal" class="form-control form-control-sm" rows="2" placeholder="原计划要达成什么目标？关键指标是什么？"></textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-success"><i class="bi bi-check-circle"></i> 2. 实际发生了什么</label>
+                        <textarea name="result" class="form-control form-control-sm" rows="2" placeholder="实际结果如何？哪些达成了，哪些没有？"></textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-warning"><i class="bi bi-search"></i> 3. 为什么有差异</label>
+                        <textarea name="analysis" class="form-control form-control-sm" rows="2" placeholder="根本原因是什么？哪些做得好要保持？哪些做得不好？"></textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-danger"><i class="bi bi-lightning"></i> 4. 下次怎么改进</label>
+                        <textarea name="action_items" class="form-control form-control-sm" rows="2" placeholder="具体行动项，谁来做，什么时候完成？"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">创建</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# ── Edit Modal ── #}
+<div class="modal fade" id="editAarModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="aar_id" id="editAarId">
+                <div class="modal-header py-2"><h6 class="modal-title">编辑 AAR</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">标题</label>
+                        <div class="col-9"><input type="text" name="title" id="editAarTitle" class="form-control form-control-sm" required></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">触发类型</label>
+                        <div class="col-9 d-flex gap-2">
+                            <select name="trigger" id="editAarTrigger" class="form-select form-select-sm" style="width:auto;">
+                                {% for k, v in trigger_labels.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                            </select>
+                            <input type="text" name="trigger_ref" id="editAarTriggerRef" class="form-control form-control-sm" placeholder="关联事件">
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">日期</label>
+                        <div class="col-9"><input type="date" name="date" id="editAarDate" class="form-control form-control-sm" max="2099-12-31"></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">参与人</label>
+                        <div class="col-9"><input type="text" name="participants" id="editAarParticipants" class="form-control form-control-sm"></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">状态</label>
+                        <div class="col-9">
+                            <select name="status" id="editAarStatus" class="form-select form-select-sm" style="width:auto;">
+                                <option value="draft">草稿</option>
+                                <option value="done">已完成</option>
+                            </select>
+                        </div>
+                    </div>
+                    <hr class="my-2">
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-primary"><i class="bi bi-bullseye"></i> 1. 目标是什么</label>
+                        <textarea name="goal" id="editAarGoal" class="form-control form-control-sm" rows="3"></textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-success"><i class="bi bi-check-circle"></i> 2. 实际发生了什么</label>
+                        <textarea name="result" id="editAarResult" class="form-control form-control-sm" rows="3"></textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-warning"><i class="bi bi-search"></i> 3. 为什么有差异</label>
+                        <textarea name="analysis" id="editAarAnalysis" class="form-control form-control-sm" rows="3"></textarea>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold text-danger"><i class="bi bi-lightning"></i> 4. 下次怎么改进</label>
+                        <textarea name="action_items" id="editAarAction" class="form-control form-control-sm" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">保存</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Toggle milestone select vs text input based on trigger type
+function toggleMsSelect(val, msSelectId) {
+    var ms = document.getElementById(msSelectId);
+    var txt = document.getElementById('addTriggerRef');
+    if (val === 'milestone') { ms.style.display = ''; ms.name = 'trigger_ref'; txt.style.display = 'none'; txt.name = ''; }
+    else { ms.style.display = 'none'; ms.name = ''; txt.style.display = ''; txt.name = 'trigger_ref'; }
+}
+// Init: show milestone select by default
+toggleMsSelect('milestone', 'addMsSelect');
+
+// Edit modal population
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.edit-aar-btn');
+    if (!btn) return;
+    document.getElementById('editAarId').value = btn.dataset.id;
+    document.getElementById('editAarTitle').value = btn.dataset.title;
+    document.getElementById('editAarTrigger').value = btn.dataset.trigger;
+    document.getElementById('editAarTriggerRef').value = btn.dataset.triggerRef;
+    document.getElementById('editAarDate').value = btn.dataset.date;
+    document.getElementById('editAarParticipants').value = btn.dataset.participants;
+    document.getElementById('editAarGoal').value = btn.dataset.goal;
+    document.getElementById('editAarResult').value = btn.dataset.result;
+    document.getElementById('editAarAnalysis').value = btn.dataset.analysis;
+    document.getElementById('editAarAction').value = btn.dataset.action;
+    document.getElementById('editAarStatus').value = btn.dataset.status;
+});
+
+// Filter by trigger type
+function filterAAR() {
+    var t = document.getElementById('aarTriggerFilter').value;
+    document.querySelectorAll('.aar-card').forEach(function(c) {
+        c.style.display = (!t || c.dataset.trigger === t) ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}
