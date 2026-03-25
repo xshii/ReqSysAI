@@ -5,7 +5,9 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4>风险问题 · {{ project.name }}</h4>
     <div class="d-flex gap-2">
-        <a href="{{ url_for('project.risk_export_csv', project_id=project.id) }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出</a>
+        <button class="btn btn-sm btn-success" onclick="exportRiskEml()"><i class="bi bi-envelope-arrow-up"></i> 导出Outlook</button>
+        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#riskEmailSettings"><i class="bi bi-gear"></i></button>
+        <a href="{{ url_for('project.risk_export_csv', project_id=project.id) }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> CSV</a>
         <form method="POST" action="{{ url_for('project.risk_import_csv', project_id=project.id) }}" enctype="multipart/form-data" id="riskCsvForm" class="d-none">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="file" name="csv_file" accept=".csv" onchange="this.form.submit();">
@@ -13,6 +15,19 @@
         <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.querySelector('#riskCsvForm input[type=file]').click()"><i class="bi bi-upload"></i> 导入</button>
         {% if ai_enabled %}<button class="btn btn-outline-warning btn-sm" id="aiScanBtn" onclick="aiRiskScan()"><i class="bi bi-robot"></i> AI 风险识别</button>{% endif %}
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg"></i> 登记风险</button>
+    </div>
+</div>
+
+<div class="collapse mb-3" id="riskEmailSettings">
+    <div class="row g-2 small">
+        <div class="col-md-6">
+            <label class="form-label mb-0 fw-bold">收件人 (To)</label>
+            <input type="text" id="riskTo" class="form-control form-control-sm" placeholder="工号;工号" onchange="saveRiskEmailSettings()">
+        </div>
+        <div class="col-md-6">
+            <label class="form-label mb-0 fw-bold">抄送 (Cc) <button type="button" class="btn btn-link btn-sm p-0 ms-1" style="font-size:.75em;" onclick="riskAutoFillManager()">+主管</button></label>
+            <input type="text" id="riskCc" class="form-control form-control-sm" placeholder="工号;工号" onchange="saveRiskEmailSettings()">
+        </div>
     </div>
 </div>
 
@@ -271,6 +286,71 @@
 
 {% block extra_js %}
 <script>
+// Email settings: load/save from DB
+(function() {
+    var projId = {{ project.id }};
+    loadEmailSettings('risk', projId,
+        {subject: '', to: {{ (default_to or '')|tojson }}, cc: {{ (default_cc or '')|tojson }}},
+        function(d) {
+            document.getElementById('riskTo').value = d.to;
+            document.getElementById('riskCc').value = d.cc;
+        });
+})();
+function saveRiskEmailSettings() {
+    saveEmailSettings('risk', {{ project.id }}, '',
+        document.getElementById('riskTo').value,
+        document.getElementById('riskCc').value);
+}
+function riskAutoFillManager() {
+    fetch('/api/users').then(function(r) { return r.json(); }).then(function(users) {
+        var me = users.find(function(u) { return u.id === {{ current_user.id }}; });
+        if (!me || !me.manager) return;
+        var parts = me.manager.trim().split(/\s+/);
+        var mgrId = parts.length > 1 ? parts[parts.length - 1] : parts[0];
+        var cc = document.getElementById('riskCc');
+        var existing = cc.value.split(/[;,]/).map(function(s) { return s.trim(); }).filter(Boolean);
+        if (existing.indexOf(mgrId) === -1) { existing.unshift(mgrId); cc.value = existing.join(';'); saveRiskEmailSettings(); }
+    });
+}
+function exportRiskEml() {
+    var to = document.getElementById('riskTo').value || '';
+    var cc = document.getElementById('riskCc').value || '';
+    var subject = '{{ project.name }} 风险通报（{{ today.strftime("%Y-%m-%d") }}）';
+
+    var body = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,sans-serif;font-size:14px;color:#333;">';
+    if (to || cc) {
+        body += '<div style="font-size:12px;color:#64748b;margin-bottom:12px;">';
+        if (to) body += '<b>To:</b> ' + to + '<br>';
+        if (cc) body += '<b>Cc:</b> ' + cc + '<br>';
+        body += '</div>';
+    }
+    body += '<h3 style="color:#1e3a5f;">' + subject + '</h3>';
+    // Build risk table from page
+    var table = document.querySelector('.table');
+    if (table) body += '<div>' + table.outerHTML + '</div>';
+    body += '</body></html>';
+
+    function encodeH(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
+    var boundary = 'boundary_' + Date.now();
+    var eml = [
+        'Subject: ' + encodeH(subject),
+        'MIME-Version: 1.0',
+        'Content-Type: multipart/alternative; boundary="' + boundary + '"',
+        'X-Unsent: 1',
+        '', '--' + boundary,
+        'Content-Type: text/html; charset=UTF-8',
+        'Content-Transfer-Encoding: base64',
+        '', btoa(unescape(encodeURIComponent(body))).match(/.{1,76}/g).join('\n'),
+        '', '--' + boundary + '--',
+    ].join('\r\n');
+    var blob = new Blob([eml], {type: 'message/rfc822'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = subject + '.eml';
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
 function aiRiskScan() {
     var btn = document.getElementById('aiScanBtn');
     btn.disabled = true;

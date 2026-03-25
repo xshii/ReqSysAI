@@ -31,9 +31,12 @@ def risk_list(project_id):
     reqs = Requirement.query.filter_by(project_id=project_id).order_by(Requirement.number).all()
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
 
+    from app.utils.recipients import compute_default_recipients
+    risk_to, risk_cc = compute_default_recipients(project_id)
     return render_template('project/risks.html', project=project, risks=risks,
                            reqs=reqs, users=users, today=date.today(),
-                           cur_status=status, cur_severity=severity)
+                           cur_status=status, cur_severity=severity,
+                           default_to=risk_to, default_cc=risk_cc)
 
 
 @project_bp.route('/<int:project_id>/risks/add', methods=['POST'])
