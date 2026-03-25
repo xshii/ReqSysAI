@@ -316,8 +316,6 @@ def quick_todo():
                                category=category, source='help', parent_id=my_todo.id, requirements=reqs)
             helper_todo.items.append(TodoItem(title=title, sort_order=0))
             db.session.add(helper_todo)
-            from app.services.notify import notify
-            notify(helper.id, 'todo_help', f'{current_user.name} 向你求助：{title}', url_for('main.index'))
             db.session.commit()
             result = {'ok': True, 'title': title, 'todo_id': my_todo.id,
                       'helper': helper.name, 'is_help': True}
