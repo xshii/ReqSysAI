@@ -630,21 +630,21 @@ function filterAAR() {
     });
 }
 
-// AAR email settings — localStorage save/load
+// AAR email settings — DB save/load
 function saveAarEmailSettings() {
-    localStorage.setItem('aar_eml_to', document.getElementById('aarEmlTo').value);
-    localStorage.setItem('aar_eml_cc', document.getElementById('aarEmlCc').value);
+    saveEmailSettings('aar', {{ project.id }},
+        '',
+        document.getElementById('aarEmlTo').value,
+        document.getElementById('aarEmlCc').value);
 }
 (function() {
-    var t = document.getElementById('aarEmlTo'), c = document.getElementById('aarEmlCc');
-    if (t) {
-        var savedTo = localStorage.getItem('aar_eml_to') || '';
-        t.value = savedTo || {{ (aar_default_to or '')|tojson }};
-    }
-    if (c) {
-        var savedCc = localStorage.getItem('aar_eml_cc') || '';
-        c.value = savedCc || {{ (aar_default_cc or '')|tojson }};
-    }
+    if (!document.getElementById('aarEmlTo')) return;
+    loadEmailSettings('aar', {{ project.id }},
+        {to: {{ (aar_default_to or '')|tojson }}, cc: {{ (aar_default_cc or '')|tojson }}},
+        function(d) {
+            document.getElementById('aarEmlTo').value = d.to || '';
+            document.getElementById('aarEmlCc').value = d.cc || '';
+        });
 })();
 
 function aarAutoFillManager() {

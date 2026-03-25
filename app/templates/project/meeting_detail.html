@@ -325,23 +325,22 @@ function acceptPolish() {
     });
 })();
 
-// Meeting email settings — localStorage save/load
+// Meeting email settings — DB save/load
 function saveMeetingEmailSettings() {
-    localStorage.setItem('meeting_eml_subject', document.getElementById('meetingEmlSubject').value);
-    localStorage.setItem('meeting_eml_to', document.getElementById('meetingEmlTo').value);
-    localStorage.setItem('meeting_eml_cc', document.getElementById('meetingEmlCc').value);
+    saveEmailSettings('meeting', {{ meeting.id }},
+        document.getElementById('meetingEmlSubject').value,
+        document.getElementById('meetingEmlTo').value,
+        document.getElementById('meetingEmlCc').value);
 }
 (function() {
-    var s = document.getElementById('meetingEmlSubject'), t = document.getElementById('meetingEmlTo'), c = document.getElementById('meetingEmlCc');
-    if (s) s.value = localStorage.getItem('meeting_eml_subject') || '';
-    if (t) {
-        var savedTo = localStorage.getItem('meeting_eml_to') || '';
-        t.value = savedTo || {{ (default_to or '')|tojson }};
-    }
-    if (c) {
-        var savedCc = localStorage.getItem('meeting_eml_cc') || '';
-        c.value = savedCc || {{ (default_cc or '')|tojson }};
-    }
+    if (!document.getElementById('meetingEmlSubject')) return;
+    loadEmailSettings('meeting', {{ meeting.id }},
+        {to: {{ (default_to or '')|tojson }}, cc: {{ (default_cc or '')|tojson }}},
+        function(d) {
+            document.getElementById('meetingEmlSubject').value = d.subject || '';
+            document.getElementById('meetingEmlTo').value = d.to || '';
+            document.getElementById('meetingEmlCc').value = d.cc || '';
+        });
 })();
 
 function meetingAutoFillManager() {

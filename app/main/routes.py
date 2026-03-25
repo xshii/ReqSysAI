@@ -15,6 +15,7 @@ from app.constants import (
 from app.extensions import db
 from app.main import main_bp
 from app.models.ai_log import AIParseLog
+from app.models.email_setting import EmailSetting
 from app.models.incentive import Incentive
 from app.models.rant import Rant
 from app.models.requirement import Requirement
@@ -592,6 +593,35 @@ def api_notifications_read():
     return jsonify(ok=True)
 
 
+@main_bp.route('/api/email-settings/<entity_type>/<int:entity_id>')
+@login_required
+def api_email_settings_get(entity_type, entity_id):
+    """Get saved email settings for an entity."""
+    from app.models.email_setting import EmailSetting
+    s = EmailSetting.query.filter_by(entity_type=entity_type, entity_id=entity_id).first()
+    if s:
+        return jsonify(ok=True, subject=s.subject or '', to=s.to_list or '', cc=s.cc_list or '')
+    return jsonify(ok=True, subject='', to='', cc='')
+
+
+@main_bp.route('/api/email-settings/<entity_type>/<int:entity_id>', methods=['POST'])
+@login_required
+def api_email_settings_save(entity_type, entity_id):
+    """Save email settings for an entity."""
+    from app.models.email_setting import EmailSetting
+    data = request.get_json() or {}
+    s = EmailSetting.query.filter_by(entity_type=entity_type, entity_id=entity_id).first()
+    if not s:
+        s = EmailSetting(entity_type=entity_type, entity_id=entity_id)
+        db.session.add(s)
+    s.subject = (data.get('subject') or '').strip() or None
+    s.to_list = (data.get('to') or '').strip() or None
+    s.cc_list = (data.get('cc') or '').strip() or None
+    s.updated_by = current_user.id
+    db.session.commit()
+    return jsonify(ok=True)
+
+
 @main_bp.route('/api/search')
 @login_required
 def api_search():
@@ -1048,3 +1078,38 @@ def delete_rant(rant_id):
         if request.is_json:
             return jsonify(ok=True)
     return redirect(url_for('main.index'))
+
+
+@main_bp.route('/api/email-settings', methods=['GET'])
+@login_required
+def get_email_settings():
+    """Get saved email settings for an entity."""
+    entity_type = request.args.get('type', '')
+    entity_id = request.args.get('id', 0, type=int)
+    if not entity_type or not entity_id:
+        return jsonify(subject='', to='', cc='')
+    setting = EmailSetting.query.filter_by(entity_type=entity_type, entity_id=entity_id).first()
+    if not setting:
+        return jsonify(subject='', to='', cc='')
+    return jsonify(subject=setting.subject or '', to=setting.to_list or '', cc=setting.cc_list or '')
+
+
+@main_bp.route('/api/email-settings', methods=['POST'])
+@login_required
+def save_email_settings_api():
+    """Save email settings for an entity (upsert)."""
+    data = request.get_json() or {}
+    entity_type = data.get('type', '')
+    entity_id = data.get('id', 0)
+    if not entity_type or not entity_id:
+        return jsonify(ok=False, msg='Missing type or id')
+    setting = EmailSetting.query.filter_by(entity_type=entity_type, entity_id=entity_id).first()
+    if not setting:
+        setting = EmailSetting(entity_type=entity_type, entity_id=entity_id)
+        db.session.add(setting)
+    setting.subject = data.get('subject', '')
+    setting.to_list = data.get('to', '')
+    setting.cc_list = data.get('cc', '')
+    setting.updated_by = current_user.id
+    db.session.commit()
+    return jsonify(ok=True)

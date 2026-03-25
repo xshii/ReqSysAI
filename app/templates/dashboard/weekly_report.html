@@ -31,18 +31,18 @@
             <div class="col-md-4">
                 <label class="form-label mb-0 fw-bold">邮件标题</label>
                 <input type="text" id="emlSubject" class="form-control form-control-sm"
-                       placeholder="默认：项目名 项目周报（日期）" onchange="saveEmailSettings()">
+                       placeholder="默认：项目名 项目周报（日期）" onchange="onSaveEmailSettings()">
             </div>
             <div class="col-md-4">
                 <label class="form-label mb-0 fw-bold">收件人 (To)</label>
                 <input type="text" id="emlTo" class="form-control form-control-sm"
-                       placeholder="工号;工号 如 a00123456;b00654321" onchange="saveEmailSettings()">
+                       placeholder="工号;工号 如 a00123456;b00654321" onchange="onSaveEmailSettings()">
                 <div class="text-muted" style="font-size:.65em;">EML为草稿模式，需在Outlook中手动填写收件人</div>
             </div>
             <div class="col-md-4">
                 <label class="form-label mb-0 fw-bold">抄送 (Cc) <button type="button" class="btn btn-link btn-sm p-0 ms-1" style="font-size:.75em;" onclick="autoFillManager()">+主管</button></label>
                 <input type="text" id="emlCc" class="form-control form-control-sm"
-                       placeholder="工号;工号" onchange="saveEmailSettings()">
+                       placeholder="工号;工号" onchange="onSaveEmailSettings()">
             </div>
         </div>
     </div>
@@ -360,7 +360,7 @@ function autoFillManager() {
         if (existing.indexOf(mgrId) === -1) {
             existing.push(mgrId);
             cc.value = existing.join(';');
-            saveEmailSettings();
+            onSaveEmailSettings();
             showToast('已添加主管: ' + me.manager, 'success');
         } else {
             showToast('主管已在抄送列表中', 'info');
@@ -368,22 +368,21 @@ function autoFillManager() {
     });
 }
 
-function saveEmailSettings() {
-    localStorage.setItem('proj_weekly_eml_subject', document.getElementById('emlSubject').value);
-    localStorage.setItem('proj_weekly_eml_to', document.getElementById('emlTo').value);
-    localStorage.setItem('proj_weekly_eml_cc', document.getElementById('emlCc').value);
+function onSaveEmailSettings() {
+    saveEmailSettings('project_weekly', {{ cur_project_id }},
+        document.getElementById('emlSubject').value,
+        document.getElementById('emlTo').value,
+        document.getElementById('emlCc').value);
 }
 (function() {
-    var s = document.getElementById('emlSubject'), t = document.getElementById('emlTo'), c = document.getElementById('emlCc');
-    if (s) s.value = localStorage.getItem('proj_weekly_eml_subject') || '';
-    if (t) {
-        var savedTo = localStorage.getItem('proj_weekly_eml_to') || '';
-        t.value = savedTo || {{ (default_to or '')|tojson }};
-    }
-    if (c) {
-        var savedCc = localStorage.getItem('proj_weekly_eml_cc') || '';
-        c.value = savedCc || {{ (default_cc or '')|tojson }};
-    }
+    if (!document.getElementById('emlSubject')) return;
+    loadEmailSettings('project_weekly', {{ cur_project_id }},
+        {to: {{ (default_to or '')|tojson }}, cc: {{ (default_cc or '')|tojson }}},
+        function(d) {
+            document.getElementById('emlSubject').value = d.subject || '';
+            document.getElementById('emlTo').value = d.to || '';
+            document.getElementById('emlCc').value = d.cc || '';
+        });
 })();
 
 function encodeHeader(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }

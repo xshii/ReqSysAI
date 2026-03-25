@@ -20,15 +20,15 @@
         <div class="row g-2 small">
             <div class="col-md-4">
                 <label class="form-label mb-0 fw-bold">标题</label>
-                <input type="text" id="emlSubject" class="form-control form-control-sm" placeholder="默认自动生成" onchange="saveEmailSettings()">
+                <input type="text" id="emlSubject" class="form-control form-control-sm" placeholder="默认自动生成" onchange="onSaveEmailSettings()">
             </div>
             <div class="col-md-4">
                 <label class="form-label mb-0 fw-bold">收件人</label>
-                <input type="text" id="emlTo" class="form-control form-control-sm" placeholder="To" onchange="saveEmailSettings()">
+                <input type="text" id="emlTo" class="form-control form-control-sm" placeholder="To" onchange="onSaveEmailSettings()">
             </div>
             <div class="col-md-4">
                 <label class="form-label mb-0 fw-bold">抄送</label>
-                <input type="text" id="emlCc" class="form-control form-control-sm" placeholder="Cc" onchange="saveEmailSettings()">
+                <input type="text" id="emlCc" class="form-control form-control-sm" placeholder="Cc" onchange="onSaveEmailSettings()">
             </div>
         </div>
     </div>
@@ -179,22 +179,21 @@ function copyRichText() {
         'text/plain': new Blob([el.innerText], {type: 'text/plain'})
     })]).then(function() { alert('已复制'); });
 }
-function saveEmailSettings() {
-    localStorage.setItem('weekly_eml_subject', document.getElementById('emlSubject').value);
-    localStorage.setItem('weekly_eml_to', document.getElementById('emlTo').value);
-    localStorage.setItem('weekly_eml_cc', document.getElementById('emlCc').value);
+function onSaveEmailSettings() {
+    saveEmailSettings('personal_weekly', {{ current_user.id }},
+        document.getElementById('emlSubject').value,
+        document.getElementById('emlTo').value,
+        document.getElementById('emlCc').value);
 }
 (function() {
-    var s = document.getElementById('emlSubject'), t = document.getElementById('emlTo'), c = document.getElementById('emlCc');
-    if (s) s.value = localStorage.getItem('weekly_eml_subject') || '';
-    if (t) {
-        var savedTo = localStorage.getItem('weekly_eml_to') || '';
-        t.value = savedTo || {{ (default_to or '')|tojson }};
-    }
-    if (c) {
-        var savedCc = localStorage.getItem('weekly_eml_cc') || '';
-        c.value = savedCc || {{ (default_cc or '')|tojson }};
-    }
+    if (!document.getElementById('emlSubject')) return;
+    loadEmailSettings('personal_weekly', {{ current_user.id }},
+        {to: {{ (default_to or '')|tojson }}, cc: {{ (default_cc or '')|tojson }}},
+        function(d) {
+            document.getElementById('emlSubject').value = d.subject || '';
+            document.getElementById('emlTo').value = d.to || '';
+            document.getElementById('emlCc').value = d.cc || '';
+        });
 })();
 function encodeHeader(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
 function exportEml() {

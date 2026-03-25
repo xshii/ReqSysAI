@@ -144,3 +144,20 @@ function apiPost(url, data) {
     });
 }
 
+// ---- Email settings: load/save from DB instead of localStorage ----
+function loadEmailSettings(entityType, entityId, defaults, callback) {
+    fetch('/api/email-settings/' + entityType + '/' + entityId)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        callback({
+            subject: d.subject || defaults.subject || '',
+            to: d.to || defaults.to || '',
+            cc: d.cc || defaults.cc || ''
+        });
+    })
+    .catch(function() { callback(defaults); });
+}
+function saveEmailSettings(entityType, entityId, subject, to, cc) {
+    apiPost('/api/email-settings/' + entityType + '/' + entityId, {subject: subject, to: to, cc: cc});
+}
+
