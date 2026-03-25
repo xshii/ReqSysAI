@@ -95,9 +95,14 @@ def permission_list(project_id):
                 app_record.approved_at = datetime.now(timezone.utc)
                 app_record.approved_by = current_user.id
                 from app.services.notify import notify
+                link = url_for('project.permission_list', project_id=project_id)
                 notify(app_record.submitted_by, 'permission',
-                       f'权限申请「{app_record.item.resource}」已通过',
-                       url_for('project.permission_list', project_id=project_id))
+                       f'权限申请「{app_record.item.resource}」已通过', link)
+                # Also notify system users mentioned in applicant_name
+                for person in app_record.people_list:
+                    u = User.query.filter(User.name == person.split('(')[0].strip(), User.is_active == True).first()
+                    if u and u.id != app_record.submitted_by:
+                        notify(u.id, 'permission', f'权限「{app_record.item.resource}」已通过', link)
                 from app.services.audit import log_audit
                 log_audit('approve', 'permission', app_record.id, app_record.item.resource, app_record.applicant_name)
                 db.session.commit()
