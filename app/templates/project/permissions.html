@@ -51,7 +51,7 @@
                 <th data-field="resource" data-sortable="true" data-filter-control="input">群组</th>
                 <th data-field="repo_path" data-sortable="true">代码仓/路径</th>
                 <th data-field="description">说明</th>
-                <th data-field="app_count" data-sortable="true">申请人数</th>
+                <th data-field="app_count" data-sortable="true">待申请人数</th>
                 <th data-field="actions">操作</th>
             </tr>
         </thead>
@@ -299,10 +299,17 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='vendor/js/jquery.slim.min.js') }}"></script>
 <script src="{{ url_for('static', filename='vendor/js/bootstrap-table.min.js') }}"></script>
 <script src="{{ url_for('static', filename='vendor/js/bootstrap-table-zh-CN.min.js') }}"></script>
 <script src="{{ url_for('static', filename='vendor/js/bootstrap-table-filter-control.min.js') }}"></script>
 <script>
+// Init bootstrap-table
+$(function() {
+    $('#itemTable').bootstrapTable();
+    $('#appTable').bootstrapTable();
+});
+
 // Edit item
 document.addEventListener('click', function(e) {
     var btn = e.target.closest('.edit-item-btn');
@@ -430,7 +437,7 @@ document.addEventListener('click', function(e) {
                     showToast('已申请成功', 'success');
                     // Update the applicant count badge in the same row
                     var tr = form.closest('tr');
-                    var countTd = tr.children[4]; // 5th column: 申请人数
+                    var countTd = tr.children[4]; // 5th column: 待申请人数
                     var badge = countTd.querySelector('.badge');
                     if (badge) {
                         var cur = parseInt(badge.textContent) || 0;
