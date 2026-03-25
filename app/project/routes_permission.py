@@ -148,13 +148,11 @@ def permission_list(project_id):
 
     existing_categories = sorted(set(i.category for i in items if i.category))
     all_users = User.query.order_by(User.name).all()
-    # name → pinyin map for copy buttons
-    user_pinyin = {u.name: (u.pinyin or '').split()[-1] if u.pinyin else u.name for u in all_users}
 
     return render_template('project/permissions.html', project=project,
                            items=items, apps=apps, is_pm=is_pm,
                            existing_categories=existing_categories,
-                           all_users=all_users, user_pinyin=user_pinyin)
+                           all_users=all_users)
 
 
 @project_bp.route('/<int:project_id>/permissions/export-items')

@@ -53,6 +53,8 @@ def create_app(config_name=None):
     # Template filters
     import json as _json
     app.jinja_env.filters['from_json'] = lambda s: _json.loads(s) if s else []
+    from app.utils.pinyin import to_pinyin as _to_pinyin
+    app.jinja_env.filters['to_pinyin'] = lambda s: _to_pinyin(s).split()[-1] if s else ''
 
     # Inject sidebar groups into all templates
     @app.context_processor

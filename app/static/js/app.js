@@ -88,7 +88,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         list.querySelectorAll('.user-picker-opt').forEach(function(o) {
-            o.addEventListener('mousedown', function(e) { e.preventDefault(); selectOpt(o); });
+            o.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                if (input.closest('#applyModal')) return; // handled by permissions.html
+                selectOpt(o);
+            });
         });
     });
 });
