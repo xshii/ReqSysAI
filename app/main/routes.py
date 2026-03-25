@@ -177,7 +177,7 @@ def index():
     from app.models.meeting import Meeting
     my_unclosed_risks = Risk.query.filter(
         Risk.status == 'open', Risk.deleted_at.is_(None), Risk.meeting_id.isnot(None),
-        db.or_(Risk.tracker_id == current_user.id, Risk.owner_id == current_user.id, Risk.created_by == current_user.id),
+        db.or_(Risk.tracker_id == current_user.id, Risk.owner_id == current_user.id),
     ).all()
     unclosed_meeting_ids = list(set(r.meeting_id for r in my_unclosed_risks))
     unclosed_meetings = Meeting.query.filter(Meeting.id.in_(unclosed_meeting_ids)).order_by(Meeting.date.desc()).all() if unclosed_meeting_ids else []
