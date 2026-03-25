@@ -575,8 +575,8 @@ function exportEml() {
         'Content-Type: multipart/alternative; boundary="' + boundary + '"',
         'X-Unsent: 1',
     ];
-    if (to) headers.push('To: ' + to.split(/[;,；，]/).map(function(s){return s.trim();}).filter(Boolean).join(', '));
-    if (cc) headers.push('Cc: ' + cc.split(/[;,；，]/).map(function(s){return s.trim();}).filter(Boolean).join(', '));
+    headers.push('To: ' + to.split(/[;,；，]/).map(function(s){return s.trim();}).filter(Boolean).join('; '));
+    headers.push('Cc: ' + cc.split(/[;,；，]/).map(function(s){return s.trim();}).filter(Boolean).join('; '));
     var eml = headers.concat([
         '', '--' + boundary,
         'Content-Type: text/html; charset=UTF-8',
