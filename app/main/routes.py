@@ -95,7 +95,8 @@ def index():
     my_risks = Risk.query.filter(
         Risk.status == 'open',
         Risk.deleted_at.is_(None),
-        db.or_(Risk.tracker_id == current_user.id, Risk.created_by == current_user.id),
+        db.or_(Risk.tracker_id == current_user.id, Risk.created_by == current_user.id,
+               Risk.owner_id == current_user.id),
     ).order_by(Risk.due_date).all()
 
     # Alerts: overdue requirements + overdue risks

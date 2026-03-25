@@ -12,7 +12,8 @@ class Risk(db.Model):
     description = db.Column(db.Text, nullable=True)
     severity = db.Column(db.String(20), default='medium')  # high / medium / low
     status = db.Column(db.String(20), default='open')  # open / resolved / closed
-    owner = db.Column(db.String(100), nullable=True)  # 责任人（可能是外部人员，存姓名文本）
+    owner = db.Column(db.String(100), nullable=True)  # 责任人姓名（外部人员或显示名）
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # 责任人（系统用户）
     tracker_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # 跟踪人（内部员工）
     requirement_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=True)  # 关联子需求
     meeting_id = db.Column(db.Integer, db.ForeignKey('meetings.id'), nullable=True)  # 来源会议
@@ -26,6 +27,7 @@ class Risk(db.Model):
     deleted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     project = db.relationship('Project', backref='risks')
+    owner_user = db.relationship('User', foreign_keys=[owner_id], backref='owned_risks')
     tracker = db.relationship('User', foreign_keys=[tracker_id], backref='tracked_risks')
     creator = db.relationship('User', foreign_keys=[created_by], backref='created_risks')
     requirement = db.relationship('Requirement', backref='risks')

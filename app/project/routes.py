@@ -18,6 +18,14 @@ from app.models.user import User
 from app.utils.pinyin import to_pinyin
 
 
+def _resolve_owner_id(owner_name):
+    """Match owner name to system user, return user_id or None."""
+    if not owner_name:
+        return None
+    u = User.query.filter(db.or_(User.name == owner_name, User.name == owner_name.strip())).filter_by(is_active=True).first()
+    return u.id if u else None
+
+
 @project_bp.route('/')
 @login_required
 def project_list():
@@ -426,6 +434,7 @@ def risk_add(project_id):
         description=request.form.get('description', '').strip() or None,
         severity=request.form.get('severity', 'medium'),
         owner=request.form.get('owner', '').strip() or None,
+        owner_id=_resolve_owner_id(request.form.get('owner', '').strip()),
         tracker_id=request.form.get('tracker_id', type=int) or None,
         requirement_id=request.form.get('requirement_id', type=int) or None,
         due_date=date.fromisoformat(request.form.get('due_date')) if request.form.get('due_date') else None,
@@ -584,6 +593,7 @@ def risk_import_csv(project_id):
             severity=severity_rev.get((row.get('严重度') or '').strip(), 'medium'),
             status=status_val,
             owner=(row.get('责任人') or '').strip() or None,
+            owner_id=_resolve_owner_id((row.get('责任人') or '').strip()),
             tracker_id=user_map.get(tracker_name),
             due_date=due,
             description=(row.get('描述') or '').strip() or None,
@@ -610,6 +620,7 @@ def risk_edit(risk_id):
     risk.title = request.form.get('title', risk.title).strip()
     risk.severity = request.form.get('severity', risk.severity)
     risk.owner = request.form.get('owner', '').strip() or None
+    risk.owner_id = _resolve_owner_id(risk.owner)
     tracker_id = request.form.get('tracker_id', type=int)
     risk.tracker_id = tracker_id if tracker_id else None
     due = request.form.get('due_date', '')
@@ -1499,10 +1510,13 @@ def meeting_apply(project_id, meeting_id):
             due = date.fromisoformat(deadline_str)
         except (ValueError, TypeError):
             due = date.today() + timedelta(days=7)
+        t_owner = assignee.name if assignee else ''
         risk = Risk(
             project_id=project.id,
             title=item.get('title', ''),
             severity='low',
+            owner=t_owner or None,
+            owner_id=assignee.id if assignee else None,
             due_date=due,
             meeting_id=meeting.id,
             created_by=current_user.id,
@@ -1533,10 +1547,13 @@ def meeting_apply(project_id, meeting_id):
             due = date.fromisoformat(deadline_str)
         except (ValueError, TypeError):
             due = date.today() + timedelta(days=7)
+        r_owner = (item.get('assignee') or '').strip()
         risk = Risk(
             project_id=project.id,
             title=item.get('title', ''),
             severity=item.get('severity', 'medium'),
+            owner=r_owner or None,
+            owner_id=_resolve_owner_id(r_owner),
             due_date=due,
             meeting_id=meeting.id,
             created_by=current_user.id,
