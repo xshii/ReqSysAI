@@ -1,5 +1,10 @@
-"""Test suite for _extract_json robustness."""
+"""Test suite for _extract_json robustness.
+Run with: pytest tests/test_json_extract.py
+Skipped in normal test runs unless --run-ai flag is set.
+"""
 import pytest
+
+pytestmark = pytest.mark.ai
 
 
 @pytest.fixture
