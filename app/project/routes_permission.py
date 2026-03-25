@@ -99,22 +99,28 @@ def permission_list(project_id):
                 notify(app_record.submitted_by, 'permission',
                        f'权限申请「{app_record.item.resource}」已通过',
                        url_for('project.permission_list', project_id=project_id))
+                from app.services.audit import log_audit
+                log_audit('approve', 'permission', app_record.id, app_record.item.resource, app_record.applicant_name)
                 db.session.commit()
                 flash('已通过', 'success')
         elif action == 'bulk_approve' and is_pm:
             pending = PermissionApplication.query.join(PermissionItem).filter(
                 PermissionItem.project_id == project_id,
                 PermissionApplication.status == 'pending').all()
+            from app.services.audit import log_audit
             for a in pending:
                 a.status = 'approved'
                 a.approved_at = datetime.now(timezone.utc)
                 a.approved_by = current_user.id
+                log_audit('approve', 'permission', a.id, a.item.resource, f'批量通过 {a.applicant_name}')
             db.session.commit()
             flash(f'已批量通过 {len(pending)} 条', 'success')
         elif action == 'reject' and is_pm:
             app_record = db.session.get(PermissionApplication, request.form.get('app_id', type=int))
             if app_record and app_record.item.project_id == project_id:
                 app_record.status = 'rejected'
+                from app.services.audit import log_audit
+                log_audit('reject', 'permission', app_record.id, app_record.item.resource, app_record.applicant_name)
                 db.session.commit()
                 flash('已拒绝', 'success')
         elif action == 'delete_app':

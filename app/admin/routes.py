@@ -121,6 +121,8 @@ def user_delete(user_id):
         flash('不能删除管理员', 'danger')
         return redirect(url_for('admin.user_list'))
     name = user.name
+    from app.services.audit import log_audit
+    log_audit('delete', 'user', user.id, name, f'删除用户 {name} ({user.employee_id})')
     db.session.delete(user)
     db.session.commit()
     flash(f'用户 {name} 已删除', 'success')

@@ -238,6 +238,8 @@ def review(inc_id):
             inc.reviewed_at = datetime.now(timezone.utc)
     else:
         inc.reviewed_at = datetime.now(timezone.utc)
+    from app.services.audit import log_audit
+    log_audit(action, 'incentive', inc.id, inc.title, f'{action_labels.get(action, action)} 金额={amount}')
     db.session.commit()
     flash(f'已{action_labels.get(action, action)}', 'success')
     return redirect(url_for('incentive.index'))

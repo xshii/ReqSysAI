@@ -68,6 +68,8 @@ def edit(todo_id):
                 _delete_descendants(child.id)
                 db.session.delete(child)
         _delete_descendants(todo.id)
+        from app.services.audit import log_audit
+        log_audit('delete', 'todo', todo.id, todo.title)
         db.session.delete(todo)
         db.session.commit()
         return jsonify(ok=True, deleted=True)

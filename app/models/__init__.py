@@ -15,3 +15,4 @@ from app.models.emotion import EmotionRecord, EmotionComment  # noqa: F401
 from app.models.recurring_todo import RecurringTodo  # noqa: F401
 from app.models.recurring_completion import RecurringCompletion  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
+from app.models.audit import AuditLog  # noqa: F401

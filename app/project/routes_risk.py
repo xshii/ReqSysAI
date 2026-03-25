@@ -132,6 +132,8 @@ def risk_delete(risk_id):
     risk.deleted_at = datetime.now(timezone.utc)
     risk.deleted_by = current_user.id
     db.session.add(RiskAuditLog(risk_id=risk.id, user_id=current_user.id, action='deleted', detail=risk.title))
+    from app.services.audit import log_audit
+    log_audit('soft_delete', 'risk', risk.id, risk.title)
     db.session.commit()
     if request.is_json:
         return jsonify(ok=True)

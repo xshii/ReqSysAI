@@ -270,6 +270,10 @@ def requirement_delete(req_id):
     for a in req.activities:
         db.session.delete(a)
     req.requirements = []
+    from app.services.audit import log_audit
+    children_count = len(req.children)
+    log_audit('delete', 'requirement', req.id, number,
+              f'删除需求 {number} {req.title}' + (f'（含{children_count}个子需求）' if children_count else ''))
     db.session.delete(req)
     db.session.commit()
     flash(f'需求 {number} 已删除', 'success')
