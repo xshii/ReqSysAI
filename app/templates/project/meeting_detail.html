@@ -54,6 +54,29 @@
     </div>
 </div>
 
+{# AI results + linked risks — full width, above content #}
+<div class="row mb-3">
+    <div class="col-12">
+        {# Linked risks #}
+        {% if linked_risks %}
+        <div class="card mb-2">
+            <div class="card-header py-2"><strong><i class="bi bi-shield-exclamation"></i> 关联的风险/遗留问题 ({{ linked_risks|length }})</strong></div>
+            <div class="card-body py-2">
+                {% for r in linked_risks %}
+                <div class="d-flex align-items-center gap-2 mb-1 small">
+                    <span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span>
+                    <span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
+                    <a href="{{ url_for('project.risk_list', project_id=project.id) }}?status={{ r.status }}" class="text-decoration-none flex-grow-1">{{ r.title }}</a>
+                    {% if r.owner %}<span class="text-muted">{{ r.owner }}</span>{% endif %}
+                    {% if r.due_date %}<span class="text-muted">{{ r.due_date.strftime('%m-%d') }}</span>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
 <div class="row">
     {# Left: content #}
     <div class="col-lg-5 mb-3">
@@ -83,25 +106,8 @@
     </div>
     {% endif %}
 
-    {# Right: AI results + linked risks #}
+    {# Right: AI extract results #}
     <div class="col-lg-7 mb-3">
-        {# Linked risks (already created from this meeting) #}
-        {% if linked_risks %}
-        <div class="card mb-3">
-            <div class="card-header py-2"><strong><i class="bi bi-shield-exclamation"></i> 关联的风险/遗留问题 ({{ linked_risks|length }})</strong></div>
-            <div class="card-body py-2">
-                {% for r in linked_risks %}
-                <div class="d-flex align-items-center gap-2 mb-1 small">
-                    <span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span>
-                    <span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
-                    <a href="{{ url_for('project.risk_list', project_id=project.id) }}?status={{ r.status }}" class="text-decoration-none flex-grow-1">{{ r.title }}</a>
-                    {% if r.owner %}<span class="text-muted">{{ r.owner }}</span>{% endif %}
-                    {% if r.due_date %}<span class="text-muted">{{ r.due_date.strftime('%m-%d') }}</span>{% endif %}
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
 
         {# AI extract results #}
         {% if ai_data %}
