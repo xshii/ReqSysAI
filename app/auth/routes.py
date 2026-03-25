@@ -73,8 +73,8 @@ def login():
             return render_template('auth/login.html', form=form, client_ip=client_ip)
 
         bound_ips = [ip.strip() for ip in user.ip_address.split(',')]
-        if user.ip_address.startswith('pending-'):
-            # First login: bind IP
+        if not user.ip_address or user.ip_address.startswith('pending-'):
+            # First login or empty IP: bind current IP
             user.ip_address = client_ip
             db.session.commit()
         elif client_ip not in bound_ips:
