@@ -59,6 +59,11 @@ def compute_default_recipients(cur_project_id):
     from flask_login import current_user as _cu
     if _cu.is_authenticated:
         all_user_ids.add(_cu.id)
+    # Extract current user's manager first
+    my_mgr_eid = ''
+    if _cu.is_authenticated and _cu.manager:
+        parts = _cu.manager.strip().split()
+        my_mgr_eid = parts[-1] if len(parts) > 1 else parts[0]
     for uid in all_user_ids:
         u = db.session.get(User, uid)
         if u and u.manager:
@@ -68,7 +73,13 @@ def compute_default_recipients(cur_project_id):
                 cc_eids.add(mgr_eid)
     # Remove anyone already in To
     cc_eids -= to_set
-    default_cc = ';'.join(sorted(cc_eids))
+    # Current user's manager first
+    cc_list = []
+    if my_mgr_eid and my_mgr_eid not in to_set:
+        cc_list.append(my_mgr_eid)
+        cc_eids.discard(my_mgr_eid)
+    cc_list.extend(sorted(cc_eids))
+    default_cc = ';'.join(cc_list)
     return default_to, default_cc
 
 
@@ -135,6 +146,11 @@ def compute_meeting_recipients(project_id, meeting):
     from flask_login import current_user as _cu2
     if _cu2.is_authenticated:
         all_user_ids.add(_cu2.id)
+    # Current user's manager first
+    my_mgr_eid2 = ''
+    if _cu2.is_authenticated and _cu2.manager:
+        parts = _cu2.manager.strip().split()
+        my_mgr_eid2 = parts[-1] if len(parts) > 1 else parts[0]
     # Cc: all above people's managers
     cc_eids = set()
     for uid in all_user_ids:
@@ -145,7 +161,12 @@ def compute_meeting_recipients(project_id, meeting):
             if mgr_eid:
                 cc_eids.add(mgr_eid)
     cc_eids -= to_set
-    default_cc = ';'.join(sorted(cc_eids))
+    cc_list = []
+    if my_mgr_eid2 and my_mgr_eid2 not in to_set:
+        cc_list.append(my_mgr_eid2)
+        cc_eids.discard(my_mgr_eid2)
+    cc_list.extend(sorted(cc_eids))
+    default_cc = ';'.join(cc_list)
     return default_to, default_cc
 
 
