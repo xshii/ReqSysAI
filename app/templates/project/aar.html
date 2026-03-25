@@ -55,7 +55,16 @@
                 </div>
             </div>
         </div>
+        {% if ai_enabled %}
+        <div class="mt-2 issues-area" id="issuesArea{{ aar.id }}"></div>
+        {% endif %}
         <div class="mt-2 text-end">
+            {% if ai_enabled %}
+            <button class="btn btn-sm btn-outline-info ai-issues-btn"
+                    data-goal="{{ aar.goal or '' }}" data-result="{{ aar.result or '' }}"
+                    data-analysis="{{ aar.analysis or '' }}" data-action="{{ aar.action or '' }}"
+                    data-target="issuesArea{{ aar.id }}"><i class="bi bi-robot"></i> AI提取遗留问题</button>
+            {% endif %}
             <button class="btn btn-sm btn-outline-primary edit-aar-btn" data-bs-toggle="modal" data-bs-target="#editAarModal"
                     data-id="{{ aar.id }}" data-title="{{ aar.title }}" data-trigger="{{ aar.trigger }}"
                     data-trigger-ref="{{ aar.trigger_ref or '' }}" data-date="{{ aar.date.strftime('%Y-%m-%d') }}"
@@ -115,13 +124,6 @@
                         <div class="col-9"><input type="text" name="participants" class="form-control form-control-sm" placeholder="逗号分隔，如：张三,李四,王五"></div>
                     </div>
                     <hr class="my-2">
-                    {% if ai_enabled %}
-                    <div class="mb-2 text-end">
-                        <button type="button" class="btn btn-sm btn-outline-info" id="btnAiAar" onclick="aiGenerateAAR()">
-                            <i class="bi bi-robot"></i> AI 一键生成
-                        </button>
-                    </div>
-                    {% endif %}
                     <div class="mb-2">
                         <label class="form-label small fw-bold text-primary"><i class="bi bi-bullseye"></i> 1. 目标是什么</label>
                         <textarea name="goal" id="addGoal" class="form-control form-control-sm" rows="2" placeholder="原计划要达成什么目标？关键指标是什么？"></textarea>
@@ -138,6 +140,16 @@
                         <label class="form-label small fw-bold text-danger"><i class="bi bi-lightning"></i> 4. 下次怎么改进</label>
                         <textarea name="action_items" id="addAction" class="form-control form-control-sm" rows="2" placeholder="具体行动项，谁来做，什么时候完成？"></textarea>
                     </div>
+                    {% if ai_enabled %}
+                    <hr class="my-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label class="form-label small fw-bold mb-0"><i class="bi bi-list-check"></i> 遗留问题</label>
+                        <button type="button" class="btn btn-sm btn-outline-info" id="btnAiIssues" onclick="aiExtractIssues()">
+                            <i class="bi bi-robot"></i> AI 提取
+                        </button>
+                    </div>
+                    <div id="issuesResult" class="small" style="display:none;"></div>
+                    {% endif %}
                 </div>
                 <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">创建</button></div>
             </form>
@@ -239,32 +251,53 @@ document.addEventListener('click', function(e) {
     document.getElementById('editAarStatus').value = btn.dataset.status;
 });
 
-// AI generate AAR content
-function aiGenerateAAR() {
-    var btn = document.getElementById('btnAiAar');
+// AI extract issues — shared logic
+function _aiIssues(goal, result, analysis, action, onDone) {
+    apiPost('{{ url_for("project.aar_ai_issues", project_id=project.id) }}',
+        {goal: goal, result: result, analysis: analysis, action: action})
+    .then(function(d) { onDone(d); });
+}
+
+// AI extract from new AAR modal
+function aiExtractIssues() {
+    var btn = document.getElementById('btnAiIssues');
     var orig = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 生成中...';
-    var triggerRef = '';
-    var msSelect = document.getElementById('addMsSelect');
-    var triggerInput = document.getElementById('addTriggerRef');
-    if (msSelect && msSelect.style.display !== 'none') triggerRef = msSelect.value;
-    else if (triggerInput && triggerInput.style.display !== 'none') triggerRef = triggerInput.value;
-    apiPost('{{ url_for("project.aar_ai_generate", project_id=project.id) }}', {trigger_ref: triggerRef})
-    .then(function(d) {
-        btn.disabled = false;
-        btn.innerHTML = orig;
-        if (d && d.ok) {
-            if (d.goal) document.getElementById('addGoal').value = d.goal;
-            if (d.result) document.getElementById('addResult').value = d.result;
-            if (d.analysis) document.getElementById('addAnalysis').value = d.analysis;
-            if (d.action) document.getElementById('addAction').value = d.action;
-            showToast('AI 已填充四要素', 'success');
-        } else {
-            showToast(d.msg || 'AI 生成失败', 'danger');
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 提取中...';
+    _aiIssues(
+        document.getElementById('addGoal').value,
+        document.getElementById('addResult').value,
+        document.getElementById('addAnalysis').value,
+        document.getElementById('addAction').value,
+        function(d) {
+            btn.disabled = false; btn.innerHTML = orig;
+            var el = document.getElementById('issuesResult');
+            if (d && d.ok && d.issues) {
+                el.style.display = '';
+                el.innerHTML = '<ul class="ps-3 mb-0">' + d.issues.map(function(i) { return '<li>' + i + '</li>'; }).join('') + '</ul>';
+            } else { showToast(d.msg || 'AI 提取失败', 'danger'); }
         }
-    });
+    );
 }
+
+// AI extract from existing AAR card
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.ai-issues-btn');
+    if (!btn) return;
+    var orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    _aiIssues(btn.dataset.goal, btn.dataset.result, btn.dataset.analysis, btn.dataset.action,
+        function(d) {
+            btn.disabled = false; btn.innerHTML = orig;
+            var area = document.getElementById(btn.dataset.target);
+            if (d && d.ok && d.issues) {
+                area.innerHTML = '<div class="border rounded p-2 bg-light"><h6 class="small fw-bold mb-1"><i class="bi bi-list-check"></i> AI 提取的遗留问题</h6>'
+                    + '<ul class="ps-3 mb-0 small">' + d.issues.map(function(i) { return '<li>' + i + '</li>'; }).join('') + '</ul></div>';
+            } else { showToast(d.msg || 'AI 提取失败', 'danger'); }
+        }
+    );
+});
 
 // Filter by trigger type
 function filterAAR() {

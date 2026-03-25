@@ -990,71 +990,43 @@ def aar_list(project_id):
                            today=date.today(), ai_enabled=current_app.config.get('AI_ENABLED'))
 
 
-@project_bp.route('/<int:project_id>/aar/ai-generate', methods=['POST'])
+@project_bp.route('/<int:project_id>/aar/ai-issues', methods=['POST'])
 @login_required
-def aar_ai_generate(project_id):
-    """AI generates AAR content from project data."""
-    project = db.get_or_404(Project, project_id)
-    trigger_ref = (request.get_json() or {}).get('trigger_ref', '')
+def aar_ai_issues(project_id):
+    """AI extracts remaining issues from AAR content."""
+    db.get_or_404(Project, project_id)
+    data = request.get_json() or {}
+    goal = data.get('goal', '').strip()
+    result = data.get('result', '').strip()
+    analysis = data.get('analysis', '').strip()
+    action = data.get('action', '').strip()
 
-    # Gather project data
-    from app.models.requirement import Requirement
-    from app.constants import REQ_INACTIVE_STATUSES
-    reqs = Requirement.query.filter_by(project_id=project_id, parent_id=None).all()
-    total = len(reqs)
-    done = sum(1 for r in reqs if r.status in REQ_INACTIVE_STATUSES)
-    overdue = [r for r in reqs if r.due_date and r.due_date < date.today()
-               and r.status not in REQ_INACTIVE_STATUSES]
+    if not (goal or result or analysis):
+        return jsonify(ok=False, msg='请先填写目标/结果/差异分析')
 
-    risks = Risk.query.filter_by(project_id=project_id, status='open')\
-        .filter(Risk.deleted_at.is_(None)).all()
-
-    from app.models.meeting import Meeting
-    recent_meetings = Meeting.query.filter_by(project_id=project_id)\
-        .order_by(Meeting.date.desc()).limit(5).all()
-
-    # Build context
-    lines = [f'项目: {project.name}']
-    if project.description:
-        lines.append(f'项目目标: {project.description}')
-    if trigger_ref:
-        lines.append(f'复盘对象: {trigger_ref}')
-    lines.append(f'\n需求: 总{total}个, 已完成{done}个, 完成率{done*100//max(total,1)}%')
-    if overdue:
-        lines.append('超期需求:')
-        for r in overdue:
-            lines.append(f'- [{r.number}] {r.title} (超期{(date.today()-r.due_date).days}天, {r.assignee_display})')
-    if risks:
-        lines.append('\n未关闭风险:')
-        for r in risks:
-            days = (r.due_date - date.today()).days if r.due_date else 999
-            lines.append(f'- {r.title} ({r.severity_label}, {"超期" + str(-days) + "天" if days < 0 else "剩" + str(days) + "天"}, {r.owner or "无"})')
-    if recent_meetings:
-        lines.append('\n近期会议:')
-        for m in recent_meetings:
-            lines.append(f'- {m.title} ({m.date.strftime("%m-%d")})')
-
-    # Call AI
-    from app.services.prompts import get_prompt
     from app.services.ai import call_ollama
-    prompt = f"""你是项目管理专家，根据以下项目数据生成AAR(After Action Review)复盘内容。
+    prompt = f"""根据以下AAR复盘内容，提取遗留问题清单。
 严格返回JSON，不要返回其他内容：
-{{"goal":"目标是什么(计划达成的目标和关键指标)","result":"实际发生了什么(实际成果、完成情况、关键数据)","analysis":"为什么有差异(根因分析，做得好的和不好的)","action":"下次怎么改进(具体行动项，含负责人和时间)"}}
+{{"issues":["遗留问题1（含责任人和建议解决时间）","遗留问题2","..."]}}
+
+AAR内容：
+目标：{goal or '未填写'}
+实际结果：{result or '未填写'}
+差异分析：{analysis or '未填写'}
+{'改进措施：' + action if action else ''}
 
 规则：
-- 每个字段2-4句话，基于数据分析
-- goal: 从项目目标和需求规划推导
-- result: 用实际完成率、超期情况等量化描述
-- analysis: 分析延期/风险的根因，也要提到做得好的方面
-- action: SMART化的改进措施，不要空话
-- 严禁编造数据
+- 从目标与实际结果的差距中提取未解决的问题
+- 从差异分析中提取根因未消除的风险
+- 如有改进措施，检查措施是否覆盖了所有问题，未覆盖的也列为遗留
+- 每条遗留问题包含：问题描述、影响、建议责任人、建议解决时间
+- 没有遗留问题写["暂无明显遗留问题"]
+- 不要编造内容，只从上述文本推演"""
 
-{chr(10).join(lines)}"""
-
-    result, _ = call_ollama(prompt)
-    if isinstance(result, dict):
-        return jsonify(ok=True, **result)
-    return jsonify(ok=False, msg='AI 生成失败')
+    result_data, _ = call_ollama(prompt)
+    if isinstance(result_data, dict) and 'issues' in result_data:
+        return jsonify(ok=True, issues=result_data['issues'])
+    return jsonify(ok=False, msg='AI 提取失败')
 
 
 # ---- Permission management (catalog + applications) ----
