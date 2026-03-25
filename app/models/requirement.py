@@ -109,6 +109,14 @@ class Requirement(db.Model):
         seq = (result + 1) if result else 1
         return f'REQ-{seq:03d}'
 
+    @staticmethod
+    def generate_child_number(parent_number):
+        """Generate child requirement number like REQ-001-1, REQ-001-2."""
+        existing = db.session.query(db.func.count(Requirement.id)).filter(
+            Requirement.number.like(f'{parent_number}-%')
+        ).scalar() or 0
+        return f'{parent_number}-{existing + 1}'
+
     def __repr__(self):
         return f'<Requirement {self.number}>'
 

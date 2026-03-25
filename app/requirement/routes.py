@@ -161,7 +161,7 @@ def requirement_create():
                 except (ValueError, IndexError):
                     est_cases = None
                 sub = Requirement(
-                    number=Requirement.generate_number(),
+                    number=Requirement.generate_child_number(req.number),
                     title=st,
                     project_id=req.project_id,
                     priority=req.priority,
@@ -245,7 +245,7 @@ def requirement_edit(req_id):
             except (ValueError, IndexError):
                 est_cases = None
             sub = Requirement(
-                number=Requirement.generate_number(),
+                number=Requirement.generate_child_number(req.number),
                 title=st, project_id=req.project_id, priority=req.priority,
                 assignee_id=a_id_sub, assignee_name=a_name_sub,
                 estimate_days=days,
