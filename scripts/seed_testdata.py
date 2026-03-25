@@ -226,9 +226,11 @@ def seed():
             if existing:
                 risk_count += 1
                 continue
+            owner_user = users.get(next((u['eid'] for u in TEST_USERS if u['name'] == owner), ''))
             r = Risk(
                 project_id=projects[pidx].id, title=title,
                 severity=sev, owner=owner,
+                owner_id=owner_user.id if owner_user else None,
                 meeting_id=meeting_objects[midx].id if midx is not None else None,
                 due_date=today + timedelta(days=due_days),
                 created_by=creator.id,

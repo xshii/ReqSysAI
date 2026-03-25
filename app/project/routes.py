@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, date, timedelta
 
-from flask import render_template, redirect, url_for, flash, request, jsonify, make_response
+from flask import render_template, redirect, url_for, flash, request, jsonify, make_response, current_app
 from flask_login import current_user
 
 from app.constants import MILESTONE_COLOR
