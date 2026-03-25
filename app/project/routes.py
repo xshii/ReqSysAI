@@ -62,6 +62,13 @@ def project_create():
                 due = date.fromisoformat(due_str) if due_str else None
                 project.milestones.append(Milestone(name=name, due_date=due))
 
+        # If child project has no milestones, copy from parent
+        if project.parent_id and not project.milestones:
+            parent = db.session.get(Project, project.parent_id)
+            if parent and parent.milestones:
+                for ms in parent.milestones:
+                    project.milestones.append(Milestone(name=ms.name, due_date=ms.due_date, status=ms.status))
+
         db.session.commit()
         flash(f'项目「{project.name}」创建成功', 'success')
         return redirect(url_for('project.project_detail', project_id=project.id))

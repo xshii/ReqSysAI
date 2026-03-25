@@ -176,12 +176,19 @@ def seed():
                            created_by=creator.id, owner_id=creator.id)
             db.session.add(proj)
             db.session.flush()
-            # Child projects
+            # Child projects (copy parent milestones if none)
             for child in p.get('children', []):
-                if not Project.query.filter_by(name=child['name'], parent_id=proj.id).first():
-                    db.session.add(Project(name=child['name'], description=child['desc'],
-                                           parent_id=proj.id, created_by=creator.id,
-                                           owner_id=creator.id, status='active'))
+                existing_child = Project.query.filter_by(name=child['name'], parent_id=proj.id).first()
+                if not existing_child:
+                    cp = Project(name=child['name'], description=child['desc'],
+                                 parent_id=proj.id, created_by=creator.id,
+                                 owner_id=creator.id, status='active')
+                    db.session.add(cp)
+                    db.session.flush()
+                    # Copy parent milestones
+                    for ms in proj.milestones:
+                        db.session.add(Milestone(project_id=cp.id, name=ms.name,
+                                                 due_date=ms.due_date, status=ms.status))
             projects.append(proj)
         db.session.commit()
         print(f'项目: {len(projects)}')
