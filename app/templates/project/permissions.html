@@ -45,9 +45,9 @@
     </div>
 </div>
 {% if items %}
-<div class="table-responsive mb-4">
+<div class="table-responsive mb-4" style="max-height:400px;overflow-y:auto;">
     <table class="table table-hover small mb-0" id="itemTable">
-        <thead class="table-light"><tr><th>分类</th><th>群组</th><th>代码仓/路径</th><th>说明</th><th>申请人数</th><th>操作</th></tr></thead>
+        <thead class="table-light" style="position:sticky;top:0;z-index:1;"><tr><th>分类</th><th>群组</th><th>代码仓/路径</th><th>说明</th><th>申请人数</th><th>操作</th></tr></thead>
         <tbody>
         {% for item in items %}
         <tr data-cat="{{ item.category or '' }}">
@@ -118,9 +118,9 @@
     </div>
 </div>
 {% if apps %}
-<div class="table-responsive">
+<div class="table-responsive" style="max-height:400px;overflow-y:auto;">
     <table class="table table-hover small mb-0" id="appTable">
-        <thead class="table-light"><tr><th>权限</th><th>分类</th><th>申请人</th><th>理由</th><th>状态</th><th>申请日期</th><th>审批日期</th><th>操作</th></tr></thead>
+        <thead class="table-light" style="position:sticky;top:0;z-index:1;"><tr><th>权限</th><th>分类</th><th>申请人</th><th>理由</th><th>状态</th><th>申请日期</th><th>审批日期</th><th>操作</th></tr></thead>
         <tbody>
         {% for a in apps %}
         <tr data-status="{{ a.status }}" data-cat="{{ a.item.category or '' }}">
