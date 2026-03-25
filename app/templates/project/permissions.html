@@ -267,8 +267,8 @@
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">申请人 *</label>
                         <div class="col-9">
-                            <textarea name="people_list" id="peopleList" class="form-control form-control-sm" rows="3" placeholder="每行一人：姓名(拼音) 工号">{{ my_pinyin_name }} {{ current_user.employee_id or '' }}</textarea>
-                            <div class="text-muted small mt-1">每行一人，支持批量粘贴</div>
+                            <textarea name="people_list" id="peopleList" class="form-control form-control-sm" rows="3" placeholder="每行一人，格式：姓名 工号&#10;如：张三 a00123456&#10;外部人员只填姓名即可">{{ my_pinyin_name }} {{ current_user.employee_id or '' }}</textarea>
+                            <div class="text-muted small mt-1">内部成员用上方搜索添加，外部人员直接输入 姓名 工号</div>
                         </div>
                     </div>
                     <div class="row mb-2">
