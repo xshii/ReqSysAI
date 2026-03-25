@@ -250,6 +250,34 @@ def requirement_status(req_id):
     return redirect(url_for('requirement.requirement_detail', req_id=back_id))
 
 
+@requirement_bp.route('/<int:req_id>/delete', methods=['POST'])
+@login_required
+def requirement_delete(req_id):
+    req = db.get_or_404(Requirement, req_id)
+    parent_id = req.parent_id
+    number = req.number
+    # Delete children first
+    for child in req.children:
+        for c in child.comments:
+            db.session.delete(c)
+        for a in child.activities:
+            db.session.delete(a)
+        child.requirements = []  # clear todo associations
+        db.session.delete(child)
+    # Delete self
+    for c in req.comments:
+        db.session.delete(c)
+    for a in req.activities:
+        db.session.delete(a)
+    req.requirements = []
+    db.session.delete(req)
+    db.session.commit()
+    flash(f'需求 {number} 已删除', 'success')
+    if parent_id:
+        return redirect(url_for('requirement.requirement_detail', req_id=parent_id))
+    return redirect(url_for('requirement.requirement_list'))
+
+
 @requirement_bp.route('/<int:req_id>/status-api', methods=['POST'])
 @login_required
 def requirement_status_api(req_id):

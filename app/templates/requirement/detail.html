@@ -18,9 +18,17 @@
                         <span class="text-muted">{{ req.number }}</span>
                         <h4 class="mt-1">{{ req.title }}</h4>
                     </div>
-                    <a href="{{ url_for('requirement.requirement_edit', req_id=req.id) }}" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-pencil"></i> 编辑
-                    </a>
+                    <div class="d-flex gap-1">
+                        <a href="{{ url_for('requirement.requirement_edit', req_id=req.id) }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-pencil"></i> 编辑
+                        </a>
+                        <form method="POST" action="{{ url_for('requirement.requirement_delete', req_id=req.id) }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('删除需求 {{ req.number }}{% if req.children %} 及其 {{ req.children|length }} 个子需求{% endif %}？此操作不可恢复。')">
+                                <i class="bi bi-trash"></i> 删除
+                            </button>
+                        </form>
+                    </div>
                 </div>
                 <div class="mt-3">{{ req.description or '暂无描述' }}</div>
             </div>
