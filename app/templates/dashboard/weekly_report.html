@@ -104,12 +104,6 @@
 <div class="report-section">
     <h6>三、整体进展与下周计划</h6>
     <div class="report-summary">{{ ai.summary }}</div>
-    {% if ai.highlights %}
-    <div style="padding:6px 14px;font-size:.84rem;margin-top:4px;color:#334155;">
-        <strong>本周亮点：</strong>
-        {% for h in ai.highlights %}{{ h }}{% if not loop.last %}；{% endif %}{% endfor %}
-    </div>
-    {% endif %}
     {% set high_risks = report_data.open_risks | selectattr('severity', 'equalto', 'high') | list %}
     {% if high_risks %}
     <div style="background:#fef2f2;border:1px solid #fecaca;padding:8px 12px;font-size:.84rem;margin-top:4px;">
