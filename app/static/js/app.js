@@ -150,24 +150,29 @@ function loadNotifs() {
             list.innerHTML = '<li class="text-center text-muted small py-3">暂无新通知</li>';
             return;
         }
-        var h = '<li><div class="d-flex justify-content-between px-3 py-1 border-bottom"><span class="small fw-bold">通知</span>'
-            + '<a href="#" class="small text-primary" onclick="markAllRead();return false;">全部已读</a></div></li>';
+        var h = '<li><div class="px-3 py-1 border-bottom"><span class="small fw-bold">通知</span></div></li>';
         items.forEach(function(n) {
-            h += '<li><a class="dropdown-item small py-2 notif-item" href="' + (n.link || '#') + '" data-nid="' + n.id + '">'
+            h += '<li class="d-flex align-items-start">'
+                + '<a class="dropdown-item small py-2 flex-grow-1" href="' + (n.link || '#') + '" onclick="markRead(' + n.id + ')">'
                 + '<i class="bi bi-' + n.icon + ' me-1 text-muted"></i>'
                 + '<span class="text-muted" style="font-size:.75em;">[' + n.type_label + ']</span> '
                 + n.title
                 + '<div class="text-muted" style="font-size:.7em;">' + n.time + '</div>'
-                + '</a></li>';
+                + '</a>'
+                + '<button class="btn btn-sm border-0 text-muted px-2 py-2" onclick="markRead(' + n.id + ');this.closest(\'li\').remove();updateBadge(-1);" title="已读"><i class="bi bi-x"></i></button>'
+                + '</li>';
         });
         list.innerHTML = h;
     });
 }
-function markAllRead() {
-    apiPost('/api/notifications/read', {id: 'all'}).then(function() {
-        var badge = document.getElementById('notifBadge');
-        if (badge) badge.style.display = 'none';
-        _notifLoaded = false;
-        loadNotifs();
-    });
+function markRead(nid) {
+    apiPost('/api/notifications/read', {id: nid});
+}
+function updateBadge(delta) {
+    var badge = document.getElementById('notifBadge');
+    if (!badge) return;
+    var cur = parseInt(badge.textContent) || 0;
+    var next = Math.max(0, cur + delta);
+    badge.textContent = next;
+    badge.style.display = next > 0 ? '' : 'none';
 }
