@@ -17,6 +17,7 @@ class Risk(db.Model):
     tracker_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # 跟踪人（内部员工）
     requirement_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=True)  # 关联子需求
     meeting_id = db.Column(db.Integer, db.ForeignKey('meetings.id'), nullable=True)  # 来源会议
+    aar_id = db.Column(db.Integer, db.ForeignKey('aars.id'), nullable=True)  # 来源AAR
     due_date = db.Column(db.Date, nullable=False)
     resolution = db.Column(db.Text, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)

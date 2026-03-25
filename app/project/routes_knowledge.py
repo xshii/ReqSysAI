@@ -149,9 +149,11 @@ def aar_ai_issues(project_id):
     from app.services.ai import call_ollama
     from app.services.prompts import get_prompt
     action_line = f'改进措施：{action}' if action else ''
+    aar_date = data.get('aar_date', str(date.today()))
     tpl = get_prompt('aar_extract_issues')
     prompt = tpl.format(goal=goal or '未填写', result=result or '未填写',
-                        analysis=analysis or '未填写', action_line=action_line)
+                        analysis=analysis or '未填写', action_line=action_line,
+                        aar_date=aar_date)
 
     result_data, _ = call_ollama(prompt)
 
@@ -199,6 +201,7 @@ def aar_adopt_risks(project_id):
     db.get_or_404(Project, project_id)
     data = request.get_json() or {}
     issues = data.get('issues', [])
+    aar_id = data.get('aar_id')
     if not issues:
         return jsonify(ok=False, msg='无遗留问题')
     created = 0
@@ -223,6 +226,7 @@ def aar_adopt_risks(project_id):
             owner=owner_name or None, owner_id=_resolve_owner_id(owner_name),
             due_date=due, created_by=current_user.id,
             tracker_id=_resolve_owner_id(owner_name) or current_user.id,
+            aar_id=int(aar_id) if aar_id else None,
         )
         db.session.add(risk)
         created += 1

@@ -209,13 +209,34 @@
                 </div>
             </div>
         </div>
+        {% set linked_risks = [] %}
+        {% for r in aar.project.risks if r.aar_id == aar.id and not r.deleted_at %}
+        {% if linked_risks.append(r) %}{% endif %}
+        {% endfor %}
+        {% if linked_risks %}
+        <div class="mt-2">
+            <div class="small fw-bold mb-1"><i class="bi bi-list-check"></i> 遗留问题闭环 ({{ linked_risks|selectattr('status','ne','open')|list|length }}/{{ linked_risks|length }})</div>
+            <table class="table table-sm small mb-0">
+                <tbody>
+                {% for r in linked_risks %}
+                <tr class="{{ 'table-success' if r.status != 'open' else '' }}">
+                    <td>{{ r.title }}</td>
+                    <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span></td>
+                    <td class="text-muted">{{ r.owner or '-' }}</td>
+                    <td class="text-muted">{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
         {% if ai_enabled %}
         <div class="mt-2 issues-area" id="issuesArea{{ aar.id }}"></div>
         {% endif %}
         <div class="mt-2 text-end">
             {% if ai_enabled %}
             <button class="btn btn-sm btn-outline-info ai-issues-btn"
-                    data-goal="{{ aar.goal or '' }}" data-result="{{ aar.result or '' }}"
+                    data-goal="{{ aar.goal or '' }}" data-result="{{ aar.result or '' }}" data-date="{{ aar.date.strftime('%Y-%m-%d') if aar.date else '' }}"
                     data-analysis="{{ aar.analysis or '' }}" data-action="{{ aar.action or '' }}"
                     data-target="issuesArea{{ aar.id }}" data-aar-id="{{ aar.id }}"><i class="bi bi-robot"></i> AI提取遗留问题</button>
             {% endif %}
@@ -437,6 +458,7 @@ document.addEventListener('click', function(e) {
 });
 
 var _lastIssues = null;
+var _lastAarId = null;
 
 function _renderIssues(issues, container, showAdopt, aiAction) {
     var h = '';
@@ -469,9 +491,9 @@ function _renderIssues(issues, container, showAdopt, aiAction) {
 }
 
 // AI extract — shared
-function _aiIssues(goal, result, analysis, action, onDone) {
+function _aiIssues(goal, result, analysis, action, aarDate, onDone) {
     apiPost('{{ url_for("project.aar_ai_issues", project_id=project.id) }}',
-        {goal: goal, result: result, analysis: analysis, action: action})
+        {goal: goal, result: result, analysis: analysis, action: action, aar_date: aarDate || '{{ today.strftime("%Y-%m-%d") }}'})
     .then(function(d) { onDone(d); });
 }
 
@@ -486,12 +508,13 @@ function aiExtractIssues() {
         document.getElementById('addResult').value,
         document.getElementById('addAnalysis').value,
         document.getElementById('addAction').value,
+        (document.querySelector('#addAarModal input[name="date"]') || {}).value || '',
         function(d) {
             btn.disabled = false; btn.innerHTML = orig;
             var el = document.getElementById('issuesResult');
             el.style.display = '';
             if (d && d.ok) {
-                _lastIssues = d.issues || [];
+                _lastIssues = d.issues || []; _lastAarId = null;
                 _renderIssues(d.issues, el, true, d.action);
                 // If AI generated action, fill into the action textarea
                 if (d.action && document.getElementById('addAction')) {
@@ -511,12 +534,12 @@ document.addEventListener('click', function(e) {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     var aarId = btn.dataset.aarId;
-    _aiIssues(btn.dataset.goal, btn.dataset.result, btn.dataset.analysis, btn.dataset.action,
+    _aiIssues(btn.dataset.goal, btn.dataset.result, btn.dataset.analysis, btn.dataset.action, btn.dataset.date,
         function(d) {
             btn.disabled = false; btn.innerHTML = orig;
             var area = document.getElementById(btn.dataset.target);
             if (d && d.ok) {
-                _lastIssues = d.issues || [];
+                _lastIssues = d.issues || []; _lastAarId = aarId;
                 _renderIssues(d.issues, area, true, d.action);
                 // Auto-save AI action to AAR if empty
                 if (d.action && aarId) {
@@ -533,7 +556,7 @@ document.addEventListener('click', function(e) {
     if (!btn || !_lastIssues) return;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 创建中...';
-    apiPost('{{ url_for("project.aar_adopt_risks", project_id=project.id) }}', {issues: _lastIssues})
+    apiPost('{{ url_for("project.aar_adopt_risks", project_id=project.id) }}', {issues: _lastIssues, aar_id: _lastAarId})
     .then(function(d) {
         if (d && d.ok) {
             btn.innerHTML = '<i class="bi bi-check"></i> 已创建 ' + d.created + ' 条风险';
@@ -555,7 +578,7 @@ document.addEventListener('click', function(e) {
     if (!issue) return;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-    apiPost('{{ url_for("project.aar_adopt_risks", project_id=project.id) }}', {issues: [issue]})
+    apiPost('{{ url_for("project.aar_adopt_risks", project_id=project.id) }}', {issues: [issue], aar_id: _lastAarId})
     .then(function(d) {
         if (d && d.ok && d.created > 0) {
             var tr = btn.closest('tr');
