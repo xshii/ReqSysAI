@@ -109,7 +109,7 @@ def stats():
     cur_project_id = request.args.get('project_id', type=int)
     monday, sunday = week_range(offset)
 
-    groups = [g.name for g in Group.query.order_by(Group.name).all()]
+    groups = [g.name for g in Group.query.filter_by(is_hidden=False).order_by(Group.name).all()]
     cur_project = db.session.get(Project, cur_project_id) if cur_project_id else None
     data = gather_week_stats(monday, sunday, group=cur_group or None, project_id=cur_project_id)
 
@@ -1283,7 +1283,9 @@ def resource_map():
         start, end = week_range(week_offset)
     label = f'{start.strftime("%Y-%m-%d")} ~ {end.strftime("%Y-%m-%d")}'
 
-    users = User.query.filter_by(is_active=True).order_by(User.group, User.name).all()
+    hidden_groups = {g.name for g in Group.query.filter_by(is_hidden=True).all()}
+    users = [u for u in User.query.filter_by(is_active=True).order_by(User.group, User.name).all()
+             if u.group not in hidden_groups]
     user_ids = [u.id for u in users]
 
     # All todos in the period (by created_date, which always exists)
@@ -1415,7 +1417,9 @@ def resource_map_export():
     else:
         start, end = week_range(week_offset)
 
-    users_q = User.query.filter_by(is_active=True).order_by(User.group, User.name).all()
+    _hg = {g.name for g in Group.query.filter_by(is_hidden=True).all()}
+    users_q = [u for u in User.query.filter_by(is_active=True).order_by(User.group, User.name).all()
+               if u.group not in _hg]
     user_ids = [u.id for u in users_q]
     todos = Todo.query.filter(
         Todo.user_id.in_(user_ids),
