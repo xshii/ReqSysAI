@@ -436,25 +436,35 @@ document.addEventListener('click', function(e) {
     document.getElementById('editAarStatus').value = btn.dataset.status;
 });
 
-var _lastIssues = null; // store for adopt
+var _lastIssues = null;
 
-function _renderIssues(issues, container, showAdopt) {
+function _renderIssues(issues, container, showAdopt, aiAction) {
+    var h = '';
+    // Show AI-generated action suggestion
+    if (aiAction) {
+        h += '<div class="small mb-2" style="white-space:pre-line;"><strong>AI建议改进措施：</strong><br>' + aiAction + '</div>';
+    }
     if (!issues || !issues.length) {
-        container.innerHTML = '<div class="text-muted small">暂无遗留问题</div>';
+        h += '<div class="text-muted small">暂无遗留问题</div>';
+        container.innerHTML = h;
         return;
     }
     var sevLabels = {high:'高',medium:'中',low:'低'};
     var sevColors = {high:'danger',medium:'warning text-dark',low:'secondary'};
-    var h = '<table class="table table-sm small mb-1"><thead class="table-light"><tr><th>问题</th><th>严重度</th><th>责任人</th><th>截止日期</th></tr></thead><tbody>';
-    issues.forEach(function(i) {
+    h += '<table class="table table-sm small mb-1"><thead class="table-light"><tr>';
+    if (showAdopt) h += '<th style="width:60px;">采纳</th>';
+    h += '<th>问题</th><th>严重度</th><th>责任人</th><th>截止日期</th></tr></thead><tbody>';
+    issues.forEach(function(i, idx) {
         var t = typeof i === 'string' ? i : (i.title || '');
         var sev = i.severity || 'medium';
         var owner = i.owner || '-';
         var dl = i.deadline || '-';
-        h += '<tr><td>' + t + '</td><td><span class="badge bg-' + (sevColors[sev]||'secondary') + '">' + (sevLabels[sev]||sev) + '</span></td><td>' + owner + '</td><td>' + dl + '</td></tr>';
+        h += '<tr data-idx="' + idx + '">';
+        if (showAdopt) h += '<td><button class="btn btn-sm btn-outline-success py-0 adopt-one-btn" data-idx="' + idx + '" title="采纳为风险"><i class="bi bi-check"></i></button></td>';
+        h += '<td>' + t + '</td><td><span class="badge bg-' + (sevColors[sev]||'secondary') + '">' + (sevLabels[sev]||sev) + '</span></td><td>' + owner + '</td><td>' + dl + '</td></tr>';
     });
     h += '</tbody></table>';
-    if (showAdopt) h += '<button type="button" class="btn btn-sm btn-success adopt-risks-btn"><i class="bi bi-check-all"></i> 采纳为风险</button>';
+    if (showAdopt) h += '<button type="button" class="btn btn-sm btn-success adopt-risks-btn"><i class="bi bi-check-all"></i> 全部采纳</button>';
     container.innerHTML = h;
 }
 
@@ -480,9 +490,14 @@ function aiExtractIssues() {
             btn.disabled = false; btn.innerHTML = orig;
             var el = document.getElementById('issuesResult');
             el.style.display = '';
-            if (d && d.ok && d.issues) {
-                _lastIssues = d.issues;
-                _renderIssues(d.issues, el, true);
+            if (d && d.ok) {
+                _lastIssues = d.issues || [];
+                _renderIssues(d.issues, el, true, d.action);
+                // If AI generated action, fill into the action textarea
+                if (d.action && document.getElementById('addAction')) {
+                    var ta = document.getElementById('addAction');
+                    if (!ta.value.trim()) ta.value = d.action;
+                }
             } else { showToast(d.msg || 'AI 提取失败', 'danger'); }
         }
     );
@@ -499,15 +514,15 @@ document.addEventListener('click', function(e) {
         function(d) {
             btn.disabled = false; btn.innerHTML = orig;
             var area = document.getElementById(btn.dataset.target);
-            if (d && d.ok && d.issues) {
-                _lastIssues = d.issues;
-                _renderIssues(d.issues, area, true);
+            if (d && d.ok) {
+                _lastIssues = d.issues || [];
+                _renderIssues(d.issues, area, true, d.action);
             } else { showToast(d.msg || 'AI 提取失败', 'danger'); }
         }
     );
 });
 
-// Adopt issues as risks
+// Adopt ALL issues as risks
 document.addEventListener('click', function(e) {
     var btn = e.target.closest('.adopt-risks-btn');
     if (!btn || !_lastIssues) return;
@@ -518,8 +533,32 @@ document.addEventListener('click', function(e) {
         if (d && d.ok) {
             btn.innerHTML = '<i class="bi bi-check"></i> 已创建 ' + d.created + ' 条风险';
             btn.className = 'btn btn-sm btn-outline-success';
+            // Mark all individual adopt buttons as done
+            btn.closest('div').querySelectorAll('.adopt-one-btn').forEach(function(b) {
+                b.innerHTML = '<i class="bi bi-check text-success"></i>'; b.disabled = true;
+            });
             showToast('已创建 ' + d.created + ' 条风险', 'success');
-        } else { showToast(d.msg || '创建失败', 'danger'); btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-all"></i> 采纳为风险'; }
+        } else { showToast(d.msg || '创建失败', 'danger'); btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-all"></i> 全部采纳'; }
+    });
+});
+// Adopt SINGLE issue as risk
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.adopt-one-btn');
+    if (!btn || !_lastIssues) return;
+    var idx = parseInt(btn.dataset.idx);
+    var issue = _lastIssues[idx];
+    if (!issue) return;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    apiPost('{{ url_for("project.aar_adopt_risks", project_id=project.id) }}', {issues: [issue]})
+    .then(function(d) {
+        if (d && d.ok && d.created > 0) {
+            btn.innerHTML = '<i class="bi bi-check text-success"></i>';
+            showToast('已采纳: ' + (issue.title || ''), 'success');
+        } else if (d && d.created === 0) {
+            btn.innerHTML = '<i class="bi bi-dash text-muted"></i>';
+            showToast('已存在', 'info');
+        } else { showToast('失败', 'danger'); btn.disabled = false; btn.innerHTML = '<i class="bi bi-check"></i>'; }
     });
 });
 
