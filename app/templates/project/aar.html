@@ -115,21 +115,28 @@
                         <div class="col-9"><input type="text" name="participants" class="form-control form-control-sm" placeholder="逗号分隔，如：张三,李四,王五"></div>
                     </div>
                     <hr class="my-2">
+                    {% if ai_enabled %}
+                    <div class="mb-2 text-end">
+                        <button type="button" class="btn btn-sm btn-outline-info" id="btnAiAar" onclick="aiGenerateAAR()">
+                            <i class="bi bi-robot"></i> AI 一键生成
+                        </button>
+                    </div>
+                    {% endif %}
                     <div class="mb-2">
                         <label class="form-label small fw-bold text-primary"><i class="bi bi-bullseye"></i> 1. 目标是什么</label>
-                        <textarea name="goal" class="form-control form-control-sm" rows="2" placeholder="原计划要达成什么目标？关键指标是什么？"></textarea>
+                        <textarea name="goal" id="addGoal" class="form-control form-control-sm" rows="2" placeholder="原计划要达成什么目标？关键指标是什么？"></textarea>
                     </div>
                     <div class="mb-2">
                         <label class="form-label small fw-bold text-success"><i class="bi bi-check-circle"></i> 2. 实际发生了什么</label>
-                        <textarea name="result" class="form-control form-control-sm" rows="2" placeholder="实际结果如何？哪些达成了，哪些没有？"></textarea>
+                        <textarea name="result" id="addResult" class="form-control form-control-sm" rows="2" placeholder="实际结果如何？哪些达成了，哪些没有？"></textarea>
                     </div>
                     <div class="mb-2">
                         <label class="form-label small fw-bold text-warning"><i class="bi bi-search"></i> 3. 为什么有差异</label>
-                        <textarea name="analysis" class="form-control form-control-sm" rows="2" placeholder="根本原因是什么？哪些做得好要保持？哪些做得不好？"></textarea>
+                        <textarea name="analysis" id="addAnalysis" class="form-control form-control-sm" rows="2" placeholder="根本原因是什么？哪些做得好要保持？哪些做得不好？"></textarea>
                     </div>
                     <div class="mb-2">
                         <label class="form-label small fw-bold text-danger"><i class="bi bi-lightning"></i> 4. 下次怎么改进</label>
-                        <textarea name="action_items" class="form-control form-control-sm" rows="2" placeholder="具体行动项，谁来做，什么时候完成？"></textarea>
+                        <textarea name="action_items" id="addAction" class="form-control form-control-sm" rows="2" placeholder="具体行动项，谁来做，什么时候完成？"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">创建</button></div>
@@ -231,6 +238,33 @@ document.addEventListener('click', function(e) {
     document.getElementById('editAarAction').value = btn.dataset.action;
     document.getElementById('editAarStatus').value = btn.dataset.status;
 });
+
+// AI generate AAR content
+function aiGenerateAAR() {
+    var btn = document.getElementById('btnAiAar');
+    var orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 生成中...';
+    var triggerRef = '';
+    var msSelect = document.getElementById('addMsSelect');
+    var triggerInput = document.getElementById('addTriggerRef');
+    if (msSelect && msSelect.style.display !== 'none') triggerRef = msSelect.value;
+    else if (triggerInput && triggerInput.style.display !== 'none') triggerRef = triggerInput.value;
+    apiPost('{{ url_for("project.aar_ai_generate", project_id=project.id) }}', {trigger_ref: triggerRef})
+    .then(function(d) {
+        btn.disabled = false;
+        btn.innerHTML = orig;
+        if (d && d.ok) {
+            if (d.goal) document.getElementById('addGoal').value = d.goal;
+            if (d.result) document.getElementById('addResult').value = d.result;
+            if (d.analysis) document.getElementById('addAnalysis').value = d.analysis;
+            if (d.action) document.getElementById('addAction').value = d.action;
+            showToast('AI 已填充四要素', 'success');
+        } else {
+            showToast(d.msg || 'AI 生成失败', 'danger');
+        }
+    });
+}
 
 // Filter by trigger type
 function filterAAR() {
