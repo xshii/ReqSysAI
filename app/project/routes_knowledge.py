@@ -186,7 +186,14 @@ def aar_save_action(project_id, aar_id):
     aar = db.session.get(AAR, aar_id)
     if aar and aar.project_id == project_id:
         data = request.get_json() or {}
-        action_text = data.get('action', '').strip()
+        raw_action = data.get('action', '')
+        if isinstance(raw_action, list):
+            action_text = '\n'.join(
+                a if isinstance(a, str) else (a.get('title') or a.get('content') or str(a))
+                for a in raw_action
+            ).strip()
+        else:
+            action_text = str(raw_action).strip()
         if action_text and not aar.action:
             aar.action = action_text
             db.session.commit()

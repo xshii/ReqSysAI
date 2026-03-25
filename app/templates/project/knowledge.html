@@ -464,7 +464,13 @@ function _renderIssues(issues, container, showAdopt, aiAction) {
     var h = '';
     // Show AI-generated action suggestion
     if (aiAction) {
-        h += '<div class="small mb-2" style="white-space:pre-line;"><strong>AI建议改进措施：</strong><br>' + aiAction + '</div>';
+        var actionText = '';
+        if (Array.isArray(aiAction)) {
+            actionText = aiAction.map(function(a) { return typeof a === 'string' ? a : (a.title || a.content || JSON.stringify(a)); }).join('\n');
+        } else {
+            actionText = String(aiAction);
+        }
+        h += '<div class="small mb-2" style="white-space:pre-line;"><strong>AI建议改进措施：</strong><br>' + actionText + '</div>';
     }
     if (!issues || !issues.length) {
         h += '<div class="text-muted small">暂无遗留问题</div>';
@@ -519,7 +525,8 @@ function aiExtractIssues() {
                 // If AI generated action, fill into the action textarea
                 if (d.action && document.getElementById('addAction')) {
                     var ta = document.getElementById('addAction');
-                    if (!ta.value.trim()) ta.value = d.action;
+                    var actionStr = Array.isArray(d.action) ? d.action.map(function(a) { return typeof a === 'string' ? a : (a.title || a.content || JSON.stringify(a)); }).join('\n') : String(d.action);
+                    if (!ta.value.trim()) ta.value = actionStr;
                 }
             } else { showToast(d.msg || 'AI 提取失败', 'danger'); }
         }
