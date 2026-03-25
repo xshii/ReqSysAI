@@ -24,15 +24,19 @@ from app.utils.pinyin import to_pinyin
 TEST_GROUPS = ['前端组', '后端组', '测试组']
 
 TEST_USERS = [
-    {'eid': 't00000001', 'name': '张三', 'group': '后端组', 'roles': ['DE'], 'ip': '10.0.0.101'},
-    {'eid': 't00000002', 'name': '李四', 'group': '前端组', 'roles': ['DE'], 'ip': '10.0.0.102'},
-    {'eid': 't00000003', 'name': '王五', 'group': '测试组', 'roles': ['DE'], 'ip': '10.0.0.103'},
-    {'eid': 't00000004', 'name': '赵六', 'group': '后端组', 'roles': ['DE', 'PL'], 'ip': '10.0.0.104'},
-    {'eid': 't00000005', 'name': '孙七', 'group': '前端组', 'roles': ['DE'], 'ip': '10.0.0.105'},
+    {'eid': 't00000001', 'name': '张三', 'group': '后端组', 'roles': ['DE'], 'ip': '10.0.0.101', 'manager': '赵六 t00000004', 'domain': '后端开发'},
+    {'eid': 't00000002', 'name': '李四', 'group': '前端组', 'roles': ['DE'], 'ip': '10.0.0.102', 'manager': '赵六 t00000004', 'domain': '前端开发'},
+    {'eid': 't00000003', 'name': '王五', 'group': '测试组', 'roles': ['DE'], 'ip': '10.0.0.103', 'manager': '赵六 t00000004', 'domain': '测试'},
+    {'eid': 't00000004', 'name': '赵六', 'group': '后端组', 'roles': ['DE', 'PL'], 'ip': '10.0.0.104', 'manager': '管理员 a00000001', 'domain': '项目管理'},
+    {'eid': 't00000005', 'name': '孙七', 'group': '前端组', 'roles': ['DE'], 'ip': '10.0.0.105', 'manager': '赵六 t00000004', 'domain': '前端开发'},
 ]
 
 TEST_PROJECTS = [
-    {'name': '商城后台系统', 'desc': '电商后台管理系统重构'},
+    {'name': '商城后台系统', 'desc': '电商后台管理系统重构', 'children': [
+        {'name': '用户中心模块', 'desc': '用户注册登录、权限管理、个人信息'},
+        {'name': '订单系统模块', 'desc': '订单创建、支付、退款、物流'},
+        {'name': '商品管理模块', 'desc': '商品CRUD、搜索、分类'},
+    ]},
     {'name': '移动端APP', 'desc': 'iOS/Android客户端开发'},
 ]
 
@@ -149,6 +153,7 @@ def seed():
                 employee_id=u['eid'], name=u['name'],
                 pinyin=to_pinyin(u['name']),
                 ip_address=u['ip'], group=u['group'],
+                manager=u.get('manager'), domain=u.get('domain'),
                 roles=roles,
             )
             db.session.add(user)
@@ -171,6 +176,12 @@ def seed():
                            created_by=creator.id, owner_id=creator.id)
             db.session.add(proj)
             db.session.flush()
+            # Child projects
+            for child in p.get('children', []):
+                if not Project.query.filter_by(name=child['name'], parent_id=proj.id).first():
+                    db.session.add(Project(name=child['name'], description=child['desc'],
+                                           parent_id=proj.id, created_by=creator.id,
+                                           owner_id=creator.id, status='active'))
             projects.append(proj)
         db.session.commit()
         print(f'项目: {len(projects)}')
