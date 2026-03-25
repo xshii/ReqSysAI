@@ -127,8 +127,9 @@
             <td><button class="btn btn-sm py-0 px-1 btn-outline-secondary copy-btn" data-copy="{{ a.item.resource }}" data-bs-toggle="tooltip" title="复制群组"><i class="bi bi-clipboard"></i></button> {{ a.item.resource }}</td>
             <td>{% if a.item.category %}<span class="badge bg-info text-dark">{{ a.item.category }}</span>{% endif %}</td>
             <td>
-                <button class="btn btn-sm py-0 px-1 btn-outline-secondary copy-btn" data-bs-toggle="tooltip" title="复制人员名单"
-                        data-copy="{{ a.applicant_name }}"><i class="bi bi-clipboard"></i></button>
+                {% set _copy_lines = [] %}{% for p in a.people_list %}{% set parts = p.strip().split() %}{% set name = parts[0] if parts else p %}{% set eid = parts[1] if parts|length > 1 else '' %}{% set py = user_pinyin.get(name, name) %}{% if _copy_lines.append(py ~ (' ' ~ eid if eid else '')) %}{% endif %}{% endfor %}
+                <button class="btn btn-sm py-0 px-1 btn-outline-secondary copy-btn" data-bs-toggle="tooltip" title="复制人员(拼音)"
+                        data-copy="{{ _copy_lines|join('\n') }}"><i class="bi bi-clipboard"></i></button>
                 {% for p in a.people_list %}<div class="small">{{ p }}</div>{% endfor %}
                 {% if a.people_count > 1 %}<span class="badge bg-secondary" style="font-size:.6em;">{{ a.people_count }}人</span>{% endif %}
             </td>
