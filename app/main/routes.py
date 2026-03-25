@@ -206,8 +206,14 @@ def index():
         Todo.actual_minutes > 0,
     ).scalar() or 0
 
+    # Persistent notifications (unread)
+    from app.models.notification import Notification
+    notifications = Notification.query.filter_by(user_id=current_user.id, is_read=False)\
+        .order_by(Notification.created_at.desc()).limit(10).all()
+
     return render_template('main/index.html',
         my_todos=my_todos, todo_total=todo_total, todo_done=todo_done,
+        notifications=notifications,
         my_reqs=my_reqs, my_risks=my_risks, today=today,
         req_todos=req_todos, risk_todos=risk_todos, team_todos=team_todos, personal_todos=personal_todos,
         display_reqs=display_reqs,
