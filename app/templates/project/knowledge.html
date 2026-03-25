@@ -453,14 +453,15 @@ function _renderIssues(issues, container, showAdopt, aiAction) {
     var sevColors = {high:'danger',medium:'warning text-dark',low:'secondary'};
     h += '<table class="table table-sm small mb-1"><thead class="table-light"><tr>';
     if (showAdopt) h += '<th style="width:60px;">采纳</th>';
-    h += '<th>问题</th><th>严重度</th><th>截止日期</th></tr></thead><tbody>';
+    h += '<th>问题</th><th>严重度</th><th>责任人</th><th>截止日期</th></tr></thead><tbody>';
     issues.forEach(function(i, idx) {
         var t = typeof i === 'string' ? i : (i.title || '');
         var sev = i.severity || 'medium';
+        var owner = i.owner || '-';
         var dl = i.deadline || '-';
         h += '<tr data-idx="' + idx + '">';
         if (showAdopt) h += '<td><button class="btn btn-sm btn-outline-success py-0 adopt-one-btn" data-idx="' + idx + '" title="采纳为风险"><i class="bi bi-check"></i></button></td>';
-        h += '<td>' + t + '</td><td><span class="badge bg-' + (sevColors[sev]||'secondary') + '">' + (sevLabels[sev]||sev) + '</span></td><td>' + dl + '</td></tr>';
+        h += '<td>' + t + '</td><td><span class="badge bg-' + (sevColors[sev]||'secondary') + '">' + (sevLabels[sev]||sev) + '</span></td><td>' + owner + '</td><td>' + dl + '</td></tr>';
     });
     h += '</tbody></table>';
     if (showAdopt) h += '<button type="button" class="btn btn-sm btn-success adopt-risks-btn"><i class="bi bi-check-all"></i> 全部采纳</button>';

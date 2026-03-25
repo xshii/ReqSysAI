@@ -154,13 +154,26 @@ def aar_ai_issues(project_id):
                         analysis=analysis or '未填写', action_line=action_line)
 
     result_data, _ = call_ollama(prompt)
+
+    # Validate owner against system users
+    from app.models.user import User
+    user_names = {u.name for u in User.query.filter_by(is_active=True).all()}
+
+    def _validate_issues(issues):
+        for issue in issues:
+            if isinstance(issue, dict):
+                owner = (issue.get('owner') or '').strip()
+                if owner and owner not in user_names:
+                    issue['owner'] = ''  # Not a system user, clear it
+        return issues
+
     # AI may return {"action":"...", "issues":[...]} or {"issues":[...]} or just [...]
     if isinstance(result_data, dict):
-        issues = result_data.get('issues', [])
+        issues = _validate_issues(result_data.get('issues', []))
         ai_action = result_data.get('action', '')
         return jsonify(ok=True, issues=issues, action=ai_action)
     if isinstance(result_data, list):
-        return jsonify(ok=True, issues=result_data, action='')
+        return jsonify(ok=True, issues=_validate_issues(result_data), action='')
     return jsonify(ok=False, msg='AI 提取失败')
 
 
