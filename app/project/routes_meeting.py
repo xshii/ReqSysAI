@@ -21,7 +21,21 @@ from app.project.routes import _resolve_owner_id
 def meeting_list(project_id):
     project = db.get_or_404(Project, project_id)
     meetings = Meeting.query.filter_by(project_id=project_id).order_by(Meeting.date.desc()).all()
-    return render_template('project/meetings.html', project=project, meetings=meetings)
+    # Count open/total risks per meeting
+    from app.models.risk import Risk
+    meeting_ids = [m.id for m in meetings]
+    risk_stats = {}  # meeting_id → (open, total)
+    if meeting_ids:
+        rows = db.session.query(
+            Risk.meeting_id,
+            db.func.count(Risk.id),
+            db.func.sum(db.case((Risk.status == 'open', 1), else_=0)),
+        ).filter(Risk.meeting_id.in_(meeting_ids), Risk.deleted_at.is_(None))\
+         .group_by(Risk.meeting_id).all()
+        for mid, total, open_count in rows:
+            risk_stats[mid] = (int(open_count or 0), int(total or 0))
+    return render_template('project/meetings.html', project=project, meetings=meetings,
+                           risk_stats=risk_stats)
 
 
 @project_bp.route('/<int:project_id>/meetings/new', methods=['GET', 'POST'])

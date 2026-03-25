@@ -18,6 +18,7 @@
                 <th>日期</th>
                 <th>参会人</th>
                 <th>AI 提取</th>
+                <th>遗留问题</th>
                 <th>创建人</th>
                 <th>操作</th>
             </tr>
@@ -44,6 +45,17 @@
                 {% else %}
                     <span class="badge bg-secondary">未提取</span>
                 {% endif %}
+            </td>
+            <td>
+                {% set rs = risk_stats.get(m.id) %}
+                {% if rs %}
+                {% set open_count, total = rs %}
+                {% if open_count > 0 %}
+                <span class="badge bg-danger">{{ open_count }}未闭环</span><span class="text-muted small">/{{ total }}</span>
+                {% else %}
+                <span class="badge bg-success">全部闭环</span><span class="text-muted small"> {{ total }}</span>
+                {% endif %}
+                {% else %}-{% endif %}
             </td>
             <td class="small">{{ m.creator.name }}</td>
             <td>
