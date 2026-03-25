@@ -30,7 +30,7 @@
             <i class="bi bi-robot"></i> AI 润色并提取遗留问题
         </button>
         <button type="button" class="btn btn-outline-primary btn-sm" onclick="sendEmail()">
-            <i class="bi bi-envelope"></i> 发送邮件
+            <i class="bi bi-envelope-arrow-up"></i> 导出Outlook
         </button>
     </div>
 </div>
@@ -300,60 +300,73 @@ function acceptPolish() {
     });
 })();
 
-// Send email via mailto:
+// Send email as EML file (Outlook draft)
+function encodeHeader(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
 function sendEmail() {
-    fetch('/api/users').then(function(r) { return r.json(); }).then(function(users) {
-    var nameMap = {}, mgrMap = {};
-    users.forEach(function(u) {
-        if (u.employee_id) nameMap[u.name] = u.employee_id;
-        if (u.manager) mgrMap[u.name] = u.manager;  // "姓名 工号" or just name
-    });
-
-    var attendees = (document.getElementById('attendeesVal').value || '').split(',').map(function(n) { return n.trim(); }).filter(Boolean);
-    var cc = (document.getElementById('ccVal').value || '').split(',').map(function(n) { return n.trim(); }).filter(Boolean);
-
-    // Auto-CC managers of all attendees + cc people
-    var ccSet = {};
-    cc.forEach(function(n) { ccSet[nameMap[n] || n] = 1; });
-    attendees.concat(cc).forEach(function(n) {
-        var mgr = mgrMap[n];
-        if (mgr) {
-            // manager field: "姓名 工号" — extract eid if present, else use as-is
-            var parts = mgr.trim().split(/\s+/);
-            var mgrId = parts.length > 1 ? parts[parts.length - 1] : (nameMap[parts[0]] || parts[0]);
-            if (mgrId && !ccSet[mgrId]) ccSet[mgrId] = 1;
-        }
-    });
-
-    var toList = attendees.map(function(n) { return nameMap[n] || n; }).join(';');
-    var ccList = Object.keys(ccSet).join(';');
+    var defaultTo = {{ (default_to or '')|tojson }};
+    var defaultCc = {{ (default_cc or '')|tojson }};
 
     var subject = {{ (meeting.title ~ '（' ~ (meeting.date.strftime("%Y-%m-%d") if meeting.date else "") ~ '）')|tojson }};
 
-    var body = '会议标题：' + {{ meeting.title|tojson }} + '\n'
-        + '召集人：' + {{ meeting.creator.name|tojson }} + '\n'
-        + '与会人：' + attendees.join('、') + '\n'
-        + '日期：{{ meeting.date.strftime("%Y-%m-%d") if meeting.date else "" }}\n'
-        + '━━━━━━━━━━━━━━━━━━━━\n\n';
+    var attendees = (document.getElementById('attendeesVal').value || '').split(',').map(function(n) { return n.trim(); }).filter(Boolean);
+
+    // Build HTML body
+    var html = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,Segoe UI,sans-serif;font-size:13px;color:#333;">';
+
+    // To/Cc as plain text in body first lines
+    if (defaultTo || defaultCc) {
+        html += '<div style="font-size:12px;color:#64748b;margin-bottom:12px;">';
+        if (defaultTo) html += '<div><b>To:</b> ' + defaultTo + '</div>';
+        if (defaultCc) html += '<div><b>Cc:</b> ' + defaultCc + '</div>';
+        html += '</div>';
+    }
+
+    html += '<h3 style="margin:0 0 8px;">' + {{ meeting.title|tojson }} + '</h3>';
+    html += '<div style="font-size:12px;color:#64748b;margin-bottom:12px;">'
+        + '召集人：' + {{ meeting.creator.name|tojson }}
+        + '　与会人：' + attendees.join('、')
+        + '　日期：{{ meeting.date.strftime("%Y-%m-%d") if meeting.date else "" }}'
+        + '</div>';
+    html += '<hr style="border:none;border-top:1px solid #e2e8f0;">';
 
     var contentEl = document.querySelector('textarea[name="content"]');
-    if (contentEl && contentEl.value) body += contentEl.value + '\n';
+    if (contentEl && contentEl.value) {
+        html += '<div style="white-space:pre-wrap;font-size:13px;line-height:1.6;">' + contentEl.value.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>') + '</div>';
+    }
 
     {% if linked_risks %}
-    body += '\n━━━━━━━━━━━━━━━━━━━━\n';
-    body += '遗留问题跟踪：\n';
-    body += '序号\t严重度\t标题\t责任人\t截止日期\t状态\n';
+    html += '<hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0;">';
+    html += '<h4 style="font-size:14px;margin:0 0 8px;">遗留问题跟踪</h4>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+    html += '<tr style="background:#f1f5f9;"><th style="border:1px solid #e2e8f0;padding:5px 10px;">序号</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">严重度</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">标题</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">责任人</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">截止日期</th><th style="border:1px solid #e2e8f0;padding:5px 10px;">状态</th></tr>';
     {% for r in linked_risks %}
-    body += '{{ loop.index }}\t' + {{ r.severity_label|tojson }} + '\t' + {{ r.title|tojson }} + '\t' + {{ (r.owner or "待定")|tojson }} + '\t{{ r.due_date.strftime("%Y-%m-%d") if r.due_date else "待定" }}\t' + {{ r.status_label|tojson }} + '\n';
+    html += '<tr><td style="border:1px solid #e2e8f0;padding:5px 10px;">{{ loop.index }}</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">' + {{ r.severity_label|tojson }} + '</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">' + {{ r.title|tojson }} + '</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">' + {{ (r.owner or "待定")|tojson }} + '</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">{{ r.due_date.strftime("%Y-%m-%d") if r.due_date else "待定" }}</td><td style="border:1px solid #e2e8f0;padding:5px 10px;">' + {{ r.status_label|tojson }} + '</td></tr>';
     {% endfor %}
+    html += '</table>';
     {% endif %}
 
-    var url = 'mailto:' + encodeURIComponent(toList)
-        + '?cc=' + encodeURIComponent(ccList)
-        + '&subject=' + encodeURIComponent(subject)
-        + '&body=' + encodeURIComponent(body);
-    window.location.href = url;
-    });
+    html += '</body></html>';
+
+    var boundary = 'boundary_' + Date.now();
+    var headers = [
+        'Subject: ' + encodeHeader(subject),
+        'MIME-Version: 1.0',
+        'Content-Type: multipart/alternative; boundary="' + boundary + '"',
+        'X-Unsent: 1',
+    ];
+    var eml = headers.concat([
+        '', '--' + boundary,
+        'Content-Type: text/html; charset=UTF-8',
+        'Content-Transfer-Encoding: base64',
+        '', btoa(unescape(encodeURIComponent(html))).match(/.{1,76}/g).join('\n'),
+        '', '--' + boundary + '--',
+    ]).join('\r\n');
+    var blob = new Blob([eml], {type: 'message/rfc822'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = subject + '.eml';
+    a.click();
+    URL.revokeObjectURL(a.href);
 }
 
 // Auto-extract

@@ -218,53 +218,9 @@ def stats_export():
 
 
 def _compute_default_recipients(cur_project_id):
-    """Compute default To (member employee_ids) and Cc (risk owners' managers)."""
-    default_to = ''
-    default_cc = ''
-    if not cur_project_id:
-        return default_to, default_cc
-
-    # To: all project members' employee_ids
-    members = ProjectMember.query.filter_by(project_id=cur_project_id).all()
-    to_eids = []
-    for m in members:
-        if m.user and m.user.employee_id:
-            to_eids.append(m.user.employee_id)
-    default_to = ';'.join(to_eids)
-    if not default_to:
-        # Fallback: use current user
-        from flask_login import current_user
-        if current_user.is_authenticated and current_user.employee_id:
-            default_to = current_user.employee_id
-
-    # To also includes risk tracker + owner
-    to_set = set(to_eids)
-    open_risks = Risk.query.filter_by(project_id=cur_project_id, status='open')\
-        .filter(Risk.deleted_at.is_(None)).all()
-    for r in open_risks:
-        if r.tracker and r.tracker.employee_id:
-            to_set.add(r.tracker.employee_id)
-        if r.owner_id:
-            owner_user = db.session.get(User, r.owner_id)
-            if owner_user and owner_user.employee_id:
-                to_set.add(owner_user.employee_id)
-    default_to = ';'.join(sorted(to_set))
-
-    # Cc: risk owners' + trackers' managers
-    cc_eids = set()
-    for r in open_risks:
-        for uid in [r.owner_id, r.tracker_id]:
-            if uid:
-                u = db.session.get(User, uid)
-                if u and u.manager:
-                    parts = u.manager.strip().split()
-                    mgr_eid = parts[-1] if len(parts) > 1 else parts[0]
-                    if mgr_eid:
-                        cc_eids.add(mgr_eid)
-    # Remove anyone already in To
-    cc_eids -= to_set
-    default_cc = ';'.join(sorted(cc_eids))
-    return default_to, default_cc
+    """Compute default To/Cc — delegates to shared utility."""
+    from app.utils.recipients import compute_default_recipients
+    return compute_default_recipients(cur_project_id)
 
 
 @dashboard_bp.route('/weekly-report', methods=['GET', 'POST'])
@@ -1285,6 +1241,9 @@ def my_weekly():
     total_focus = sum(t.actual_minutes or 0 for t in my_done)
     reviewer_name = get_reviewer(current_user)
 
+    from app.utils.recipients import compute_personal_recipients
+    _def_to, _def_cc = compute_personal_recipients(current_user)
+
     return render_template('dashboard/my_weekly.html',
         my_done=my_done, my_active=my_active, my_reqs=my_reqs,
         req_days=req_days, report=report, ai_report=ai_report,
@@ -1292,6 +1251,7 @@ def my_weekly():
         total_focus_min=total_focus, reviewer=reviewer_name,
         today=date.today(),
         monday=monday, sunday=sunday, offset=offset,
+        default_to=_def_to, default_cc=_def_cc,
     )
 
 

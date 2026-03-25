@@ -187,8 +187,14 @@ function saveEmailSettings() {
 (function() {
     var s = document.getElementById('emlSubject'), t = document.getElementById('emlTo'), c = document.getElementById('emlCc');
     if (s) s.value = localStorage.getItem('weekly_eml_subject') || '';
-    if (t) t.value = localStorage.getItem('weekly_eml_to') || '';
-    if (c) c.value = localStorage.getItem('weekly_eml_cc') || '';
+    if (t) {
+        var savedTo = localStorage.getItem('weekly_eml_to') || '';
+        t.value = savedTo || {{ (default_to or '')|tojson }};
+    }
+    if (c) {
+        var savedCc = localStorage.getItem('weekly_eml_cc') || '';
+        c.value = savedCc || {{ (default_cc or '')|tojson }};
+    }
 })();
 function encodeHeader(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
 function exportEml() {
@@ -203,7 +209,15 @@ function exportEml() {
         + 'th,td{border:1px solid #e2e8f0;padding:5px 10px;font-size:12px;}'
         + 'h6{background:#f8fafc;border-left:3px solid #1e3a5f;padding:7px 12px;font-size:13px;font-weight:700;}'
         + '.row-risk{background:#fef2f2;}.highlight{color:#dc2626;}';
-    var html = '<html><head><style>' + css + '</style></head><body>' + el.innerHTML + '</body></html>';
+    // Prepend To/Cc as plain text in body
+    var recipientBlock = '';
+    if (to || cc) {
+        recipientBlock = '<div style="font-size:12px;color:#64748b;margin-bottom:12px;">';
+        if (to) recipientBlock += '<div><b>To:</b> ' + to + '</div>';
+        if (cc) recipientBlock += '<div><b>Cc:</b> ' + cc + '</div>';
+        recipientBlock += '</div>';
+    }
+    var html = '<html><head><style>' + css + '</style></head><body>' + recipientBlock + el.innerHTML + '</body></html>';
     var boundary = 'b_' + Date.now();
     var headers = ['Subject: ' + encodeHeader(subject), 'MIME-Version: 1.0',
         'Content-Type: multipart/alternative; boundary="' + boundary + '"', 'X-Unsent: 1'];

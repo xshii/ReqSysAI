@@ -138,8 +138,12 @@ def meeting_detail(project_id, meeting_id):
     # Linked risks from this meeting
     linked_risks = Risk.query.filter_by(meeting_id=meeting.id).order_by(Risk.created_at).all()
 
+    from app.utils.recipients import compute_meeting_recipients
+    _def_to, _def_cc = compute_meeting_recipients(project.id, meeting)
+
     return render_template('project/meeting_detail.html', project=project, meeting=meeting,
-                           ai_data=ai_data, linked_risks=linked_risks)
+                           ai_data=ai_data, linked_risks=linked_risks,
+                           default_to=_def_to, default_cc=_def_cc)
 
 
 @project_bp.route('/<int:project_id>/meetings/<int:meeting_id>/extract', methods=['POST'])
