@@ -63,6 +63,8 @@ document.addEventListener('DOMContentLoaded', function() {
         input.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
+                // Skip if inside applyModal (handled by permissions.html)
+                if (input.closest('#applyModal')) return;
                 var first = list.querySelector('.user-picker-opt:not([style*="none"])');
                 if (first) selectOpt(first);
             }
