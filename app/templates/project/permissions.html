@@ -267,7 +267,7 @@
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">申请人 *</label>
                         <div class="col-9">
-                            <textarea name="people_list" id="peopleList" class="form-control form-control-sm" rows="3" placeholder="每行一人，格式：姓名 工号&#10;如：张三 a00123456&#10;外部人员只填姓名即可">{{ my_pinyin_name }} {{ current_user.employee_id or '' }}</textarea>
+                            <textarea name="people_list" id="peopleList" class="form-control form-control-sm" rows="3" placeholder="每行一人，格式：姓名 工号&#10;如：张三 a00123456&#10;外部人员只填姓名即可">{{ current_user.name }} {{ current_user.employee_id or '' }}</textarea>
                             <div class="text-muted small mt-1">内部成员用上方搜索添加，外部人员直接输入 姓名 工号</div>
                         </div>
                     </div>
@@ -307,13 +307,11 @@ document.addEventListener('click', function(e) {
 });
 // User picker: append to textarea (click + Enter)
 function appendUserToList(name, pinyin, eid) {
-    var py = (pinyin || '').split(' ').pop();
-    var entry = name + (py ? '(' + py + ')' : '') + ' ' + (eid || '');
+    var entry = (name + ' ' + (eid || '')).trim();
     var ta = document.getElementById('peopleList');
     var cur = ta.value.trim();
     if (cur && cur.indexOf(name) !== -1) return;
     ta.value = cur ? cur + '\n' + entry : entry;
-    // Clear picker input
     var pickerInput = document.querySelector('#applyModal .user-picker-input');
     if (pickerInput) pickerInput.value = '';
 }
@@ -345,18 +343,35 @@ document.addEventListener('click', function(e) {
         e.stopPropagation();
         var target = (selIdx >= 0 && opts[selIdx]) ? opts[selIdx] : opts[0];
         if (target) {
-            appendUserToList(target.dataset.name, target.dataset.pinyin, target.dataset.eid);
-            pickerInput.value = '';
-            list.style.display = 'none';
-            selIdx = -1;
+            appendUserToList(target.dataset.name, '', target.dataset.eid);
+        } else if (pickerInput.value.trim()) {
+            // No match — add raw input as external member
+            appendUserToList(pickerInput.value.trim(), '', '');
         }
+        pickerInput.value = '';
+        list.style.display = 'none';
+        selIdx = -1;
     });
 })();
-// Copy buttons
+// Copy buttons (with fallback for non-HTTPS)
+function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text);
+    }
+    // Fallback: textarea + execCommand
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    return Promise.resolve();
+}
 document.addEventListener('click', function(e) {
     var btn = e.target.closest('.copy-btn');
     if (!btn) return;
-    navigator.clipboard.writeText(btn.dataset.copy).then(function() {
+    copyText(btn.dataset.copy).then(function() {
         var icon = btn.querySelector('i');
         icon.className = 'bi bi-check text-success';
         setTimeout(function() { icon.className = 'bi bi-clipboard'; }, 800);
