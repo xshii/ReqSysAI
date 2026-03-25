@@ -100,6 +100,9 @@
 </div>
 
 <div class="row">
+    <datalist id="domainOptions">
+        {% for d in all_domains %}<option value="{{ d }}">{% endfor %}
+    </datalist>
     <div class="col-md-9">
         <div class="card">
             <div class="table-responsive">
@@ -111,7 +114,9 @@
                             <th>IP 地址</th>
                             <th class="sortable" data-col="3" style="cursor:pointer;">小组 <i class="bi bi-chevron-expand" style="font-size:.7em;"></i></th>
                             <th>角色</th>
-                            <th class="sortable" data-col="5" style="cursor:pointer;">状态 <i class="bi bi-chevron-expand" style="font-size:.7em;"></i></th>
+                            <th>主管</th>
+                            <th>业务领域</th>
+                            <th class="sortable" data-col="7" style="cursor:pointer;">状态 <i class="bi bi-chevron-expand" style="font-size:.7em;"></i></th>
                             <th class="sortable" data-col="6" style="cursor:pointer;">最后登录 <i class="bi bi-chevron-expand" style="font-size:.7em;"></i></th>
                             <th>操作</th>
                         </tr>
@@ -134,6 +139,13 @@
                                 </form>
                             </td>
                             <td>{% for r in user.roles %}<span class="badge bg-secondary me-1">{{ r.name }}</span>{% endfor %}</td>
+                            <td class="text-muted small">{{ user.manager or '-' }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('admin.user_update_domain', user_id=user.id) }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="text" name="domain" class="form-control form-control-sm py-0 border-0 bg-transparent" style="width:auto;font-size:.85em;" value="{{ user.domain or '' }}" placeholder="-" list="domainOptions" onchange="this.form.submit()">
+                                </form>
+                            </td>
                             <td>
                                 {% if user.is_active %}
                                 <span class="badge bg-success">启用</span>

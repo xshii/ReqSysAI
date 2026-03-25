@@ -47,9 +47,10 @@ def user_list():
     ip_requests = IPChangeRequest.query.filter_by(status='pending')\
         .order_by(IPChangeRequest.created_at.desc()).all()
 
+    all_domains = sorted(set(u.domain for u in User.query.filter(User.domain.isnot(None), User.domain != '').all()))
     return render_template('admin/users.html', users=users, visible_roles=visible_roles,
                            all_groups=all_groups, all_group_objs=all_group_objs,
-                           group_counts=group_counts,
+                           group_counts=group_counts, all_domains=all_domains,
                            filter_group=filter_group, ip_requests=ip_requests)
 
 
@@ -104,6 +105,7 @@ def user_edit(user_id):
         user.ip_address = form.ip_address.data or f'pending-{user.employee_id}'
         user.group = form.group.data or None
         user.manager = form.manager.data or None
+        user.domain = form.domain.data or None
         user.roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
         user.is_active = form.is_active.data
         db.session.commit()
@@ -206,6 +208,8 @@ def _do_csv_import(text, require_group=False):
         eid = (row.get('工号') or '').strip().lower()
         group = (row.get('小组') or '').strip() or None
         role_str = (row.get('角色') or '').strip()
+        manager = (row.get('主管') or '').strip() or None
+        domain = (row.get('业务领域') or '').strip() or None
 
         if not name or not eid:
             skipped += 1
@@ -240,6 +244,10 @@ def _do_csv_import(text, require_group=False):
             user.name = name
             user.pinyin = to_pinyin(name)
             user.group = group
+            if manager:
+                user.manager = manager
+            if domain:
+                user.domain = domain
             if roles:
                 user.roles = roles
             # If no roles in CSV, keep existing roles unchanged
@@ -248,6 +256,7 @@ def _do_csv_import(text, require_group=False):
             user = User(
                 employee_id=eid, name=name, pinyin=to_pinyin(name),
                 ip_address=f'pending-{eid}', group=group, roles=roles,
+                manager=manager, domain=domain,
             )
             db.session.add(user)
             created += 1
@@ -292,6 +301,16 @@ def user_update_group(user_id):
     """Inline group change from user table."""
     user = db.get_or_404(User, user_id)
     user.group = request.form.get('group', '').strip() or None
+    db.session.commit()
+    return redirect(request.referrer or url_for('admin.user_list'))
+
+
+@admin_bp.route('/users/<int:user_id>/domain', methods=['POST'])
+@admin_required
+def user_update_domain(user_id):
+    """Inline domain change from user table."""
+    user = db.get_or_404(User, user_id)
+    user.domain = request.form.get('domain', '').strip() or None
     db.session.commit()
     return redirect(request.referrer or url_for('admin.user_list'))
 
@@ -350,11 +369,11 @@ def group_export_csv():
     buf = io.StringIO()
     buf.write('\ufeff')  # BOM for Excel
     writer = csv.writer(buf)
-    writer.writerow(['ID', '姓名', '工号', '小组', '角色'])
-    writer.writerow([0, '张三', 'a00123456', '研发一组(选填)', 'DE;TE(选填,分号隔开) 此行为格式示例，导入时自动跳过'])
+    writer.writerow(['ID', '姓名', '工号', '小组', '角色', '主管', '业务领域'])
+    writer.writerow([0, '张三', 'a00123456', '研发一组(选填)', 'DE;TE(选填)', '李四 b00234567(选填)', '支付(选填) 此行为格式示例，导入时自动跳过'])
     for u in users:
         role_names = ';'.join(r.name for r in u.roles if r.name not in hidden)
-        writer.writerow([u.id, u.name, u.employee_id, u.group or '', role_names])
+        writer.writerow([u.id, u.name, u.employee_id, u.group or '', role_names, u.manager or '', u.domain or ''])
 
     return Response(
         buf.getvalue(),

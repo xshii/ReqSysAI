@@ -27,6 +27,7 @@ class UserEditForm(FlaskForm):
     ip_address = StringField('IP 地址', validators=[Optional(), Length(max=45)])
     group = StringField('小组', validators=[Optional(), Length(max=50)])
     manager = StringField('主管', validators=[Optional(), Length(max=100)])
+    domain = StringField('业务领域', validators=[Optional(), Length(max=100)])
     role_ids = SelectMultipleField('角色', coerce=int, validators=[DataRequired()])
     is_active = BooleanField('启用')
     submit = SubmitField('保存')
