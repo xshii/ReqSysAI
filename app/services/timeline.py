@@ -59,15 +59,17 @@ def generate_timeline_image(milestones, today=None, width=760):
         return None
 
     today = today or date.today()
-    font_name = _get_font(12)
-    font_date = _get_font(10)
-    font_today = _get_font(11)
+    scale = 2  # Retina / high DPI
+    font_name = _get_font(12 * scale)
+    font_date = _get_font(10 * scale)
+    font_today = _get_font(11 * scale)
 
-    # Layout constants
-    pad_x = 40
-    pad_top = 30
-    axis_y = pad_top + 20
-    marker_h = 10
+    # Layout constants (scaled)
+    pad_x = 40 * scale
+    pad_top = 30 * scale
+    axis_y = pad_top + 20 * scale
+    marker_h = 10 * scale
+    width = width * scale
     usable_w = width - 2 * pad_x
 
     # Filter milestones with dates, sort by date
@@ -88,43 +90,39 @@ def generate_timeline_image(milestones, today=None, width=760):
     # Stagger labels to avoid overlap: alternate top/bottom
     rows = [0] * len(ms_with_date)  # 0=below axis, 1=above axis
     for i in range(1, len(positions)):
-        if positions[i] - positions[i - 1] < 70:
+        if positions[i] - positions[i - 1] < 70 * scale:
             rows[i] = 1 - rows[i - 1]
 
-    height = axis_y + 80  # enough for two rows of labels
+    height = axis_y + 80 * scale  # enough for two rows of labels
     img = Image.new('RGB', (width, height), COLOR_BG)
     draw = ImageDraw.Draw(img)
 
     # Axis line
-    draw.line([(pad_x, axis_y), (width - pad_x, axis_y)], fill=COLOR_AXIS, width=2)
+    s = scale
+    draw.line([(pad_x, axis_y), (width - pad_x, axis_y)], fill=COLOR_AXIS, width=2 * s)
 
     # Today marker
     today_days = (today - min_date).days
     if 0 <= today_days <= date_range:
         tx = pad_x + int(today_days / date_range * usable_w)
-        # Star above axis
-        draw.text((tx - 5, axis_y - 18), '★', fill=COLOR_TODAY, font=font_today)
-        draw.text((tx + 8, axis_y - 18), '今天', fill=COLOR_TODAY, font=font_date)
-        # Dashed vertical line
-        for dy in range(axis_y - 2, axis_y + 50, 4):
-            draw.line([(tx, dy), (tx, dy + 2)], fill=(220, 53, 69, 80), width=1)
+        draw.text((tx - 5 * s, axis_y - 18 * s), '★', fill=COLOR_TODAY, font=font_today)
+        draw.text((tx + 8 * s, axis_y - 18 * s), '今天', fill=COLOR_TODAY, font=font_date)
+        for dy in range(axis_y - 2 * s, axis_y + 50 * s, 4 * s):
+            draw.line([(tx, dy), (tx, dy + 2 * s)], fill=(220, 53, 69, 80), width=s)
 
     # Milestones
+    tri = 5 * s  # triangle half-width
     for i, m in enumerate(ms_with_date):
         x = positions[i]
-        color = COLOR_ACTIVE  # unified dark blue
+        color = COLOR_ACTIVE
 
-        # Triangle marker
         if rows[i] == 0:
-            # Below axis
-            draw.polygon([(x, axis_y + 2), (x - 5, axis_y + marker_h + 2), (x + 5, axis_y + marker_h + 2)], fill=color)
-            ty = axis_y + marker_h + 6
+            draw.polygon([(x, axis_y + 2 * s), (x - tri, axis_y + marker_h + 2 * s), (x + tri, axis_y + marker_h + 2 * s)], fill=color)
+            ty = axis_y + marker_h + 6 * s
         else:
-            # Above axis
-            draw.polygon([(x, axis_y - 2), (x - 5, axis_y - marker_h - 2), (x + 5, axis_y - marker_h - 2)], fill=color)
-            ty = axis_y - marker_h - 30
+            draw.polygon([(x, axis_y - 2 * s), (x - tri, axis_y - marker_h - 2 * s), (x + tri, axis_y - marker_h - 2 * s)], fill=color)
+            ty = axis_y - marker_h - 30 * s
 
-        # Name (truncate)
         name = m.get('name', '')
         if len(name) > 8:
             name = name[:7] + '…'
@@ -133,14 +131,17 @@ def generate_timeline_image(milestones, today=None, width=760):
         nx = max(2, min(x - tw // 2, width - tw - 2))
         draw.text((nx, ty), name, fill=color, font=font_name)
 
-        # Date
         if m.get('due_date'):
             ds = m['due_date'].strftime('%m-%d')
             bbox_d = draw.textbbox((0, 0), ds, font=font_date)
             dw = bbox_d[2] - bbox_d[0]
-            draw.text((max(2, min(x - dw // 2, width - dw - 2)), ty + 15), ds, fill=COLOR_TEXT, font=font_date)
+            draw.text((max(2, min(x - dw // 2, width - dw - 2)), ty + 15 * s), ds, fill=COLOR_TEXT, font=font_date)
 
-    # Export as base64 PNG
+    # Downscale for crisp display at original size
+    final_w = width // scale
+    final_h = height // scale
+    img = img.resize((final_w, final_h), Image.LANCZOS)
+
     buf = io.BytesIO()
     img.save(buf, format='PNG', optimize=True)
     result = base64.b64encode(buf.getvalue()).decode('ascii')
