@@ -66,7 +66,7 @@ def seed():
                 employee_id=eid,
                 name=admin_name,
                 pinyin=to_pinyin(admin_name),
-                ip_address=admin_cfg.get('ip', '127.0.0.1'),
+                ip_address=admin_cfg.get('ip', ''),
                 roles=[admin_role] if admin_role else [],
             )
             db.session.add(admin)
