@@ -42,9 +42,6 @@
         </select>
         {% endif %}
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addItemModal"><i class="bi bi-plus-lg"></i> 登记权限</button>
-        {% if items %}
-        <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#applyModal"><i class="bi bi-check2-square"></i> 申请权限</button>
-        {% endif %}
     </div>
 </div>
 {% if items %}
@@ -77,6 +74,7 @@
                     <input type="hidden" name="item_id" value="{{ item.id }}">
                     <button type="submit" class="btn btn-sm btn-outline-success py-0" data-bs-toggle="tooltip" title="为我申请"><i class="bi bi-person-plus"></i></button>
                 </form>
+                <button class="btn btn-sm btn-outline-primary py-0 apply-for-btn" data-bs-toggle="modal" data-bs-target="#applyModal" data-item-id="{{ item.id }}" title="为他人申请"><i class="bi bi-people"></i></button>
                 <button class="btn btn-sm btn-outline-primary py-0 edit-item-btn"
                         data-bs-toggle="modal" data-bs-target="#editItemModal"
                         data-id="{{ item.id }}" data-category="{{ item.category or '' }}"
@@ -296,6 +294,15 @@ document.addEventListener('click', function(e) {
         document.getElementById('editItemRes').value = btn.dataset.resource;
         document.getElementById('editItemRepo').value = btn.dataset.repo;
         document.getElementById('editItemDesc').value = btn.dataset.desc;
+    }
+});
+// Pre-select item when "为他人申请" clicked
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.apply-for-btn');
+    if (btn) {
+        var itemId = btn.dataset.itemId;
+        // Uncheck all, then check the target
+        document.querySelectorAll('#applyModal input[name=item_id]').forEach(function(c) { c.checked = (c.value === itemId); });
     }
 });
 // User picker: append to textarea
