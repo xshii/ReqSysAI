@@ -576,14 +576,16 @@ function exportEml() {
         + rows + '</table>'
         + '</td></tr></table></body></html>';
     var boundary = 'boundary_' + Date.now();
+    var to = (document.getElementById('emlTo') || {}).value || '';
+    var cc = (document.getElementById('emlCc') || {}).value || '';
     var headers = [
         'Subject: ' + encodeHeader(subject),
         'MIME-Version: 1.0',
         'Content-Type: multipart/alternative; boundary="' + boundary + '"',
         'X-Unsent: 1',
     ];
-    // To/Cc not in EML headers — Outlook would auto-resolve into links.
-    // X-Unsent:1 opens as draft, user fills recipients manually.
+    if (to) headers.push('To: ' + to.split(/[;,；，]/).map(function(s){return s.trim();}).filter(Boolean).join(', '));
+    if (cc) headers.push('Cc: ' + cc.split(/[;,；，]/).map(function(s){return s.trim();}).filter(Boolean).join(', '));
     var eml = headers.concat([
         '', '--' + boundary,
         'Content-Type: text/html; charset=UTF-8',
