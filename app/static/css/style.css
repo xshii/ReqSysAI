@@ -81,6 +81,9 @@ body {
     max-width: 900px;
     margin: 0 auto;
 }
+#report-content {
+    border: 1px solid #e2e8f0;
+}
 .report-header {
     background: #1e3a5f;
     color: #fff;
@@ -91,7 +94,6 @@ body {
     letter-spacing: 1px;
 }
 .report-meta {
-    background: #f8fafc;
     text-align: center;
     padding: 6px 20px;
     font-size: 0.82rem;
@@ -104,7 +106,6 @@ body {
 .report-section h6 {
     padding: 7px 12px;
     margin-bottom: 0;
-    background: #f8fafc;
     border-left: 3px solid #1e3a5f;
     font-size: 0.85rem;
     font-weight: 700;
@@ -162,8 +163,6 @@ body {
     margin-top: 2px;
 }
 .report-summary {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
     padding: 10px 14px;
     font-size: 0.85rem;
     color: #334155;

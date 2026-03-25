@@ -106,7 +106,7 @@
     <div class="report-summary">{{ ai.summary }}</div>
     {% set high_risks = report_data.open_risks | selectattr('severity', 'equalto', 'high') | list %}
     {% if high_risks %}
-    <div style="background:#fef2f2;border:1px solid #fecaca;padding:8px 12px;font-size:.84rem;margin-top:4px;">
+    <div style="background:#fef2f2;padding:8px 12px;font-size:.84rem;margin-top:4px;">
         <strong>高风险通报：</strong>
         {% for r in high_risks %}{{ r.title }}{% if not loop.last %}；{% endif %}{% endfor %}
     </div>
