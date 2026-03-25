@@ -1018,7 +1018,7 @@ def aar_ai_issues(project_id):
     from app.services.ai import call_ollama
     prompt = f"""根据以下AAR复盘内容，提取遗留问题清单。
 严格返回JSON，不要返回其他内容：
-{{"issues":["遗留问题1（含责任人和建议解决时间）","遗留问题2","..."]}}
+{{"issues":[{{"title":"问题标题","severity":"high/medium/low","owner":"责任人姓名","deadline":"YYYY-MM-DD"}},{{"title":"...","severity":"...","owner":"...","deadline":"..."}}]}}
 
 AAR内容：
 目标：{goal or '未填写'}
@@ -1030,14 +1030,55 @@ AAR内容：
 - 从目标与实际结果的差距中提取未解决的问题
 - 从差异分析中提取根因未消除的风险
 - 如有改进措施，检查措施是否覆盖了所有问题，未覆盖的也列为遗留
-- 每条遗留问题包含：问题描述、影响、建议责任人、建议解决时间
-- 没有遗留问题写["暂无明显遗留问题"]
+- title: 简明描述问题
+- severity: 根据影响程度判断 high/medium/low
+- owner: 从文本中提取责任人姓名，提取不到写空字符串
+- deadline: 建议解决日期，提取不到写从今天起7天后的日期
+- 没有遗留问题返回空数组 []
 - 不要编造内容，只从上述文本推演"""
 
     result_data, _ = call_ollama(prompt)
     if isinstance(result_data, dict) and 'issues' in result_data:
         return jsonify(ok=True, issues=result_data['issues'])
     return jsonify(ok=False, msg='AI 提取失败')
+
+
+@project_bp.route('/<int:project_id>/aar/adopt-risks', methods=['POST'])
+@login_required
+def aar_adopt_risks(project_id):
+    """Adopt AI-extracted issues as risks."""
+    db.get_or_404(Project, project_id)
+    data = request.get_json() or {}
+    issues = data.get('issues', [])
+    if not issues:
+        return jsonify(ok=False, msg='无遗留问题')
+    created = 0
+    for item in issues:
+        title = (item.get('title') or '').strip()
+        if not title:
+            continue
+        # Dedup
+        exists = Risk.query.filter_by(project_id=project_id, title=title, status='open').first()
+        if exists:
+            continue
+        owner_name = (item.get('owner') or '').strip()
+        try:
+            due = date.fromisoformat(item.get('deadline', ''))
+        except (ValueError, TypeError):
+            due = date.today() + timedelta(days=7)
+        severity = item.get('severity', 'medium')
+        if severity not in ('high', 'medium', 'low'):
+            severity = 'medium'
+        risk = Risk(
+            project_id=project_id, title=title, severity=severity,
+            owner=owner_name or None, owner_id=_resolve_owner_id(owner_name),
+            due_date=due, created_by=current_user.id,
+            tracker_id=_resolve_owner_id(owner_name) or current_user.id,
+        )
+        db.session.add(risk)
+        created += 1
+    db.session.commit()
+    return jsonify(ok=True, created=created)
 
 
 # ---- Permission management (catalog + applications) ----

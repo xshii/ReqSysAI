@@ -251,14 +251,36 @@ document.addEventListener('click', function(e) {
     document.getElementById('editAarStatus').value = btn.dataset.status;
 });
 
-// AI extract issues — shared logic
+var _lastIssues = null; // store for adopt
+
+function _renderIssues(issues, container, showAdopt) {
+    if (!issues || !issues.length) {
+        container.innerHTML = '<div class="text-muted small">暂无遗留问题</div>';
+        return;
+    }
+    var sevLabels = {high:'高',medium:'中',low:'低'};
+    var sevColors = {high:'danger',medium:'warning text-dark',low:'secondary'};
+    var h = '<table class="table table-sm small mb-1"><thead class="table-light"><tr><th>问题</th><th>严重度</th><th>责任人</th><th>截止日期</th></tr></thead><tbody>';
+    issues.forEach(function(i) {
+        var t = typeof i === 'string' ? i : (i.title || '');
+        var sev = i.severity || 'medium';
+        var owner = i.owner || '-';
+        var dl = i.deadline || '-';
+        h += '<tr><td>' + t + '</td><td><span class="badge bg-' + (sevColors[sev]||'secondary') + '">' + (sevLabels[sev]||sev) + '</span></td><td>' + owner + '</td><td>' + dl + '</td></tr>';
+    });
+    h += '</tbody></table>';
+    if (showAdopt) h += '<button type="button" class="btn btn-sm btn-success adopt-risks-btn"><i class="bi bi-check-all"></i> 采纳为风险</button>';
+    container.innerHTML = h;
+}
+
+// AI extract — shared
 function _aiIssues(goal, result, analysis, action, onDone) {
     apiPost('{{ url_for("project.aar_ai_issues", project_id=project.id) }}',
         {goal: goal, result: result, analysis: analysis, action: action})
     .then(function(d) { onDone(d); });
 }
 
-// AI extract from new AAR modal
+// From new AAR modal
 function aiExtractIssues() {
     var btn = document.getElementById('btnAiIssues');
     var orig = btn.innerHTML;
@@ -272,15 +294,16 @@ function aiExtractIssues() {
         function(d) {
             btn.disabled = false; btn.innerHTML = orig;
             var el = document.getElementById('issuesResult');
+            el.style.display = '';
             if (d && d.ok && d.issues) {
-                el.style.display = '';
-                el.innerHTML = '<ul class="ps-3 mb-0">' + d.issues.map(function(i) { return '<li>' + i + '</li>'; }).join('') + '</ul>';
+                _lastIssues = d.issues;
+                _renderIssues(d.issues, el, true);
             } else { showToast(d.msg || 'AI 提取失败', 'danger'); }
         }
     );
 }
 
-// AI extract from existing AAR card
+// From existing AAR card
 document.addEventListener('click', function(e) {
     var btn = e.target.closest('.ai-issues-btn');
     if (!btn) return;
@@ -292,11 +315,27 @@ document.addEventListener('click', function(e) {
             btn.disabled = false; btn.innerHTML = orig;
             var area = document.getElementById(btn.dataset.target);
             if (d && d.ok && d.issues) {
-                area.innerHTML = '<div class="border rounded p-2 bg-light"><h6 class="small fw-bold mb-1"><i class="bi bi-list-check"></i> AI 提取的遗留问题</h6>'
-                    + '<ul class="ps-3 mb-0 small">' + d.issues.map(function(i) { return '<li>' + i + '</li>'; }).join('') + '</ul></div>';
+                _lastIssues = d.issues;
+                _renderIssues(d.issues, area, true);
             } else { showToast(d.msg || 'AI 提取失败', 'danger'); }
         }
     );
+});
+
+// Adopt issues as risks
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.adopt-risks-btn');
+    if (!btn || !_lastIssues) return;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 创建中...';
+    apiPost('{{ url_for("project.aar_adopt_risks", project_id=project.id) }}', {issues: _lastIssues})
+    .then(function(d) {
+        if (d && d.ok) {
+            btn.innerHTML = '<i class="bi bi-check"></i> 已创建 ' + d.created + ' 条风险';
+            btn.className = 'btn btn-sm btn-outline-success';
+            showToast('已创建 ' + d.created + ' 条风险', 'success');
+        } else { showToast(d.msg || '创建失败', 'danger'); btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-all"></i> 采纳为风险'; }
+    });
 });
 
 // Filter by trigger type
