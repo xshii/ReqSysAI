@@ -6,7 +6,7 @@ from datetime import date
 
 from PIL import Image, ImageDraw, ImageFont
 
-_cache = {}  # in-memory cache: hash → base64
+_cache = {}  # in-memory cache: hash → base64 (cleared on app restart)
 
 
 def _cache_key(milestones, today, width):
@@ -59,7 +59,7 @@ def generate_timeline_image(milestones, today=None, width=760):
         return None
 
     today = today or date.today()
-    scale = 2  # Retina / high DPI
+    scale = 3  # High DPI
     font_name = _get_font(12 * scale)
     font_date = _get_font(10 * scale)
     font_today = _get_font(11 * scale)
@@ -137,13 +137,10 @@ def generate_timeline_image(milestones, today=None, width=760):
             dw = bbox_d[2] - bbox_d[0]
             draw.text((max(2, min(x - dw // 2, width - dw - 2)), ty + 15 * s), ds, fill=COLOR_TEXT, font=font_date)
 
-    # Downscale for crisp display at original size
-    final_w = width // scale
-    final_h = height // scale
-    img = img.resize((final_w, final_h), Image.LANCZOS)
-
+    # Keep full resolution — browser scales down via CSS width, resulting in crisp display
     buf = io.BytesIO()
-    img.save(buf, format='PNG', optimize=True)
+    dpi = 72 * scale
+    img.save(buf, format='PNG', optimize=True, dpi=(dpi, dpi))
     result = base64.b64encode(buf.getvalue()).decode('ascii')
     _cache[key] = result
     return result
