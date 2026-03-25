@@ -29,19 +29,14 @@
                     <i class="bi bi-eye-slash" id="mgrEyeIcon"></i>
                 </button>
                 {% endif %}
-                <div class="dropdown">
-                    <button class="btn btn-primary position-relative" type="button" data-bs-toggle="dropdown" id="notifBtn" onclick="loadNotifs()">
-                        <i class="bi bi-bell"></i>
-                        {% if notif_count > 0 %}
-                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:.6em;" id="notifBadge">
-                            {{ notif_count }}
-                        </span>
-                        {% endif %}
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end" style="width:320px;max-height:400px;overflow-y:auto;" id="notifList">
-                        <li class="text-center text-muted small py-2">加载中...</li>
-                    </ul>
-                </div>
+                <a href="{{ url_for('main.index') }}" class="btn btn-primary position-relative" title="通知">
+                    <i class="bi bi-bell"></i>
+                    {% if notif_count > 0 %}
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size:.6em;">
+                        {{ notif_count }}
+                    </span>
+                    {% endif %}
+                </a>
                 <div class="dropdown">
                     <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                         <i class="bi bi-person-circle"></i> {{ current_user.name }}
