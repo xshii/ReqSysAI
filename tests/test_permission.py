@@ -1,10 +1,11 @@
 """Permission module tests: apply, merge, approve, freeze."""
 import pytest
+
 from app import create_app
 from app.extensions import db as _db
-from app.models.knowledge import PermissionItem, PermissionApplication
+from app.models.knowledge import PermissionApplication, PermissionItem
 from app.models.project import Project
-from app.models.user import User, Role
+from app.models.user import Role, User
 
 
 @pytest.fixture
@@ -119,7 +120,6 @@ class TestPermissionMerge:
             _db.session.add_all([a1, a2])
             _db.session.commit()
         resp = client.get(f'/projects/{pid}/permissions')
-        html = resp.data.decode()
         # Should show merged — only one row with both names
         assert resp.status_code == 200
 

@@ -9,8 +9,8 @@ pytestmark = pytest.mark.ai
 
 @pytest.fixture
 def extract():
-    import sys
     import os
+    import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from app.services.ai import _extract_json
     return _extract_json
