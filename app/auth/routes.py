@@ -203,19 +203,23 @@ def profile():
                 db.session.add(UserGroup(name=group_name, is_hidden=True))
                 db.session.flush()
         current_user.group = group_name or None
-        mgr_name = request.form.get('manager_name', '').strip()
-        mgr_eid = request.form.get('manager_eid', '').strip()
-        if mgr_name and mgr_eid:
+        new_manager = request.form.get('manager', '').strip()
+        if new_manager:
             import re
-            if not re.match(r'^[a-z](00\d{6}|\d00\d{7})$', mgr_eid):
-                flash('主管工号格式错误，如 a00123456', 'danger')
-                return render_template('auth/profile.html', form=form)
-            current_user.manager = f'{mgr_name} {mgr_eid}'
-        elif mgr_name or mgr_eid:
-            flash('主管需同时填写姓名和工号', 'danger')
-            return render_template('auth/profile.html', form=form)
-        else:
-            current_user.manager = None
+            parts = new_manager.rsplit(' ', 1)
+            if len(parts) == 2 and re.match(r'^[a-z]?(00\d{6}|\d00\d{7})$', parts[1]):
+                pass  # valid format
+            else:
+                mgr_user = User.query.filter_by(name=new_manager, is_active=True).first()
+                if not mgr_user and len(parts) == 2:
+                    mgr_user = User.query.filter_by(name=parts[0].strip(), is_active=True).first()
+                if mgr_user:
+                    new_manager = f'{mgr_user.name} {mgr_user.employee_id}'
+                else:
+                    flash('主管未找到，请从下拉选择或输入 姓名 工号', 'danger')
+                    users = User.query.filter_by(is_active=True).order_by(User.name).all()
+                    return render_template('auth/profile.html', form=form, users=users)
+        current_user.manager = new_manager or None
         current_user.domain = request.form.get('domain', '').strip() or None
         new_email = request.form.get('email', '').strip()
         if new_email:
@@ -223,7 +227,8 @@ def profile():
             allowed_suffix = SiteSetting.get('mail_domain', current_app.config.get('MAIL_DOMAIN', ''))
             if allowed_suffix and not new_email.endswith('@' + allowed_suffix):
                 flash(f'邮箱必须以 @{allowed_suffix} 结尾', 'danger')
-                return render_template('auth/profile.html', form=form)
+                users = User.query.filter_by(is_active=True).order_by(User.name).all()
+                return render_template('auth/profile.html', form=form, users=users)
         current_user.email = new_email or None
         current_user.pomodoro_minutes = request.form.get('pomodoro_minutes', type=int) or 45
         # Handle avatar upload
@@ -241,7 +246,8 @@ def profile():
         flash('个人信息已更新', 'success')
         return redirect(url_for('auth.profile'))
 
-    return render_template('auth/profile.html', form=form)
+    users = User.query.filter_by(is_active=True).order_by(User.name).all()
+    return render_template('auth/profile.html', form=form, users=users)
 
 
 @auth_bp.route('/profile/toggle-my-group', methods=['POST'])

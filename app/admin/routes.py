@@ -65,7 +65,7 @@ def user_create():
     if form.validate_on_submit():
         if form.ip_address.data and User.query.filter_by(ip_address=form.ip_address.data).first():
             flash('该 IP 已被绑定', 'danger')
-            return render_template('admin/user_form.html', form=form, title='创建用户')
+            return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title='创建用户')
 
         selected_roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
         user = User(
@@ -81,7 +81,7 @@ def user_create():
         flash(f'用户 {user.name} 创建成功', 'success')
         return redirect(url_for('admin.user_list'))
 
-    return render_template('admin/user_form.html', form=form, title='创建用户')
+    return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title='创建用户')
 
 
 @admin_bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
@@ -99,22 +99,14 @@ def user_edit(user_id):
         ).first() if form.ip_address.data else None
         if existing:
             flash(f'该 IP 已被 {existing.name} 绑定', 'danger')
-            return render_template('admin/user_form.html', form=form, title=f'编辑用户 - {user.name}', user=user)
+            return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title=f'编辑用户 - {user.name}', user=user)
 
         user.employee_id = form.employee_id.data
         user.name = form.name.data
         user.pinyin = to_pinyin(form.name.data)
         user.ip_address = form.ip_address.data or f'pending-{user.employee_id}'
         user.group = form.group.data or None
-        mgr_name = request.form.get('manager_name', '').strip()
-        mgr_eid = request.form.get('manager_eid', '').strip()
-        if mgr_name and mgr_eid:
-            user.manager = f'{mgr_name} {mgr_eid}'
-        elif not mgr_name and not mgr_eid:
-            user.manager = None
-        else:
-            flash('主管需同时填写姓名和工号', 'danger')
-            return render_template('admin/user_form.html', form=form, title=f'编辑用户 - {user.name}', user=user)
+        user.manager = form.manager.data.strip() or None
         user.domain = form.domain.data or None
         user.roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
         user.is_active = form.is_active.data
@@ -122,7 +114,7 @@ def user_edit(user_id):
         flash(f'用户 {user.name} 更新成功', 'success')
         return redirect(url_for('admin.user_list'))
 
-    return render_template('admin/user_form.html', form=form, title=f'编辑用户 - {user.name}', user=user)
+    return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title=f'编辑用户 - {user.name}', user=user)
 
 
 @admin_bp.route('/users/<int:user_id>/delete', methods=['POST'])
@@ -317,6 +309,31 @@ def user_update_group(user_id):
     """Inline group change from user table."""
     user = db.get_or_404(User, user_id)
     user.group = request.form.get('group', '').strip() or None
+    db.session.commit()
+    return redirect(request.referrer or url_for('admin.user_list'))
+
+
+@admin_bp.route('/users/<int:user_id>/manager', methods=['POST'])
+@admin_required
+def user_update_manager(user_id):
+    """Inline manager change from user table."""
+    import re
+    user = db.get_or_404(User, user_id)
+    raw = request.form.get('manager', '').strip()
+    if raw:
+        parts = raw.rsplit(' ', 1)
+        if len(parts) == 2 and re.match(r'^[a-z]?(00\d{6}|\d00\d{7})$', parts[1]):
+            pass
+        else:
+            mgr_user = User.query.filter_by(name=raw, is_active=True).first()
+            if not mgr_user and len(parts) == 2:
+                mgr_user = User.query.filter_by(name=parts[0].strip(), is_active=True).first()
+            if mgr_user:
+                raw = f'{mgr_user.name} {mgr_user.employee_id}'
+            else:
+                flash('主管未找到，请输入 姓名 工号', 'danger')
+                return redirect(request.referrer or url_for('admin.user_list'))
+    user.manager = raw or None
     db.session.commit()
     return redirect(request.referrer or url_for('admin.user_list'))
 
