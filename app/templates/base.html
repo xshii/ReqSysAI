@@ -456,7 +456,7 @@
 
     /* --- Add Personnel Modal --- */
     var _apDataLoaded = false;
-    var AP_EID_RE = /^[a-z]\d?00\d{6,7}$/;
+    var AP_EID_RE = /^[a-z](00\d{6}|\d00\d{7})$/;
 
     function openAddPersonnelModal() {
         var modal = document.getElementById('addPersonnelModal');
@@ -518,7 +518,7 @@
             errEl.textContent = '请填写业务领域';
             errEl.style.display = 'block'; return;
         }
-        if (manager && !/^\S+\s+[a-z]\d?00\d{6,7}$/.test(manager)) {
+        if (manager && !/^\S+\s+[a-z](00\d{6}|\d00\d{7})$/.test(manager)) {
             errEl.textContent = '主管格式错误，请按"姓名 工号"填写，如：张三 a00123456';
             errEl.style.display = 'block'; return;
         }
