@@ -51,7 +51,7 @@
                 {% for z in [0, 30, 60, 90] %}
                 {% if z > 0 %}<div class="pct-divider"><span>{{ z }}%</span></div>{% endif %}
                 <div class="pct-zone" data-status="{{ status }}" data-pct="{{ z }}"
-                     ondragover="onDragOver(event)" ondragenter="onZoneEnter(event, this)" ondragleave="onZoneLeave(this)" ondrop="onZoneDrop(event, this)">
+                     ondragover="onDragOver(event)" ondragenter="onZoneEnter(event, this)" ondragleave="onZoneLeave(event, this)" ondrop="onZoneDrop(event, this)">
                 {% for r in reqs %}
                     {% set r_pct = r.completion or 0 %}
                     {% if (z == 0 and r_pct < 30) or (z == 30 and r_pct >= 30 and r_pct < 60) or (z == 60 and r_pct >= 60 and r_pct < 90) or (z == 90 and r_pct >= 90) %}
@@ -63,7 +63,7 @@
                 {% endfor %}
             {% else %}
                 <div class="pct-zone" data-status="{{ status }}" data-pct="0"
-                     ondragover="onDragOver(event)" ondragenter="onZoneEnter(event, this)" ondragleave="onZoneLeave(this)" ondrop="onZoneDrop(event, this)">
+                     ondragover="onDragOver(event)" ondragenter="onZoneEnter(event, this)" ondragleave="onZoneLeave(event, this)" ondrop="onZoneDrop(event, this)">
                 {% for r in reqs %}
                     {% set is_child = r.parent_id is not none %}
                     {% include "requirement/_board_card.html" %}
@@ -141,26 +141,27 @@ function onDragLeave(col) { col.classList.remove('drag-target'); }
 function onZoneEnter(e, zone) {
     e.preventDefault();
     zone.classList.add('drag-target');
-    // Show ghost in this zone
-    if (dragGhost) {
-        removeGhost();
-        // Re-create from source card (it may have been removed)
-        var src = dragId ? document.querySelector('.kanban-card[data-id="' + dragId + '"]:not(.drag-ghost)') : null;
-        if (src) {
-            dragGhost = src.cloneNode(true);
-            dragGhost.classList.add('drag-ghost');
-            dragGhost.removeAttribute('draggable');
-            dragGhost.removeAttribute('ondragstart');
-            dragGhost.removeAttribute('onclick');
-            dragGhost.style.cursor = 'default';
-        }
-        if (dragGhost) zone.appendChild(dragGhost);
+    if (!dragId) return;
+    // Only create ghost if not already in this zone
+    if (dragGhost && dragGhost.parentNode === zone) return;
+    removeGhost();
+    var src = document.querySelector('.kanban-card[data-id="' + dragId + '"]:not(.drag-ghost)');
+    if (src) {
+        dragGhost = src.cloneNode(true);
+        dragGhost.classList.add('drag-ghost');
+        dragGhost.removeAttribute('draggable');
+        dragGhost.removeAttribute('ondragstart');
+        dragGhost.removeAttribute('onclick');
+        dragGhost.style.cursor = 'default';
+        zone.appendChild(dragGhost);
     }
 }
-function onZoneLeave(zone) {
+function onZoneLeave(e, zone) {
+    // Only remove if actually leaving the zone (not entering a child)
+    var related = e.relatedTarget;
+    if (related && zone.contains(related)) return;
     zone.classList.remove('drag-target');
-    // Remove ghost from this zone
-    if (dragGhost && dragGhost.parentNode === zone) zone.removeChild(dragGhost);
+    removeGhost();
 }
 
 function onZoneDrop(e, zone) {
