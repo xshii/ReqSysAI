@@ -196,80 +196,105 @@
     {# Tab 3: Members (only for editing) #}
     {% if is_edit %}
     <div class="tab-pane fade{% if cur_tab == 'members' %} show active{% endif %}" id="tabMembers">
-        {# Add member form #}
-        <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="mb-3">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="action" value="add">
-            <input type="hidden" name="next" value="{{ url_for('project.project_edit', project_id=project.id) }}?tab=members">
-            <div class="d-flex gap-2 align-items-end flex-wrap">
-                <div>
-                    <label class="form-label small mb-0">成员</label>
-                    {% from "_user_picker.html" import user_picker %}
-                    {{ user_picker('member_name', available, mode='text', placeholder='搜索姓名或输入外部成员', size='sm') }}
+        <div class="row">
+            {# Left: current members #}
+            <div class="col-md-7">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="fw-bold small">项目成员 ({{ members|length }})</span>
+                    <div class="d-flex gap-1 ms-auto">
+                        <a href="{{ url_for('project.member_export_csv', project_id=project.id) }}" class="btn btn-sm btn-outline-success py-0" style="font-size:.75em;"><i class="bi bi-download"></i> 导出</a>
+                        <form method="POST" action="{{ url_for('project.member_import_csv', project_id=project.id) }}" enctype="multipart/form-data" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <label class="btn btn-sm btn-outline-primary py-0 mb-0" style="font-size:.75em;"><i class="bi bi-upload"></i> 导入 <input type="file" name="csv_file" accept=".csv" hidden onchange="this.form.submit()"></label>
+                        </form>
+                    </div>
                 </div>
-                <div>
-                    <label class="form-label small mb-0">角色</label>
-                    <input type="text" name="project_role" class="form-control form-control-sm" list="roleOptions" placeholder="选择或输入" style="max-width:150px;" value="DEV">
-                    <datalist id="roleOptions">
-                        {% for k, v in roles.items() %}<option value="{{ k }}" label="{{ k }} - {{ v }}">{% endfor %}
-                    </datalist>
-                </div>
-                <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-plus"></i> 添加</button>
-            </div>
-        </form>
-        <div class="d-flex gap-2 mt-2 mb-2">
-            <a href="{{ url_for('project.member_export_csv', project_id=project.id) }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出CSV</a>
-            <form method="POST" action="{{ url_for('project.member_import_csv', project_id=project.id) }}" enctype="multipart/form-data" class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <label class="btn btn-sm btn-outline-primary mb-0"><i class="bi bi-upload"></i> 导入CSV <input type="file" name="csv_file" accept=".csv" hidden onchange="this.form.submit()"></label>
-            </form>
-        </div>
-
-        {# Member list #}
-        {% if members %}
-        <table class="table table-sm" id="memberTable">
-            <thead><tr><th style="width:20px;"></th><th>成员</th><th>角色</th><th>关键</th><th></th></tr></thead>
-            <tbody>
-            {% for m in members %}
-            <tr data-mid="{{ m.id }}">
-                <td class="text-muted member-drag-handle" style="cursor:grab;" draggable="true"><i class="bi bi-grip-vertical"></i></td>
-                <td class="small">{{ m.display_name }}{% if m.user and m.user.group %} <span class="text-muted">({{ m.user.group }})</span>{% endif %}</td>
-                <td>
-                    <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="d-inline">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="role">
-                        <input type="hidden" name="member_id" value="{{ m.id }}">
-                        <input type="text" name="project_role" class="form-control form-control-sm d-inline" list="roleOptions{{ m.id }}" style="max-width:150px;" value="{{ m.project_role }}" onchange="this.form.submit()">
-                        <datalist id="roleOptions{{ m.id }}">
+                {# Add single member (external or search) #}
+                <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="mb-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="add">
+                    <input type="hidden" name="next" value="{{ url_for('project.project_edit', project_id=project.id) }}?tab=members">
+                    <div class="d-flex gap-1 align-items-end">
+                        <div class="flex-grow-1">
+                            {% from "_user_picker.html" import user_picker %}
+                            {{ user_picker('member_name', available, mode='text', placeholder='搜索姓名或输入外部成员', size='sm') }}
+                        </div>
+                        <input type="text" name="project_role" class="form-control form-control-sm" list="roleOptions" placeholder="角色" style="max-width:80px;" value="DEV">
+                        <datalist id="roleOptions">
                             {% for k, v in roles.items() %}<option value="{{ k }}" label="{{ k }} - {{ v }}">{% endfor %}
                         </datalist>
-                    </form>
-                </td>
-                <td>
-                    <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="d-inline">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="toggle_key">
-                        <input type="hidden" name="member_id" value="{{ m.id }}">
-                        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent">
-                            <i class="bi bi-{{ 'star-fill text-warning' if m.is_key else 'star text-muted' }}"></i>
-                        </button>
-                    </form>
-                </td>
-                <td>
-                    <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="d-inline">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="remove">
-                        <input type="hidden" name="member_id" value="{{ m.id }}">
-                        <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('移除该成员？')"><i class="bi bi-x"></i></button>
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="text-muted small">暂无成员</div>
-        {% endif %}
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-plus"></i></button>
+                    </div>
+                </form>
+                {% if members %}
+                <table class="table table-sm mb-0" id="memberTable">
+                    <thead><tr><th style="width:20px;"></th><th>成员</th><th>角色</th><th>关键</th><th></th></tr></thead>
+                    <tbody>
+                    {% for m in members %}
+                    <tr data-mid="{{ m.id }}">
+                        <td class="text-muted member-drag-handle" style="cursor:grab;" draggable="true"><i class="bi bi-grip-vertical"></i></td>
+                        <td class="small">{{ m.display_name }}{% if m.user and m.user.group %} <span class="text-muted">({{ m.user.group }})</span>{% endif %}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="role">
+                                <input type="hidden" name="member_id" value="{{ m.id }}">
+                                <input type="text" name="project_role" class="form-control form-control-sm d-inline" list="roleOpt{{ m.id }}" style="max-width:80px;" value="{{ m.project_role }}" onchange="this.form.submit()">
+                                <datalist id="roleOpt{{ m.id }}">
+                                    {% for k, v in roles.items() %}<option value="{{ k }}" label="{{ k }} - {{ v }}">{% endfor %}
+                                </datalist>
+                            </form>
+                        </td>
+                        <td>
+                            <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="toggle_key">
+                                <input type="hidden" name="member_id" value="{{ m.id }}">
+                                <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent">
+                                    <i class="bi bi-{{ 'star-fill text-warning' if m.is_key else 'star text-muted' }}"></i>
+                                </button>
+                            </form>
+                        </td>
+                        <td>
+                            <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="remove">
+                                <input type="hidden" name="member_id" value="{{ m.id }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('移除该成员？')"><i class="bi bi-x"></i></button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="text-muted small text-center py-3">暂无成员，从右侧勾选添加</div>
+                {% endif %}
+            </div>
+
+            {# Right: available system users — checkbox to add #}
+            <div class="col-md-5">
+                <div class="fw-bold small mb-2">系统用户</div>
+                <input type="text" id="availUserSearch" class="form-control form-control-sm mb-2" placeholder="搜索姓名/工号/拼音...">
+                <div id="availUserList" style="max-height:400px;overflow-y:auto;font-size:.85em;">
+                    {% for u in available|sort(attribute='pinyin') %}
+                    <div class="d-flex align-items-center gap-2 py-1 px-1 avail-user-row border-bottom" data-name="{{ u.name }}" data-eid="{{ u.employee_id }}" data-pinyin="{{ u.pinyin or '' }}" data-group="{{ u.group or '' }}">
+                        <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="add">
+                            <input type="hidden" name="member_name" value="{{ u.name }}">
+                            <input type="hidden" name="project_role" value="DEV">
+                            <input type="hidden" name="next" value="{{ url_for('project.project_edit', project_id=project.id) }}?tab=members">
+                            <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="添加"><i class="bi bi-plus-circle text-primary"></i></button>
+                        </form>
+                        <span>{{ u.name }}</span>
+                        <span class="text-muted">{{ u.employee_id }}{% if u.group %} · {{ u.group }}{% endif %}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="text-muted small mt-1" id="availUserCount">共 {{ available|length }} 人</div>
+            </div>
+        </div>
     </div>
     {% endif %}
 </div>
@@ -528,6 +553,28 @@ document.querySelectorAll('.edit-tpl-drag').forEach(function(row) {
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
             body: JSON.stringify({ids: ids})
         });
+    });
+})();
+
+// Available users search filter
+(function() {
+    var input = document.getElementById('availUserSearch');
+    var list = document.getElementById('availUserList');
+    var countEl = document.getElementById('availUserCount');
+    if (!input || !list) return;
+    input.addEventListener('input', function() {
+        var q = input.value.toLowerCase();
+        var visible = 0;
+        list.querySelectorAll('.avail-user-row').forEach(function(row) {
+            var name = (row.dataset.name || '').toLowerCase();
+            var eid = (row.dataset.eid || '').toLowerCase();
+            var py = (row.dataset.pinyin || '').toLowerCase();
+            var group = (row.dataset.group || '').toLowerCase();
+            var show = !q || name.includes(q) || eid.includes(q) || py.includes(q) || group.includes(q);
+            row.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+        if (countEl) countEl.textContent = q ? '匹配 ' + visible + ' 人' : '共 ' + list.querySelectorAll('.avail-user-row').length + ' 人';
     });
 })();
 
