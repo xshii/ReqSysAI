@@ -211,7 +211,7 @@
                     <label class="form-label small mb-0">角色</label>
                     <input type="text" name="project_role" class="form-control form-control-sm" list="roleOptions" placeholder="选择或输入" style="max-width:120px;" value="DEV">
                     <datalist id="roleOptions">
-                        {% for k, v in roles.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                        {% for k, v in roles.items() %}<option value="{{ k }}" label="{{ k }} - {{ v }}">{% endfor %}
                     </datalist>
                 </div>
                 <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-plus"></i> 添加</button>
@@ -241,7 +241,7 @@
                         <input type="hidden" name="member_id" value="{{ m.id }}">
                         <input type="text" name="project_role" class="form-control form-control-sm d-inline" list="roleOptions{{ m.id }}" style="max-width:90px;" value="{{ m.project_role }}" onchange="this.form.submit()">
                         <datalist id="roleOptions{{ m.id }}">
-                            {% for k, v in roles.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                            {% for k, v in roles.items() %}<option value="{{ k }}" label="{{ k }} - {{ v }}">{% endfor %}
                         </datalist>
                     </form>
                 </td>
