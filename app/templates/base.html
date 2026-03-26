@@ -265,14 +265,19 @@
                 </div>
                 <div class="modal-body">
                     <form id="addPersonnelForm">
-                        <div class="mb-2">
-                            <label class="form-label mb-0 small fw-bold">工号 <span class="text-danger">*</span></label>
-                            <input type="text" id="ap_employee_id" class="form-control form-control-sm" placeholder="如 a00123456" required>
-                            <div class="form-text" style="font-size:.75em;">格式：1位小写字母 + 8~9位数字，倒数第7、8位为0</div>
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label mb-0 small fw-bold">姓名 <span class="text-danger">*</span></label>
-                            <input type="text" id="ap_name" class="form-control form-control-sm" placeholder="请输入姓名" required minlength="2" maxlength="80">
+                        <div class="row g-2 mb-2">
+                            <div class="col-5">
+                                <label class="form-label mb-0 small fw-bold">姓名 <span class="text-danger">*</span></label>
+                                <input type="text" id="ap_name" class="form-control form-control-sm" placeholder="请输入姓名" required minlength="2" maxlength="80">
+                            </div>
+                            <div class="col-7">
+                                <label class="form-label mb-0 small fw-bold">工号 <span class="text-danger">*</span></label>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text py-0" id="ap_eid_prefix" style="font-size:.85em;min-width:28px;justify-content:center;">?</span>
+                                    <input type="text" id="ap_employee_id" class="form-control form-control-sm" placeholder="00123456 或 300123456" required>
+                                </div>
+                                <div class="form-text" style="font-size:.75em;">首字母由姓名拼音自动生成</div>
+                            </div>
                         </div>
                         <div class="mb-2">
                             <label class="form-label mb-0 small fw-bold">角色 <span class="text-danger">*</span></label>
@@ -456,13 +461,24 @@
 
     /* --- Add Personnel Modal --- */
     var _apDataLoaded = false;
-    var AP_EID_RE = /^[a-z](00\d{6}|\d00\d{7})$/;
+    var AP_EID_NUM_RE = /^(00\d{6}|\d00\d{7})$/;
+
+    // Auto-update prefix when name changes
+    document.getElementById('ap_name').addEventListener('input', function() {
+        var prefix = document.getElementById('ap_eid_prefix');
+        var name = this.value.trim();
+        if (!name) { prefix.textContent = '?'; return; }
+        // Fetch pinyin initial from backend
+        fetch('{{ url_for("main.api_pinyin_initial") }}?name=' + encodeURIComponent(name))
+            .then(r => r.json()).then(d => { prefix.textContent = d.initial || '?'; });
+    });
 
     function openAddPersonnelModal() {
         var modal = document.getElementById('addPersonnelModal');
         var bsModal = bootstrap.Modal.getOrCreateInstance(modal);
         document.getElementById('apErrorMsg').style.display = 'none';
         document.getElementById('addPersonnelForm').reset();
+        document.getElementById('ap_eid_prefix').textContent = '?';
         if (!_apDataLoaded) {
             fetch('{{ url_for("main.api_personnel_options") }}')
                 .then(r => r.json())
@@ -488,26 +504,26 @@
         bsModal.show();
         modal.addEventListener('shown.bs.modal', function onShown() {
             modal.removeEventListener('shown.bs.modal', onShown);
-            document.getElementById('ap_employee_id').focus();
+            document.getElementById('ap_name').focus();
         });
     }
 
     function submitAddPersonnel() {
         var errEl = document.getElementById('apErrorMsg');
         errEl.style.display = 'none';
-        var eid = document.getElementById('ap_employee_id').value.trim();
+        var eidNum = document.getElementById('ap_employee_id').value.trim();
         var name = document.getElementById('ap_name').value.trim();
         var roleId = document.getElementById('ap_role').value;
         var domain = document.getElementById('ap_domain').value.trim();
         var group = document.getElementById('ap_group').value;
         var manager = document.getElementById('ap_manager').value.trim();
 
-        if (!eid || !AP_EID_RE.test(eid)) {
-            errEl.textContent = '工号格式错误：1位小写字母 + 8~10位数字，倒数第7、8位为0，如 a00123456 或 q3001234567';
-            errEl.style.display = 'block'; return;
-        }
         if (!name || name.length < 2) {
             errEl.textContent = '请输入姓名（至少2个字符）';
+            errEl.style.display = 'block'; return;
+        }
+        if (!eidNum || !AP_EID_NUM_RE.test(eidNum)) {
+            errEl.textContent = '工号数字部分格式错误，如 00123456 或 3001234567';
             errEl.style.display = 'block'; return;
         }
         if (!roleId) {
@@ -528,7 +544,7 @@
         btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 提交中...';
 
         apiPost('{{ url_for("main.api_add_personnel") }}', {
-            employee_id: eid, name: name, role_id: parseInt(roleId),
+            employee_id_num: eidNum, name: name, role_id: parseInt(roleId),
             domain: domain, group: group, manager: manager
         }).then(function(data) {
             btn.disabled = false;
