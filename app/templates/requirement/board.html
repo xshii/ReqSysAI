@@ -126,12 +126,12 @@ function onZoneDrop(e, zone) {
     var newStatus = zone.dataset.status;
     var newPct = parseInt(zone.dataset.pct) || 0;
 
-    // Find current card status
     var card = document.querySelector('.kanban-card[data-id="' + dragId + '"]');
-    var curStatus = card ? card.dataset.status : '';
+    if (!card) return;
+    var curStatus = card.dataset.status;
 
     var promises = [];
-    // Update status if changed
+    var statusResult = null;
     if (curStatus !== newStatus) {
         promises.push(
             fetch('/requirements/' + dragId + '/status-api', {
@@ -139,12 +139,12 @@ function onZoneDrop(e, zone) {
                 headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
                 body: JSON.stringify({status: newStatus, force: true})
             }).then(function(r) { return r.json(); }).then(function(d) {
-                if (!d.ok) showToast(d.msg || '状态流转失败');
+                if (!d.ok) { showToast(d.msg || '状态流转失败', 'danger'); return d; }
+                statusResult = d;
                 return d;
             })
         );
     }
-    // Update completion
     promises.push(
         fetch('/requirements/' + dragId + '/completion-api', {
             method: 'POST',
@@ -153,8 +153,31 @@ function onZoneDrop(e, zone) {
         }).then(function(r) { return r.json(); })
     );
 
-    Promise.all(promises).then(function() { location.reload(); })
-        .catch(function() { showToast('网络错误'); });
+    Promise.all(promises).then(function(results) {
+        // Check if status update failed
+        if (curStatus !== newStatus && statusResult && !statusResult.ok) return;
+
+        // Move card to new zone in DOM
+        zone.appendChild(card);
+        card.dataset.status = newStatus;
+
+        // Update status badge if changed
+        if (statusResult && statusResult.ok) {
+            var badge = card.querySelector('.badge');
+            // Update column counts
+            updateColCount(curStatus);
+            updateColCount(newStatus);
+        }
+        showToast('已更新', 'success');
+    }).catch(function() { showToast('网络错误', 'danger'); });
+}
+
+function updateColCount(status) {
+    var col = document.querySelector('.kanban-col[data-status="' + status + '"]');
+    if (!col) return;
+    var count = col.querySelectorAll('.kanban-card').length;
+    var badge = col.closest('.flex-fill').querySelector('.text-muted.small');
+    if (badge) badge.textContent = count;
 }
 
 function showToast(msg) {
