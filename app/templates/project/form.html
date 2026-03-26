@@ -209,7 +209,7 @@
                 </div>
                 <div>
                     <label class="form-label small mb-0">角色</label>
-                    <input type="text" name="project_role" class="form-control form-control-sm" list="roleOptions" placeholder="选择或输入" style="max-width:120px;" value="DEV">
+                    <input type="text" name="project_role" class="form-control form-control-sm" list="roleOptions" placeholder="选择或输入" style="max-width:150px;" value="DEV">
                     <datalist id="roleOptions">
                         {% for k, v in roles.items() %}<option value="{{ k }}" label="{{ k }} - {{ v }}">{% endfor %}
                     </datalist>
@@ -239,7 +239,7 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="role">
                         <input type="hidden" name="member_id" value="{{ m.id }}">
-                        <input type="text" name="project_role" class="form-control form-control-sm d-inline" list="roleOptions{{ m.id }}" style="max-width:120px;" value="{{ m.project_role }}" onchange="this.form.submit()">
+                        <input type="text" name="project_role" class="form-control form-control-sm d-inline" list="roleOptions{{ m.id }}" style="max-width:150px;" value="{{ m.project_role }}" onchange="this.form.submit()">
                         <datalist id="roleOptions{{ m.id }}">
                             {% for k, v in roles.items() %}<option value="{{ k }}" label="{{ k }} - {{ v }}">{% endfor %}
                         </datalist>

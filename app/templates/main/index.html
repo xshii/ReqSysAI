@@ -1409,12 +1409,13 @@ document.addEventListener('dragend', function() {
     if (_dragScrollTimer) { clearInterval(_dragScrollTimer); _dragScrollTimer = null; }
 });
 
-// Lazy-init Bootstrap tooltips (mouseover bubbles, mouseenter doesn't)
+// Lazy-init Bootstrap tooltips for dynamically created elements
 document.addEventListener('mouseover', function(e) {
     var el = e.target.closest('[data-bs-toggle="tooltip"]');
     if (el && !bootstrap.Tooltip.getInstance(el)) {
-        var tip = new bootstrap.Tooltip(el);
-        tip.show();
+        new bootstrap.Tooltip(el);
+        // Trigger via Bootstrap's internal handler (re-dispatch mouseenter)
+        el.dispatchEvent(new MouseEvent('mouseenter', {bubbles: false}));
     }
 });
 

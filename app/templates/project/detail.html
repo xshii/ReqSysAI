@@ -206,7 +206,7 @@
                             <th id="ganttNameCol" style="width:50px;position:sticky;left:0;z-index:2;background:#f8f9fa;cursor:col-resize;" title="拖拽调整列宽">负责人</th>
                             {% for i in range(g_days) %}
                             {% set d = g_start + timedelta(days=i) %}
-                            <th class="gantt-col" data-date="{{ d.strftime('%Y-%m-%d') }}" style="width:{{ col_w }}px;padding:1px;text-align:center;font-size:.75em;{{ 'background:#fff3cd;' if d == gantt.today else ('background:#f0f0f0;' if d.weekday() >= 5 else '') }}">
+                            <th class="gantt-col" data-date="{{ d.strftime('%Y-%m-%d') }}" style="width:{{ col_w }}px;padding:1px;text-align:center;font-size:.9em;{{ 'background:#fff3cd;' if d == gantt.today else ('background:#f0f0f0;' if d.weekday() >= 5 else '') }}">
                                 {{ d.strftime('%d') }}{% if d.day == 1 or i == 0 %}<br><span style="font-size:.8em;">{{ d.strftime('%m') }}月</span>{% endif %}
                             </th>
                             {% endfor %}
