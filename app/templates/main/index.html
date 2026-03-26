@@ -1349,7 +1349,7 @@ function addTomatoIcon(btn, minutes) {
         area = document.createElement('span');
         area.className = 'pomodoro-area ms-1';
         // Insert before delete button
-        var delBtn = container.querySelector('.btn-delete-home');
+        var delBtn = container.querySelector('.btn-delete-home') || container.querySelector('.btn-del-r');
         if (delBtn) container.insertBefore(area, delBtn);
         else container.appendChild(area);
     }
