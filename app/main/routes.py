@@ -17,6 +17,7 @@ from app.main import main_bp
 from app.models.ai_log import AIParseLog
 from app.models.email_setting import EmailSetting
 from app.models.incentive import Incentive
+from app.models.project import Project
 from app.models.rant import Rant
 from app.models.requirement import Requirement
 from app.models.risk import Risk
