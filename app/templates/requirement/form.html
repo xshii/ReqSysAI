@@ -227,7 +227,7 @@ function sumSubDays() {
     });
     if (hasAny) {
         document.getElementById('reqDays').value = total;
-        onDateOrDaysChange();
+        onDateOrDaysChange('days');
     }
 }
 
@@ -255,7 +255,9 @@ function calcStartFromDue(dueStr, days) {
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-function onDateOrDaysChange() {
+var _startSetByUser = false;  // true = user manually edited start_date
+
+function onDateOrDaysChange(source) {
     var startInput = document.querySelector('[name="start_date"]');
     var dueInput = document.getElementById('reqDueDate');
     var daysInput = document.getElementById('reqDays');
@@ -263,20 +265,36 @@ function onDateOrDaysChange() {
     var dueVal = dueInput ? dueInput.value : '';
     var daysVal = parseFloat(daysInput ? daysInput.value : '');
 
-    if (startVal && dueVal) {
-        // Both dates: auto-calc workdays
-        var wd = calcWorkdays(startVal, dueVal);
-        if (wd > 0) daysInput.value = wd;
-    } else if (!startVal && dueVal && daysVal > 0) {
-        // Only due + days: calc start date
-        startInput.value = calcStartFromDue(dueVal, daysVal);
+    if (source === 'start') {
+        // User manually set start_date
+        _startSetByUser = !!startVal;
+        if (startVal && dueVal) {
+            var wd = calcWorkdays(startVal, dueVal);
+            if (wd > 0) daysInput.value = wd;
+        }
+    } else if (source === 'due') {
+        if (_startSetByUser && startVal && dueVal) {
+            var wd = calcWorkdays(startVal, dueVal);
+            if (wd > 0) daysInput.value = wd;
+        } else if (!_startSetByUser && daysVal > 0 && dueVal) {
+            startInput.value = calcStartFromDue(dueVal, daysVal);
+        }
+    } else {
+        // source === 'days' or sub-total
+        if (!_startSetByUser && dueVal && daysVal > 0) {
+            startInput.value = calcStartFromDue(dueVal, daysVal);
+        }
     }
 }
 
-document.getElementById('reqDays').addEventListener('change', onDateOrDaysChange);
-document.getElementById('reqDueDate').addEventListener('change', onDateOrDaysChange);
+document.getElementById('reqDays').addEventListener('change', function() { onDateOrDaysChange('days'); });
+document.getElementById('reqDueDate').addEventListener('change', function() { onDateOrDaysChange('due'); });
 var _startInput = document.querySelector('[name="start_date"]');
-if (_startInput) _startInput.addEventListener('change', onDateOrDaysChange);
+if (_startInput) {
+    _startInput.addEventListener('change', function() { onDateOrDaysChange('start'); });
+    // If start_date already has value on page load (editing), mark as user-set
+    if (_startInput.value) _startSetByUser = true;
+}
 
 var aiData = null;
 
