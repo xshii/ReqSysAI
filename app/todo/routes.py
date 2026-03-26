@@ -439,6 +439,11 @@ def team():
     keep_days = current_app.config.get('TODO_KEEP_DAYS', 7)
     week_ago = today - timedelta(days=keep_days)
 
+    # Hidden project filtering (privacy mode)
+    from app.models.project import Project
+    from app.project.routes import _mgr_view_open
+    _hidden_pids = set() if _mgr_view_open() else {p.id for p in Project.query.filter_by(is_hidden=True).all()}
+
     groups = [g.name for g in Group.query.order_by(Group.name).all()]
 
     cur_group = request.args.get('group', current_user.group or '')
@@ -493,12 +498,14 @@ def team():
             elif t.category == 'team' or not t.requirements:
                 ud['team_todos'].append(t)
             else:
+                _has_visible_req = False
                 for r in t.requirements:
-                    if r.status not in REQ_INACTIVE_STATUSES:
+                    if r.status not in REQ_INACTIVE_STATUSES and r.project_id not in _hidden_pids:
                         ud['req_todos'].setdefault(r.id, []).append(t)
                         if r.id not in ud['_req_map']:
                             ud['_req_map'][r.id] = r
-                if not t.requirements or all(r.status in REQ_INACTIVE_STATUSES for r in t.requirements):
+                        _has_visible_req = True
+                if not _has_visible_req:
                     ud['team_todos'].append(t)
         elif t.status == TODO_STATUS_DONE:
             user_done.setdefault(t.user_id, []).append(t)
