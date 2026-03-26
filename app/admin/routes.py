@@ -63,7 +63,7 @@ def user_create():
     form.role_ids.choices = [(r.id, r.name) for r in Role.query.order_by(Role.id).all()]
 
     if form.validate_on_submit():
-        if User.query.filter_by(ip_address=form.ip_address.data).first():
+        if form.ip_address.data and User.query.filter_by(ip_address=form.ip_address.data).first():
             flash('该 IP 已被绑定', 'danger')
             return render_template('admin/user_form.html', form=form, title='创建用户')
 
@@ -96,7 +96,7 @@ def user_edit(user_id):
     if form.validate_on_submit():
         existing = User.query.filter(
             User.ip_address == form.ip_address.data, User.id != user.id
-        ).first()
+        ).first() if form.ip_address.data else None
         if existing:
             flash(f'该 IP 已被 {existing.name} 绑定', 'danger')
             return render_template('admin/user_form.html', form=form, title=f'编辑用户 - {user.name}', user=user)
