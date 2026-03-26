@@ -313,6 +313,23 @@ def user_update_group(user_id):
     return redirect(request.referrer or url_for('admin.user_list'))
 
 
+@admin_bp.route('/users/<int:user_id>/manager', methods=['POST'])
+@admin_required
+def user_update_manager(user_id):
+    """Inline manager change from user table."""
+    import re
+    user = db.get_or_404(User, user_id)
+    raw = request.form.get('manager', '').strip()
+    if raw:
+        parts = raw.rsplit(' ', 1)
+        if len(parts) != 2 or not re.match(r'^[a-z](00\d{6}|\d00\d{7})$', parts[1]):
+            flash('主管格式：姓名 工号，如 张三 a00123456', 'danger')
+            return redirect(request.referrer or url_for('admin.user_list'))
+    user.manager = raw or None
+    db.session.commit()
+    return redirect(request.referrer or url_for('admin.user_list'))
+
+
 @admin_bp.route('/users/<int:user_id>/domain', methods=['POST'])
 @admin_required
 def user_update_domain(user_id):

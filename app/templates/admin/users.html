@@ -139,7 +139,12 @@
                                 </form>
                             </td>
                             <td>{% for r in user.roles %}<span class="badge bg-secondary me-1">{{ r.name }}</span>{% endfor %}</td>
-                            <td class="text-muted small">{{ user.manager or '-' }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('admin.user_update_manager', user_id=user.id) }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="text" name="manager" class="form-control form-control-sm py-0 border-0 bg-transparent text-muted" style="width:auto;font-size:.85em;" value="{{ user.manager or '' }}" placeholder="-" onchange="this.form.submit()">
+                                </form>
+                            </td>
                             <td>
                                 <form method="POST" action="{{ url_for('admin.user_update_domain', user_id=user.id) }}" class="d-inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
