@@ -106,6 +106,7 @@ def create_app(config_name=None):
                 Todo.user_id == current_user.id,
                 Todo.parent_id.isnot(None),
                 Todo.status == 'todo',
+                Todo.source == 'help',
             ).count()
             # Persistent notifications
             from app.models.notification import Notification

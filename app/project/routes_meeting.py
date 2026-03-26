@@ -11,7 +11,7 @@ from app.models.project import Project
 from app.models.risk import Risk
 from app.models.user import User
 from app.project import project_bp
-from app.project.routes import _resolve_owner_id
+from app.project.routes import _check_project_access, _resolve_owner_id
 
 # ---- Meeting minutes ----
 
@@ -19,6 +19,9 @@ from app.project.routes import _resolve_owner_id
 @login_required
 def meeting_list(project_id):
     project = db.get_or_404(Project, project_id)
+    denied = _check_project_access(project)
+    if denied:
+        return denied
     meetings = Meeting.query.filter_by(project_id=project_id).order_by(Meeting.date.desc()).all()
     # Count open/total risks per meeting
     from app.models.risk import Risk

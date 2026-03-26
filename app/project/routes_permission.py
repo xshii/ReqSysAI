@@ -9,6 +9,7 @@ from app.models.knowledge import PermissionApplication, PermissionItem
 from app.models.project import Project
 from app.models.user import User
 from app.project import project_bp
+from app.project.routes import _check_project_access
 from app.utils.pinyin import to_pinyin
 
 # ---- Permission management (catalog + applications) ----
@@ -17,6 +18,9 @@ from app.utils.pinyin import to_pinyin
 @login_required
 def permission_list(project_id):
     project = db.get_or_404(Project, project_id)
+    denied = _check_project_access(project)
+    if denied:
+        return denied
     is_pm = current_user.is_admin or current_user.has_role('PM', 'PL', 'FO', 'LM', 'XM', 'HR')
 
     if request.method == 'POST':

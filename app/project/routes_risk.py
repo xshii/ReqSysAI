@@ -9,7 +9,7 @@ from app.models.project import Project
 from app.models.risk import Risk
 from app.models.user import User
 from app.project import project_bp
-from app.project.routes import _resolve_owner_id
+from app.project.routes import _check_project_access, _resolve_owner_id
 
 # ---- Risk management ----
 
@@ -17,6 +17,9 @@ from app.project.routes import _resolve_owner_id
 @login_required
 def risk_list(project_id):
     project = db.get_or_404(Project, project_id)
+    denied = _check_project_access(project)
+    if denied:
+        return denied
     status = request.args.get('status', '')
     severity = request.args.get('severity', '')
     overdue_filter = request.args.get('overdue', '')

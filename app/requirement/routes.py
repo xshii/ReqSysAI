@@ -95,7 +95,7 @@ def requirement_list():
 
     return render_template('requirement/list.html',
         pagination=pagination, requirements=pagination.items,
-        projects=Project.query.all(),
+        projects=[p for p in Project.query.all() if not p.is_hidden or current_user.is_team_manager],
         users=User.query.filter_by(is_active=True).all(),
         statuses=Requirement.STATUS_LABELS, priorities=Requirement.PRIORITY_LABELS,
         cur_status=status, cur_priority=priority, cur_project=project_id,
@@ -198,6 +198,9 @@ def requirement_create():
 @login_required
 def requirement_detail(req_id):
     req = db.get_or_404(Requirement, req_id)
+    if req.project and req.project.is_hidden and not current_user.is_team_manager:
+        flash('无权访问该需求', 'danger')
+        return redirect(url_for('requirement.requirement_list'))
     comment_form = CommentForm()
     return render_template('requirement/detail.html', req=req,
                            comment_form=comment_form)
@@ -358,6 +361,10 @@ def requirement_board():
         query = query.filter_by(project_id=project_id)
     if assignee_id:
         query = query.filter_by(assignee_id=assignee_id)
+    if not current_user.is_team_manager:
+        hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
+        if hidden_pids:
+            query = query.filter(Requirement.project_id.notin_(hidden_pids))
 
     reqs = query.order_by(Requirement.priority, Requirement.updated_at.desc()).all()
 

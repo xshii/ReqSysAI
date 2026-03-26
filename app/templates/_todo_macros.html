@@ -34,28 +34,30 @@
 
 {# Unified todo row — single source of truth #}
 {% macro todo_row(t, icon_color='text-secondary') %}
-{% set is_help = t.children | length > 0 %}
+{% set _active_helpers = t.children | selectattr('source', 'ne', 'rejected') | list %}
+{% set _all_helpers = t.children | list %}
+{% set is_help = _all_helpers | length > 0 %}
+{% set _helper_todo = _active_helpers[0] if _active_helpers else _all_helpers[0] if _all_helpers else none %}
 {% set is_emotion = t.title.startswith('[情绪跟进]') %}
 <div class="mb-1 ps-2 {% if is_emotion %}mgr-only{% endif %}">
 <div class="d-flex align-items-center gap-1 todo-drag-item {% if t.status == 'done' %}text-muted text-decoration-line-through{% elif t.workdays_overdue >= 3 %}border-start border-danger border-2{% elif t.workdays_overdue >= 1 %}border-start border-warning border-2{% endif %}" draggable="true" data-todo-id="{{ t.id }}" style="cursor:grab;">
-    {% if is_help %}
-    <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'hourglass-split text-warning' }}" style="font-size:.9em;" title="等待{{ t.children[0].user.name }}完成"></i>
-    {% else %}
     <form method="POST" action="{{ url_for('main.toggle_todo', todo_id=t.id) }}" class="d-inline flex-shrink-0">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="{{ '撤销完成' if t.status == 'done' else '标记完成' }}">
+        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="{{ '撤销完成' if t.status == 'done' else '标记完成' }}{% if is_help and _helper_todo %} · 等待{{ _helper_todo.user.name }}完成{% endif %}">
+            {% if is_help %}
+            <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'hourglass-split text-warning' }}" style="font-size:.9em;"></i>
+            {% else %}
             <i class="bi bi-{{ 'check-circle-fill text-success' if t.status == 'done' else 'circle ' + icon_color }}"></i>
+            {% endif %}
         </button>
     </form>
-    {% endif %}
     <span class="small">{{ t.title }}</span>
     {%- if t.workdays_overdue >= 1 and t.status != 'done' %}<span class="badge bg-{{ t.overdue_color }} bg-opacity-75" style="font-size:.5em;">延{{ t.workdays_overdue }}天</span>{% endif %}
     {%- if t.need_help %}<span class="badge bg-danger" style="font-size:.55em;">阻塞{% if t.blocked_reason %}：{{ t.blocked_reason }}{% endif %}</span>{% endif %}
     {%- if t.source == "ai" %}<span class="badge bg-info" style="font-size:.55em;">AI</span>{% endif %}
     {%- if t.source == "help_accepted" and t.parent %}{% set _help_days = (t.due_date - today).days if t.due_date and today else none %}<span class="badge bg-info bg-opacity-75" style="font-size:.55em;">{{ t.parent.user.name }}求助 · 已承诺{{ '今天' if _help_days is not none and _help_days <= 0 else (_help_days|string + '天后') if _help_days is not none else '' }}完成</span>{% endif %}
     {%- if t.source == "help" and t.parent %}<span class="badge bg-warning text-dark" style="font-size:.55em;">{{ t.parent.user.name }}求助 · 待接纳</span>{% endif %}
-    {%- if is_help %}
-    {% set _helper_todo = t.children[0] %}
+    {%- if is_help and _helper_todo %}
     {% if _helper_todo.source == 'rejected' %}
     <span class="badge bg-secondary" style="font-size:.55em;">@{{ _helper_todo.user.name }} 已暂缓{% if _helper_todo.blocked_reason %}：{{ _helper_todo.blocked_reason }}{% endif %}</span>
     {% elif _helper_todo.status == 'done' %}

@@ -27,6 +27,23 @@ from app.services.statistics import (
 )
 
 
+
+def _guard_hidden_project(cur_project_id):
+    """If project_id refers to a hidden project and user is not manager, return (None, None)."""
+    if not cur_project_id:
+        return cur_project_id, None
+    p = db.session.get(Project, cur_project_id)
+    if p and p.is_hidden and not current_user.is_team_manager:
+        return None, None
+    return cur_project_id, p
+
+
+def _visible_projects():
+    """Active projects visible to current user."""
+    return [p for p in Project.query.filter_by(status='active').order_by(Project.name).all()
+            if not p.is_hidden or current_user.is_team_manager]
+
+
 def _build_sub_projects(cur_project, monday):
     """Build sub-project progress list for parent project weekly report."""
     if not cur_project or not cur_project.children:
@@ -76,24 +93,29 @@ def _build_sub_projects(cur_project, monday):
 def requirement_progress():
 
     cur_status = request.args.get('status', '')
-    cur_project = request.args.get('project_id', type=int)
+    cur_project_id = request.args.get('project_id', type=int)
+    cur_project_id, _ = _guard_hidden_project(cur_project_id)
 
     query = Requirement.query.options(
         joinedload(Requirement.project), joinedload(Requirement.assignee),
     )
     if cur_status:
         query = query.filter_by(status=cur_status)
-    if cur_project:
-        query = query.filter_by(project_id=cur_project)
+    if cur_project_id:
+        query = query.filter_by(project_id=cur_project_id)
+    if not current_user.is_team_manager:
+        hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
+        if hidden_pids:
+            query = query.filter(Requirement.project_id.notin_(hidden_pids))
     requirements = query.order_by(Requirement.updated_at.desc()).all()
 
     todo_counts = get_todo_progress([r.id for r in requirements])
 
     return render_template('dashboard/requirements.html',
         requirements=requirements, todo_counts=todo_counts,
-        projects=Project.query.filter_by(status='active').all(),
+        projects=_visible_projects(),
         statuses=Requirement.STATUS_LABELS,
-        cur_status=cur_status, cur_project=cur_project,
+        cur_status=cur_status, cur_project=cur_project_id,
     )
 
 
@@ -107,10 +129,10 @@ def stats():
     offset = request.args.get('week', 0, type=int)
     cur_group = request.args.get('group', '')
     cur_project_id = request.args.get('project_id', type=int)
+    cur_project_id, cur_project = _guard_hidden_project(cur_project_id)
     monday, sunday = week_range(offset)
 
     groups = [g.name for g in Group.query.filter_by(is_hidden=False).order_by(Group.name).all()]
-    cur_project = db.session.get(Project, cur_project_id) if cur_project_id else None
     data = gather_week_stats(monday, sunday, group=cur_group or None, project_id=cur_project_id)
 
     return render_template('dashboard/stats.html',
@@ -127,8 +149,8 @@ def metrics():
     import statistics as _stats
 
     cur_project_id = request.args.get('project_id', type=int)
-    cur_project = db.session.get(Project, cur_project_id) if cur_project_id else None
-    projects = Project.query.filter_by(status='active').order_by(Project.name).all()
+    cur_project_id, cur_project = _guard_hidden_project(cur_project_id)
+    projects = _visible_projects()
 
     delivery = get_delivery_metrics(project_id=cur_project_id)
     deviation = get_estimate_deviation(project_id=cur_project_id)
@@ -163,6 +185,7 @@ def stats_export():
     offset = request.args.get('week', 0, type=int)
     cur_group = request.args.get('group', '')
     cur_project_id = request.args.get('project_id', type=int)
+    cur_project_id, _ = _guard_hidden_project(cur_project_id)
     monday, sunday = week_range(offset)
     data = gather_week_stats(monday, sunday, group=cur_group or None, project_id=cur_project_id)
 
@@ -229,8 +252,8 @@ def weekly_report():
 
     offset = request.args.get('week', 0, type=int)
     cur_project_id = request.args.get('project_id', type=int)
+    cur_project_id, cur_project = _guard_hidden_project(cur_project_id)
     monday, sunday = week_range(offset)
-    cur_project = db.session.get(Project, cur_project_id) if cur_project_id else None
 
     if request.method == 'POST':
         WR_check = WeeklyReport
@@ -770,8 +793,8 @@ def weekly_report_export():
 
     offset = request.args.get('week', 0, type=int)
     cur_project_id = request.args.get('project_id', type=int)
+    cur_project_id, cur_project = _guard_hidden_project(cur_project_id)
     monday, sunday = week_range(offset)
-    cur_project = db.session.get(Project, cur_project_id) if cur_project_id else None
     project_name = cur_project.name if cur_project else '研发团队'
 
     # AI analysis from form hidden fields
@@ -1346,6 +1369,14 @@ def resource_map():
     project_ids = sorted(set(pid for (_, pid) in user_project_days))
     projects = {p.id: p for p in Project.query.filter(Project.id.in_(project_ids)).all()} if project_ids else {}
 
+    # Filter out hidden projects for non-managers
+    if not current_user.is_team_manager:
+        hidden_ids = {pid for pid, p in projects.items() if p.is_hidden}
+        if hidden_ids:
+            project_ids = [pid for pid in project_ids if pid not in hidden_ids]
+            projects = {pid: p for pid, p in projects.items() if pid not in hidden_ids}
+            user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in hidden_ids}
+
     # Per-user total days
     user_total = defaultdict(float)
     for (uid, _pid), d in user_project_days.items():
@@ -1475,6 +1506,15 @@ def resource_map_export():
 
     project_ids = sorted(set(pid for (_, pid) in user_project_days))
     projects = {p.id: p for p in Project.query.filter(Project.id.in_(project_ids)).all()} if project_ids else {}
+
+    # Filter out hidden projects for non-managers
+    if not current_user.is_team_manager:
+        hidden_ids = {pid for pid, p in projects.items() if p.is_hidden}
+        if hidden_ids:
+            project_ids = [pid for pid in project_ids if pid not in hidden_ids]
+            projects = {pid: p for pid, p in projects.items() if pid not in hidden_ids}
+            user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in hidden_ids}
+
     user_total = defaultdict(float)
     for (uid, _pid), d in user_project_days.items():
         user_total[uid] += d

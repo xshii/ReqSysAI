@@ -7,6 +7,7 @@ from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.user import User
 from app.project import project_bp
+from app.project.routes import _check_project_access
 
 # ---- Project members ----
 
@@ -14,6 +15,9 @@ from app.project import project_bp
 @login_required
 def member_list(project_id):
     project = db.get_or_404(Project, project_id)
+    denied = _check_project_access(project)
+    if denied:
+        return denied
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'add':

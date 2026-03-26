@@ -21,6 +21,13 @@ def _resolve_owner_id(owner_name):
     return u.id if u else None
 
 
+def _check_project_access(project):
+    """Block non-managers from accessing hidden projects. Returns a redirect response or None."""
+    if project.is_hidden and not current_user.is_team_manager:
+        flash('无权访问该项目', 'danger')
+        return redirect(url_for('project.project_list'))
+
+
 @project_bp.route('/')
 @login_required
 def project_list():
@@ -242,6 +249,9 @@ def project_detail(project_id):
     from app.models.todo import Todo, todo_requirements
 
     project = db.get_or_404(Project, project_id)
+    denied = _check_project_access(project)
+    if denied:
+        return denied
     today = d_date.today()
 
     # Requirements stats
@@ -312,6 +322,9 @@ def toggle_follow(project_id):
 @login_required
 def project_edit(project_id):
     project = db.get_or_404(Project, project_id)
+    denied = _check_project_access(project)
+    if denied:
+        return denied
     form = ProjectForm(obj=project)
     form.parent_id.choices = [(0, '-- 无（顶级项目）--')] + [
         (p.id, p.name) for p in Project.query.filter(
