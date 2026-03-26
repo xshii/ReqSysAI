@@ -665,7 +665,7 @@ def api_add_personnel():
     from app.utils.pinyin import to_pinyin
     from app.services.audit import log_audit
 
-    EMPLOYEE_ID_RE = r'^[a-z]\d?00\d{6}$'
+    EMPLOYEE_ID_RE = r'^[a-z]\d?00\d{6,7}$'
     data = request.get_json() or {}
     eid = (data.get('employee_id') or '').strip()
     name = (data.get('name') or '').strip()
@@ -675,14 +675,14 @@ def api_add_personnel():
     manager = (data.get('manager') or '').strip() or None
 
     if not eid or not re.match(EMPLOYEE_ID_RE, eid):
-        return jsonify(ok=False, msg='工号格式错误：1位小写字母 + 8~9位数字，倒数第7、8位为0，如 a00123456')
+        return jsonify(ok=False, msg='工号格式错误：1位小写字母 + 8~10位数字，倒数第7、8位为0，如 a00123456 或 q3001234567')
     if not name or len(name) < 2:
         return jsonify(ok=False, msg='姓名至少2个字符')
     if not role_id:
         return jsonify(ok=False, msg='请选择角色')
     if not domain:
         return jsonify(ok=False, msg='请填写业务领域')
-    if manager and not re.match(r'^\S+\s+[a-z]\d?00\d{6}$', manager):
+    if manager and not re.match(r'^\S+\s+[a-z]\d?00\d{6,7}$', manager):
         return jsonify(ok=False, msg='主管格式错误，请按"姓名 工号"填写，如：张三 a00123456')
 
     # Check hidden roles

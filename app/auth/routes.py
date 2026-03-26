@@ -206,7 +206,7 @@ def profile():
         new_manager = request.form.get('manager', '').strip()
         if new_manager:
             import re
-            if not re.match(r'^.+\s[a-z]\d?00\d{6}$', new_manager):
+            if not re.match(r'^.+\s[a-z]\d?00\d{6,7}$', new_manager):
                 flash('主管格式应为「姓名 工号」，如：John Smith z00880001', 'danger')
                 return render_template('auth/profile.html', form=form)
         current_user.manager = new_manager or None

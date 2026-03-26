@@ -213,7 +213,7 @@ def _do_csv_import(text, require_group=False):
         manager_raw = (row.get('主管') or '').strip()
         # Validate manager format: "姓名 工号" or empty
         import re as _re
-        if manager_raw and not _re.match(r'^.+\s[a-z]\d?00\d{6}$', manager_raw):
+        if manager_raw and not _re.match(r'^.+\s[a-z]\d?00\d{6,7}$', manager_raw):
             errors.append(f'第{i}行({eid})：主管格式错误「{manager_raw}」，应为「姓名 工号」，已忽略')
             manager_raw = None
         manager = manager_raw or None

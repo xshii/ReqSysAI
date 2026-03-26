@@ -456,7 +456,7 @@
 
     /* --- Add Personnel Modal --- */
     var _apDataLoaded = false;
-    var AP_EID_RE = /^[a-z]\d?00\d{6}$/;
+    var AP_EID_RE = /^[a-z]\d?00\d{6,7}$/;
 
     function openAddPersonnelModal() {
         var modal = document.getElementById('addPersonnelModal');
@@ -503,7 +503,7 @@
         var manager = document.getElementById('ap_manager').value.trim();
 
         if (!eid || !AP_EID_RE.test(eid)) {
-            errEl.textContent = '工号格式错误：1位小写字母 + 8~9位数字，倒数第7、8位为0，如 a00123456';
+            errEl.textContent = '工号格式错误：1位小写字母 + 8~10位数字，倒数第7、8位为0，如 a00123456 或 q3001234567';
             errEl.style.display = 'block'; return;
         }
         if (!name || name.length < 2) {
@@ -518,7 +518,7 @@
             errEl.textContent = '请填写业务领域';
             errEl.style.display = 'block'; return;
         }
-        if (manager && !/^\S+\s+[a-z]\d?00\d{6}$/.test(manager)) {
+        if (manager && !/^\S+\s+[a-z]\d?00\d{6,7}$/.test(manager)) {
             errEl.textContent = '主管格式错误，请按"姓名 工号"填写，如：张三 a00123456';
             errEl.style.display = 'block'; return;
         }
