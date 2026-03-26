@@ -43,7 +43,8 @@
                     {% if form.manager is defined %}
                     <div class="mb-3">
                         <label class="form-label">{{ form.manager.label.text }}</label>
-                        {{ form.manager(class="form-control", placeholder="如：张三 a00123456") }}
+                        {% from "_user_picker.html" import user_picker %}
+                        {{ user_picker('manager', users, value=form.manager.data or '', value_name=form.manager.data or '', mode='manager', placeholder='搜索姓名/工号...', size='') }}
                         {% for e in form.manager.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
                     </div>
                     {% endif %}

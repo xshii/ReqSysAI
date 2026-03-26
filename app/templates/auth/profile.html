@@ -70,7 +70,8 @@
                     <div class="row mb-2 align-items-center">
                         <label class="col-3 col-form-label small">主管</label>
                         <div class="col-9">
-                            <input type="text" name="manager" class="form-control form-control-sm" value="{{ current_user.manager or '' }}" placeholder="如：张三 a00123456">
+                            {% from "_user_picker.html" import user_picker %}
+                            {{ user_picker('manager', users, value=current_user.manager or '', value_name=current_user.manager or '', mode='manager', placeholder='搜索姓名/工号...') }}
                         </div>
                     </div>
                     <div class="row mb-2 align-items-center">

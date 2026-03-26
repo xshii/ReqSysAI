@@ -107,12 +107,12 @@ function initUserPicker(wrap) {
     input.addEventListener('focus', function() { filter(); list.style.display = 'block'; });
     input.addEventListener('input', function() {
         filter();
-        if (mode === 'text') hidden.value = input.value.trim();
+        if (mode === 'text' || mode === 'manager') hidden.value = input.value.trim();
         else hidden.value = '';
     });
     input.addEventListener('blur', function() {
         setTimeout(function() { list.style.display = 'none'; }, 200);
-        if (mode === 'text' && input.value.trim()) hidden.value = input.value.trim();
+        if ((mode === 'text' || mode === 'manager') && input.value.trim()) hidden.value = input.value.trim();
     });
     input.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
@@ -135,8 +135,14 @@ function initUserPicker(wrap) {
     }
 
     function selectOpt(o) {
-        input.value = o.dataset.name;
-        hidden.value = mode === 'id' ? o.dataset.id : o.dataset.name;
+        if (mode === 'manager') {
+            var val = o.dataset.name + ' ' + o.dataset.eid;
+            input.value = val;
+            hidden.value = val;
+        } else {
+            input.value = o.dataset.name;
+            hidden.value = mode === 'id' ? o.dataset.id : o.dataset.name;
+        }
         list.style.display = 'none';
     }
 

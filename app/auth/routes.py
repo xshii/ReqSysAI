@@ -208,8 +208,14 @@ def profile():
             import re
             parts = new_manager.rsplit(' ', 1)
             if len(parts) != 2 or not re.match(r'^[a-z](00\d{6}|\d00\d{7})$', parts[1]):
-                flash('主管格式：姓名 工号，如 张三 a00123456', 'danger')
-                return render_template('auth/profile.html', form=form)
+                # Try to match system user by name
+                mgr_user = User.query.filter_by(name=new_manager, is_active=True).first()
+                if mgr_user:
+                    new_manager = f'{mgr_user.name} {mgr_user.employee_id}'
+                else:
+                    flash('主管：请从下拉选择，或输入 姓名 工号', 'danger')
+                    users = User.query.filter_by(is_active=True).order_by(User.name).all()
+                    return render_template('auth/profile.html', form=form, users=users)
         current_user.manager = new_manager or None
         current_user.domain = request.form.get('domain', '').strip() or None
         new_email = request.form.get('email', '').strip()
@@ -218,7 +224,8 @@ def profile():
             allowed_suffix = SiteSetting.get('mail_domain', current_app.config.get('MAIL_DOMAIN', ''))
             if allowed_suffix and not new_email.endswith('@' + allowed_suffix):
                 flash(f'邮箱必须以 @{allowed_suffix} 结尾', 'danger')
-                return render_template('auth/profile.html', form=form)
+                users = User.query.filter_by(is_active=True).order_by(User.name).all()
+                return render_template('auth/profile.html', form=form, users=users)
         current_user.email = new_email or None
         current_user.pomodoro_minutes = request.form.get('pomodoro_minutes', type=int) or 45
         # Handle avatar upload
@@ -236,7 +243,8 @@ def profile():
         flash('个人信息已更新', 'success')
         return redirect(url_for('auth.profile'))
 
-    return render_template('auth/profile.html', form=form)
+    users = User.query.filter_by(is_active=True).order_by(User.name).all()
+    return render_template('auth/profile.html', form=form, users=users)
 
 
 @auth_bp.route('/profile/toggle-my-group', methods=['POST'])

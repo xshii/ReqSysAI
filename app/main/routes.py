@@ -698,8 +698,15 @@ def api_add_personnel():
         return jsonify(ok=False, msg='请填写业务领域')
     if manager:
         mgr_parts = manager.rsplit(' ', 1)
-        if len(mgr_parts) != 2 or not re.match(r'^[a-z](00\d{6}|\d00\d{7})$', mgr_parts[1]):
-            return jsonify(ok=False, msg='主管格式：姓名 工号，如 张三 a00123456')
+        if len(mgr_parts) == 2 and re.match(r'^[a-z](00\d{6}|\d00\d{7})$', mgr_parts[1]):
+            pass  # already "姓名 工号" format
+        else:
+            # Try to match system user by name
+            mgr_user = User.query.filter_by(name=manager.strip(), is_active=True).first()
+            if mgr_user:
+                manager = f'{mgr_user.name} {mgr_user.employee_id}'
+            else:
+                return jsonify(ok=False, msg='主管格式：姓名 工号，或输入系统用户姓名自动匹配')
 
     # Check hidden roles
     hidden = current_app.config.get('HIDDEN_ROLES', [])

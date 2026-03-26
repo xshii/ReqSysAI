@@ -65,7 +65,7 @@ def user_create():
     if form.validate_on_submit():
         if form.ip_address.data and User.query.filter_by(ip_address=form.ip_address.data).first():
             flash('该 IP 已被绑定', 'danger')
-            return render_template('admin/user_form.html', form=form, title='创建用户')
+            return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title='创建用户')
 
         selected_roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
         user = User(
@@ -81,7 +81,7 @@ def user_create():
         flash(f'用户 {user.name} 创建成功', 'success')
         return redirect(url_for('admin.user_list'))
 
-    return render_template('admin/user_form.html', form=form, title='创建用户')
+    return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title='创建用户')
 
 
 @admin_bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
@@ -99,7 +99,7 @@ def user_edit(user_id):
         ).first() if form.ip_address.data else None
         if existing:
             flash(f'该 IP 已被 {existing.name} 绑定', 'danger')
-            return render_template('admin/user_form.html', form=form, title=f'编辑用户 - {user.name}', user=user)
+            return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title=f'编辑用户 - {user.name}', user=user)
 
         user.employee_id = form.employee_id.data
         user.name = form.name.data
@@ -114,7 +114,7 @@ def user_edit(user_id):
         flash(f'用户 {user.name} 更新成功', 'success')
         return redirect(url_for('admin.user_list'))
 
-    return render_template('admin/user_form.html', form=form, title=f'编辑用户 - {user.name}', user=user)
+    return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title=f'编辑用户 - {user.name}', user=user)
 
 
 @admin_bp.route('/users/<int:user_id>/delete', methods=['POST'])
@@ -323,8 +323,12 @@ def user_update_manager(user_id):
     if raw:
         parts = raw.rsplit(' ', 1)
         if len(parts) != 2 or not re.match(r'^[a-z](00\d{6}|\d00\d{7})$', parts[1]):
-            flash('主管格式：姓名 工号，如 张三 a00123456', 'danger')
-            return redirect(request.referrer or url_for('admin.user_list'))
+            mgr_user = User.query.filter_by(name=raw, is_active=True).first()
+            if mgr_user:
+                raw = f'{mgr_user.name} {mgr_user.employee_id}'
+            else:
+                flash('主管：请输入 姓名 工号，或系统用户姓名', 'danger')
+                return redirect(request.referrer or url_for('admin.user_list'))
     user.manager = raw or None
     db.session.commit()
     return redirect(request.referrer or url_for('admin.user_list'))
