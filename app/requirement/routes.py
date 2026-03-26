@@ -152,7 +152,6 @@ def requirement_create():
     form = _build_requirement_form()
     if request.method == 'GET':
         from datetime import date
-        form.start_date.data = form.start_date.data or date.today()
         form.due_date.data = form.due_date.data or date.today()
         pid = request.args.get('project_id', type=int)
         if pid and any(pid == c[0] for c in form.project_id.choices):
