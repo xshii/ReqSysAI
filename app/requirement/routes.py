@@ -425,12 +425,17 @@ def _build_req_data_text(all_reqs, today_):
         parent_info = f' (父需求ID={r.parent_id})' if r.parent_id else ''
         children_info = f' [子需求{len(r.children)}个]' if r.children else ''
         overdue = f' 超期{(today_ - r.due_date).days}天' if r.due_date and r.due_date < today_ and r.status not in ('done', 'closed') else ''
+        dep_info = ''
+        if r.dependencies:
+            dep_info = ' 依赖:[' + ','.join(d.number for d in r.dependencies) + ']'
+        if r.dependents:
+            dep_info += ' 被依赖:[' + ','.join(d.number for d in r.dependents) + ']'
         line = (
             f'{r.number} | {r.title} | 状态:{r.status_label} | 完成率:{pct}% | '
             f'类型:{r.source_label} | 负责人:{r.assignee_display} | '
             f'预估:{r.estimate_days or "?"}天 | '
             f'启动:{r.start_date or "无"} | 截止:{r.due_date or "无"}'
-            f'{parent_info}{children_info}{overdue}'
+            f'{parent_info}{children_info}{dep_info}{overdue}'
         )
         # Append recent comments (last 3)
         if hasattr(r, 'comments') and r.comments:
@@ -520,6 +525,21 @@ def _code_based_diagnose(all_reqs, today_):
         if r.start_date and (r.completion or 0) == 0 and (today_ - r.start_date).days > 14:
             issues.append({'id': _id('stale', r.id), 'level': 'info', 'tag': '长期停滞',
                 'text': f'<strong>{r.number} {r.title}</strong> 已启动 {(today_ - r.start_date).days} 天但完成率 0%'})
+    # Dependency issues: blocked by unfinished dependency
+    for r in active:
+        if r.dependencies:
+            blocked = [d for d in r.dependencies if d.status not in ('done', 'closed')]
+            if blocked:
+                nums = '、'.join(d.number for d in blocked)
+                issues.append({'id': _id('depblock', r.id), 'level': 'warning', 'tag': '依赖阻塞',
+                    'text': f'<strong>{r.number} {r.title}</strong> 依赖未完成：{nums}'})
+    # Dependency date conflict: dependency due_date later than dependent
+    for r in all_reqs:
+        if r.dependencies and r.start_date:
+            late_deps = [d for d in r.dependencies if d.due_date and d.due_date > r.start_date]
+            for d in late_deps:
+                issues.append({'id': _id('depdate', f'{r.id}_{d.id}'), 'level': 'warning', 'tag': '依赖日期冲突',
+                    'text': f'<strong>{r.number}</strong> 启动({r.start_date.strftime("%m-%d")})早于依赖 {d.number} 截止({d.due_date.strftime("%m-%d")})'})
 
     level_order = {'danger': 0, 'warning': 1, 'info': 2}
     issues.sort(key=lambda i: level_order.get(i['level'], 9))
