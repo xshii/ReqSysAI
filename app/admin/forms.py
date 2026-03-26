@@ -2,14 +2,13 @@ from flask_wtf import FlaskForm
 from wtforms import BooleanField, SelectMultipleField, StringField, SubmitField
 from wtforms.validators import DataRequired, Length, Optional, Regexp
 
-EMPLOYEE_ID_RE = r'^[a-z](00\d{6}|\d00\d{7})$'
-EMPLOYEE_ID_MSG = '工号格式：1位小写字母 + 8~10位数字，倒数第7、8位为0，如 a00123456 或 q3001234567'
+from app.constants import EID_FULL_RE, EID_MSG, MGR_FIELD_RE, MGR_FIELD_MSG
 
 
 class UserCreateForm(FlaskForm):
     employee_id = StringField('工号', validators=[
         DataRequired(message='请输入工号'),
-        Regexp(EMPLOYEE_ID_RE, message=EMPLOYEE_ID_MSG),
+        Regexp(EID_FULL_RE, message=EID_MSG),
     ])
     name = StringField('姓名', validators=[DataRequired(), Length(min=2, max=80)])
     ip_address = StringField('IP 地址', validators=[DataRequired(), Length(max=45)])
@@ -21,13 +20,13 @@ class UserCreateForm(FlaskForm):
 class UserEditForm(FlaskForm):
     employee_id = StringField('工号', validators=[
         DataRequired(message='请输入工号'),
-        Regexp(EMPLOYEE_ID_RE, message=EMPLOYEE_ID_MSG),
+        Regexp(EID_FULL_RE, message=EID_MSG),
     ])
     name = StringField('姓名', validators=[DataRequired(), Length(min=2, max=80)])
     ip_address = StringField('IP 地址', validators=[Optional(), Length(max=45)])
     group = StringField('小组', validators=[Optional(), Length(max=50)])
     manager = StringField('主管', validators=[Optional(), Length(max=100),
-                          Regexp(r'^$|^.+\s[a-z]?(00\d{6}|\d00\d{7})$', message='格式：姓名 工号，如 张三 a00123456 或 张三 00123456')])
+                          Regexp(MGR_FIELD_RE, message=MGR_FIELD_MSG)])
     domain = StringField('业务领域', validators=[Optional(), Length(max=100)])
     role_ids = SelectMultipleField('角色', coerce=int, validators=[DataRequired()])
     is_active = BooleanField('启用')

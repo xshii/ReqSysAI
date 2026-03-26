@@ -2,14 +2,13 @@ from flask_wtf import FlaskForm
 from wtforms import SelectField, SelectMultipleField, StringField, SubmitField
 from wtforms.validators import DataRequired, Length, Optional, Regexp
 
-EMPLOYEE_ID_RE = r'^[a-z](00\d{6}|\d00\d{7})$'
-EMPLOYEE_ID_MSG = '工号格式：1位小写字母 + 8~10位数字，倒数第7、8位为0，如 a00123456 或 q3001234567'
+from app.constants import EID_FULL_RE, EID_MSG
 
 
 class LoginForm(FlaskForm):
     employee_id = StringField('工号', validators=[
         DataRequired(message='请输入工号'),
-        Regexp(EMPLOYEE_ID_RE, message=EMPLOYEE_ID_MSG),
+        Regexp(EID_FULL_RE, message=EID_MSG),
     ])
     submit = SubmitField('登录')
 
@@ -17,7 +16,7 @@ class LoginForm(FlaskForm):
 class RegisterForm(FlaskForm):
     employee_id = StringField('工号', validators=[
         DataRequired(message='请输入工号'),
-        Regexp(EMPLOYEE_ID_RE, message=EMPLOYEE_ID_MSG),
+        Regexp(EID_FULL_RE, message=EID_MSG),
     ])
     name = StringField('姓名', validators=[DataRequired(message='请输入姓名'), Length(min=2, max=80)])
     role_ids = SelectMultipleField('角色', coerce=int, validators=[DataRequired(message='请至少选择一个角色')])

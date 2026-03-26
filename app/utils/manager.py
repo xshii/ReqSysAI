@@ -2,11 +2,12 @@
 """Manager field normalization: ensure employee_id has pinyin prefix."""
 import re
 
+from app.constants import EID_FULL_RE, EID_NUM_RE
 from app.models.user import User
 from app.utils.pinyin import pinyin_initial
 
-EID_FULL_RE = re.compile(r'^[a-z](00\d{6}|\d00\d{7})$')
-EID_NUM_RE = re.compile(r'^(00\d{6}|\d00\d{7})$')
+_EID_FULL = re.compile(EID_FULL_RE)
+_EID_NUM = re.compile(EID_NUM_RE)
 
 
 def normalize_manager(raw):
@@ -28,9 +29,9 @@ def normalize_manager(raw):
 
     if len(parts) == 2:
         mgr_name, mgr_eid = parts[0].strip(), parts[1].strip()
-        if EID_FULL_RE.match(mgr_eid):
+        if _EID_FULL.match(mgr_eid):
             return raw, None  # already complete
-        if EID_NUM_RE.match(mgr_eid):
+        if _EID_NUM.match(mgr_eid):
             # Missing prefix, generate from manager name
             prefix = pinyin_initial(mgr_name)
             if prefix:

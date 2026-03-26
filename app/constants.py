@@ -30,6 +30,21 @@ REQ_INACTIVE_STATUSES = ('done', 'closed')
 HEATMAP_DAYS = 90
 
 # ---------------------------------------------------------------------------
+# Employee ID (工号) patterns
+# ---------------------------------------------------------------------------
+# Full: letter + digits, e.g. a00123456 (9) or q3001234567 (11)
+EID_FULL_RE = r'^[a-z](00\d{6}|\d00\d{7})$'
+# Digits only (no letter prefix), e.g. 00123456 or 3001234567
+EID_NUM_RE = r'^(00\d{6}|\d00\d{7})$'
+# Optional letter prefix (accepts both full and digits-only)
+EID_FLEX_RE = r'^[a-z]?(00\d{6}|\d00\d{7})$'
+# For WTForms Regexp on employee_id fields
+EID_MSG = '工号格式：如 a00123456 或 q3001234567'
+# Manager field in WTForms: "姓名 工号" (工号可带可不带首字母)
+MGR_FIELD_RE = r'^$|^.+\s[a-z]?(00\d{6}|\d00\d{7})$'
+MGR_FIELD_MSG = '格式：姓名 工号，如 张三 a00123456 或 张三 00123456'
+
+# ---------------------------------------------------------------------------
 # AI helpers
 # ---------------------------------------------------------------------------
 AI_TOKEN_RATIO = 0.6

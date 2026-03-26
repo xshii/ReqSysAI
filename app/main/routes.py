@@ -679,8 +679,7 @@ def api_add_personnel():
     from app.utils.pinyin import to_pinyin
     from app.services.audit import log_audit
 
-    EID_FULL_RE = r'^[a-z](00\d{6}|\d00\d{7})$'
-    EID_NUM_RE = r'^(00\d{6}|\d00\d{7})$'
+    from app.constants import EID_FULL_RE, EID_NUM_RE
     data = request.get_json() or {}
     eid = (data.get('employee_id') or '').strip()
     name = (data.get('name') or '').strip()

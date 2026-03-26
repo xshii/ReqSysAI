@@ -219,11 +219,13 @@ def _do_csv_import(text, require_group=False):
         group = (row.get('小组') or '').strip() or None
         role_str = (row.get('角色') or '').strip()
         manager_raw = (row.get('主管') or '').strip()
-        # Validate manager format: "姓名 工号" or empty
-        import re as _re
-        if manager_raw and not _re.match(r'^.+\s[a-z](00\d{6}|\d00\d{7})$', manager_raw):
-            errors.append(f'第{i}行({eid})：主管格式错误「{manager_raw}」，应为「姓名 工号」，已忽略')
-            manager_raw = None
+        # Validate manager format
+        if manager_raw:
+            from app.utils.manager import normalize_manager
+            manager_raw, mgr_err = normalize_manager(manager_raw)
+            if mgr_err:
+                errors.append(f'第{i}行({eid})：{mgr_err}，已忽略主管')
+                manager_raw = None
         manager = manager_raw or None
         domain = (row.get('业务领域') or '').strip() or None
 
