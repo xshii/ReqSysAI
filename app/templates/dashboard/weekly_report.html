@@ -447,7 +447,7 @@ function _emlTable(tableEl) {
     if (!tableEl) return '';
     var h = '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">';
     tableEl.querySelectorAll('tr').forEach(function(tr, ri) {
-        h += '<tr' + (tr.classList.contains('row-risk') ? ' style=""' : (ri > 0 && ri % 2 === 0 ? ' style="background:#fafbfc;"' : '')) + '>';
+        h += '<tr' + (tr.classList.contains('row-risk') ? ' style="background:#fef2f2;"' : (ri > 0 && ri % 2 === 0 ? ' style="background:#fafbfc;"' : '')) + '>';
         tr.querySelectorAll('th,td').forEach(function(cell) {
             var tag = cell.tagName.toLowerCase();
             var bg = tag === 'th' ? 'background:#f7fafc;font-weight:600;color:#4a5568;' : '';
@@ -543,7 +543,7 @@ function exportEml() {
 
         // High risk box (red)
         sec.querySelectorAll('div[style*="fef2f2"]').forEach(function(d) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;"><tr><td style="padding:8px 12px;font-size:13px;">' + _inlineStyles(d.innerHTML) + '</td></tr></table>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;"><tr><td style="background:#fef2f2;padding:8px 0;font-size:13px;">' + _inlineStyles(d.innerHTML) + '</td></tr></table>';
         });
 
         // Sub-headers (e.g., "下周计划：")
