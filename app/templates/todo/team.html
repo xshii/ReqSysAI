@@ -75,13 +75,13 @@
                 {# Requirement todos — same as homepage #}
                 {% for r in ud.display_reqs %}
                 {% set r_todos = ud.req_todos.get(r.id, []) %}
-                {% if r_todos %}
                 <div class="mb-2">
                     <div class="d-flex align-items-center gap-1 mb-1">
                         <span class="badge bg-{{ r.status_color }}" style="font-size:.6em;">{{ r.status_label }}</span>
-                        <span class="badge bg-secondary bg-opacity-50" style="font-size:.5em;">{{ r_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ r_todos|length }}</span>
+                        {% if r_todos %}<span class="badge bg-secondary bg-opacity-50" style="font-size:.5em;">{{ r_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ r_todos|length }}</span>{% endif %}
                         {% if r.due_date and r.due_date < today %}<span class="badge bg-danger" style="font-size:.55em;">超期</span>{% endif %}
                         <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="small fw-bold text-primary text-decoration-none" style="overflow:hidden;text-overflow:ellipsis;">{{ r.number }} {{ r.title }}</a>
+                        {% if not r_todos %}<span class="text-muted" style="font-size:.65em;">暂无Todo</span>{% endif %}
                     </div>
                     {% for t in r_todos %}{{ todo_row(t) }}{% endfor %}
                     {% if req_comments.get(r.id) %}
@@ -101,7 +101,6 @@
                         <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加Todo / @人名 求助 / #评论" required style="font-size:.75em;">
                     </form>
                 </div>
-                {% endif %}
                 {% endfor %}
 
                 {# Team todos — always show section #}
