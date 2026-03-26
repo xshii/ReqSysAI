@@ -91,7 +91,7 @@
     <h6>二、里程碑</h6>
     {% if report_data.timeline_img %}
     <div class="text-center">
-        <img src="data:image/png;base64,{{ report_data.timeline_img }}" class="timeline-img" style="width:100%;max-width:760px;" alt="里程碑时间轴">
+        <img src="data:image/png;base64,{{ report_data.timeline_img }}" class="timeline-img" style="width:100%;" alt="里程碑时间轴">
     </div>
     {% else %}
     <div class="text-muted small text-center py-2">里程碑无日期数据</div>
@@ -554,7 +554,7 @@ function exportEml() {
         // Milestones → use PNG image
         var msImg = sec.querySelector('.timeline-img');
         if (msImg && msImg.src) {
-            body += '<img src="' + msImg.src + '" width="760" style="width:100%;max-width:760px;" alt="里程碑时间轴">';
+            body += '<img src="' + msImg.src + '" width="100%" style="width:100%;" alt="里程碑时间轴">';
         }
 
         // Data tables
