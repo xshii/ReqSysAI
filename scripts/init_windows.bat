@@ -29,5 +29,6 @@ set FLASK_APP=app:create_app
 python scripts\init_db.py
 
 echo.
-echo [OK] 初始化完成！运行 scripts\run_windows.bat 启动平台
-pause
+echo [OK] 初始化完成！正在启动平台...
+echo.
+call "%~dp0\run_windows.bat"
