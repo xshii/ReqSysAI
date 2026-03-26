@@ -83,6 +83,14 @@ def compute_default_recipients(cur_project_id):
     if _cu.is_authenticated and _cu.manager:
         parts = _cu.manager.strip().split()
         my_mgr_eid = parts[-1] if len(parts) > 1 else parts[0]
+        # Also add manager's manager (二级主管)
+        if my_mgr_eid:
+            mgr_user = User.query.filter_by(employee_id=my_mgr_eid, is_active=True).first()
+            if mgr_user and mgr_user.manager:
+                mgr2_parts = mgr_user.manager.strip().split()
+                mgr2_eid = mgr2_parts[-1] if len(mgr2_parts) > 1 else mgr2_parts[0]
+                if mgr2_eid:
+                    cc_eids.add(mgr2_eid)
     for uid in all_user_ids:
         u = db.session.get(User, uid)
         if u and u.manager:
