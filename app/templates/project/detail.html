@@ -55,7 +55,7 @@
             <i class="bi bi-bullseye text-primary" style="font-size:1.1em;margin-top:2px;"></i>
             <div>
                 <div class="small fw-bold text-muted mb-1">项目目标</div>
-                <div class="small">{{ project.description }}</div>
+                <div class="small" style="white-space:pre-line;">{{ project.description }}</div>
             </div>
         </div>
     </div>
@@ -70,7 +70,7 @@
         <div class="text-muted small mb-1"><i class="bi bi-diagram-2"></i> 继承自父项目 <a href="{{ url_for('project.project_detail', project_id=project.parent.id) }}">{{ project.parent.name }}</a> 的里程碑</div>
         {% endif %}
         {% if timeline_img %}
-        <img src="data:image/png;base64,{{ timeline_img }}" style="width:100%;max-width:760px;" alt="里程碑时间轴">
+        <img src="data:image/png;base64,{{ timeline_img }}" style="width:100%;" alt="里程碑时间轴">
         {% else %}
         <div class="text-muted small">里程碑无日期数据</div>
         {% endif %}

@@ -91,7 +91,7 @@
     <h6>二、里程碑</h6>
     {% if report_data.timeline_img %}
     <div class="text-center">
-        <img src="data:image/png;base64,{{ report_data.timeline_img }}" class="timeline-img" style="width:100%;max-width:760px;" alt="里程碑时间轴">
+        <img src="data:image/png;base64,{{ report_data.timeline_img }}" class="timeline-img" style="width:100%;" alt="里程碑时间轴">
     </div>
     {% else %}
     <div class="text-muted small text-center py-2">里程碑无日期数据</div>
@@ -105,7 +105,7 @@
     <div class="report-summary">{{ ai.summary }}</div>
     {% set high_risks = report_data.open_risks | selectattr('severity', 'equalto', 'high') | list %}
     {% if high_risks %}
-    <div style="background:#fef2f2;padding:8px 12px;font-size:.84rem;margin-top:4px;">
+    <div style="padding:8px 12px;font-size:.84rem;margin-top:4px;">
         <strong>高风险通报：</strong>
         {% for r in high_risks %}{{ r.title }}{% if not loop.last %}；{% endif %}{% endfor %}
     </div>
@@ -439,9 +439,9 @@ function _inlineStyles(html) {
     return html;
 }
 function _emlSection(title, body, titleColor) {
-    var c = titleColor || '#1e3a5f';
-    return '<tr><td colspan="99" style="background:' + c + ';color:#fff;padding:8px 16px;font-size:13px;font-weight:700;letter-spacing:1px;border-bottom:2px solid ' + c + ';">' + title + '</td></tr>'
-        + '<tr><td colspan="99" style="padding:10px 16px 16px 16px;font-size:13px;color:#334155;">' + body + '</td></tr>';
+    var c = titleColor || '#4a5568';
+    return '<tr><td colspan="99" style="background:' + c + ';color:#fff;padding:7px 16px;font-size:13px;font-weight:600;">' + title + '</td></tr>'
+        + '<tr><td colspan="99" style="padding:10px 16px 16px 16px;font-size:13px;color:#4a5568;">' + body + '</td></tr>';
 }
 function _emlTable(tableEl) {
     if (!tableEl) return '';
@@ -450,8 +450,8 @@ function _emlTable(tableEl) {
         h += '<tr' + (tr.classList.contains('row-risk') ? ' style="background:#fef2f2;"' : (ri > 0 && ri % 2 === 0 ? ' style="background:#fafbfc;"' : '')) + '>';
         tr.querySelectorAll('th,td').forEach(function(cell) {
             var tag = cell.tagName.toLowerCase();
-            var bg = tag === 'th' ? 'background:#f1f5f9;font-weight:600;color:#475569;' : '';
-            h += '<' + tag + ' style="border:1px solid #e2e8f0;padding:6px 12px;' + bg + '">' + _inlineStyles(cell.innerHTML) + '</' + tag + '>';
+            var bg = tag === 'th' ? 'background:#f7fafc;font-weight:600;color:#4a5568;' : '';
+            h += '<' + tag + ' style="border:1px solid #a0aec0;padding:6px 12px;' + bg + '">' + _inlineStyles(cell.innerHTML) + '</' + tag + '>';
         });
         h += '</tr>';
     });
@@ -468,7 +468,7 @@ function exportEml() {
 
     // Title
     var headerEl = el.querySelector('.report-header');
-    if (headerEl) rows += '<tr><td style="background:#1e3a5f;color:#fff;text-align:center;padding:18px 24px;font-size:16px;font-weight:700;letter-spacing:2px;">' + headerEl.textContent + '</td></tr>';
+    if (headerEl) rows += '<tr><td style="background:#4a5568;color:#fff;text-align:center;padding:14px 24px;font-size:15px;font-weight:600;">' + headerEl.textContent + '</td></tr>';
 
     // Meta
     var metaEls = el.querySelectorAll('.report-meta');
@@ -489,20 +489,20 @@ function exportEml() {
         // Stats panel → convert to table
         var stats = sec.querySelector('.report-stats');
         if (stats) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-collapse:collapse;margin-bottom:8px;"><tr>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #a0aec0;border-collapse:collapse;margin-bottom:8px;"><tr>';
             stats.querySelectorAll('.report-stat').forEach(function(st) {
                 var num = st.querySelector('.num');
                 var lbl = st.querySelector('.label');
-                var numStyle = 'font-size:22px;font-weight:700;color:#1e3a5f;';
+                var numStyle = 'font-size:20px;font-weight:700;color:#4a5568;';
                 if (num) {
-                    if (num.classList.contains('text-success')) numStyle += 'color:#198754;';
-                    else if (num.classList.contains('text-primary')) numStyle += 'color:#0d6efd;';
-                    else if (num.classList.contains('text-warning')) numStyle += 'color:#ffc107;';
-                    else if (num.classList.contains('text-danger')) numStyle += 'color:#dc3545;';
-                    else if (num.classList.contains('text-info')) numStyle += 'color:#0dcaf0;';
-                    else if (num.classList.contains('text-secondary')) numStyle += 'color:#6c757d;';
+                    if (num.classList.contains('text-success')) numStyle += 'color:#38a169;';
+                    else if (num.classList.contains('text-primary')) numStyle += 'color:#4a7ab5;';
+                    else if (num.classList.contains('text-warning')) numStyle += 'color:#b7791f;';
+                    else if (num.classList.contains('text-danger')) numStyle += 'color:#c53030;';
+                    else if (num.classList.contains('text-info')) numStyle += 'color:#4a7ab5;';
+                    else if (num.classList.contains('text-secondary')) numStyle += 'color:#718096;';
                 }
-                body += '<td style="text-align:center;padding:12px 6px;border-right:1px solid #e2e8f0;">'
+                body += '<td style="text-align:center;padding:12px 6px;border-right:1px solid #a0aec0;">'
                     + '<div style="' + numStyle + '">' + (num ? num.textContent : '') + '</div>'
                     + '<div style="font-size:11px;color:#94a3b8;">' + (lbl ? lbl.textContent : '') + '</div></td>';
             });
@@ -533,17 +533,17 @@ function exportEml() {
         var summary = sec.querySelector('.report-summary');
         if (summary) {
             var sumText = summary.innerHTML.replace(/\n/g, '<br>');
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:6px;"><tr><td style="background:#f8fafc;border:1px solid #e2e8f0;padding:12px 16px;font-size:13px;line-height:1.6;">' + sumText + '</td></tr></table>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:6px;"><tr><td style="padding:12px 16px;font-size:13px;line-height:1.6;">' + sumText + '</td></tr></table>';
         }
 
         // Highlights box (green)
         sec.querySelectorAll('div[style*="f8fafc"][style*="e2e8f0"]').forEach(function(d) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;"><tr><td style="background:#f8fafc;border:1px solid #e2e8f0;padding:8px 12px;font-size:13px;">' + d.innerHTML + '</td></tr></table>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;"><tr><td style="padding:8px 12px;font-size:13px;">' + d.innerHTML + '</td></tr></table>';
         });
 
         // High risk box (red)
         sec.querySelectorAll('div[style*="fef2f2"]').forEach(function(d) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;"><tr><td style="background:#fef2f2;border:1px solid #fecaca;padding:8px 12px;font-size:13px;">' + _inlineStyles(d.innerHTML) + '</td></tr></table>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;"><tr><td style="background:#fef2f2;padding:8px 0;font-size:13px;">' + _inlineStyles(d.innerHTML) + '</td></tr></table>';
         });
 
         // Sub-headers (e.g., "下周计划：")
@@ -554,7 +554,7 @@ function exportEml() {
         // Milestones → use PNG image
         var msImg = sec.querySelector('.timeline-img');
         if (msImg && msImg.src) {
-            body += '<img src="' + msImg.src + '" width="760" style="width:100%;max-width:760px;" alt="里程碑时间轴">';
+            body += '<img src="' + msImg.src + '" width="100%" style="width:100%;" alt="里程碑时间轴">';
         }
 
         // Data tables
@@ -592,17 +592,17 @@ function exportEml() {
         if (domainBar) {
             var dHtml = '';
             domainBar.querySelectorAll('.badge').forEach(function(b) {
-                dHtml += '<span style="display:inline-block;padding:2px 8px;margin:2px;font-size:11px;border:1px solid #e2e8f0;border-radius:4px;background:#f8fafc;">' + b.innerHTML + '</span>';
+                dHtml += '<span style="display:inline-block;padding:2px 8px;margin:2px;font-size:11px;border:1px solid #a0aec0;border-radius:4px;">' + b.innerHTML + '</span>';
             });
             if (dHtml) body += '<div style="margin-bottom:8px;">' + dHtml + '</div>';
         }
 
         // AI risk analysis
         sec.querySelectorAll('.mt-2.ps-2').forEach(function(d) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;"><tr><td style="padding:6px 12px;font-size:12px;color:#64748b;background:#f8fafc;border-left:3px solid #94a3b8;">' + d.innerHTML + '</td></tr></table>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;"><tr><td style="padding:6px 12px;font-size:12px;color:#64748b;border-left:3px solid #94a3b8;">' + d.innerHTML + '</td></tr></table>';
         });
 
-        rows += _emlSection(title, body, isRisk ? '#dc2626' : '#1e3a5f');
+        rows += _emlSection(title, body, isRisk ? '#c53030' : '#4a5568');
     });
 
 
@@ -617,10 +617,10 @@ function exportEml() {
         recipientBlock += '</table>';
     }
 
-    var html = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,Segoe UI,sans-serif;margin:0;padding:0;background:#f5f5f5;">'
+    var html = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,Segoe UI,sans-serif;margin:0;padding:0;background:#ffffff;">'
         + '<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:20px;">'
         + recipientBlock
-        + '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:800px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;">'
+        + '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:800px;margin:0 auto;background:#fff;">'
         + rows + '</table>'
         + '</td></tr></table></body></html>';
     var boundary = 'boundary_' + Date.now();

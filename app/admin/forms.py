@@ -11,8 +11,11 @@ class UserCreateForm(FlaskForm):
         Regexp(EID_FULL_RE, message=EID_MSG),
     ])
     name = StringField('姓名', validators=[DataRequired(), Length(min=2, max=80)])
-    ip_address = StringField('IP 地址', validators=[DataRequired(), Length(max=45)])
+    ip_address = StringField('IP 地址', validators=[Optional(), Length(max=45)])
     group = StringField('小组', validators=[Optional(), Length(max=50)])
+    manager = StringField('主管', validators=[Optional(), Length(max=100),
+                          Regexp(MGR_FIELD_RE, message=MGR_FIELD_MSG)])
+    domain = StringField('业务领域', validators=[Optional(), Length(max=100)])
     role_ids = SelectMultipleField('角色', coerce=int, validators=[DataRequired()])
     submit = SubmitField('创建用户')
 

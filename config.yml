@@ -17,7 +17,7 @@ auth:
   default_role: DE
 
 roles:
-  - { name: SE, desc: 软件工程师 }
+  - { name: SE, desc: 设计师 }
   - { name: DE, desc: 开发工程师 }
   - { name: TE, desc: 测试工程师 }
   - { name: Committer, desc: 代码评审人 }

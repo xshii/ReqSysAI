@@ -9,6 +9,13 @@ from app.models.user import User
 from app.project import project_bp
 from app.project.routes import _check_project_access
 
+def _default_project_role(user):
+    """Use user's domain as default project role."""
+    if user and user.domain:
+        return user.domain
+    return 'DEV'
+
+
 # ---- Project members ----
 
 @project_bp.route('/<int:project_id>/members', methods=['GET', 'POST'])
@@ -22,11 +29,13 @@ def member_list(project_id):
         action = request.form.get('action')
         if action == 'add':
             member_name = request.form.get('member_name', '').strip()
-            role = request.form.get('project_role', 'DEV').strip()
+            role = request.form.get('project_role', '').strip()
             if member_name:
                 # Try to find internal user by name
                 user = User.query.filter_by(name=member_name, is_active=True).first()
                 if user:
+                    if not role:
+                        role = _default_project_role(user)
                     if not ProjectMember.query.filter_by(project_id=project_id, user_id=user.id).first():
                         db.session.add(ProjectMember(project_id=project_id, user_id=user.id, project_role=role))
                         db.session.commit()
@@ -72,6 +81,74 @@ def member_list(project_id):
     return render_template('project/members.html', project=project, members=members,
                            available=available, roles=ProjectMember.DEFAULT_ROLES,
                            is_pm=is_pm, can_edit=can_edit)
+
+
+@project_bp.route('/<int:project_id>/members/ajax', methods=['POST'])
+@login_required
+def member_ajax(project_id):
+    """AJAX member operations: add/remove/role/toggle_key. Returns JSON."""
+    project = db.get_or_404(Project, project_id)
+    denied = _check_project_access(project)
+    if denied:
+        return jsonify(ok=False, msg='无权限'), 403
+    data = request.get_json() or {}
+    action = data.get('action')
+    if action == 'add':
+        member_name = (data.get('member_name') or '').strip()
+        role = (data.get('project_role') or '').strip()
+        if not member_name:
+            return jsonify(ok=False, msg='请输入成员名')
+        user = User.query.filter_by(name=member_name, is_active=True).first()
+        if user:
+            if not role:
+                role = _default_project_role(user)
+            if ProjectMember.query.filter_by(project_id=project_id, user_id=user.id).first():
+                return jsonify(ok=False, msg=f'{user.name} 已在项目中')
+            m = ProjectMember(project_id=project_id, user_id=user.id, project_role=role)
+            db.session.add(m)
+            db.session.commit()
+            return jsonify(ok=True, member={
+                'id': m.id, 'name': user.name, 'group': user.group or '',
+                'role': role, 'is_key': m.is_key, 'user_id': user.id,
+            })
+        else:
+            if ProjectMember.query.filter_by(project_id=project_id, external_name=member_name).first():
+                return jsonify(ok=False, msg=f'{member_name} 已在项目中')
+            m = ProjectMember(project_id=project_id, external_name=member_name, project_role=role)
+            db.session.add(m)
+            db.session.commit()
+            return jsonify(ok=True, member={
+                'id': m.id, 'name': member_name, 'group': '',
+                'role': role, 'is_key': m.is_key, 'user_id': None,
+            })
+    elif action == 'remove':
+        member_id = data.get('member_id')
+        m = db.session.get(ProjectMember, member_id)
+        if m and m.project_id == project_id:
+            uid = m.user_id
+            name = m.display_name
+            db.session.delete(m)
+            db.session.commit()
+            return jsonify(ok=True, user_id=uid, name=name)
+        return jsonify(ok=False, msg='成员不存在')
+    elif action == 'role':
+        member_id = data.get('member_id')
+        new_role = data.get('project_role', 'DEV')
+        m = db.session.get(ProjectMember, member_id)
+        if m and m.project_id == project_id:
+            m.project_role = new_role
+            db.session.commit()
+            return jsonify(ok=True)
+        return jsonify(ok=False, msg='成员不存在')
+    elif action == 'toggle_key':
+        member_id = data.get('member_id')
+        m = db.session.get(ProjectMember, member_id)
+        if m and m.project_id == project_id:
+            m.is_key = not m.is_key
+            db.session.commit()
+            return jsonify(ok=True, is_key=m.is_key)
+        return jsonify(ok=False, msg='成员不存在')
+    return jsonify(ok=False, msg='未知操作')
 
 
 # ---- Member CSV import/export ----

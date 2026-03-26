@@ -28,15 +28,19 @@ from app.utils.pinyin import to_pinyin
 @admin_required
 def user_list():
     filter_group = request.args.get('group', '')
+    all_group_objs = Group.query.order_by(Group.name).all()
+    all_groups = [g.name for g in all_group_objs]
+    hidden_groups = {g.name for g in all_group_objs if g.is_hidden}
+    visible_group_names = [g.name for g in all_group_objs if not g.is_hidden]
+
     q = User.query
     if filter_group == '_none':
         q = q.filter(db.or_(User.group.is_(None), User.group == ''))
+    elif filter_group == '_visible':
+        q = q.filter(User.group.in_(visible_group_names))
     elif filter_group:
         q = q.filter_by(group=filter_group)
     users = q.order_by(User.group, User.name).all()
-
-    all_group_objs = Group.query.order_by(Group.name).all()
-    all_groups = [g.name for g in all_group_objs]
     group_counts = {}
     for g in all_groups:
         group_counts[g] = User.query.filter_by(group=g, is_active=True).count()
@@ -53,6 +57,7 @@ def user_list():
     return render_template('admin/users.html', users=users, visible_roles=visible_roles,
                            all_groups=all_groups, all_group_objs=all_group_objs,
                            group_counts=group_counts, all_domains=all_domains,
+                           hidden_groups=hidden_groups,
                            filter_group=filter_group, ip_requests=ip_requests)
 
 
@@ -62,18 +67,50 @@ def user_create():
     form = UserCreateForm()
     form.role_ids.choices = [(r.id, r.name) for r in Role.query.order_by(Role.id).all()]
 
+    # Parse combined "姓名 工号" field
+    if request.method == 'POST':
+        import re
+        from app.constants import EID_FULL_RE, EID_NUM_RE
+        name_eid = request.form.get('name_eid', '').strip()
+        if name_eid:
+            parts = name_eid.rsplit(' ', 1)
+            if len(parts) == 2 and re.match(EID_FULL_RE, parts[1]):
+                form.name.data = parts[0].strip()
+                form.employee_id.data = parts[1].strip()
+            elif len(parts) == 2 and re.match(EID_NUM_RE, parts[1]):
+                from app.utils.pinyin import pinyin_initial
+                prefix = pinyin_initial(parts[0].strip())
+                form.name.data = parts[0].strip()
+                form.employee_id.data = (prefix + parts[1].strip()) if prefix else parts[1].strip()
+            else:
+                flash('请输入 姓名 工号，如 张三 a00123456', 'danger')
+                return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title='创建用户')
+        else:
+            form.name.data = ''
+            form.employee_id.data = ''
+
     if form.validate_on_submit():
         if form.ip_address.data and User.query.filter_by(ip_address=form.ip_address.data).first():
             flash('该 IP 已被绑定', 'danger')
             return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title='创建用户')
 
         selected_roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
+        # Normalize manager
+        mgr_val = None
+        if form.manager.data and form.manager.data.strip():
+            from app.utils.manager import normalize_manager
+            mgr_val, mgr_err = normalize_manager(form.manager.data)
+            if mgr_err:
+                flash(mgr_err, 'danger')
+                return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title='创建用户')
         user = User(
             employee_id=form.employee_id.data,
             name=form.name.data,
             pinyin=to_pinyin(form.name.data),
-            ip_address=form.ip_address.data,
+            ip_address=form.ip_address.data or f'pending-{form.employee_id.data}',
             group=form.group.data or None,
+            manager=mgr_val,
+            domain=form.domain.data or None,
             roles=selected_roles,
         )
         db.session.add(user)
@@ -92,6 +129,25 @@ def user_edit(user_id):
     form.role_ids.choices = [(r.id, r.name) for r in Role.query.order_by(Role.id).all()]
     if not form.is_submitted():
         form.role_ids.data = [r.id for r in user.roles]
+
+    # Parse combined "姓名 工号" field
+    if request.method == 'POST':
+        import re
+        from app.constants import EID_FULL_RE, EID_NUM_RE
+        name_eid = request.form.get('name_eid', '').strip()
+        if name_eid:
+            parts = name_eid.rsplit(' ', 1)
+            if len(parts) == 2 and re.match(EID_FULL_RE, parts[1]):
+                form.name.data = parts[0].strip()
+                form.employee_id.data = parts[1].strip()
+            elif len(parts) == 2 and re.match(EID_NUM_RE, parts[1]):
+                from app.utils.pinyin import pinyin_initial
+                prefix = pinyin_initial(parts[0].strip())
+                form.name.data = parts[0].strip()
+                form.employee_id.data = (prefix + parts[1].strip()) if prefix else parts[1].strip()
+            else:
+                flash('请输入 姓名 工号，如 张三 a00123456', 'danger')
+                return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title=f'编辑用户 - {user.name}', user=user)
 
     if form.validate_on_submit():
         existing = User.query.filter(

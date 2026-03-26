@@ -288,7 +288,13 @@
                         </div>
                         <div class="mb-2">
                             <label class="form-label mb-0 small">主管</label>
-                            <input type="text" id="ap_manager" class="form-control form-control-sm" placeholder="如：张三 a00123456">
+                            <div class="position-relative user-picker-wrap" id="apMgrPicker">
+                                <input type="hidden" name="manager" class="user-picker-val" value="">
+                                <input type="text" class="form-control form-control-sm user-picker-input" id="ap_manager"
+                                       placeholder="搜索姓名/工号..." autocomplete="off" data-mode="manager">
+                                <div class="position-absolute bg-white border rounded shadow-sm w-100 user-picker-list" style="z-index:1050;display:none;max-height:160px;overflow-y:auto;">
+                                </div>
+                            </div>
                         </div>
                     </form>
                     <div id="apErrorMsg" class="text-danger small mt-1" style="display:none;"></div>
@@ -477,6 +483,14 @@
                     data.domains.forEach(d => {
                         dl.innerHTML += '<option value="'+d+'">';
                     });
+                    // Populate manager user picker
+                    var mgrList = document.querySelector('#apMgrPicker .user-picker-list');
+                    mgrList.innerHTML = '';
+                    (data.users || []).forEach(u => {
+                        mgrList.innerHTML += '<div class="px-2 py-1 small user-picker-opt" style="cursor:pointer;" data-id="'+u.id+'" data-name="'+u.name+'" data-eid="'+u.eid+'" data-pinyin="'+u.pinyin+'">'
+                            + u.name + ' <span class="text-muted">'+u.eid+(u.group?' · '+u.group:'')+'</span></div>';
+                    });
+                    initUserPicker(document.getElementById('apMgrPicker'));
                 });
         }
         bsModal.show();
