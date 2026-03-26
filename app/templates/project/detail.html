@@ -206,7 +206,7 @@
                             <th id="ganttNameCol" style="width:50px;position:sticky;left:0;z-index:2;background:#f8f9fa;cursor:col-resize;" title="拖拽调整列宽">负责人</th>
                             {% for i in range(g_days) %}
                             {% set d = g_start + timedelta(days=i) %}
-                            <th class="gantt-col" data-date="{{ d.strftime('%Y-%m-%d') }}" style="width:{{ col_w }}px;padding:1px;text-align:center;font-size:.9em;{{ 'background:#fff3cd;' if d == gantt.today else ('background:#f0f0f0;' if d.weekday() >= 5 else '') }}">
+                            <th class="gantt-col" data-date="{{ d.strftime('%Y-%m-%d') }}" style="width:{{ col_w }}px;padding:1px;text-align:center;font-size:1em;{{ 'background:#fff3cd;' if d == gantt.today else ('background:#f0f0f0;' if d.weekday() >= 5 else '') }}">
                                 {{ d.strftime('%d') }}{% if d.day == 1 or i == 0 %}<br><span style="font-size:.8em;">{{ d.strftime('%m') }}月</span>{% endif %}
                             </th>
                             {% endfor %}
@@ -274,13 +274,26 @@
             var table = document.querySelector('#ganttBody table');
             var nameW = document.getElementById('ganttNameCol') ? document.getElementById('ganttNameCol').offsetWidth : 50;
             if (table) table.style.minWidth = (nameW + colCount * w) + 'px';
+            var _lastWeekMonth = 0;
             document.querySelectorAll('.gantt-col').forEach(function(td) {
                 td.style.width = w + 'px';
-                // In week mode, hide header text for non-Monday columns
+                // In week mode, show week labels on Mondays, hide others
                 if (td.tagName === 'TH' && td.dataset.date) {
                     if (!td.dataset.origHtml) td.dataset.origHtml = td.innerHTML;
-                    var d = new Date(td.dataset.date + 'T00:00:00');
-                    td.innerHTML = isWeek ? (d.getDay() === 1 ? '<span style="font-size:.7em;">' + td.dataset.date.slice(5) + '</span>' : '') : td.dataset.origHtml;
+                    if (isWeek) {
+                        var d = new Date(td.dataset.date + 'T00:00:00');
+                        if (d.getDay() === 1) {
+                            var m = d.getMonth() + 1;
+                            var weekNum = Math.ceil(d.getDate() / 7);
+                            var label = (m !== _lastWeekMonth) ? (m + '月第' + weekNum + '周') : ('第' + weekNum + '周');
+                            _lastWeekMonth = m;
+                            td.innerHTML = '<span style="font-size:.85em;white-space:nowrap;">' + label + '</span>';
+                        } else {
+                            td.innerHTML = '';
+                        }
+                    } else {
+                        td.innerHTML = td.dataset.origHtml;
+                    }
                 }
             });
             // Recalculate bar widths
