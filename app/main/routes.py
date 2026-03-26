@@ -679,8 +679,7 @@ def api_add_personnel():
     from app.utils.pinyin import to_pinyin
     from app.services.audit import log_audit
 
-    EID_FULL_RE = r'^[a-z](00\d{6}|\d00\d{7})$'
-    EID_NUM_RE = r'^(00\d{6}|\d00\d{7})$'
+    from app.constants import EID_FULL_RE, EID_NUM_RE
     data = request.get_json() or {}
     eid = (data.get('employee_id') or '').strip()
     name = (data.get('name') or '').strip()
@@ -707,17 +706,10 @@ def api_add_personnel():
     if not domain:
         return jsonify(ok=False, msg='请填写业务领域')
     if manager:
-        mgr_parts = manager.rsplit(' ', 1)
-        if len(mgr_parts) == 2 and re.match(r'^[a-z]?(00\d{6}|\d00\d{7})$', mgr_parts[1]):
-            pass  # "姓名 工号" or "姓名 纯数字工号"
-        else:
-            mgr_user = User.query.filter_by(name=manager.strip(), is_active=True).first()
-            if not mgr_user and len(mgr_parts) == 2:
-                mgr_user = User.query.filter_by(name=mgr_parts[0].strip(), is_active=True).first()
-            if mgr_user:
-                manager = f'{mgr_user.name} {mgr_user.employee_id}'
-            else:
-                return jsonify(ok=False, msg='主管未找到，请输入 姓名 工号')
+        from app.utils.manager import normalize_manager
+        manager, mgr_err = normalize_manager(manager)
+        if mgr_err:
+            return jsonify(ok=False, msg=mgr_err)
 
     # Check hidden roles
     hidden = current_app.config.get('HIDDEN_ROLES', [])

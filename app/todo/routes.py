@@ -510,13 +510,30 @@ def team():
         elif t.status == TODO_STATUS_DONE:
             user_done.setdefault(t.user_id, []).append(t)
 
-    # Build display_reqs for each user
-    for _uid, ud in user_data.items():
+    # Build display_reqs for each user, include started requirements without todos
+    from app.models.requirement import Requirement
+    for u in users:
+        ud = user_data.setdefault(u.id, {
+            'req_todos': {}, 'risk_todos': [], 'team_todos': [],
+            'display_reqs': [], 'todos': [], '_req_map': {},
+        })
+        # Add requirements assigned to user, started (start_date <= today), not done/closed, not hidden
+        started_reqs = Requirement.query.filter(
+            Requirement.assignee_id == u.id,
+            Requirement.status.notin_(REQ_INACTIVE_STATUSES),
+            Requirement.start_date <= today,
+        ).all()
+        for r in started_reqs:
+            if r.id not in ud['_req_map'] and r.project_id not in _hidden_pids:
+                ud['_req_map'][r.id] = r
         ud['display_reqs'] = sorted(ud['_req_map'].values(),
             key=lambda r: (r.due_date or date(2099,1,1), r.priority))
-        ud['todo_total'] = len(ud['todos'])
-        ud['todo_done'] = sum(1 for t in ud['todos'] if t.status == TODO_STATUS_DONE)
-        del ud['_req_map'], ud['todos']
+        ud['todo_total'] = len(ud.get('todos', []))
+        ud['todo_done'] = sum(1 for t in ud.get('todos', []) if t.status == TODO_STATUS_DONE)
+        if '_req_map' in ud:
+            del ud['_req_map']
+        if 'todos' in ud:
+            del ud['todos']
 
     for uid in user_done:
         user_done[uid].sort(key=lambda t: t.done_date or t.created_date, reverse=True)
