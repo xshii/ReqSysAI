@@ -655,6 +655,20 @@ def api_personnel_options():
     )
 
 
+@main_bp.route('/api/pinyin-initial')
+@login_required
+def api_pinyin_initial():
+    """Return the lowercase pinyin initial of a Chinese name."""
+    from app.utils.pinyin import to_pinyin
+    name = request.args.get('name', '').strip()
+    if not name:
+        return jsonify(initial='')
+    py = to_pinyin(name)
+    # to_pinyin returns e.g. "zs zhangsan", take first char
+    initial = py[0].lower() if py else ''
+    return jsonify(initial=initial if initial.isalpha() else '')
+
+
 @main_bp.route('/api/personnel/add', methods=['POST'])
 @login_required
 def api_add_personnel():
@@ -665,24 +679,30 @@ def api_add_personnel():
     from app.utils.pinyin import to_pinyin
     from app.services.audit import log_audit
 
-    EMPLOYEE_ID_RE = r'^[a-z]\d?00\d{6}$'
+    EID_NUM_RE = r'^(00\d{6}|\d00\d{7})$'
     data = request.get_json() or {}
-    eid = (data.get('employee_id') or '').strip()
+    eid_num = (data.get('employee_id_num') or data.get('employee_id') or '').strip()
     name = (data.get('name') or '').strip()
     role_id = data.get('role_id')
     domain = (data.get('domain') or '').strip()
     group = (data.get('group') or '').strip() or None
     manager = (data.get('manager') or '').strip() or None
 
-    if not eid or not re.match(EMPLOYEE_ID_RE, eid):
-        return jsonify(ok=False, msg='工号格式错误：1位小写字母 + 8~9位数字，倒数第7、8位为0，如 a00123456')
     if not name or len(name) < 2:
         return jsonify(ok=False, msg='姓名至少2个字符')
+    # Auto-generate employee_id prefix from name pinyin initial
+    py = to_pinyin(name)
+    prefix = py[0].lower() if py and py[0].isalpha() else ''
+    if not prefix:
+        return jsonify(ok=False, msg='无法从姓名生成工号首字母，请检查姓名')
+    if not eid_num or not re.match(EID_NUM_RE, eid_num):
+        return jsonify(ok=False, msg='工号数字部分格式错误，如 00123456 或 3001234567')
+    eid = prefix + eid_num
     if not role_id:
         return jsonify(ok=False, msg='请选择角色')
     if not domain:
         return jsonify(ok=False, msg='请填写业务领域')
-    if manager and not re.match(r'^\S+\s+[a-z]\d?00\d{6}$', manager):
+    if manager and not re.match(r'^\S+\s+[a-z](00\d{6}|\d00\d{7})$', manager):
         return jsonify(ok=False, msg='主管格式错误，请按"姓名 工号"填写，如：张三 a00123456')
 
     # Check hidden roles
@@ -698,7 +718,7 @@ def api_add_personnel():
     user = User(
         employee_id=eid,
         name=name,
-        ip_address='',
+        ip_address=f'pending-{eid}',
         pinyin=to_pinyin(name),
         group=group,
         domain=domain,

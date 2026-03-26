@@ -121,7 +121,7 @@ def permission_list(project_id):
             app_record = db.session.get(PermissionApplication, request.form.get('app_id', type=int))
             if app_record and app_record.item.project_id == project_id:
                 app_record.status = 'approved'
-                app_record.approved_at = datetime.now(timezone.utc)
+                app_record.approved_at = datetime.now()
                 app_record.approved_by = current_user.id
                 from app.services.notify import notify
                 link = url_for('project.permission_list', project_id=project_id)
@@ -143,7 +143,7 @@ def permission_list(project_id):
             from app.services.audit import log_audit
             for a in pending:
                 a.status = 'approved'
-                a.approved_at = datetime.now(timezone.utc)
+                a.approved_at = datetime.now()
                 a.approved_by = current_user.id
                 log_audit('approve', 'permission', a.id, a.item.resource, f'批量通过 {a.applicant_name}')
             db.session.commit()

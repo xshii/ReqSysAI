@@ -151,7 +151,7 @@ def timer(todo_id):
     if todo.started_at:
         # Stop timer — save this session
         from app.models.todo import PomodoroSession
-        elapsed_sec = (datetime.now(timezone.utc).replace(tzinfo=None) - todo.started_at).total_seconds()
+        elapsed_sec = (datetime.now() - todo.started_at).total_seconds()
         elapsed_min = max(1, round(elapsed_sec / 60))  # At least 1 minute
         pomo_min = current_user.pomodoro_minutes or 45
         completed = elapsed_min >= pomo_min
@@ -162,7 +162,7 @@ def timer(todo_id):
         return jsonify(ok=True, running=False, minutes=elapsed_min,
                        completed=completed, total_minutes=todo.actual_minutes)
     else:
-        todo.started_at = datetime.now(timezone.utc)
+        todo.started_at = datetime.now()
         db.session.commit()
         return jsonify(ok=True, running=True, minutes=0)
 

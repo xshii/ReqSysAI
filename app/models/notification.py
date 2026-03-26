@@ -12,7 +12,7 @@ class Notification(db.Model):
     title = db.Column(db.String(300), nullable=False)
     link = db.Column(db.String(500), nullable=True)  # URL to navigate to
     is_read = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now())
 
     user = db.relationship('User', backref='notifications')
 

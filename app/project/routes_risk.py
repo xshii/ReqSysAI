@@ -117,7 +117,7 @@ def risk_add(project_id):
         domain=request.form.get('domain', '').strip() or None,
         created_by=current_user.id,
         created_at=datetime.strptime(request.form.get('created_at'), '%Y-%m-%d') if request.form.get('created_at') else None,
-        owner_since=datetime.utcnow() if request.form.get('owner', '').strip() else None,
+        owner_since=datetime.now() if request.form.get('owner', '').strip() else None,
     )
     db.session.add(risk)
     # Notify owner and tracker
@@ -140,14 +140,14 @@ def risk_resolve(risk_id):
     # If no resolution provided, use latest comment from last 24h
     if not resolution and risk.comments:
         latest = risk.comments[0]  # ordered desc
-        if (datetime.utcnow() - latest.created_at).total_seconds() < 86400:
+        if (datetime.now() - latest.created_at).total_seconds() < 86400:
             resolution = latest.content
     if not resolution:
         flash('请填写解决方案（或先添加评论）', 'danger')
         return redirect(url_for('project.risk_list', project_id=risk.project_id))
     risk.status = 'resolved'
     risk.resolution = resolution
-    risk.resolved_at = datetime.utcnow()
+    risk.resolved_at = datetime.now()
     from app.models.risk import RiskAuditLog
     db.session.add(RiskAuditLog(risk_id=risk.id, user_id=current_user.id, action='resolved', detail=resolution[:200]))
     db.session.commit()
@@ -194,7 +194,7 @@ def risk_delete(risk_id):
             return jsonify(ok=False, msg='仅 PM 或管理员可删除风险'), 403
         flash('仅 PM 或管理员可删除风险', 'danger')
         return redirect(url_for('project.risk_list', project_id=risk.project_id))
-    risk.deleted_at = datetime.utcnow()
+    risk.deleted_at = datetime.now()
     risk.deleted_by = current_user.id
     db.session.add(RiskAuditLog(risk_id=risk.id, user_id=current_user.id, action='deleted', detail=risk.title))
     from app.services.audit import log_audit
@@ -302,7 +302,7 @@ def risk_import_csv(project_id):
             created_by=current_user.id,
         )
         if status_val == 'resolved' and resolution_text:
-            risk.resolved_at = datetime.utcnow()
+            risk.resolved_at = datetime.now()
         db.session.add(risk)
         created += 1
     db.session.commit()
@@ -347,7 +347,7 @@ def risk_edit(risk_id):
     risk.domain = request.form.get('domain', '').strip() or None
     # Log owner change as comment with hold duration
     if new_owner != old_owner:
-        now = datetime.utcnow()
+        now = datetime.now()
         if old_owner and risk.owner_since:
             # 有前任且有接手时间，计算持有时长
             delta = now - risk.owner_since
@@ -390,7 +390,7 @@ def risk_inline_edit(risk_id):
         risk.severity = value
     elif field == 'status' and value in ('open', 'resolved', 'closed'):
         if value == 'resolved' and risk.status == 'open':
-            risk.resolved_at = datetime.utcnow()
+            risk.resolved_at = datetime.now()
         risk.status = value
     else:
         return jsonify(ok=False, msg='无效字段或值')

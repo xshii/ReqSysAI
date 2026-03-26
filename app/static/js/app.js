@@ -152,9 +152,16 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.user-picker-wrap').forEach(initUserPicker);
 });
 
-// ---- Date picker: close on select ----
+// ---- Date picker: close on calendar select (not keyboard) ----
 document.addEventListener('change', function(e) {
-    if (e.target.type === 'date') e.target.blur();
+    if (e.target.type === 'date' && !e.target._keyActive) e.target.blur();
+});
+document.addEventListener('keydown', function(e) {
+    if (e.target.type === 'date') {
+        e.target._keyActive = true;
+        clearTimeout(e.target._keyTimer);
+        e.target._keyTimer = setTimeout(function() { e.target._keyActive = false; }, 800);
+    }
 });
 
 // ---- Clear native tooltips before DOM removal ----

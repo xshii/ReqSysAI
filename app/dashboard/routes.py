@@ -381,6 +381,13 @@ def weekly_report():
                     children_str = f'，子需求 {done_children}/{len(r.children)} 完成'
                 assignee = r.assignee_display
                 lines.append(f'- [{r.number}] {r.title}（{r.status_label}，{assignee}{days_str}{due_str}{children_str}）{overdue}')
+                for c in (r.children or []):
+                    c_due = f'，预期 {c.due_date.strftime("%m-%d")}' if c.due_date else ''
+                    c_days = f'，预估 {c.estimate_days}人天' if c.estimate_days else ''
+                    c_overdue = ''
+                    if c.due_date and c.due_date < date.today() and c.status not in REQ_INACTIVE_STATUSES:
+                        c_overdue = f'⚠️已延期{(date.today() - c.due_date).days}天'
+                    lines.append(f'  - ↳[{c.number}] {c.title}（{c.status_label}，{c.assignee_display}{c_days}{c_due}）{c_overdue}')
 
         if todos_done:
             lines.append('\n本周已完成的任务：')
@@ -594,7 +601,7 @@ def weekly_report():
             saved.summary = ai_analysis['summary']
             saved.risks_json = json_lib.dumps(ai_analysis['risks'], ensure_ascii=False)
             saved.plan_json = json_lib.dumps(ai_analysis['plan'], ensure_ascii=False)
-            saved.updated_at = datetime.now(timezone.utc)
+            saved.updated_at = datetime.now()
         else:
             saved = WeeklyReport(
                 project_id=cur_project_id,
@@ -826,7 +833,7 @@ def weekly_report_save():
     plan = [p.strip() for p in request.form.get('plan', '').strip().splitlines() if p.strip()]
     saved.risks_json = json_lib.dumps(risks, ensure_ascii=False)
     saved.plan_json = json_lib.dumps(plan, ensure_ascii=False)
-    saved.updated_at = datetime.now(timezone.utc)
+    saved.updated_at = datetime.now()
     db.session.commit()
     flash('周报已保存', 'success')
 
@@ -858,7 +865,7 @@ def weekly_report_freeze():
     if action == 'freeze':
         saved.is_frozen = True
         saved.frozen_by = current_user.id
-        saved.frozen_at = datetime.now(timezone.utc)
+        saved.frozen_at = datetime.now()
         flash('周报已冻结', 'success')
     else:
         saved.is_frozen = False
@@ -1381,6 +1388,14 @@ def my_weekly():
     for t in my_done + my_active:
         for r in t.requirements:
             my_reqs.add(r)
+    # Also include requirements (and child requirements) directly assigned to me
+    from app.models.requirement import Requirement
+    assigned_reqs = Requirement.query.filter(
+        Requirement.assignee_id == current_user.id,
+        Requirement.status.notin_(['done', 'closed']),
+    ).all()
+    for r in assigned_reqs:
+        my_reqs.add(r)
     my_reqs = _urgency_sort(list(my_reqs), limit=30)
 
     req_days = {}
@@ -1454,7 +1469,9 @@ def my_weekly():
                     if r.due_date:
                         days_left = (r.due_date - date.today()).days
                         due_info = f'，已延期{-days_left}天' if days_left < 0 else f'，剩{days_left}天'
-                    lines.append(f'- [{r.number}] {r.title}（{r.status_label}{due_info}）')
+                    child_tag = '，↳子需求' if r.parent_id else ''
+                    start_info = f'，开始 {r.start_date.strftime("%m-%d")}' if r.start_date else ''
+                    lines.append(f'- {r.title}（{r.status_label}{start_info}{due_info}{child_tag}）')
 
             # Recurring todo stats this week
             from app.models.recurring_completion import RecurringCompletion

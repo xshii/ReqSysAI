@@ -63,7 +63,7 @@ def user_create():
     form.role_ids.choices = [(r.id, r.name) for r in Role.query.order_by(Role.id).all()]
 
     if form.validate_on_submit():
-        if User.query.filter_by(ip_address=form.ip_address.data).first():
+        if form.ip_address.data and User.query.filter_by(ip_address=form.ip_address.data).first():
             flash('该 IP 已被绑定', 'danger')
             return render_template('admin/user_form.html', form=form, title='创建用户')
 
@@ -96,7 +96,7 @@ def user_edit(user_id):
     if form.validate_on_submit():
         existing = User.query.filter(
             User.ip_address == form.ip_address.data, User.id != user.id
-        ).first()
+        ).first() if form.ip_address.data else None
         if existing:
             flash(f'该 IP 已被 {existing.name} 绑定', 'danger')
             return render_template('admin/user_form.html', form=form, title=f'编辑用户 - {user.name}', user=user)
@@ -106,7 +106,15 @@ def user_edit(user_id):
         user.pinyin = to_pinyin(form.name.data)
         user.ip_address = form.ip_address.data or f'pending-{user.employee_id}'
         user.group = form.group.data or None
-        user.manager = form.manager.data.strip() or None
+        mgr_name = request.form.get('manager_name', '').strip()
+        mgr_eid = request.form.get('manager_eid', '').strip()
+        if mgr_name and mgr_eid:
+            user.manager = f'{mgr_name} {mgr_eid}'
+        elif not mgr_name and not mgr_eid:
+            user.manager = None
+        else:
+            flash('主管需同时填写姓名和工号', 'danger')
+            return render_template('admin/user_form.html', form=form, title=f'编辑用户 - {user.name}', user=user)
         user.domain = form.domain.data or None
         user.roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
         user.is_active = form.is_active.data
@@ -139,7 +147,7 @@ def ip_request_approve(req_id):
     r = db.get_or_404(IPChangeRequest, req_id)
     r.status = 'approved'
     r.reviewed_by = current_user.id
-    r.reviewed_at = datetime.now(timezone.utc)
+    r.reviewed_at = datetime.now()
     # Update user IP
     user = db.session.get(User, r.user_id)
     if user:
@@ -155,7 +163,7 @@ def ip_request_reject(req_id):
     r = db.get_or_404(IPChangeRequest, req_id)
     r.status = 'rejected'
     r.reviewed_by = current_user.id
-    r.reviewed_at = datetime.now(timezone.utc)
+    r.reviewed_at = datetime.now()
     db.session.commit()
     flash('已拒绝 IP 更换申请', 'info')
     return redirect(url_for('admin.user_list'))
@@ -213,7 +221,7 @@ def _do_csv_import(text, require_group=False):
         manager_raw = (row.get('主管') or '').strip()
         # Validate manager format: "姓名 工号" or empty
         import re as _re
-        if manager_raw and not _re.match(r'^.+\s[a-z]\d?00\d{6}$', manager_raw):
+        if manager_raw and not _re.match(r'^.+\s[a-z](00\d{6}|\d00\d{7})$', manager_raw):
             errors.append(f'第{i}行({eid})：主管格式错误「{manager_raw}」，应为「姓名 工号」，已忽略')
             manager_raw = None
         manager = manager_raw or None

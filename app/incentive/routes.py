@@ -235,9 +235,9 @@ def review(inc_id):
         try:
             inc.reviewed_at = datetime.strptime(award_month + '-15', '%Y-%m-%d')
         except ValueError:
-            inc.reviewed_at = datetime.now(timezone.utc)
+            inc.reviewed_at = datetime.now()
     else:
-        inc.reviewed_at = datetime.now(timezone.utc)
+        inc.reviewed_at = datetime.now()
     from app.services.audit import log_audit
     log_audit(action, 'incentive', inc.id, inc.title, f'{action_labels.get(action, action)} 金额={amount}')
     db.session.commit()
@@ -379,7 +379,7 @@ def import_csv():
         comment = first.get('评语', '').strip()[:150]
         month_str = first.get('获奖年月', '').strip()
 
-        reviewed_at = datetime.now(timezone.utc)
+        reviewed_at = datetime.now()
         if month_str:
             try:
                 reviewed_at = datetime.strptime(month_str + '-15', '%Y-%m-%d')
@@ -650,7 +650,7 @@ def admin_submit():
 
     photo_path = save_photo(request.files.get('photo'))
 
-    reviewed_at = datetime.now(timezone.utc)
+    reviewed_at = datetime.now()
     if month_str:
         try:
             reviewed_at = datetime.strptime(month_str + '-15', '%Y-%m-%d')
