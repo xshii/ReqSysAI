@@ -679,9 +679,9 @@ def api_add_personnel():
     from app.utils.pinyin import to_pinyin
     from app.services.audit import log_audit
 
-    EID_NUM_RE = r'^(00\d{6}|\d00\d{7})$'
+    EMPLOYEE_ID_RE = r'^[a-z](00\d{6}|\d00\d{7})$'
     data = request.get_json() or {}
-    eid_num = (data.get('employee_id_num') or data.get('employee_id') or '').strip()
+    eid = (data.get('employee_id') or '').strip()
     name = (data.get('name') or '').strip()
     role_id = data.get('role_id')
     domain = (data.get('domain') or '').strip()
@@ -690,14 +690,8 @@ def api_add_personnel():
 
     if not name or len(name) < 2:
         return jsonify(ok=False, msg='姓名至少2个字符')
-    # Auto-generate employee_id prefix from name pinyin initial
-    py = to_pinyin(name)
-    prefix = py[0].lower() if py and py[0].isalpha() else ''
-    if not prefix:
-        return jsonify(ok=False, msg='无法从姓名生成工号首字母，请检查姓名')
-    if not eid_num or not re.match(EID_NUM_RE, eid_num):
-        return jsonify(ok=False, msg='工号数字部分格式错误，如 00123456 或 3001234567')
-    eid = prefix + eid_num
+    if not eid or not re.match(EMPLOYEE_ID_RE, eid):
+        return jsonify(ok=False, msg='工号格式错误，如 a00123456 或 q3001234567')
     if not role_id:
         return jsonify(ok=False, msg='请选择角色')
     if not domain:
