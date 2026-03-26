@@ -462,6 +462,13 @@ checkHelpAlert();
                     {% endif %}
                     <a href="{{ url_for('project.risk_list', project_id=r.project_id) }}" class="text-decoration-none text-dark flex-grow-1 text-truncate">{{ r.title }}</a>
                     <span class="flex-shrink-0 d-flex align-items-center gap-1">
+                        {% if r.owner_id == current_user.id and r.tracker_id == current_user.id %}
+                        <span class="badge bg-dark bg-opacity-50" style="font-size:.6em;">责任人+跟踪</span>
+                        {% elif r.owner_id == current_user.id %}
+                        <span class="badge bg-dark bg-opacity-50" style="font-size:.6em;">责任人</span>
+                        {% elif r.tracker_id == current_user.id %}
+                        <span class="badge bg-light text-dark border" style="font-size:.6em;">跟踪人</span>
+                        {% endif %}
                         <span class="badge bg-{{ r.severity_color }}" style="font-size:.7em;">{{ r.severity_label }}</span>
                         {% if r.is_overdue %}<span class="badge bg-danger" style="font-size:.7em;">超期</span>{% elif r.is_due_today %}<span class="badge bg-warning text-dark" style="font-size:.7em;">临期</span>{% endif %}
                         <span class="text-muted">{{ r.due_date.strftime('%m-%d') if r.due_date else '' }}</span>
