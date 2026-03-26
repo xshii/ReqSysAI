@@ -12,3 +12,13 @@ def admin_required(f):
             abort(403)
         return f(*args, **kwargs)
     return decorated_function
+
+
+def manager_required(f):
+    @wraps(f)
+    @login_required
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_team_manager:
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated_function

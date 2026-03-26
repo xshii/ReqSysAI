@@ -7,6 +7,7 @@ from sqlalchemy.orm import joinedload
 
 from app.constants import REQ_INACTIVE_STATUSES, TODO_STATUS_DONE
 from app.dashboard import dashboard_bp
+from app.decorators import manager_required
 from app.extensions import db
 from app.models.project import Project
 from app.models.project_member import ProjectMember
@@ -123,7 +124,7 @@ def requirement_progress():
 # ---- Stats / Weekly Report / Excel Export ----
 
 @dashboard_bp.route('/stats')
-@login_required
+@manager_required
 def stats():
 
     offset = request.args.get('week', 0, type=int)
@@ -143,7 +144,7 @@ def stats():
 
 
 @dashboard_bp.route('/metrics')
-@login_required
+@manager_required
 def metrics():
     """Delivery cycle time and estimate-vs-actual deviation analytics."""
     import statistics as _stats
@@ -176,7 +177,7 @@ def metrics():
 
 
 @dashboard_bp.route('/stats/export')
-@login_required
+@manager_required
 def stats_export():
     """Export weekly stats as Excel."""
     import openpyxl
@@ -1310,7 +1311,7 @@ def my_weekly():
 # ---- Resource allocation map ----
 
 @dashboard_bp.route('/resource-map')
-@login_required
+@manager_required
 def resource_map():
     from collections import defaultdict
 
@@ -1445,7 +1446,7 @@ def resource_map():
 
 
 @dashboard_bp.route('/resource-map/export')
-@login_required
+@manager_required
 def resource_map_export():
     """Export resource map as CSV."""
     import csv
@@ -1580,7 +1581,7 @@ def save_expected_ratio():
 # ---- Emotion prediction ----
 
 @dashboard_bp.route('/emotion')
-@login_required
+@manager_required
 def emotion_predict():
     if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
         from flask import abort
