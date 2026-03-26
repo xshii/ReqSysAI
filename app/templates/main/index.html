@@ -455,7 +455,11 @@ checkHelpAlert();
             <div class="card-body py-2">
             {% for r in my_risks %}
                 <div class="d-flex align-items-center small mb-1 gap-1 {% if r.is_overdue %}bg-danger bg-opacity-10 rounded px-1{% elif r.is_due_today %}bg-warning bg-opacity-10 rounded px-1{% endif %}">
+                    {% if r.title in risk_todo_titles %}
+                    <button class="btn btn-success btn-sm py-0 px-1 border-0 flex-shrink-0" style="font-size:.7em;" disabled>✓</button>
+                    {% else %}
                     <button class="btn btn-outline-danger btn-sm py-0 px-1 btn-risk-todo flex-shrink-0" data-title="{{ r.title }}" style="font-size:.7em;" title="添加到今日风险&突发 Todo" data-bs-toggle="tooltip">+Todo</button>
+                    {% endif %}
                     <a href="{{ url_for('project.risk_list', project_id=r.project_id) }}" class="text-decoration-none text-dark flex-grow-1 text-truncate">{{ r.title }}</a>
                     <span class="flex-shrink-0 d-flex align-items-center gap-1">
                         <span class="badge bg-{{ r.severity_color }}" style="font-size:.7em;">{{ r.severity_label }}</span>

@@ -100,6 +100,9 @@ def index():
     # Merge any extra requirements from todos into display list
     display_reqs = list(my_reqs) + [r for rid, r in req_map.items() if rid not in {x.id for x in my_reqs}]
 
+    # Risk titles already in today's todos (for +Todo button state)
+    risk_todo_titles = {t.title for t in my_todos if t.category == 'risk'}
+
     # My related risks — overdue/due-today first, then severity, then due_date
     my_risks = Risk.query.filter(
         Risk.status == 'open',
@@ -239,7 +242,7 @@ def index():
         req_todos=req_todos, risk_todos=risk_todos, team_todos=team_todos, personal_todos=personal_todos,
         display_reqs=display_reqs,
         approved_incentives=approved_incentives, rants=rants,
-        ai_ranking=ai_ranking, alerts=alerts, help_requests=help_requests,
+        ai_ranking=ai_ranking, alerts=alerts, help_requests=help_requests, risk_todo_titles=risk_todo_titles,
         heatmap=heatmap, heatmap_start=heatmap_start, timedelta=timedelta,
         milestones=milestones, all_recurring=all_recurring, recurring_due=recurring_due,
         recurring_status=recurring_status, week_focus=week_focus,
