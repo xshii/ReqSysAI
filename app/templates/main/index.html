@@ -456,9 +456,9 @@ checkHelpAlert();
             {% for r in my_risks %}
                 <div class="d-flex align-items-center small mb-1 gap-1 {% if r.is_overdue %}bg-danger bg-opacity-10 rounded px-1{% elif r.is_due_today %}bg-warning bg-opacity-10 rounded px-1{% endif %}">
                     {% if r.title in risk_todo_titles %}
-                    <button class="btn btn-success btn-sm py-0 px-1 border-0 flex-shrink-0" style="font-size:.7em;" disabled>✓</button>
+                    <button class="btn btn-success btn-sm py-0 border-0 flex-shrink-0" style="font-size:.7em;width:3.2em;text-align:center;" disabled>✓</button>
                     {% else %}
-                    <button class="btn btn-outline-danger btn-sm py-0 px-1 btn-risk-todo flex-shrink-0" data-title="{{ r.title }}" style="font-size:.7em;" title="添加到今日风险&突发 Todo" data-bs-toggle="tooltip">+Todo</button>
+                    <button class="btn btn-outline-danger btn-sm py-0 btn-risk-todo flex-shrink-0" data-title="{{ r.title }}" data-role="{% if r.owner_id == current_user.id %}责任人{% elif r.tracker_id == current_user.id %}跟踪人{% endif %}" style="font-size:.7em;width:3.2em;text-align:center;" title="添加到今日风险&突发 Todo" data-bs-toggle="tooltip">+Todo</button>
                     {% endif %}
                     <a href="{{ url_for('project.risk_list', project_id=r.project_id) }}" class="text-decoration-none text-dark flex-grow-1 text-truncate">{{ r.title }}</a>
                     <span class="flex-shrink-0 d-flex align-items-center gap-1">
@@ -789,10 +789,12 @@ document.querySelectorAll('.btn-risk-todo').forEach(function(btn) {
         var tip = bootstrap.Tooltip.getInstance(btn);
         if (tip) tip.hide();
         var title = btn.dataset.title;
-        apiPost('{{ url_for("main.quick_todo") }}', {title: title, category: 'risk'}).then(function(d) {
+        var role = btn.dataset.role || '';
+        var todoTitle = role ? '[' + role + '] ' + title : title;
+        apiPost('{{ url_for("main.quick_todo") }}', {title: todoTitle, category: 'risk'}).then(function(d) {
             if (d && d.ok) {
                 var listEl = document.querySelector('.todo-list-for-req[data-req-id="risk"]');
-                if (listEl) listEl.appendChild(createTodoRow(d.todo_id, title, {}));
+                if (listEl) listEl.appendChild(createTodoRow(d.todo_id, todoTitle, {}));
                 // Dispose tooltip before changing button
                 var tip2 = bootstrap.Tooltip.getInstance(btn);
                 if (tip2) tip2.dispose();
