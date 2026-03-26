@@ -560,6 +560,9 @@ function filterAvailUsers() {
     if (countEl) countEl.textContent = (g || q) ? '匹配 ' + visible + ' / ' + total + ' 人' : '共 ' + total + ' 人';
 }
 filterAvailUsers();
+// Re-filter when switching to members tab (ensures filter applies after tab visible)
+var _membersTab = document.querySelector('a[href="#tabMembers"], button[data-bs-target="#tabMembers"]');
+if (_membersTab) _membersTab.addEventListener('shown.bs.tab', filterAvailUsers);
 
 // AJAX member operations
 var _memberAjaxUrl = '{{ url_for("project.member_ajax", project_id=project.id) if is_edit else "" }}';
