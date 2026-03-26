@@ -167,8 +167,6 @@ checkHelpAlert();
         btn.onclick = function() { toggleActivity(a.key, btn); };
         btn.style.cssText = 'width:38px;height:38px;border-radius:50%;border:2px solid ' + a.color + '30;color:' + a.color + ';font-size:1.1em;padding:0;transition:all .15s;';
         btn.innerHTML = '<i class="bi ' + a.icon + '"></i>';
-        btn.setAttribute('data-bs-toggle', 'tooltip');
-        btn.setAttribute('data-bs-placement', 'bottom');
         btn.title = a.label;
         bar.appendChild(btn);
     });
@@ -178,8 +176,6 @@ checkHelpAlert();
     setBtn.className = 'btn btn-light d-flex align-items-center justify-content-center';
     setBtn.style.cssText = 'width:32px;height:32px;border-radius:50%;border:1px dashed #adb5bd;color:#adb5bd;font-size:.9em;padding:0;';
     setBtn.innerHTML = '<i class="bi bi-gear"></i>';
-    setBtn.setAttribute('data-bs-toggle', 'tooltip');
-    setBtn.setAttribute('data-bs-placement', 'bottom');
     setBtn.title = '自定义按钮';
     bar.appendChild(setBtn);
     // Timer display (next to buttons)
@@ -189,8 +185,7 @@ checkHelpAlert();
     timer.style.cssText = 'font-size:.78em;color:#198754;';
     timer.innerHTML = '<span id="actTimerLabel" class="fw-bold"></span> <span id="actTimerElapsed">0:00</span>';
     bar.appendChild(timer);
-    // Init tooltips on new elements
-    bar.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) { new bootstrap.Tooltip(el); });
+    // Activity buttons use native title tooltip (no Bootstrap tooltip residue)
 })();
 </script>
 {% if unclosed_meetings %}
