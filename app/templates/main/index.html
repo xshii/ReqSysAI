@@ -511,7 +511,7 @@ checkHelpAlert();
                     {% if r.title in risk_todo_titles %}
                     <span class="text-muted flex-shrink-0" style="font-size:.65em;width:3.2em;text-align:center;">已加</span>
                     {% else %}
-                    <button class="btn btn-outline-danger btn-sm py-0 btn-risk-todo flex-shrink-0" data-title="{{ r.title }}" data-role="{% if r.owner_id == current_user.id %}责任人{% elif r.tracker_id == current_user.id %}跟踪人{% endif %}" style="font-size:.7em;width:3.2em;text-align:center;" title="添加到今日风险&突发 Todo" data-bs-toggle="tooltip">+Todo</button>
+                    <button class="btn btn-outline-danger btn-sm py-0 btn-risk-todo flex-shrink-0" data-title="{{ r.title }}" data-role="{% if r.owner_id == current_user.id %}责任人{% elif r.tracker_id == current_user.id %}跟踪人{% endif %}" style="font-size:.7em;width:3.2em;text-align:center;" data-tip="添加到今日风险&突发 Todo">+Todo</button>
                     {% endif %}
                     <a href="{{ url_for('project.risk_list', project_id=r.project_id) }}" class="text-decoration-none text-dark flex-grow-1 text-truncate">{{ r.title }}</a>
                     <span class="flex-shrink-0 d-flex align-items-center gap-1">
@@ -983,9 +983,6 @@ document.getElementById('btnAdoptAll').addEventListener('click', function() {
 // Risk → Todo one-click
 document.querySelectorAll('.btn-risk-todo').forEach(function(btn) {
     btn.addEventListener('click', function() {
-        // Hide tooltip immediately
-        var tip = bootstrap.Tooltip.getInstance(btn);
-        if (tip) tip.hide();
         var title = btn.dataset.title;
         var role = btn.dataset.role || '';
         var todoTitle = role ? '[' + role + '] ' + title : title;
@@ -993,9 +990,6 @@ document.querySelectorAll('.btn-risk-todo').forEach(function(btn) {
             if (d && d.ok) {
                 var listEl = document.querySelector('.todo-list-for-req[data-req-id="risk"]');
                 if (listEl) listEl.appendChild(createTodoRow(d.todo_id, todoTitle, {}));
-                // Dispose tooltip before changing button
-                var tip2 = bootstrap.Tooltip.getInstance(btn);
-                if (tip2) tip2.dispose();
                 var span = document.createElement('span');
                 span.className = 'text-muted flex-shrink-0';
                 span.style.cssText = 'font-size:.65em;width:3.2em;text-align:center;';
