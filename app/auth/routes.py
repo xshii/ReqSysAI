@@ -59,7 +59,7 @@ def login():
     if auto_user and request.method == 'GET':
         login_user(auto_user, remember=False)
         session.permanent = True
-        auto_user.last_login = datetime.now(timezone.utc)
+        auto_user.last_login = datetime.now()
         db.session.commit()
         # Clear "请先登录" flash message from login_required redirect
         session.pop('_flashes', None)
@@ -97,7 +97,7 @@ def login():
 
         login_user(user, remember=False)
         session.permanent = True  # 10 min lifetime from config
-        user.last_login = datetime.now(timezone.utc)
+        user.last_login = datetime.now()
         db.session.commit()
         return redirect(url_for('main.index'))
 
