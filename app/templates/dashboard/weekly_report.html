@@ -451,7 +451,7 @@ function _emlTable(tableEl) {
         tr.querySelectorAll('th,td').forEach(function(cell) {
             var tag = cell.tagName.toLowerCase();
             var bg = tag === 'th' ? 'background:#f7fafc;font-weight:600;color:#4a5568;' : '';
-            h += '<' + tag + ' style="border:1px solid #e2e8f0;padding:6px 12px;' + bg + '">' + _inlineStyles(cell.innerHTML) + '</' + tag + '>';
+            h += '<' + tag + ' style="border:1px solid #a0aec0;padding:6px 12px;' + bg + '">' + _inlineStyles(cell.innerHTML) + '</' + tag + '>';
         });
         h += '</tr>';
     });
@@ -489,7 +489,7 @@ function exportEml() {
         // Stats panel → convert to table
         var stats = sec.querySelector('.report-stats');
         if (stats) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-collapse:collapse;margin-bottom:8px;"><tr>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #a0aec0;border-collapse:collapse;margin-bottom:8px;"><tr>';
             stats.querySelectorAll('.report-stat').forEach(function(st) {
                 var num = st.querySelector('.num');
                 var lbl = st.querySelector('.label');
@@ -502,7 +502,7 @@ function exportEml() {
                     else if (num.classList.contains('text-info')) numStyle += 'color:#4a7ab5;';
                     else if (num.classList.contains('text-secondary')) numStyle += 'color:#718096;';
                 }
-                body += '<td style="text-align:center;padding:12px 6px;border-right:1px solid #e2e8f0;">'
+                body += '<td style="text-align:center;padding:12px 6px;border-right:1px solid #a0aec0;">'
                     + '<div style="' + numStyle + '">' + (num ? num.textContent : '') + '</div>'
                     + '<div style="font-size:11px;color:#94a3b8;">' + (lbl ? lbl.textContent : '') + '</div></td>';
             });
@@ -533,12 +533,12 @@ function exportEml() {
         var summary = sec.querySelector('.report-summary');
         if (summary) {
             var sumText = summary.innerHTML.replace(/\n/g, '<br>');
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:6px;"><tr><td style="background:#f8fafc;border:1px solid #e2e8f0;padding:12px 16px;font-size:13px;line-height:1.6;">' + sumText + '</td></tr></table>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:6px;"><tr><td style="background:#f8fafc;border:1px solid #a0aec0;padding:12px 16px;font-size:13px;line-height:1.6;">' + sumText + '</td></tr></table>';
         }
 
         // Highlights box (green)
         sec.querySelectorAll('div[style*="f8fafc"][style*="e2e8f0"]').forEach(function(d) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;"><tr><td style="background:#f8fafc;border:1px solid #e2e8f0;padding:8px 12px;font-size:13px;">' + d.innerHTML + '</td></tr></table>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;"><tr><td style="background:#f8fafc;border:1px solid #a0aec0;padding:8px 12px;font-size:13px;">' + d.innerHTML + '</td></tr></table>';
         });
 
         // High risk box (red)
@@ -592,7 +592,7 @@ function exportEml() {
         if (domainBar) {
             var dHtml = '';
             domainBar.querySelectorAll('.badge').forEach(function(b) {
-                dHtml += '<span style="display:inline-block;padding:2px 8px;margin:2px;font-size:11px;border:1px solid #e2e8f0;border-radius:4px;background:#f8fafc;">' + b.innerHTML + '</span>';
+                dHtml += '<span style="display:inline-block;padding:2px 8px;margin:2px;font-size:11px;border:1px solid #a0aec0;border-radius:4px;background:#f8fafc;">' + b.innerHTML + '</span>';
             });
             if (dHtml) body += '<div style="margin-bottom:8px;">' + dHtml + '</div>';
         }
@@ -620,7 +620,7 @@ function exportEml() {
     var html = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,Segoe UI,sans-serif;margin:0;padding:0;background:#ffffff;">'
         + '<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:20px;">'
         + recipientBlock
-        + '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:800px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;">'
+        + '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:800px;margin:0 auto;background:#fff;border:1px solid #a0aec0;">'
         + rows + '</table>'
         + '</td></tr></table></body></html>';
     var boundary = 'boundary_' + Date.now();
