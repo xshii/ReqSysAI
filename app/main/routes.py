@@ -393,11 +393,19 @@ def save_activity():
     data = request.get_json() or {}
     activity = data.get('activity', '').strip()
     label = data.get('label', '').strip()
-    started_at_ms = data.get('start')
     minutes = data.get('minutes', 0)
-    if not activity or not started_at_ms or minutes < 1:
+    if not activity or minutes < 1:
         return jsonify(ok=False)
-    started_at = datetime.fromtimestamp(started_at_ms / 1000)
+    # Prefer explicit date+time strings (no timezone issues)
+    date_str = data.get('date')
+    time_str = data.get('time')
+    if date_str and time_str:
+        started_at = datetime.strptime(f'{date_str} {time_str}', '%Y-%m-%d %H:%M')
+    else:
+        started_at_ms = data.get('start')
+        if not started_at_ms:
+            return jsonify(ok=False)
+        started_at = datetime.fromtimestamp(started_at_ms / 1000)
     rec = ActivityTimer(
         user_id=current_user.id, activity=activity, label=label,
         started_at=started_at, minutes=minutes, date=started_at.date(),

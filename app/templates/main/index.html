@@ -751,7 +751,10 @@ function _saveActivity() {
     var min = Math.round((Date.now() - a.start) / 60000);
     if (min < 1) return; // ignore < 1 min
     // Save to server
-    apiPost('/api/activity', {activity: a.key, label: _actLabels[a.key] || a.key, start: a.start, minutes: min});
+    var sd = new Date(a.start);
+    var ds = sd.getFullYear() + '-' + String(sd.getMonth()+1).padStart(2,'0') + '-' + String(sd.getDate()).padStart(2,'0');
+    var ts = String(sd.getHours()).padStart(2,'0') + ':' + String(sd.getMinutes()).padStart(2,'0');
+    apiPost('/api/activity', {activity: a.key, label: _actLabels[a.key] || a.key, date: ds, time: ts, minutes: min});
 }
 
 // Requirement completion % selector

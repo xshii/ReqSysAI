@@ -626,11 +626,10 @@ function saveAddActivity(dateStr) {
     if (!label) { document.getElementById('addLabel').focus(); return; }
     var parts = time.split(':');
     var h = parseInt(parts[0]), m = parseInt(parts[1]);
-    var startMs = new Date(dateStr + 'T' + time + ':00').getTime();
     fetch('/api/activity', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({activity: 'manual', label: label, start: startMs, minutes: dur})
+        body: JSON.stringify({activity: 'manual', label: label, date: dateStr, time: time, minutes: dur})
     }).then(function(r) { return r.json(); }).then(function(d) {
         if (d.ok) location.reload();
         else alert('保存失败');
