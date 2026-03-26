@@ -16,10 +16,8 @@ def search(query, limit=20, current_user_id=None, is_manager=False):
     q = f'%{query.strip()}%'
     results = []
 
-    # Hidden project IDs (for non-managers)
-    hidden_pids = set()
-    if not is_manager:
-        hidden_pids = {p.id for p in Project.query.filter_by(is_hidden=True).all()}
+    # Hidden project IDs
+    hidden_pids = {p.id for p in Project.query.filter_by(is_hidden=True).all()}
 
     # Requirements
     req_q = Requirement.query.filter(

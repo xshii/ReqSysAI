@@ -126,10 +126,9 @@ def requirement_progress():
         query = query.filter_by(status=cur_status)
     if cur_project_id:
         query = query.filter_by(project_id=cur_project_id)
-    if not current_user.is_team_manager:
-        hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
-        if hidden_pids:
-            query = query.filter(Requirement.project_id.notin_(hidden_pids))
+    hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
+    if hidden_pids:
+        query = query.filter(Requirement.project_id.notin_(hidden_pids))
     requirements = query.order_by(Requirement.updated_at.desc()).all()
 
     todo_counts = get_todo_progress([r.id for r in requirements])
@@ -1617,11 +1616,10 @@ def resource_map():
     project_ids = sorted(set(pid for (_, pid) in user_project_days))
     projects = {p.id: p for p in Project.query.filter(Project.id.in_(project_ids)).all()} if project_ids else {}
 
-    # Filter out hidden projects for non-managers
-    if not current_user.is_team_manager:
-        hidden_ids = {pid for pid, p in projects.items() if p.is_hidden}
-        if hidden_ids:
-            project_ids = [pid for pid in project_ids if pid not in hidden_ids]
+    # Filter out hidden projects
+    hidden_ids = {pid for pid, p in projects.items() if p.is_hidden}
+    if hidden_ids:
+        project_ids = [pid for pid in project_ids if pid not in hidden_ids]
             projects = {pid: p for pid, p in projects.items() if pid not in hidden_ids}
             user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in hidden_ids}
 
@@ -1755,11 +1753,10 @@ def resource_map_export():
     project_ids = sorted(set(pid for (_, pid) in user_project_days))
     projects = {p.id: p for p in Project.query.filter(Project.id.in_(project_ids)).all()} if project_ids else {}
 
-    # Filter out hidden projects for non-managers
-    if not current_user.is_team_manager:
-        hidden_ids = {pid for pid, p in projects.items() if p.is_hidden}
-        if hidden_ids:
-            project_ids = [pid for pid in project_ids if pid not in hidden_ids]
+    # Filter out hidden projects
+    hidden_ids = {pid for pid, p in projects.items() if p.is_hidden}
+    if hidden_ids:
+        project_ids = [pid for pid in project_ids if pid not in hidden_ids]
             projects = {pid: p for pid, p in projects.items() if pid not in hidden_ids}
             user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in hidden_ids}
 

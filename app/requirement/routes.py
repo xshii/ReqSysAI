@@ -63,10 +63,9 @@ def requirement_list():
         query = query.filter(
             db.or_(Requirement.title.contains(search), Requirement.description.contains(search))
         )
-    if not current_user.is_team_manager:
-        hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
-        if hidden_pids:
-            query = query.filter(Requirement.project_id.notin_(hidden_pids))
+    hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
+    if hidden_pids:
+        query = query.filter(Requirement.project_id.notin_(hidden_pids))
 
     # Sort
     today_ = date.today()
@@ -661,10 +660,9 @@ def requirement_board():
         query = query.filter_by(project_id=project_id)
     if assignee_id:
         query = query.filter_by(assignee_id=assignee_id)
-    if not current_user.is_team_manager:
-        hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
-        if hidden_pids:
-            query = query.filter(Requirement.project_id.notin_(hidden_pids))
+    hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
+    if hidden_pids:
+        query = query.filter(Requirement.project_id.notin_(hidden_pids))
 
     reqs = query.order_by(Requirement.priority, Requirement.updated_at.desc()).all()
 
@@ -903,8 +901,7 @@ def ai_quality_check():
 def _build_requirement_form(obj=None):
     form = RequirementForm(obj=obj)
     projects = Project.query.filter_by(status='active')
-    if not current_user.is_team_manager:
-        projects = projects.filter_by(is_hidden=False)
+    projects = projects.filter_by(is_hidden=False)
     form.project_id.choices = [(p.id, p.name) for p in projects.all()]
     form.assignee_id.choices = [(0, '-- 未分配 --')] + [
         (u.id, u.name) for u in User.query.filter_by(is_active=True).all()
