@@ -939,14 +939,15 @@ def export_csv():
     writer.writerow([
         'ID', '需求编号', '层级', '需求类型', '标题', '项目', '优先级', '状态',
         '负责人', '工号', '预估工期(天)', '代码行数', '用例数', 'AI辅助(%)', '完成率(%)',
-        '开始日期', '截止日期', '父需求编号', '描述',
+        '开始日期', '截止日期', '父需求编号', '依赖需求', '描述',
     ])
     # Demo row (id=0)
     writer.writerow([
         0, 'REQ-000(选填)', '(自动)', '编码(选填)', '示例需求标题', '项目名称', '高(选填)',
         '待评估(选填)', '张三(选填)', '(自动)', '5(选填)', '1000(选填)', '20(选填)',
         '30(选填)', '60(选填)',
-        '2026-01-01(选填)', '2026-03-31(选填)', '(选填)', '描述(选填) 此行为格式示例，导入时自动跳过',
+        '2026-01-01(选填)', '2026-03-31(选填)', '(选填)', 'REQ-001,REQ-002(选填)',
+        '描述(选填) 此行为格式示例，导入时自动跳过',
     ])
     for r in reqs:
         assignee_eid = r.assignee.employee_id if r.assignee else ''
@@ -970,6 +971,7 @@ def export_csv():
             r.start_date.isoformat() if r.start_date else '',
             r.due_date.isoformat() if r.due_date else '',
             r.parent.number if r.parent else '',
+            ','.join(d.number for d in r.dependencies) if r.dependencies else '',
             r.description or '',
         ])
 
@@ -1174,7 +1176,7 @@ def import_csv():
 
     db.session.flush()  # Get IDs for parent linking
 
-    # Second pass: link parent requirements
+    # Second pass: link parent requirements and dependencies
     reader2 = csv.DictReader(io.StringIO(text))
     for row in reader2:
         number = (row.get('需求编号') or '').strip()
@@ -1185,6 +1187,19 @@ def import_csv():
                      Requirement.query.filter_by(number=parent_number).first()
             if req and parent:
                 req.parent_id = parent.id
+        # Dependencies
+        dep_str = (row.get('依赖需求') or '').strip()
+        if number and dep_str:
+            req = number_to_req.get(number)
+            if req:
+                for dep_num in dep_str.split(','):
+                    dep_num = dep_num.strip()
+                    if not dep_num:
+                        continue
+                    dep = number_to_req.get(dep_num) or \
+                          Requirement.query.filter_by(number=dep_num).first()
+                    if dep and dep not in req.dependencies and dep.id != req.id:
+                        req.dependencies.append(dep)
 
     db.session.commit()
     msg = f'导入成功，新建 {len(created)} 条需求'

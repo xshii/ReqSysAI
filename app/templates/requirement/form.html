@@ -91,6 +91,24 @@
                         </div>
                         <div id="subReqs"></div>
                     </div>
+                    {% if req and req.id %}
+                    <div class="mb-3">
+                        <label class="form-label mb-0">依赖关系</label>
+                        <div id="depList" class="mb-1">
+                        {% for d in req.dependencies %}
+                            <div class="d-flex align-items-center gap-2 mb-1" id="dep-{{ d.id }}">
+                                <span class="badge bg-{{ d.status_color }}" style="font-size:.7em;">{{ d.status_label }}</span>
+                                <span class="small">{{ d.number }} {{ d.title }}</span>
+                                <button type="button" class="btn btn-link btn-sm text-muted p-0" style="font-size:.7em;" onclick="removeDep({{ d.id }})" title="移除"><i class="bi bi-x-lg"></i></button>
+                            </div>
+                        {% endfor %}
+                        </div>
+                        <div class="input-group input-group-sm" style="max-width:100%;">
+                            <input type="text" id="depSearch" class="form-control" placeholder="搜索需求编号或标题添加依赖..." autocomplete="off">
+                        </div>
+                        <div id="depResults" class="list-group small" style="max-height:200px;overflow-y:auto;"></div>
+                    </div>
+                    {% endif %}
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> {{ form.submit.label.text }}</button>
                         {% if ai_enabled %}<button type="button" class="btn btn-outline-info" id="btnQualityCheck" onclick="qualityCheck()"><i class="bi bi-shield-check"></i> AI 质量检查</button>{% endif %}
@@ -383,5 +401,74 @@ function qualityCheck() {
         btn.innerHTML = '<i class="bi bi-shield-check"></i> AI 质量检查';
     });
 }
+
+{% if req and req.id %}
+// --- Dependency management ---
+(function() {
+    var depTimer = null;
+    var depInput = document.getElementById('depSearch');
+    var depResults = document.getElementById('depResults');
+    if (!depInput) return;
+
+    depInput.addEventListener('input', function() {
+        clearTimeout(depTimer);
+        var q = this.value.trim();
+        if (q.length < 1) { depResults.innerHTML = ''; return; }
+        depTimer = setTimeout(function() {
+            fetch('/requirements/search-api?q=' + encodeURIComponent(q) + '&project_id={{ req.project_id }}&exclude_id={{ req.id }}')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                depResults.innerHTML = '';
+                (d.results || []).forEach(function(r) {
+                    var item = document.createElement('a');
+                    item.href = '#';
+                    item.className = 'list-group-item list-group-item-action py-1 px-2';
+                    item.innerHTML = '<span class="text-muted">' + r.number + '</span> ' + r.title + ' <span class="badge bg-secondary" style="font-size:.65em;">' + r.status + '</span>';
+                    item.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        addDep(r.id);
+                    });
+                    depResults.appendChild(item);
+                });
+            });
+        }, 300);
+    });
+
+    function addDep(depId) {
+        fetch('/requirements/{{ req.id }}/dependencies', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+            body: JSON.stringify({dep_id: depId})
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (!d.ok) { showToast(d.msg || '添加失败', 'danger'); return; }
+            var dep = d.dep;
+            var row = document.createElement('div');
+            row.className = 'd-flex align-items-center gap-2 mb-1';
+            row.id = 'dep-' + dep.id;
+            row.innerHTML = '<span class="badge bg-' + dep.color + '" style="font-size:.7em;">' + dep.status + '</span>'
+                + '<span class="small">' + dep.number + ' ' + dep.title + '</span>'
+                + '<button type="button" class="btn btn-link btn-sm text-muted p-0" style="font-size:.7em;" onclick="removeDep(' + dep.id + ')" title="移除"><i class="bi bi-x-lg"></i></button>';
+            document.getElementById('depList').appendChild(row);
+            depInput.value = '';
+            depResults.innerHTML = '';
+            showToast('依赖已添加', 'success');
+        });
+    }
+
+    window.removeDep = function(depId) {
+        if (!confirm('移除该依赖？')) return;
+        fetch('/requirements/{{ req.id }}/dependencies/' + depId, {
+            method: 'DELETE',
+            headers: {'X-CSRFToken': csrfToken}
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.ok) {
+                var el = document.getElementById('dep-' + depId);
+                if (el) el.remove();
+                showToast('依赖已移除', 'success');
+            }
+        });
+    };
+})();
+{% endif %}
 </script>
 {% endblock %}
