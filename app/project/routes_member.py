@@ -81,7 +81,10 @@ def member_export_csv(project_id):
     project = db.get_or_404(Project, project_id)
     members = ProjectMember.query.filter_by(project_id=project_id).all()
 
+    from datetime import date as _date
+
     output = io.StringIO()
+    output.write('\ufeff')  # BOM for Excel
     writer = csv.writer(output)
     writer.writerow(['id', '姓名', '工号', '角色'])
     # Demo row (id=0)
@@ -92,11 +95,11 @@ def member_export_csv(project_id):
         else:
             writer.writerow([m.id, m.external_name or '', m.external_eid or '', m.project_role])
 
-    resp = make_response(output.getvalue())
-    resp.headers['Content-Type'] = 'text/csv; charset=utf-8-sig'
+    from flask import Response
     from urllib.parse import quote
-    resp.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{quote(project.name + '_members.csv')}"
-    return resp
+    fname = f"{project.name}_项目成员_{_date.today().strftime('%Y%m%d')}.csv"
+    return Response(output.getvalue(), mimetype='text/csv; charset=utf-8',
+                    headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(fname)}"})
 
 
 @project_bp.route('/<int:project_id>/members/import-csv', methods=['POST'])

@@ -12,6 +12,10 @@
            href="{{ url_for('admin.ai_prompt_list') }}">提示词管理</a>
     </li>
     <li class="nav-item">
+        <a class="nav-link {% if request.endpoint and 'site_settings' in request.endpoint %}active{% endif %}"
+           href="{{ url_for('admin.site_settings') }}">站点设置</a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link {% if request.endpoint == 'admin.audit_logs' %}active{% endif %}"
            href="{{ url_for('admin.audit_logs') }}">审计日志</a>
     </li>

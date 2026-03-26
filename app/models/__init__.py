@@ -13,6 +13,7 @@ from app.models.rant import Rant  # noqa: F401
 from app.models.recurring_completion import RecurringCompletion  # noqa: F401
 from app.models.recurring_todo import RecurringTodo  # noqa: F401
 from app.models.report import PersonalWeekly, WeeklyReport  # noqa: F401
+from app.models.site_setting import SiteSetting  # noqa: F401
 from app.models.requirement import Activity, Comment, Requirement  # noqa: F401
 from app.models.risk import Risk  # noqa: F401
 from app.models.todo import Todo, TodoItem  # noqa: F401

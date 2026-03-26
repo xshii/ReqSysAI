@@ -1017,7 +1017,7 @@ function _updateProgress() {
     if (bar) bar.style.background = barColor;
     // Update page title
     var remaining = _todoTotal - _todoDone;
-    document.title = (remaining > 0 ? '(' + remaining + ') ' : '') + '首页 - 研发协作平台';
+    document.title = (remaining > 0 ? '(' + remaining + ') ' : '') + '首页 - {{ site_name }}';
 }
 
 // Shared todo row JS (toggle, delete, timer, block)

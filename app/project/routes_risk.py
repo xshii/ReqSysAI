@@ -194,8 +194,11 @@ def risk_export_csv(project_id):
         writer.writerow([r.id, r.title, r.severity_label, r.status_label,
             r.owner or '', r.tracker.name if r.tracker else '',
             r.due_date.isoformat() if r.due_date else '', r.resolution or '', r.description or '', comments])
+    from urllib.parse import quote
+    p = db.session.get(Project, project_id)
+    fname = f"{p.name}_风险问题_{date.today().strftime('%Y%m%d')}.csv"
     return Response(buf.getvalue(), mimetype='text/csv; charset=utf-8',
-                    headers={'Content-Disposition': 'attachment; filename=risks.csv'})
+                    headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(fname)}"})
 
 
 @project_bp.route('/<int:project_id>/risks/import-csv', methods=['POST'])

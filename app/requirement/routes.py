@@ -551,9 +551,16 @@ def export_csv():
             r.description or '',
         ])
 
+    from urllib.parse import quote
+    prefix = ''
+    if project_id:
+        p = db.session.get(Project, project_id)
+        if p:
+            prefix = p.name + '_'
+    fname = f"{prefix}需求列表_{date.today().strftime('%Y%m%d')}.csv"
     return Response(
         buf.getvalue(), mimetype='text/csv; charset=utf-8',
-        headers={'Content-Disposition': 'attachment; filename=requirements.csv'},
+        headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(fname)}"},
     )
 
 

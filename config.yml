@@ -1,4 +1,5 @@
 app:
+  site_name: 研发协作平台              # 平台名称，显示在标题栏和导出文件中
   secret_key: dev-only-key          # 生产环境务必修改
   database_url: sqlite:///instance/reqsys.db   # 集中放在 instance/ 目录，不随代码覆盖
   session_timeout: 600              # 秒

@@ -10,7 +10,7 @@ from flask_login import current_user
 
 logger = logging.getLogger(__name__)
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from app.admin import admin_bp
 from app.admin.forms import UserCreateForm, UserEditForm
@@ -383,10 +383,14 @@ def group_export_csv():
         role_names = ';'.join(r.name for r in u.roles if r.name not in hidden)
         writer.writerow([u.id, u.name, u.employee_id, u.group or '', role_names, u.manager or '', u.domain or ''])
 
+    from urllib.parse import quote
+    from app.constants import DEFAULT_SITE_NAME
+    site = current_app.config.get('SITE_NAME', DEFAULT_SITE_NAME)
+    fname = f"{site}_团队成员_{date.today().strftime('%Y%m%d')}.csv"
     return Response(
         buf.getvalue(),
         mimetype='text/csv; charset=utf-8',
-        headers={'Content-Disposition': 'attachment; filename=teams.csv'},
+        headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(fname)}"},
     )
 
 
@@ -812,6 +816,30 @@ def ai_test_one():
         return jsonify(ok=True, reply=reply, time=f'{elapsed}s')
     except Exception as e:
         return jsonify(ok=False, error=str(e)[:200])
+
+
+@admin_bp.route('/site-settings')
+@admin_required
+def site_settings():
+    from app.models.site_setting import SiteSetting
+    from app.constants import DEFAULT_SITE_NAME
+    site_name = SiteSetting.get('site_name', current_app.config.get('SITE_NAME', DEFAULT_SITE_NAME))
+    return render_template('admin/site_settings.html', current_site_name=site_name)
+
+
+@admin_bp.route('/site-settings/save', methods=['POST'])
+@admin_required
+def site_settings_save():
+    from app.models.site_setting import SiteSetting
+    new_name = request.form.get('site_name', '').strip()
+    if not new_name:
+        flash('站点名称不能为空', 'danger')
+        return redirect(url_for('admin.site_settings'))
+    SiteSetting.set('site_name', new_name)
+    # Also update runtime config so CSV exports etc. pick it up immediately
+    current_app.config['SITE_NAME'] = new_name
+    flash('站点名称已更新', 'success')
+    return redirect(url_for('admin.site_settings'))
 
 
 @admin_bp.route('/audit-logs')

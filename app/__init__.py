@@ -114,12 +114,25 @@ def create_app(config_name=None):
                         sidebar_projects=projects, sidebar_followed_ids=followed_ids,
                         notif_count=notif_count,
                         ai_enabled=app.config.get('AI_ENABLED', True),
-                        site_name=app.config.get('SITE_NAME', '研发协作平台'))
+                        site_name=_get_site_name(app))
         return dict(sidebar_groups=[], sidebar_cur_group='', sidebar_projects=[],
                     sidebar_followed_ids=set(), notif_count=0,
-                    site_name=app.config.get('SITE_NAME', '研发协作平台'))
+                    site_name=_get_site_name(app))
 
     return app
+
+
+def _get_site_name(app):
+    """Read site_name from DB (SiteSetting) first, fallback to config."""
+    try:
+        from app.models.site_setting import SiteSetting
+        val = SiteSetting.get('site_name')
+        if val:
+            return val
+    except Exception:
+        pass
+    from app.constants import DEFAULT_SITE_NAME
+    return app.config.get('SITE_NAME', DEFAULT_SITE_NAME)
 
 
 def _register_error_handlers(app):

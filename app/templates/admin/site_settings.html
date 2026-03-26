@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}后台管理 - 站点设置 - {{ site_name }}{% endblock %}
+
+{% block content %}
+{% include "admin/_tabs.html" %}
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header py-2"><strong>站点名称</strong></div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin.site_settings_save') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label class="form-label">平台名称</label>
+                        <input type="text" class="form-control" name="site_name"
+                               value="{{ current_site_name }}" maxlength="50" required>
+                        <div class="form-text">显示在浏览器标题栏、导出文件名等位置</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">保存</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

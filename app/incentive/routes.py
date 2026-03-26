@@ -300,8 +300,13 @@ def export_csv():
                 if name:
                     writer.writerow(common + [name, '', ''] + tail)
 
+    from urllib.parse import quote
+    from flask import current_app
+    from app.constants import DEFAULT_SITE_NAME
+    site = current_app.config.get('SITE_NAME', DEFAULT_SITE_NAME)
+    fname = f"{site}_激励记录_{date.today().strftime('%Y%m%d')}.csv"
     return Response(buf.getvalue(), mimetype='text/csv; charset=utf-8',
-                    headers={'Content-Disposition': 'attachment; filename=incentives.csv'})
+                    headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(fname)}"})
 
 
 @incentive_bp.route('/import-csv', methods=['POST'])
@@ -1103,8 +1108,13 @@ def fund_export_csv():
             f.note or '',
             used, month_used, pct,
         ])
+    from urllib.parse import quote
+    from flask import current_app as _ca
+    from app.constants import DEFAULT_SITE_NAME
+    site = _ca.config.get('SITE_NAME', DEFAULT_SITE_NAME)
+    fname = f"{site}_资金池_{date.today().strftime('%Y%m%d')}.csv"
     return Response(buf.getvalue(), mimetype='text/csv; charset=utf-8',
-                    headers={'Content-Disposition': 'attachment; filename=incentive_funds.csv'})
+                    headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(fname)}"})
 
 
 @incentive_bp.route('/funds/add-source', methods=['POST'])
