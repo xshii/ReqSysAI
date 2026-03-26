@@ -62,6 +62,28 @@ def user_create():
     form = UserCreateForm()
     form.role_ids.choices = [(r.id, r.name) for r in Role.query.order_by(Role.id).all()]
 
+    # Parse combined "姓名 工号" field
+    if request.method == 'POST':
+        import re
+        from app.constants import EID_FULL_RE, EID_NUM_RE
+        name_eid = request.form.get('name_eid', '').strip()
+        if name_eid:
+            parts = name_eid.rsplit(' ', 1)
+            if len(parts) == 2 and re.match(EID_FULL_RE, parts[1]):
+                form.name.data = parts[0].strip()
+                form.employee_id.data = parts[1].strip()
+            elif len(parts) == 2 and re.match(EID_NUM_RE, parts[1]):
+                from app.utils.pinyin import pinyin_initial
+                prefix = pinyin_initial(parts[0].strip())
+                form.name.data = parts[0].strip()
+                form.employee_id.data = (prefix + parts[1].strip()) if prefix else parts[1].strip()
+            else:
+                flash('请输入 姓名 工号，如 张三 a00123456', 'danger')
+                return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title='创建用户')
+        else:
+            form.name.data = ''
+            form.employee_id.data = ''
+
     if form.validate_on_submit():
         if form.ip_address.data and User.query.filter_by(ip_address=form.ip_address.data).first():
             flash('该 IP 已被绑定', 'danger')
@@ -102,6 +124,25 @@ def user_edit(user_id):
     form.role_ids.choices = [(r.id, r.name) for r in Role.query.order_by(Role.id).all()]
     if not form.is_submitted():
         form.role_ids.data = [r.id for r in user.roles]
+
+    # Parse combined "姓名 工号" field
+    if request.method == 'POST':
+        import re
+        from app.constants import EID_FULL_RE, EID_NUM_RE
+        name_eid = request.form.get('name_eid', '').strip()
+        if name_eid:
+            parts = name_eid.rsplit(' ', 1)
+            if len(parts) == 2 and re.match(EID_FULL_RE, parts[1]):
+                form.name.data = parts[0].strip()
+                form.employee_id.data = parts[1].strip()
+            elif len(parts) == 2 and re.match(EID_NUM_RE, parts[1]):
+                from app.utils.pinyin import pinyin_initial
+                prefix = pinyin_initial(parts[0].strip())
+                form.name.data = parts[0].strip()
+                form.employee_id.data = (prefix + parts[1].strip()) if prefix else parts[1].strip()
+            else:
+                flash('请输入 姓名 工号，如 张三 a00123456', 'danger')
+                return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title=f'编辑用户 - {user.name}', user=user)
 
     if form.validate_on_submit():
         existing = User.query.filter(

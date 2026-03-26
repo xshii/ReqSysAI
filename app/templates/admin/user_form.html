@@ -19,15 +19,11 @@
                 <form method="POST">
                     {{ form.hidden_tag() }}
                     <div class="mb-3">
-                        <label class="form-label">{{ form.employee_id.label.text }}</label>
-                        {{ form.employee_id(class="form-control", placeholder="例如: a00123456") }}
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ form.name.label.text }}</label>
-                        {{ form.name(class="form-control") }}
-                        {% for error in form.name.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
+                        <label class="form-label">姓名 工号</label>
+                        {% set _name_eid = (form.name.data or '') ~ ' ' ~ (form.employee_id.data or '') if form.employee_id.data else (form.name.data or '') %}
+                        <input type="text" name="name_eid" class="form-control" value="{{ _name_eid|trim }}" placeholder="如：张三 a00123456">
+                        {% for error in form.name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                        {% for error in form.employee_id.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
                     </div>
                     <div class="mb-3">
                         <label class="form-label">{{ form.ip_address.label.text }}</label>
