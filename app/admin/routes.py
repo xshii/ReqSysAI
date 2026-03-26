@@ -370,7 +370,6 @@ def group_action():
 @admin_required
 def group_export_csv():
     """Export all active members as CSV."""
-    hidden = set(current_app.config.get('HIDDEN_ROLES', []) + ['Admin'])
     users = User.query.filter_by(is_active=True)\
         .order_by(User.group, User.name).all()
 
@@ -378,9 +377,9 @@ def group_export_csv():
     buf.write('\ufeff')  # BOM for Excel
     writer = csv.writer(buf)
     writer.writerow(['ID', '姓名', '工号', '小组', '角色', '主管', '业务领域'])
-    writer.writerow([0, '张三', 'a00123456', '研发一组(选填)', 'DE;TE(选填)', '李四 b00234567(选填)', '支付(选填) 此行为格式示例，导入时自动跳过'])
+    writer.writerow([0, '张三', 'a00123456', '研发一组(选填)', 'DE;TE;PL(选填)', '李四 b00234567(选填)', '支付(选填) 此行为格式示例，导入时自动跳过'])
     for u in users:
-        role_names = ';'.join(r.name for r in u.roles if r.name not in hidden)
+        role_names = ';'.join(r.name for r in u.roles if r.name != 'Admin')
         writer.writerow([u.id, u.name, u.employee_id, u.group or '', role_names, u.manager or '', u.domain or ''])
 
     from urllib.parse import quote
