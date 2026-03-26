@@ -107,8 +107,7 @@ def index():
     my_risks = Risk.query.filter(
         Risk.status == 'open',
         Risk.deleted_at.is_(None),
-        db.or_(Risk.tracker_id == current_user.id, Risk.created_by == current_user.id,
-               Risk.owner_id == current_user.id),
+        db.or_(Risk.tracker_id == current_user.id, Risk.owner_id == current_user.id),
     ).order_by(
         db.case((Risk.due_date < today, 0), (Risk.due_date == today, 1), else_=2),
         db.case({'high': 0, 'medium': 1, 'low': 2}, value=Risk.severity),
