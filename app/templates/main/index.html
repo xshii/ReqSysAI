@@ -442,8 +442,9 @@ checkHelpAlert();
             <div class="card-body py-2">
             {% for r in my_risks %}
                 <div class="d-flex justify-content-between align-items-center small mb-1">
-                    <a href="{{ url_for('project.risk_list', project_id=r.project_id) }}" class="text-decoration-none text-dark">{{ r.title }}</a>
-                    <span>
+                    <a href="{{ url_for('project.risk_list', project_id=r.project_id) }}" class="text-decoration-none text-dark flex-grow-1 text-truncate">{{ r.title }}</a>
+                    <span class="flex-shrink-0 d-flex align-items-center gap-1">
+                        <button class="btn btn-outline-danger py-0 px-1 border-0 btn-risk-todo" data-title="{{ r.title }}" style="font-size:.65em;" title="添加到今日风险Todo"><i class="bi bi-plus-circle"></i></button>
                         <span class="badge bg-{{ r.severity_color }}" style="font-size:.7em;">{{ r.severity_label }}</span>
                         {% if r.is_overdue %}<span class="badge bg-danger" style="font-size:.7em;">超期</span>{% endif %}
                         <span class="text-muted">{{ r.due_date.strftime('%m-%d') if r.due_date else '' }}</span>
@@ -754,6 +755,25 @@ document.getElementById('btnAdoptAll').addEventListener('click', function() {
         }
         btn.disabled = false;
         btn.textContent = '全部采纳';
+    });
+});
+
+// Risk → Todo one-click
+document.querySelectorAll('.btn-risk-todo').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var title = btn.dataset.title;
+        apiPost('{{ url_for("main.quick_todo") }}', {title: title, category: 'risk'}).then(function(d) {
+            if (d && d.ok) {
+                var listEl = document.querySelector('.todo-list-for-req[data-req-id="risk"]');
+                if (listEl) listEl.appendChild(createTodoRow(d.todo_id, title, {}));
+                btn.classList.remove('btn-outline-danger');
+                btn.classList.add('btn-success');
+                btn.innerHTML = '<i class="bi bi-check"></i>';
+                btn.disabled = true;
+                _todoTotal++; _updateProgress();
+                showToast(title + ' 已添加到风险Todo', 'success');
+            }
+        });
     });
 });
 
