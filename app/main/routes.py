@@ -718,7 +718,7 @@ def api_add_personnel():
     user = User(
         employee_id=eid,
         name=name,
-        ip_address='',
+        ip_address=f'pending-{eid}',
         pinyin=to_pinyin(name),
         group=group,
         domain=domain,
