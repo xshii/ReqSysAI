@@ -480,7 +480,7 @@
             if (icon) icon.className = open ? 'bi bi-eye' : 'bi bi-eye-slash';
             if (btn) { btn.className = 'btn btn-sm border-0'; btn.style.fontSize = '.85em'; btn.style.opacity = open ? '1' : '.4'; btn.style.color = open ? '#ffc107' : '#fff'; }
             // Sync to cookie so server can filter hidden projects
-            document.cookie = 'mgr_view=' + (open ? '1' : '0') + ';path=/;max-age=86400';
+            document.cookie = 'mgr_view=' + (open ? '1' : '0') + ';path=/;max-age=86400;SameSite=Lax';
         }
 
         function getSavedPwd() { return localStorage.getItem(MGR_PWD_KEY) || ''; }

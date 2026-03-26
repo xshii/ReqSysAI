@@ -117,7 +117,7 @@
                 {% if r.status == 'open' %}
                 <button class="btn btn-sm btn-outline-primary py-0" data-bs-toggle="modal" data-bs-target="#editRiskModal"
                         data-desc="{{ r.description or '' }}"
-                        onclick="setEditRisk({{ r.id }}, '{{ r.title }}', '{{ r.severity }}', '{{ r.owner or '' }}', '{{ r.owner or '' }}', '{{ r.tracker_display }}', '{{ r.tracker_display }}', '{{ r.due_date.strftime('%Y-%m-%d') if r.due_date else '' }}', '{{ r.created_at.strftime('%Y-%m-%d') if r.created_at else '' }}', '{{ r.domain_display }}', this.dataset.desc)" title="编辑"><i class="bi bi-pencil"></i></button>
+                        onclick="setEditRisk({{ r.id }}, '{{ r.title }}', '{{ r.severity }}', '{{ r.owner or '' }}', '{{ r.tracker_display }}', '{{ r.due_date.strftime('%Y-%m-%d') if r.due_date else '' }}', '{{ r.created_at.strftime('%Y-%m-%d') if r.created_at else '' }}', '{{ r.domain_display }}', this.dataset.desc)" title="编辑"><i class="bi bi-pencil"></i></button>
                 <button class="btn btn-sm btn-outline-success py-0" data-bs-toggle="modal" data-bs-target="#resolveModal" onclick="setResolveId({{ r.id }})">解决</button>
                 {% elif r.status == 'resolved' %}
                 <form method="POST" action="{{ url_for('project.risk_close', risk_id=r.id) }}" class="d-inline">
@@ -602,7 +602,7 @@ function setResolveId(id) {
     document.getElementById('resolveForm').action = '/projects/risks/' + id + '/resolve';
 }
 
-function setEditRisk(id, title, severity, owner, ownerName, trackerId, trackerName, dueDate, createdAt, domain, desc) {
+function setEditRisk(id, title, severity, ownerName, trackerName, dueDate, createdAt, domain, desc) {
     document.getElementById('editRiskForm').action = '/projects/risks/' + id + '/edit';
     document.getElementById('editRiskTitle').value = title;
     document.getElementById('editRiskDesc').value = desc || '';

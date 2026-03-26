@@ -46,7 +46,7 @@ class _TolerantDate(types.TypeDecorator):
     cache_ok = True
 
     def process_bind_param(self, value, dialect):
-        if value is None or isinstance(value, _date) and not isinstance(value, _dt):
+        if value is None or (isinstance(value, _date) and not isinstance(value, _dt)):
             return value
         if isinstance(value, _dt):
             return value.date()
@@ -58,7 +58,7 @@ class _TolerantDate(types.TypeDecorator):
         return value
 
     def process_result_value(self, value, dialect):
-        if value is None or isinstance(value, _date) and not isinstance(value, _dt):
+        if value is None or (isinstance(value, _date) and not isinstance(value, _dt)):
             return value
         if isinstance(value, _dt):
             return value.date()
