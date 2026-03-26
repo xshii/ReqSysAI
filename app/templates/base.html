@@ -293,7 +293,8 @@
                         </div>
                         <div class="mb-2">
                             <label class="form-label mb-0 small">主管</label>
-                            <input type="text" id="ap_manager" class="form-control form-control-sm" placeholder="姓名 工号（可选）">
+                            <input type="text" id="ap_manager" class="form-control form-control-sm" placeholder="如：张三 a00123456">
+                            <div class="form-text" style="font-size:.75em;">格式：姓名 工号，如填写则必须包含空格分隔的姓名和工号</div>
                         </div>
                     </form>
                     <div id="apErrorMsg" class="text-danger small mt-1" style="display:none;"></div>
@@ -515,6 +516,10 @@
         }
         if (!domain) {
             errEl.textContent = '请填写业务领域';
+            errEl.style.display = 'block'; return;
+        }
+        if (manager && !/^\S+\s+[a-z]\d?00\d{6}$/.test(manager)) {
+            errEl.textContent = '主管格式错误，请按"姓名 工号"填写，如：张三 a00123456';
             errEl.style.display = 'block'; return;
         }
 
