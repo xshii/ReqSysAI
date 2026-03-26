@@ -174,13 +174,25 @@ def compute_personal_recipients(user):
     """Compute To/Cc for a personal weekly report.
 
     To: the user's own employee_id
-    Cc: the user's manager
+    Cc: manager + all active members in same group
     """
+    from app.models.user import User
+
     to_eid = user.employee_id or ''
-    cc_eid = ''
+    cc_set = set()
+
+    # Add manager
     if user.manager:
         parts = user.manager.strip().split()
         mgr_eid = parts[-1] if len(parts) > 1 else parts[0]
         if mgr_eid and mgr_eid != to_eid:
-            cc_eid = mgr_eid
-    return to_eid, cc_eid
+            cc_set.add(mgr_eid)
+
+    # Add same-group members
+    if user.group:
+        group_members = User.query.filter_by(group=user.group, is_active=True).all()
+        for m in group_members:
+            if m.employee_id and m.employee_id != to_eid:
+                cc_set.add(m.employee_id)
+
+    return to_eid, ';'.join(sorted(cc_set))

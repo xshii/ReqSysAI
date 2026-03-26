@@ -214,6 +214,8 @@ def gather_week_stats(monday, sunday, group=None, project_id=None):
                 user_project_days[(uid, pid)] += share
 
     project_ids = set(pid for (_, pid) in user_project_days)
+    if project_id:
+        project_ids = {pid for pid in project_ids if pid == project_id}
     projects = {p.id: p for p in Project.query.filter(Project.id.in_(project_ids)).all()} if project_ids else {}
 
     project_investment = []

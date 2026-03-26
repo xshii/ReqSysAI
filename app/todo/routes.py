@@ -56,9 +56,39 @@ def edit(todo_id):
     data = request.get_json()
     if not data:
         return jsonify(ok=False), 400
+    # Accept help request: due_date change without title means acceptance
+    if 'due_date' in data and 'title' not in data:
+        todo.due_date = date.fromisoformat(data['due_date']) if data['due_date'] else None
+        if todo.source == 'help' and todo.parent_id:
+            todo.source = 'help_accepted'
+            from app.services.notify import notify
+            parent = db.session.get(Todo, todo.parent_id)
+            if parent:
+                days = (todo.due_date - date.today()).days if todo.due_date else 0
+                when = '今天' if days <= 0 else (f'{days}天内')
+                notify(parent.user_id, 'help',
+                       f'{current_user.name} 接纳了你的求助「{todo.title}」，预计{when}完成', '')
+        db.session.commit()
+        return jsonify(ok=True)
+
     title = (data.get('title') or '').strip()
+    comment = (data.get('comment') or '').strip()
     if not title:
-        # Recursively delete all descendants (children, grandchildren, etc.)
+        # Reject help request: mark as rejected instead of deleting
+        if comment and todo.parent_id and todo.source == 'help':
+            todo.source = 'rejected'
+            todo.blocked_reason = comment
+            todo.status = 'done'
+            todo.done_date = date.today()
+            from app.services.notify import notify
+            parent = db.session.get(Todo, todo.parent_id)
+            if parent:
+                notify(parent.user_id, 'help',
+                       f'{current_user.name} 暂缓了你的求助「{todo.title}」：{comment}',
+                       '')
+            db.session.commit()
+            return jsonify(ok=True, rejected=True)
+        # Normal delete: recursively delete all descendants
         def _delete_descendants(parent_id):
             children = Todo.query.filter_by(parent_id=parent_id).all()
             for child in children:

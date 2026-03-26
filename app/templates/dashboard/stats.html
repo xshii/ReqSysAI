@@ -25,11 +25,11 @@
 {% if groups %}
 <ul class="nav nav-tabs mb-4">
     <li class="nav-item">
-        <a class="nav-link {% if not cur_group %}active{% endif %}" href="?week={{ offset }}&group=">全部</a>
+        <a class="nav-link {% if not cur_group %}active{% endif %}" href="?week={{ offset }}&group=&project_id={{ cur_project_id }}">全部</a>
     </li>
     {% for g in groups %}
     <li class="nav-item">
-        <a class="nav-link {% if cur_group == g %}active{% endif %}" href="?week={{ offset }}&group={{ g }}">{{ g }}</a>
+        <a class="nav-link {% if cur_group == g %}active{% endif %}" href="?week={{ offset }}&group={{ g }}&project_id={{ cur_project_id }}">{{ g }}</a>
     </li>
     {% endfor %}
 </ul>

@@ -1255,6 +1255,20 @@ def my_weekly():
     total_focus = sum(t.actual_minutes or 0 for t in my_done)
     reviewer_name = get_reviewer(current_user)
 
+    # User's open risks (assigned as owner or tracker)
+    from app.models.risk import Risk
+    my_open_risks = Risk.query.filter(
+        Risk.deleted_at.is_(None), Risk.status == 'open',
+        db.or_(Risk.owner_id == current_user.id, Risk.tracker_id == current_user.id),
+    ).order_by(Risk.due_date).all()
+
+    # User's open requirements (assigned to me, not done/closed)
+    from app.models.requirement import Requirement
+    my_open_reqs = Requirement.query.filter(
+        Requirement.assignee_id == current_user.id,
+        Requirement.status.notin_(['done', 'closed']),
+    ).order_by(Requirement.due_date).all()
+
     from app.utils.recipients import compute_personal_recipients
     _def_to, _def_cc = compute_personal_recipients(current_user)
 
@@ -1263,6 +1277,7 @@ def my_weekly():
         req_days=req_days, report=report, ai_report=ai_report,
         overdue_todos=overdue_todos, blocked_todos=blocked_todos,
         total_focus_min=total_focus, reviewer=reviewer_name,
+        my_open_risks=my_open_risks, my_open_reqs=my_open_reqs,
         today=date.today(),
         monday=monday, sunday=sunday, offset=offset,
         default_to=_def_to, default_cc=_def_cc,

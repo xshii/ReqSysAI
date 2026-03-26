@@ -31,43 +31,18 @@
     </div>
 </div>
 
-<!-- Filters -->
-<div class="d-flex gap-2 mb-3">
-    <a href="?status=&severity=" class="btn btn-sm {% if not cur_status and not cur_severity %}btn-primary{% else %}btn-outline-secondary{% endif %}">全部</a>
-    <a href="?status=open" class="btn btn-sm {% if cur_status == 'open' %}btn-danger{% else %}btn-outline-danger{% endif %}">未解决</a>
-    <a href="?status=resolved" class="btn btn-sm {% if cur_status == 'resolved' %}btn-success{% else %}btn-outline-success{% endif %}">已解决</a>
+<!-- Filters + Stats (merged) -->
+<div class="d-flex gap-2 mb-3 flex-wrap align-items-center" id="riskStats">
+    <a href="?status=&severity=" class="btn btn-sm {% if not cur_status and not cur_severity %}btn-primary{% else %}btn-outline-secondary{% endif %}">全部 <span class="badge bg-light text-dark">{{ risk_stats.total }}</span></a>
+    <a href="?status=open" class="btn btn-sm {% if cur_status == 'open' %}btn-danger{% else %}btn-outline-danger{% endif %}">未解决 <span class="badge {{ 'bg-light text-danger' if cur_status == 'open' else 'bg-danger' }}">{{ risk_stats.open }}</span></a>
+    <a href="?overdue=1" class="btn btn-sm {% if cur_overdue %}btn-danger{% else %}btn-outline-danger{% endif %}" title="超期未解决">超期 <span class="badge {{ 'bg-light text-danger' if cur_overdue else 'bg-danger' }}">{{ risk_stats.overdue }}</span></a>
+    <a href="?status=resolved" class="btn btn-sm {% if cur_status == 'resolved' %}btn-success{% else %}btn-outline-success{% endif %}">已解决 <span class="badge {{ 'bg-light text-success' if cur_status == 'resolved' else 'bg-success' }}">{{ risk_stats.resolved }}</span></a>
+    <a href="?status=closed" class="btn btn-sm {% if cur_status == 'closed' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">已关闭 <span class="badge {{ 'bg-light text-secondary' if cur_status == 'closed' else 'bg-secondary' }}">{{ risk_stats.closed }}</span></a>
     <span class="border-start ms-1 ps-2"></span>
-    <a href="?severity=high" class="btn btn-sm {% if cur_severity == 'high' %}btn-danger{% else %}btn-outline-danger{% endif %}">高</a>
-    <a href="?severity=medium" class="btn btn-sm {% if cur_severity == 'medium' %}btn-warning{% else %}btn-outline-warning{% endif %}">中</a>
-    <a href="?severity=low" class="btn btn-sm {% if cur_severity == 'low' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">低</a>
-</div>
+    <a href="?severity=high" class="btn btn-sm {% if cur_severity == 'high' %}btn-danger{% else %}btn-outline-danger{% endif %}">高 <span class="badge {{ 'bg-light text-danger' if cur_severity == 'high' else 'bg-danger' }}">{{ risk_stats.high }}/{{ risk_stats.high_total }}</span></a>
+    <a href="?severity=medium" class="btn btn-sm {% if cur_severity == 'medium' %}btn-warning{% else %}btn-outline-warning{% endif %}">中 <span class="badge {{ 'bg-light text-warning' if cur_severity == 'medium' else 'bg-warning' }}">{{ risk_stats.medium }}/{{ risk_stats.medium_total }}</span></a>
+    <a href="?severity=low" class="btn btn-sm {% if cur_severity == 'low' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">低 <span class="badge {{ 'bg-light text-secondary' if cur_severity == 'low' else 'bg-secondary' }}">{{ risk_stats.low }}/{{ risk_stats.low_total }}</span></a>
 
-<!-- Stats cards -->
-<div class="d-flex gap-2 mb-3 flex-wrap" id="riskStats">
-    <div class="border rounded px-3 py-2 text-center bg-light">
-        <div class="fw-bold" style="font-size:1.3em;">{{ risk_stats.total }}</div>
-        <div class="text-muted small">总计</div>
-    </div>
-    <div class="border rounded px-3 py-2 text-center {{ 'border-danger' if risk_stats.open else '' }}">
-        <div class="fw-bold text-danger" style="font-size:1.3em;">{{ risk_stats.open }}</div>
-        <div class="text-muted small">未解决</div>
-    </div>
-    <div class="border rounded px-3 py-2 text-center {{ 'border-danger' if risk_stats.overdue else '' }}">
-        <div class="fw-bold text-danger" style="font-size:1.3em;">{{ risk_stats.overdue }}</div>
-        <div class="text-muted small">超期</div>
-    </div>
-    <div class="border rounded px-3 py-2 text-center">
-        <div class="fw-bold text-warning" style="font-size:1.3em;">{{ risk_stats.high }}</div>
-        <div class="text-muted small">高危未解决</div>
-    </div>
-    <div class="border rounded px-3 py-2 text-center">
-        <div class="fw-bold text-success" style="font-size:1.3em;">{{ risk_stats.resolved }}</div>
-        <div class="text-muted small">已解决</div>
-    </div>
-    <div class="border rounded px-3 py-2 text-center">
-        <div class="fw-bold text-secondary" style="font-size:1.3em;">{{ risk_stats.closed }}</div>
-        <div class="text-muted small">已关闭</div>
-    </div>
 </div>
 
 {% if domain_stats %}
@@ -366,35 +341,29 @@ function exportRiskEml() {
     rows += '<tr><td style="background:#1e3a5f;color:#fff;text-align:center;padding:18px 24px;font-size:16px;font-weight:700;letter-spacing:2px;">'
         + subject + '</td></tr>';
 
-    // ── To/Cc ──
-    if (to || cc) {
-        var rc = '';
-        if (to) rc += '<b>To:</b> ' + to + '&nbsp;&nbsp;';
-        if (cc) rc += '<b>Cc:</b> ' + cc;
-        rows += '<tr><td style="background:#f0f4f8;padding:6px 20px;font-size:11px;color:#64748b;">' + rc + '</td></tr>';
-    }
+    // To/Cc as plain text block (prepended before the card, easy to copy/delete)
 
     // ── Section: 总体概况 ──
-    var stats = document.getElementById('riskStats');
-    if (stats) {
-        var statsHtml = '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>';
-        stats.querySelectorAll('.border').forEach(function(card) {
-            var num = card.querySelector('.fw-bold');
-            var label = card.querySelector('.small');
-            var color = '#1e3a5f';
-            if (num.classList.contains('text-danger')) color = '#dc3545';
-            else if (num.classList.contains('text-warning')) color = '#e67e22';
-            else if (num.classList.contains('text-success')) color = '#198754';
-            else if (num.classList.contains('text-secondary')) color = '#6c757d';
-            statsHtml += '<td style="text-align:center;padding:14px 6px;' + S + '">'
-                + '<div style="font-size:24px;font-weight:700;color:' + color + ';">' + (num ? num.textContent.trim() : '') + '</div>'
-                + '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + (label ? label.textContent.trim() : '') + '</div></td>';
-        });
-        statsHtml += '</tr></table>';
-        rows += '<tr><td style="padding:16px 20px;">'
-            + '<div style="font-size:13px;font-weight:700;color:#1e3a5f;border-left:4px solid #1e3a5f;padding-left:10px;margin-bottom:10px;">总体概况</div>'
-            + statsHtml + '</td></tr>';
-    }
+    var _stats = [
+        {label:'总计', value:'{{ risk_stats.total }}', color:'#1e3a5f'},
+        {label:'未解决', value:'{{ risk_stats.open }}', color:'#dc3545'},
+        {label:'超期', value:'{{ risk_stats.overdue }}', color:'#dc3545'},
+        {label:'已解决', value:'{{ risk_stats.resolved }}', color:'#198754'},
+        {label:'已关闭', value:'{{ risk_stats.closed }}', color:'#6c757d'},
+        {label:'高', value:'{{ risk_stats.high }}/{{ risk_stats.high_total }}', color:'#dc3545'},
+        {label:'中', value:'{{ risk_stats.medium }}/{{ risk_stats.medium_total }}', color:'#e67e22'},
+        {label:'低', value:'{{ risk_stats.low }}/{{ risk_stats.low_total }}', color:'#6c757d'},
+    ];
+    var statsHtml = '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>';
+    _stats.forEach(function(s) {
+        statsHtml += '<td style="text-align:center;padding:14px 6px;' + S + '">'
+            + '<div style="font-size:24px;font-weight:700;color:' + s.color + ';">' + s.value + '</div>'
+            + '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + s.label + '</div></td>';
+    });
+    statsHtml += '</tr></table>';
+    rows += '<tr><td style="padding:16px 20px;">'
+        + '<div style="font-size:13px;font-weight:700;color:#1e3a5f;border-left:4px solid #1e3a5f;padding-left:10px;margin-bottom:10px;">总体概况</div>'
+        + statsHtml + '</td></tr>';
 
     // ── Section: 各领域风险分布 ──
     var domainStats = document.getElementById('domainStats');
@@ -477,8 +446,17 @@ function exportRiskEml() {
     rows += '<tr><td style="background:#f0f4f8;text-align:center;padding:10px 20px;font-size:11px;color:#94a3b8;">'
         + '{{ project.name }} · 风险通报 · {{ today.strftime("%Y-%m-%d") }}</td></tr>';
 
+    var recipientBlock = '';
+    if (to || cc) {
+        recipientBlock = '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;font-size:12px;color:#64748b;">';
+        if (to) recipientBlock += '<tr><td style="padding:2px 16px;"><b>To:</b> ' + to + '</td></tr>';
+        if (cc) recipientBlock += '<tr><td style="padding:2px 16px;"><b>Cc:</b> ' + cc + '</td></tr>';
+        recipientBlock += '</table>';
+    }
+
     var html = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,Segoe UI,sans-serif;margin:0;padding:0;background:#f5f5f5;">'
         + '<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:20px;">'
+        + recipientBlock
         + '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:800px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;">'
         + rows + '</table></td></tr></table></body></html>';
     var body = html;

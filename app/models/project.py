@@ -7,7 +7,8 @@ class Project(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text)
-    status = db.Column(db.String(20), default='active')  # active / completed / archived
+    status = db.Column(db.String(20), default='active')  # active / completed / archived / closed
+    is_hidden = db.Column(db.Boolean, default=False)  # 仅管理层可见
     parent_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True)
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -20,7 +21,7 @@ class Project(db.Model):
     milestones = db.relationship('Milestone', back_populates='project', cascade='all, delete-orphan')
     requirements = db.relationship('Requirement', back_populates='project', lazy='dynamic')
 
-    STATUS_LABELS = {'active': '进行中', 'completed': '已完成'}
+    STATUS_LABELS = {'active': '进行中', 'completed': '已完成', 'closed': '已关闭'}
 
     @property
     def status_label(self):

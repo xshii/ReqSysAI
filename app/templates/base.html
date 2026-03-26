@@ -117,7 +117,7 @@
                         </a>
                     </li>
                     {% endif %}
-                    <li class="nav-item d-flex align-items-center proj-item {% if _should_hide %}proj-collapsed d-none{% endif %}" style="padding-left:1.2rem;">
+                    <li class="nav-item d-flex align-items-center proj-item {% if _should_hide %}proj-collapsed d-none{% endif %}{% if p.is_hidden %} mgr-only{% endif %}" style="padding-left:1.2rem;">
                         <button class="btn btn-sm p-0 border-0 bg-transparent me-1 follow-btn" data-pid="{{ p.id }}" title="{{ '取消关注' if _is_followed else '关注项目' }}" style="font-size:.65rem;line-height:1;flex-shrink:0;">
                             <i class="bi bi-heart{% if _is_followed %}-fill text-danger{% endif %}"></i>
                         </button>
@@ -129,49 +129,49 @@
                             <i class="bi bi-chevron-{{ 'down' if _p_active else 'right' }}"></i>
                         </a>
                     </li>
-                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}{% if p.is_hidden %} mgr-only{% endif %}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'requirement.requirement_list' and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('requirement.requirement_list') }}?project_id={{ p.id }}">
                             需求列表
                         </a>
                     </li>
-                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}{% if p.is_hidden %} mgr-only{% endif %}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'requirement.requirement_board' and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('requirement.requirement_board') }}?project_id={{ p.id }}">
                             需求看板
                         </a>
                     </li>
-                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}{% if p.is_hidden %} mgr-only{% endif %}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.risk_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('project.risk_list', project_id=p.id) }}">
                             风险问题 {% if p.risks | selectattr('status', 'equalto', 'open') | list | length %}<span class="badge bg-danger rounded-pill" style="font-size:.6rem;">{{ p.risks | selectattr('status', 'equalto', 'open') | list | length }}</span>{% endif %}
                         </a>
                     </li>
-                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}{% if p.is_hidden %} mgr-only{% endif %}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint and 'project.meeting' in request.endpoint and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('project.meeting_list', project_id=p.id) }}">
                             会议纪要
                         </a>
                     </li>
-                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}{% if p.is_hidden %} mgr-only{% endif %}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.knowledge_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('project.knowledge_list', project_id=p.id) }}">
                             知识管理
                         </a>
                     </li>
-                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}{% if p.is_hidden %} mgr-only{% endif %}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'project.permission_list' and _this_project %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('project.permission_list', project_id=p.id) }}">
                             权限申请
                         </a>
                     </li>
-                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}{% if p.is_hidden %} mgr-only{% endif %}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'dashboard.stats' and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('dashboard.stats') }}?project_id={{ p.id }}">
                             统计报表
                         </a>
                     </li>
-                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}">
+                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}{% if p.is_hidden %} mgr-only{% endif %}">
                         <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'dashboard.weekly_report' and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('dashboard.weekly_report') }}?project_id={{ p.id }}">
                             AI 周报
@@ -473,7 +473,7 @@
 
         function applyView(open) {
             document.querySelectorAll('.mgr-only').forEach(function(el) {
-                el.style.display = open ? '' : 'none';
+                if (open) { el.classList.remove('d-none'); } else { el.classList.add('d-none'); }
             });
             var icon = document.getElementById('mgrEyeIcon');
             var btn = document.getElementById('mgrEyeBtn');

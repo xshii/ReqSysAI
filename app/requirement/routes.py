@@ -63,6 +63,10 @@ def requirement_list():
         query = query.filter(
             db.or_(Requirement.title.contains(search), Requirement.description.contains(search))
         )
+    if not current_user.is_team_manager:
+        hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
+        if hidden_pids:
+            query = query.filter(Requirement.project_id.notin_(hidden_pids))
 
     # Sort
     order = {
@@ -378,7 +382,8 @@ def requirement_board():
     return render_template('requirement/board.html',
         board=board, columns=columns, show_sub=show_sub,
         status_meta=Requirement._STATUS_META,
-        projects=Project.query.filter_by(status='active').all(),
+        projects=[p for p in Project.query.filter_by(status='active').all()
+                  if not p.is_hidden or current_user.is_team_manager],
         users=User.query.filter_by(is_active=True).order_by(User.name).all(),
         cur_project=project_id, cur_assignee=assignee_id, swimlane=swimlane,
         today=date.today(),

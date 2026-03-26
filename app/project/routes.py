@@ -28,6 +28,8 @@ def project_list():
     query = Project.query
     if status != 'all':
         query = query.filter_by(status=status)
+    if not current_user.is_team_manager:
+        query = query.filter_by(is_hidden=False)
     projects = query.order_by(Project.created_at.desc()).all()
     return render_template('project/list.html', projects=projects, cur_status=status)
 
@@ -265,12 +267,18 @@ def project_detail(project_id):
             todo_requirements.c.requirement_id.in_(req_ids)
         ).options(joinedload(Todo.user)).order_by(Todo.done_date.desc()).limit(10).all()
 
-    # Generate milestone timeline image
+    # Generate milestone timeline image (fallback to parent milestones for sub-projects)
+    milestones = project.milestones
+    milestone_from_parent = False
+    if not milestones and project.parent_id and project.parent and project.parent.milestones:
+        milestones = project.parent.milestones
+        milestone_from_parent = True
+
     timeline_img = None
-    if project.milestones:
+    if milestones:
         try:
             from app.services.timeline import generate_timeline_image
-            ms_data = [{'name': m.name, 'due_date': m.due_date, 'status': m.status} for m in project.milestones]
+            ms_data = [{'name': m.name, 'due_date': m.due_date, 'status': m.status} for m in milestones]
             timeline_img = generate_timeline_image(ms_data)
         except Exception:  # noqa: S110
             pass
@@ -279,7 +287,8 @@ def project_detail(project_id):
                            reqs=reqs, req_total=req_total, req_done=req_done,
                            req_overdue=req_overdue, open_risks=open_risks,
                            key_members=key_members, recent_done=recent_done,
-                           milestone_color=MILESTONE_COLOR, timeline_img=timeline_img)
+                           milestone_color=MILESTONE_COLOR, timeline_img=timeline_img,
+                           milestone_from_parent=milestone_from_parent)
 
 
 @project_bp.route('/<int:project_id>/follow', methods=['POST'])
@@ -327,6 +336,39 @@ def project_edit(project_id):
                            templates=templates, members=members, available=available,
                            roles=ProjectMember.DEFAULT_ROLES,
                            title=f'编辑项目 - {project.name}')
+
+
+@project_bp.route('/<int:project_id>/toggle-hidden', methods=['POST'])
+@login_required
+def project_toggle_hidden(project_id):
+    project = db.get_or_404(Project, project_id)
+    if not current_user.is_team_manager:
+        flash('仅管理层可操作', 'danger')
+        return redirect(url_for('project.project_detail', project_id=project.id))
+    project.is_hidden = not project.is_hidden
+    db.session.commit()
+    flash(f'项目已{"设为仅管理层可见" if project.is_hidden else "取消隐藏"}', 'success')
+    return redirect(url_for('project.project_detail', project_id=project.id))
+
+
+@project_bp.route('/<int:project_id>/close', methods=['POST'])
+@login_required
+def project_close(project_id):
+    project = db.get_or_404(Project, project_id)
+    project.status = 'closed'
+    db.session.commit()
+    flash(f'项目 {project.name} 已关闭', 'warning')
+    return redirect(url_for('project.project_list'))
+
+
+@project_bp.route('/<int:project_id>/reopen', methods=['POST'])
+@login_required
+def project_reopen(project_id):
+    project = db.get_or_404(Project, project_id)
+    project.status = 'active'
+    db.session.commit()
+    flash(f'项目 {project.name} 已重新开启', 'success')
+    return redirect(url_for('project.project_detail', project_id=project.id))
 
 
 @project_bp.route('/<int:project_id>/save-milestones', methods=['POST'])

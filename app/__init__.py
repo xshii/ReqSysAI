@@ -76,6 +76,8 @@ def create_app(config_name=None):
             if not cur_group and groups:
                 cur_group = groups[0]
             all_projects = Project.query.filter_by(status='active').order_by(Project.name).all()
+            if not current_user.is_team_manager:
+                all_projects = [p for p in all_projects if not p.is_hidden]
             followed_ids = set(p.id for p in current_user.followed_projects.all())
             # Followed projects first, then others
             followed = [p for p in all_projects if p.id in followed_ids]

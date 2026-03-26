@@ -9,17 +9,25 @@ from app.models.todo import Todo
 from app.models.user import User
 
 
-def search(query, limit=20, current_user_id=None):
+def search(query, limit=20, current_user_id=None, is_manager=False):
     """Search across all entities using LIKE. Returns list of dicts."""
     if not query or not query.strip():
         return []
     q = f'%{query.strip()}%'
     results = []
 
+    # Hidden project IDs (for non-managers)
+    hidden_pids = set()
+    if not is_manager:
+        hidden_pids = {p.id for p in Project.query.filter_by(is_hidden=True).all()}
+
     # Requirements
-    for r in Requirement.query.filter(
+    req_q = Requirement.query.filter(
         db.or_(Requirement.title.like(q), Requirement.number.like(q), Requirement.description.like(q))
-    ).limit(limit).all():
+    )
+    if hidden_pids:
+        req_q = req_q.filter(Requirement.project_id.notin_(hidden_pids))
+    for r in req_q.limit(limit).all():
         results.append({'type': 'requirement', 'id': r.id,
                         'title': f'[{r.number}] {r.title}', 'extra': r.status})
 
@@ -32,9 +40,12 @@ def search(query, limit=20, current_user_id=None):
                         'title': t.title, 'extra': t.status})
 
     # Projects
-    for p in Project.query.filter(
+    proj_q = Project.query.filter(
         db.or_(Project.name.like(q), Project.description.like(q))
-    ).limit(limit).all():
+    )
+    if hidden_pids:
+        proj_q = proj_q.filter(Project.id.notin_(hidden_pids))
+    for p in proj_q.limit(limit).all():
         results.append({'type': 'project', 'id': p.id,
                         'title': p.name, 'extra': ''})
 
@@ -47,26 +58,35 @@ def search(query, limit=20, current_user_id=None):
                         'title': u.name, 'extra': u.employee_id or ''})
 
     # Meetings
-    for m in Meeting.query.filter(
+    meet_q = Meeting.query.filter(
         db.or_(Meeting.title.like(q), Meeting.content.like(q), Meeting.attendees.like(q))
-    ).order_by(Meeting.date.desc()).limit(limit).all():
+    )
+    if hidden_pids:
+        meet_q = meet_q.filter(Meeting.project_id.notin_(hidden_pids))
+    for m in meet_q.order_by(Meeting.date.desc()).limit(limit).all():
         results.append({'type': 'meeting', 'id': m.id, 'project_id': m.project_id,
                         'title': m.title, 'extra': m.date.strftime('%Y-%m-%d') if m.date else ''})
 
     # Risks
-    for r in Risk.query.filter(
+    risk_q = Risk.query.filter(
         Risk.deleted_at.is_(None),
         db.or_(Risk.title.like(q), Risk.description.like(q), Risk.owner.like(q))
-    ).limit(limit).all():
+    )
+    if hidden_pids:
+        risk_q = risk_q.filter(Risk.project_id.notin_(hidden_pids))
+    for r in risk_q.limit(limit).all():
         results.append({'type': 'risk', 'id': r.id, 'project_id': r.project_id,
                         'title': r.title, 'extra': r.status})
 
     # AAR
     from app.models.knowledge import AAR
-    for a in AAR.query.filter(
+    aar_q = AAR.query.filter(
         db.or_(AAR.title.like(q), AAR.goal.like(q), AAR.result.like(q),
                AAR.analysis.like(q), AAR.action.like(q))
-    ).order_by(AAR.date.desc()).limit(limit).all():
+    )
+    if hidden_pids:
+        aar_q = aar_q.filter(AAR.project_id.notin_(hidden_pids))
+    for a in aar_q.order_by(AAR.date.desc()).limit(limit).all():
         results.append({'type': 'aar', 'id': a.id, 'project_id': a.project_id,
                         'title': a.title, 'extra': a.date.strftime('%Y-%m-%d') if a.date else ''})
 

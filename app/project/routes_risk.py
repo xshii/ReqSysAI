@@ -19,11 +19,14 @@ def risk_list(project_id):
     project = db.get_or_404(Project, project_id)
     status = request.args.get('status', '')
     severity = request.args.get('severity', '')
+    overdue_filter = request.args.get('overdue', '')
     domain_filter = request.args.get('domain', '')
 
     query = Risk.query.filter_by(project_id=project_id).filter(Risk.deleted_at.is_(None))
     if status:
         query = query.filter_by(status=status)
+    if overdue_filter:
+        query = query.filter(Risk.status == 'open', Risk.due_date < date.today())
     if severity:
         query = query.filter_by(severity=severity)
     if domain_filter:
@@ -46,6 +49,11 @@ def risk_list(project_id):
         'open': sum(1 for r in all_risks if r.status == 'open'),
         'overdue': sum(1 for r in all_risks if r.is_overdue),
         'high': sum(1 for r in all_risks if r.severity == 'high' and r.status == 'open'),
+        'high_total': sum(1 for r in all_risks if r.severity == 'high'),
+        'medium': sum(1 for r in all_risks if r.severity == 'medium' and r.status == 'open'),
+        'medium_total': sum(1 for r in all_risks if r.severity == 'medium'),
+        'low': sum(1 for r in all_risks if r.severity == 'low' and r.status == 'open'),
+        'low_total': sum(1 for r in all_risks if r.severity == 'low'),
         'resolved': sum(1 for r in all_risks if r.status == 'resolved'),
         'closed': sum(1 for r in all_risks if r.status == 'closed'),
     }
@@ -65,7 +73,7 @@ def risk_list(project_id):
     risk_to, risk_cc = compute_default_recipients(project_id)
     return render_template('project/risks.html', project=project, risks=risks,
                            reqs=reqs, users=users, today=date.today(),
-                           cur_status=status, cur_severity=severity,
+                           cur_status=status, cur_severity=severity, cur_overdue=overdue_filter,
                            risk_stats=risk_stats, domain_stats=domain_stats, cur_domain=domain_filter,
                            default_to=risk_to, default_cc=risk_cc)
 

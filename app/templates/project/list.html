@@ -8,6 +8,7 @@
         <div class="btn-group btn-group-sm me-2">
             <a href="?status=active" class="btn btn-outline-primary {% if cur_status == 'active' %}active{% endif %}">进行中</a>
             <a href="?status=completed" class="btn btn-outline-primary {% if cur_status == 'completed' %}active{% endif %}">已完成</a>
+            <a href="?status=closed" class="btn btn-outline-primary {% if cur_status == 'closed' %}active{% endif %}">已关闭</a>
             <a href="?status=archived" class="btn btn-outline-primary {% if cur_status == 'archived' %}active{% endif %}">已归档</a>
             <a href="?status=all" class="btn btn-outline-primary {% if cur_status == 'all' %}active{% endif %}">全部</a>
         </div>

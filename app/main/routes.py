@@ -76,7 +76,12 @@ def index():
     team_todos = []
     personal_todos = []
     req_map = {r.id: r for r in my_reqs}  # Known requirements
+    # Help requests: others' @me child todos I haven't accepted yet
+    help_requests = [t for t in my_todos if t.parent_id and t.source == 'help' and t.status != 'done']
+    help_todo_ids = {t.id for t in help_requests}
     for t in my_todos:
+        if t.id in help_todo_ids:
+            continue  # Skip unaccepted help requests — shown separately with accept/reject buttons
         if t.category == 'risk':
             risk_todos.append(t)
         elif t.category == 'personal':
@@ -111,9 +116,6 @@ def index():
         f'风险「{r.title}」已超期 ({r.due_date.strftime("%m-%d") if r.due_date else ""})'
         for r in my_risks if r.is_overdue
     ]
-
-    # Help requests: others' @me child todos I haven't completed
-    help_requests = [t for t in my_todos if t.parent_id and t.status != 'done']
 
     # Approved incentives: last 2 months excluding recent 7 days; fallback to 3 months if empty
     inc_end = today - timedelta(days=7)
@@ -322,7 +324,7 @@ def quick_todo():
         helper = User.query.filter(
             db.or_(User.name == at_target, User.pinyin.ilike(f'{at_target}%'))
         ).filter_by(is_active=True).first()
-        if helper and helper.id != current_user.id:
+        if helper and helper.id != todo_user_id:
             my_todo = Todo(user_id=todo_user_id, title=title, due_date=today,
                            category=category, source='help', requirements=reqs)
             my_todo.items.append(TodoItem(title=title, sort_order=0))
@@ -630,7 +632,7 @@ def api_search():
     q = request.args.get('q', '').strip()
     if not q:
         return jsonify(ok=True, results=[])
-    results = search(q, current_user_id=current_user.id)
+    results = search(q, current_user_id=current_user.id, is_manager=current_user.is_team_manager)
     # Add URLs for each result
     url_map = {
         'requirement': lambda r: url_for('requirement.requirement_detail', req_id=int(r['id'])),

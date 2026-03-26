@@ -15,6 +15,9 @@
                 <input type="hidden" name="status" value="{{ 'completed' if project.status == 'active' else 'active' }}">
                 <button type="submit" class="badge bg-{{ 'success' if project.status == 'active' else 'secondary' }} border-0 ms-1" style="font-size:0.6em;cursor:pointer;" title="点击切换状态">{{ project.status_label }}</button>
             </form>
+            {% if project.is_hidden %}
+            <span class="badge bg-dark ms-1" style="font-size:0.6em;"><i class="bi bi-eye-slash"></i> 仅管理层</span>
+            {% endif %}
         </h4>
     </div>
     <div class="d-flex gap-2">
@@ -25,6 +28,25 @@
             </button>
         </form>
         <a href="{{ url_for('project.project_edit', project_id=project.id) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil"></i> 编辑项目</a>
+        {% if current_user.is_team_manager %}
+        <form method="POST" action="{{ url_for('project.project_toggle_hidden', project_id=project.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm {{ 'btn-dark' if project.is_hidden else 'btn-outline-dark' }}" title="{{ '取消隐藏' if project.is_hidden else '设为仅管理层可见' }}">
+                <i class="bi bi-eye{{ '-slash' if project.is_hidden else '' }}"></i>
+            </button>
+        </form>
+        {% endif %}
+        {% if project.status != 'closed' %}
+        <form method="POST" action="{{ url_for('project.project_close', project_id=project.id) }}" class="d-inline" onsubmit="return confirm('确定关闭项目？关闭后不在导航中显示。')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-x-circle"></i> 关闭项目</button>
+        </form>
+        {% else %}
+        <form method="POST" action="{{ url_for('project.project_reopen', project_id=project.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-outline-success btn-sm"><i class="bi bi-arrow-counterclockwise"></i> 重新开启</button>
+        </form>
+        {% endif %}
     </div>
 </div>
 
@@ -43,10 +65,13 @@
 </div>
 {% endif %}
 
-{# Milestone timeline — top position #}
-{% if project.milestones %}
+{# Milestone timeline — top position (fallback to parent milestones for sub-projects) #}
+{% if timeline_img or (project.milestones or milestone_from_parent) %}
 <div class="card mb-3 border-0 shadow-sm">
     <div class="card-body py-2 text-center">
+        {% if milestone_from_parent %}
+        <div class="text-muted small mb-1"><i class="bi bi-diagram-2"></i> 继承自父项目 <a href="{{ url_for('project.project_detail', project_id=project.parent.id) }}">{{ project.parent.name }}</a> 的里程碑</div>
+        {% endif %}
         {% if timeline_img %}
         <img src="data:image/png;base64,{{ timeline_img }}" style="width:100%;max-width:760px;" alt="里程碑时间轴">
         {% else %}

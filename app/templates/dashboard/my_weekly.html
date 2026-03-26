@@ -62,6 +62,8 @@
         <div class="report-stat"><div class="num {% if overdue_todos %}highlight{% endif %}">{{ overdue_todos|length }}</div><div class="label">延期</div></div>
         <div class="report-stat"><div class="num {% if blocked_todos %}highlight{% endif %}">{{ blocked_todos|length }}</div><div class="label">阻塞</div></div>
         <div class="report-stat"><div class="num">{{ my_reqs|length }}</div><div class="label">参与需求</div></div>
+        <div class="report-stat"><div class="num {% if my_open_reqs %}highlight{% endif %}">{{ my_open_reqs|length }}</div><div class="label">未闭环需求</div></div>
+        <div class="report-stat"><div class="num {% if my_open_risks %}highlight{% endif %}">{{ my_open_risks|length }}</div><div class="label">未闭环风险</div></div>
         <div class="report-stat"><div class="num">{{ total_focus_min }}</div><div class="label">专注(min)</div></div>
     </div>
 </div>
@@ -144,6 +146,53 @@
 </div>
 {% endif %}
 
+{% if my_open_reqs %}
+<div class="report-section">
+    <h6>名下未闭环需求</h6>
+    <table class="report-table">
+        <thead><tr><th style="width:55px;">编号</th><th>需求</th><th style="width:55px;">优先级</th><th style="width:55px;">状态</th><th style="width:85px;">截止</th></tr></thead>
+        <tbody>
+        {% for r in my_open_reqs %}
+        {% set is_overdue = r.due_date and r.due_date < today %}
+        <tr class="{{ 'row-risk' if is_overdue else '' }}">
+            <td class="text-muted">{{ r.number }}</td>
+            <td>{{ r.title }}</td>
+            <td><span class="badge bg-{{ r.priority_color }}">{{ r.priority_label }}</span></td>
+            <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span></td>
+            <td>
+                {{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}
+                {% if is_overdue %}<span class="fw-bold text-danger"> (+{{ (today - r.due_date).days }}天)</span>{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if my_open_risks %}
+<div class="report-section">
+    <h6 class="risk-title">名下未闭环风险</h6>
+    <table class="report-table">
+        <thead><tr><th>风险</th><th style="width:55px;">严重度</th><th style="width:65px;">项目</th><th style="width:85px;">截止</th></tr></thead>
+        <tbody>
+        {% for r in my_open_risks %}
+        {% set is_overdue = r.due_date and r.due_date < today %}
+        <tr class="{{ 'row-risk' if is_overdue else '' }}">
+            <td>{{ r.title }}</td>
+            <td><span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span></td>
+            <td class="text-muted small">{{ r.project.name[:6] }}</td>
+            <td>
+                {{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}
+                {% if is_overdue %}<span class="fw-bold text-danger"> (+{{ (today - r.due_date).days }}天)</span>{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 {% if ai_report %}
 <div class="report-section">
     <h6>总结与建议</h6>
@@ -196,6 +245,52 @@ function onSaveEmailSettings() {
         });
 })();
 function encodeHeader(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
+
+/* ── EML helpers (inline styles for Outlook) ── */
+var _badgeMap = {
+    'bg-success':'background:#198754;color:#fff;','bg-primary':'background:#0d6efd;color:#fff;',
+    'bg-warning':'background:#ffc107;color:#333;','bg-secondary':'background:#6c757d;color:#fff;',
+    'bg-danger':'background:#dc3545;color:#fff;','bg-info':'background:#0dcaf0;color:#333;',
+    'bg-dark':'background:#212529;color:#fff;'
+};
+var _textMap = {
+    'text-success':'color:#198754;','text-primary':'color:#0d6efd;','text-warning':'color:#ffc107;',
+    'text-danger':'color:#dc3545;','text-secondary':'color:#6c757d;','text-muted':'color:#6c757d;',
+    'text-info':'color:#0dcaf0;','fw-bold':'font-weight:700;'
+};
+function _inlineStyles(html) {
+    html = html.replace(/<span\s+class="badge\s+([^"]+)"/g, function(m, cls) {
+        var s = 'display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;';
+        cls.split(/\s+/).forEach(function(c) { if (_badgeMap[c]) s += _badgeMap[c]; });
+        return '<span style="' + s + '"';
+    });
+    html = html.replace(/<span\s+class="([^"]*(?:text-|fw-)[^"]*)"/g, function(m, cls) {
+        var s = '';
+        cls.split(/\s+/).forEach(function(c) { if (_textMap[c]) s += _textMap[c]; });
+        return s ? '<span style="' + s + '"' : m;
+    });
+    return html;
+}
+function _emlSection(title, body, titleColor) {
+    var c = titleColor || '#1e3a5f';
+    return '<tr><td style="background:' + c + ';color:#fff;padding:8px 16px;font-size:13px;font-weight:700;letter-spacing:1px;border-bottom:2px solid ' + c + ';">' + title + '</td></tr>'
+        + '<tr><td style="padding:10px 16px 16px;font-size:13px;color:#334155;">' + body + '</td></tr>';
+}
+function _emlTable(tableEl) {
+    if (!tableEl) return '';
+    var h = '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">';
+    tableEl.querySelectorAll('tr').forEach(function(tr, ri) {
+        h += '<tr' + (tr.classList.contains('row-risk') ? ' style="background:#fef2f2;"' : (ri > 0 && ri % 2 === 0 ? ' style="background:#fafbfc;"' : '')) + '>';
+        tr.querySelectorAll('th,td').forEach(function(cell) {
+            var tag = cell.tagName.toLowerCase();
+            var bg = tag === 'th' ? 'background:#f1f5f9;font-weight:600;color:#475569;' : '';
+            h += '<' + tag + ' style="border:1px solid #e2e8f0;padding:6px 12px;' + bg + '">' + _inlineStyles(cell.innerHTML) + '</' + tag + '>';
+        });
+        h += '</tr>';
+    });
+    return h + '</table>';
+}
+
 function exportEml() {
     var el = document.getElementById('report-content');
     if (!el) return;
@@ -203,28 +298,79 @@ function exportEml() {
     var subject = document.getElementById('emlSubject').value || defaultSubject;
     var _r = getMergedRecipients(document.getElementById('emlTo').value, document.getElementById('emlCc').value);
     var to = _r.to, cc = _r.cc;
-    var css = 'body{font-family:Microsoft YaHei,sans-serif;font-size:13px;color:#333;}'
-        + 'table{width:100%;border-collapse:collapse;}th{background:#f1f5f9;font-weight:600;font-size:12px;}'
-        + 'th,td{border:1px solid #e2e8f0;padding:5px 10px;font-size:12px;}'
-        + 'h6{background:#f8fafc;border-left:3px solid #1e3a5f;padding:7px 12px;font-size:13px;font-weight:700;}'
-        + '.row-risk{background:#fef2f2;}.highlight{color:#dc2626;}';
-    // Prepend To/Cc as plain text in body
+
+    var rows = '';
+
+    // Header banner
+    var headerEl = el.querySelector('.report-header');
+    if (headerEl) rows += '<tr><td style="background:#1e3a5f;color:#fff;text-align:center;padding:18px 24px;font-size:16px;font-weight:700;letter-spacing:2px;">' + headerEl.textContent + '</td></tr>';
+
+    // Meta
+    el.querySelectorAll('.report-meta').forEach(function(m) {
+        rows += '<tr><td style="background:#f0f4f8;text-align:center;padding:6px 20px;font-size:12px;color:#64748b;">' + m.textContent.trim() + '</td></tr>';
+    });
+
+    // Sections
+    el.querySelectorAll('.report-section').forEach(function(sec) {
+        var h6 = sec.querySelector('h6');
+        if (!h6) return;
+        var title = h6.textContent.trim();
+        var isRisk = h6.classList.contains('risk-title');
+        var body = '';
+
+        // Stats panel
+        var stats = sec.querySelector('.report-stats');
+        if (stats) {
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-collapse:collapse;margin-bottom:8px;"><tr>';
+            stats.querySelectorAll('.report-stat').forEach(function(st) {
+                var num = st.querySelector('.num');
+                var lbl = st.querySelector('.label');
+                var numStyle = 'font-size:22px;font-weight:700;color:#1e3a5f;';
+                if (num && num.classList.contains('highlight')) numStyle = 'font-size:22px;font-weight:700;color:#dc3545;';
+                body += '<td style="text-align:center;padding:12px 6px;border-right:1px solid #e2e8f0;">'
+                    + '<div style="' + numStyle + '">' + (num ? num.textContent : '') + '</div>'
+                    + '<div style="font-size:11px;color:#94a3b8;">' + (lbl ? lbl.textContent : '') + '</div></td>';
+            });
+            body += '</tr></table>';
+        }
+
+        // Data tables
+        sec.querySelectorAll('.report-table').forEach(function(t) { body += _emlTable(t); });
+
+        // AI summary
+        var summary = sec.querySelector('.report-summary');
+        if (summary) {
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px;"><tr><td style="background:#f8fafc;border:1px solid #e2e8f0;padding:12px 16px;font-size:13px;line-height:1.6;">' + summary.innerHTML + '</td></tr></table>';
+        }
+
+        rows += _emlSection(title, body, isRisk ? '#dc2626' : '#1e3a5f');
+    });
+
+    // Footer
+    rows += '<tr><td style="background:#f0f4f8;text-align:center;padding:10px 20px;font-size:11px;color:#94a3b8;">'
+        + '{{ current_user.name }} · 个人周报 · {{ monday.strftime("%Y-%m-%d") }} ~ {{ sunday.strftime("%Y-%m-%d") }}</td></tr>';
+
+    // To/Cc as plain text
     var recipientBlock = '';
     if (to || cc) {
-        recipientBlock = '<div style="font-size:12px;color:#64748b;margin-bottom:12px;">';
-        if (to) recipientBlock += '<div><b>To:</b> ' + to + '</div>';
-        if (cc) recipientBlock += '<div><b>Cc:</b> ' + cc + '</div>';
-        recipientBlock += '</div>';
+        recipientBlock = '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;font-size:12px;color:#64748b;">';
+        if (to) recipientBlock += '<tr><td style="padding:2px 16px;"><b>To:</b> ' + to + '</td></tr>';
+        if (cc) recipientBlock += '<tr><td style="padding:2px 16px;"><b>Cc:</b> ' + cc + '</td></tr>';
+        recipientBlock += '</table>';
     }
-    var html = '<html><head><style>' + css + '</style></head><body>' + recipientBlock + el.innerHTML + '</body></html>';
+
+    var html = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,Segoe UI,sans-serif;margin:0;padding:0;background:#f5f5f5;">'
+        + '<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:20px;">'
+        + recipientBlock
+        + '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:800px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;">'
+        + rows + '</table></td></tr></table></body></html>';
+
     var boundary = 'b_' + Date.now();
-    var headers = ['Subject: ' + encodeHeader(subject), 'MIME-Version: 1.0',
-        'Content-Type: multipart/alternative; boundary="' + boundary + '"', 'X-Unsent: 1'];
-    if (to) headers.push('To: ' + to);
-    if (cc) headers.push('Cc: ' + cc);
-    var eml = headers.concat(['', '--' + boundary, 'Content-Type: text/html; charset=UTF-8',
+    var eml = ['Subject: ' + encodeHeader(subject), 'MIME-Version: 1.0',
+        'Content-Type: multipart/alternative; boundary="' + boundary + '"', 'X-Unsent: 1',
+        '', '--' + boundary, 'Content-Type: text/html; charset=UTF-8',
         'Content-Transfer-Encoding: base64', '', btoa(unescape(encodeURIComponent(html))).match(/.{1,76}/g).join('\n'),
-        '', '--' + boundary + '--']).join('\r\n');
+        '', '--' + boundary + '--'].join('\r\n');
     var a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([eml], {type: 'message/rfc822'}));
     a.download = subject + '.eml'; a.click();
