@@ -1620,8 +1620,8 @@ def resource_map():
     hidden_ids = {pid for pid, p in projects.items() if p.is_hidden}
     if hidden_ids:
         project_ids = [pid for pid in project_ids if pid not in hidden_ids]
-            projects = {pid: p for pid, p in projects.items() if pid not in hidden_ids}
-            user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in hidden_ids}
+        projects = {pid: p for pid, p in projects.items() if pid not in hidden_ids}
+        user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in hidden_ids}
 
     # Per-user total days
     user_total = defaultdict(float)
@@ -1757,8 +1757,8 @@ def resource_map_export():
     hidden_ids = {pid for pid, p in projects.items() if p.is_hidden}
     if hidden_ids:
         project_ids = [pid for pid in project_ids if pid not in hidden_ids]
-            projects = {pid: p for pid, p in projects.items() if pid not in hidden_ids}
-            user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in hidden_ids}
+        projects = {pid: p for pid, p in projects.items() if pid not in hidden_ids}
+        user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in hidden_ids}
 
     user_total = defaultdict(float)
     for (uid, _pid), d in user_project_days.items():
