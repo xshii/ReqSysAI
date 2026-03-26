@@ -9,6 +9,24 @@ from app.models.user import User
 from app.project import project_bp
 from app.project.routes import _check_project_access
 
+# System role → project role mapping
+_ROLE_MAP = {
+    'SE': 'DEV', 'DE': 'DEV', 'MDE': 'DEV', 'Committer': 'DEV',
+    'TE': 'TE', 'QA': 'QA', 'PM': 'PM', 'PL': 'PL',
+    'FO': 'PL', 'SEC': 'DEV', 'Admin': 'DEV',
+}
+
+
+def _default_project_role(user):
+    """Derive project role from user's system roles."""
+    if not user or not user.roles:
+        return 'DEV'
+    for r in user.roles:
+        if r.name in _ROLE_MAP:
+            return _ROLE_MAP[r.name]
+    return 'DEV'
+
+
 # ---- Project members ----
 
 @project_bp.route('/<int:project_id>/members', methods=['GET', 'POST'])
@@ -22,11 +40,13 @@ def member_list(project_id):
         action = request.form.get('action')
         if action == 'add':
             member_name = request.form.get('member_name', '').strip()
-            role = request.form.get('project_role', 'DEV').strip()
+            role = request.form.get('project_role', '').strip()
             if member_name:
                 # Try to find internal user by name
                 user = User.query.filter_by(name=member_name, is_active=True).first()
                 if user:
+                    if not role:
+                        role = _default_project_role(user)
                     if not ProjectMember.query.filter_by(project_id=project_id, user_id=user.id).first():
                         db.session.add(ProjectMember(project_id=project_id, user_id=user.id, project_role=role))
                         db.session.commit()
@@ -86,11 +106,13 @@ def member_ajax(project_id):
     action = data.get('action')
     if action == 'add':
         member_name = (data.get('member_name') or '').strip()
-        role = (data.get('project_role') or 'DEV').strip()
+        role = (data.get('project_role') or '').strip()
         if not member_name:
             return jsonify(ok=False, msg='请输入成员名')
         user = User.query.filter_by(name=member_name, is_active=True).first()
         if user:
+            if not role:
+                role = _default_project_role(user)
             if ProjectMember.query.filter_by(project_id=project_id, user_id=user.id).first():
                 return jsonify(ok=False, msg=f'{user.name} 已在项目中')
             m = ProjectMember(project_id=project_id, user_id=user.id, project_role=role)

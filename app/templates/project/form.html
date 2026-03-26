@@ -611,7 +611,7 @@ function ajaxAddMember(name, role, btn) {
 // Right side: + button click
 document.querySelectorAll('.btn-add-member').forEach(function(btn) {
     btn.addEventListener('click', function() {
-        ajaxAddMember(btn.dataset.name, 'DEV', btn);
+        ajaxAddMember(btn.dataset.name, '', btn);
     });
 });
 
