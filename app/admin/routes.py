@@ -106,7 +106,15 @@ def user_edit(user_id):
         user.pinyin = to_pinyin(form.name.data)
         user.ip_address = form.ip_address.data or f'pending-{user.employee_id}'
         user.group = form.group.data or None
-        user.manager = form.manager.data.strip() or None
+        if form.manager.data and form.manager.data.strip():
+            from app.utils.manager import normalize_manager
+            mgr_val, mgr_err = normalize_manager(form.manager.data)
+            if mgr_err:
+                flash(mgr_err, 'danger')
+                return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title=f'编辑用户 - {user.name}', user=user)
+            user.manager = mgr_val
+        else:
+            user.manager = None
         user.domain = form.domain.data or None
         user.roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
         user.is_active = form.is_active.data
@@ -317,22 +325,14 @@ def user_update_group(user_id):
 @admin_required
 def user_update_manager(user_id):
     """Inline manager change from user table."""
-    import re
     user = db.get_or_404(User, user_id)
     raw = request.form.get('manager', '').strip()
     if raw:
-        parts = raw.rsplit(' ', 1)
-        if len(parts) == 2 and re.match(r'^[a-z]?(00\d{6}|\d00\d{7})$', parts[1]):
-            pass
-        else:
-            mgr_user = User.query.filter_by(name=raw, is_active=True).first()
-            if not mgr_user and len(parts) == 2:
-                mgr_user = User.query.filter_by(name=parts[0].strip(), is_active=True).first()
-            if mgr_user:
-                raw = f'{mgr_user.name} {mgr_user.employee_id}'
-            else:
-                flash('主管未找到，请输入 姓名 工号', 'danger')
-                return redirect(request.referrer or url_for('admin.user_list'))
+        from app.utils.manager import normalize_manager
+        raw, mgr_err = normalize_manager(raw)
+        if mgr_err:
+            flash(mgr_err, 'danger')
+            return redirect(request.referrer or url_for('admin.user_list'))
     user.manager = raw or None
     db.session.commit()
     return redirect(request.referrer or url_for('admin.user_list'))
