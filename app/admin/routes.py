@@ -28,15 +28,19 @@ from app.utils.pinyin import to_pinyin
 @admin_required
 def user_list():
     filter_group = request.args.get('group', '')
+    all_group_objs = Group.query.order_by(Group.name).all()
+    all_groups = [g.name for g in all_group_objs]
+    hidden_groups = {g.name for g in all_group_objs if g.is_hidden}
+    visible_group_names = [g.name for g in all_group_objs if not g.is_hidden]
+
     q = User.query
     if filter_group == '_none':
         q = q.filter(db.or_(User.group.is_(None), User.group == ''))
+    elif filter_group == '_visible':
+        q = q.filter(User.group.in_(visible_group_names))
     elif filter_group:
         q = q.filter_by(group=filter_group)
     users = q.order_by(User.group, User.name).all()
-
-    all_group_objs = Group.query.order_by(Group.name).all()
-    all_groups = [g.name for g in all_group_objs]
     group_counts = {}
     for g in all_groups:
         group_counts[g] = User.query.filter_by(group=g, is_active=True).count()
@@ -53,6 +57,7 @@ def user_list():
     return render_template('admin/users.html', users=users, visible_roles=visible_roles,
                            all_groups=all_groups, all_group_objs=all_group_objs,
                            group_counts=group_counts, all_domains=all_domains,
+                           hidden_groups=hidden_groups,
                            filter_group=filter_group, ip_requests=ip_requests)
 
 
