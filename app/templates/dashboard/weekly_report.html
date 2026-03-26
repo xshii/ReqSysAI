@@ -111,7 +111,7 @@
     </div>
     {% endif %}
     {% if ai.plan %}
-    <div style="margin-top:8px;font-size:.84rem;"><strong>下周计划：</strong></div>
+    <div style="margin-top:2px;font-size:.84rem;"><strong>下周计划：</strong></div>
     <ul class="ps-3 mb-0">
     {% for p in ai.plan %}<li>{{ p }}</li>{% endfor %}
     </ul>
@@ -441,7 +441,7 @@ function _inlineStyles(html) {
 function _emlSection(title, body, titleColor) {
     var c = titleColor || '#4a5568';
     return '<tr><td colspan="99" style="background:' + c + ';color:#fff;padding:7px 16px;font-size:13px;font-weight:600;">' + title + '</td></tr>'
-        + '<tr><td colspan="99" style="padding:6px 12px 8px;font-size:13px;color:#4a5568;">' + body + '</td></tr>';
+        + '<tr><td colspan="99" style="padding:4px 12px 4px;font-size:13px;color:#4a5568;">' + body + '</td></tr>';
 }
 function _emlTable(tableEl) {
     if (!tableEl) return '';
@@ -489,7 +489,7 @@ function exportEml() {
         // Stats panel → convert to table
         var stats = sec.querySelector('.report-stats');
         if (stats) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #718096;border-collapse:collapse;margin-bottom:8px;"><tr>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #718096;border-collapse:collapse;margin-bottom:2px;"><tr>';
             stats.querySelectorAll('.report-stat').forEach(function(st) {
                 var num = st.querySelector('.num');
                 var lbl = st.querySelector('.label');
@@ -512,7 +512,7 @@ function exportEml() {
         // Progress bar → table-based
         var prog = sec.querySelector('.progress');
         if (prog) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;"><tr>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:2px;"><tr>';
             prog.querySelectorAll('.progress-bar').forEach(function(bar) {
                 var w = bar.style.width;
                 if (w && w !== '0%') {
@@ -533,7 +533,7 @@ function exportEml() {
         var summary = sec.querySelector('.report-summary');
         if (summary) {
             var sumText = summary.innerHTML.replace(/\n/g, '<br>');
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:6px;"><tr><td style="padding:6px 10px;font-size:13px;line-height:1.6;">' + sumText + '</td></tr></table>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:2px;"><tr><td style="padding:6px 10px;font-size:13px;line-height:1.6;">' + sumText + '</td></tr></table>';
         }
 
         // Highlights box (green)
@@ -548,7 +548,7 @@ function exportEml() {
 
         // Sub-headers (e.g., "下周计划：")
         sec.querySelectorAll('div[style*="margin-top:8px"]').forEach(function(d) {
-            if (d.querySelector('strong')) body += '<div style="font-size:13px;font-weight:700;margin-top:10px;margin-bottom:4px;">' + d.innerHTML + '</div>';
+            if (d.querySelector('strong')) body += '<div style="font-size:13px;font-weight:700;margin-top:4px;margin-bottom:2px;">' + d.innerHTML + '</div>';
         });
 
         // Milestones → use PNG image
@@ -580,7 +580,7 @@ function exportEml() {
         // Risk stats bar
         var statsBar = sec.querySelector('.risk-stats-bar');
         if (statsBar) {
-            var statsHtml = '<table cellpadding="0" cellspacing="0" style="font-size:12px;margin-bottom:6px;"><tr>';
+            var statsHtml = '<table cellpadding="0" cellspacing="0" style="font-size:12px;margin-bottom:2px;"><tr>';
             statsBar.querySelectorAll('span:not(.border-start)').forEach(function(s) {
                 var color = s.classList.contains('text-danger') ? '#dc3545' : s.classList.contains('text-success') ? '#198754' : s.classList.contains('text-muted') ? '#6c757d' : '#1e3a5f';
                 statsHtml += '<td style="padding:4px 10px;color:' + color + ';">' + s.innerHTML + '</td>';
@@ -594,12 +594,12 @@ function exportEml() {
             domainBar.querySelectorAll('.badge').forEach(function(b) {
                 dHtml += '<span style="display:inline-block;padding:2px 8px;margin:2px;font-size:11px;border:1px solid #718096;border-radius:4px;">' + b.innerHTML + '</span>';
             });
-            if (dHtml) body += '<div style="margin-bottom:8px;">' + dHtml + '</div>';
+            if (dHtml) body += '<div style="margin-bottom:2px;">' + dHtml + '</div>';
         }
 
         // AI risk analysis
         sec.querySelectorAll('.mt-2.ps-2').forEach(function(d) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;"><tr><td style="padding:4px 8px;font-size:12px;color:#64748b;border-left:3px solid #94a3b8;">' + d.innerHTML + '</td></tr></table>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:2px;"><tr><td style="padding:4px 8px;font-size:12px;color:#64748b;border-left:3px solid #94a3b8;">' + d.innerHTML + '</td></tr></table>';
         });
 
         rows += _emlSection(title, body, isRisk ? '#c53030' : '#4a5568');
@@ -611,7 +611,7 @@ function exportEml() {
     // Prepend To/Cc as plain text in body
     var recipientBlock = '';
     if (to || cc) {
-        recipientBlock = '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;font-size:12px;color:#64748b;">';
+        recipientBlock = '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:2px;font-size:12px;color:#64748b;">';
         if (to) recipientBlock += '<tr><td style="padding:2px 16px;"><b>To:</b> ' + to + '</td></tr>';
         if (cc) recipientBlock += '<tr><td style="padding:2px 16px;"><b>Cc:</b> ' + cc + '</td></tr>';
         recipientBlock += '</table>';

@@ -279,7 +279,7 @@ function _inlineStyles(html) {
 function _emlSection(title, body, titleColor) {
     var c = titleColor || '#4a5568';
     return '<tr><td style="background:' + c + ';color:#fff;padding:7px 16px;font-size:13px;font-weight:600;">' + title + '</td></tr>'
-        + '<tr><td style="padding:6px 12px 8px;font-size:13px;color:#4a5568;">' + body + '</td></tr>';
+        + '<tr><td style="padding:4px 12px 4px;font-size:13px;color:#4a5568;">' + body + '</td></tr>';
 }
 function _emlTable(tableEl) {
     if (!tableEl) return '';
@@ -326,7 +326,7 @@ function exportEml() {
         // Stats panel
         var stats = sec.querySelector('.report-stats');
         if (stats) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #718096;border-collapse:collapse;margin-bottom:8px;"><tr>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #718096;border-collapse:collapse;margin-bottom:2px;"><tr>';
             stats.querySelectorAll('.report-stat').forEach(function(st) {
                 var num = st.querySelector('.num');
                 var lbl = st.querySelector('.label');
@@ -345,7 +345,7 @@ function exportEml() {
         // AI summary
         var summary = sec.querySelector('.report-summary');
         if (summary) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px;"><tr><td style="padding:6px 10px;font-size:13px;line-height:1.6;">' + summary.innerHTML + '</td></tr></table>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:2px;"><tr><td style="padding:6px 10px;font-size:13px;line-height:1.6;">' + summary.innerHTML + '</td></tr></table>';
         }
 
         rows += _emlSection(title, body, isRisk ? '#c53030' : '#4a5568');
@@ -358,7 +358,7 @@ function exportEml() {
     // To/Cc as plain text
     var recipientBlock = '';
     if (to || cc) {
-        recipientBlock = '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;font-size:12px;color:#64748b;">';
+        recipientBlock = '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:2px;font-size:12px;color:#64748b;">';
         if (to) recipientBlock += '<tr><td style="padding:2px 16px;"><b>To:</b> ' + to + '</td></tr>';
         if (cc) recipientBlock += '<tr><td style="padding:2px 16px;"><b>Cc:</b> ' + cc + '</td></tr>';
         recipientBlock += '</table>';
