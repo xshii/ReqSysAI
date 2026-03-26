@@ -456,7 +456,7 @@ checkHelpAlert();
             {% for r in my_risks %}
                 <div class="d-flex align-items-center small mb-1 gap-1 {% if r.is_overdue %}bg-danger bg-opacity-10 rounded px-1{% elif r.is_due_today %}bg-warning bg-opacity-10 rounded px-1{% endif %}">
                     {% if r.title in risk_todo_titles %}
-                    <button class="btn btn-success btn-sm py-0 border-0 flex-shrink-0" style="font-size:.7em;width:3.2em;text-align:center;" disabled>✓</button>
+                    <span class="text-muted flex-shrink-0" style="font-size:.65em;width:3.2em;text-align:center;">已加</span>
                     {% else %}
                     <button class="btn btn-outline-danger btn-sm py-0 btn-risk-todo flex-shrink-0" data-title="{{ r.title }}" data-role="{% if r.owner_id == current_user.id %}责任人{% elif r.tracker_id == current_user.id %}跟踪人{% endif %}" style="font-size:.7em;width:3.2em;text-align:center;" title="添加到今日风险&突发 Todo" data-bs-toggle="tooltip">+Todo</button>
                     {% endif %}
@@ -798,10 +798,11 @@ document.querySelectorAll('.btn-risk-todo').forEach(function(btn) {
                 // Dispose tooltip before changing button
                 var tip2 = bootstrap.Tooltip.getInstance(btn);
                 if (tip2) tip2.dispose();
-                btn.classList.remove('btn-outline-danger');
-                btn.classList.add('btn-success', 'border-0');
-                btn.textContent = '✓';
-                btn.disabled = true;
+                var span = document.createElement('span');
+                span.className = 'text-muted flex-shrink-0';
+                span.style.cssText = 'font-size:.65em;width:3.2em;text-align:center;';
+                span.textContent = '已加';
+                btn.replaceWith(span);
                 _todoTotal++; _updateProgress();
                 showToast(title + ' 已添加到风险Todo', 'success');
             }
