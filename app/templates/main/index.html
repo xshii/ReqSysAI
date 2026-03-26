@@ -167,7 +167,8 @@ checkHelpAlert();
         btn.onclick = function() { toggleActivity(a.key, btn); };
         btn.style.cssText = 'width:38px;height:38px;border-radius:50%;border:2px solid ' + a.color + '30;color:' + a.color + ';font-size:1.1em;padding:0;transition:all .15s;';
         btn.innerHTML = '<i class="bi ' + a.icon + '"></i>';
-        btn.title = a.label;
+        btn.dataset.tip = a.label;
+        btn.dataset.tipPos = 'bottom';
         bar.appendChild(btn);
     });
     // Settings button (always last)
@@ -176,7 +177,8 @@ checkHelpAlert();
     setBtn.className = 'btn btn-light d-flex align-items-center justify-content-center';
     setBtn.style.cssText = 'width:32px;height:32px;border-radius:50%;border:1px dashed #adb5bd;color:#adb5bd;font-size:.9em;padding:0;';
     setBtn.innerHTML = '<i class="bi bi-gear"></i>';
-    setBtn.title = '自定义按钮';
+    setBtn.dataset.tip = '自定义按钮';
+    setBtn.dataset.tipPos = 'bottom';
     bar.appendChild(setBtn);
     // Timer display (next to buttons)
     var timer = document.createElement('span');
