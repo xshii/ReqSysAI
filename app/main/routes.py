@@ -632,6 +632,89 @@ def api_users():
                       'employee_id': u.employee_id, 'manager': u.manager or ''} for u in users])
 
 
+@main_bp.route('/api/personnel/options')
+@login_required
+def api_personnel_options():
+    """Return roles, groups, domains for add-personnel modal."""
+    import re
+    from flask import current_app
+    from app.models.user import Group, Role
+
+    hidden = current_app.config.get('HIDDEN_ROLES', [])
+    roles = Role.query.filter(Role.name.notin_(hidden)).order_by(Role.name).all()
+    groups = Group.query.filter_by(is_hidden=False).order_by(Group.name).all()
+    DEFAULT_DOMAINS = ['芯片验证', '业务开发', '技术开发', '编译器', '算法', '芯片', '产品', '功能仿真', '性能仿真', '产品测试']
+    db_domains = set(u.domain for u in User.query.filter(User.domain.isnot(None), User.domain != '').all())
+    all_domains = sorted(db_domains | set(DEFAULT_DOMAINS))
+
+    role_cfg = {r['name']: r.get('desc', '') for r in current_app.config.get('ROLES', [])}
+    return jsonify(
+        roles=[{'id': r.id, 'name': r.name, 'desc': role_cfg.get(r.name, r.description or '')} for r in roles],
+        groups=[g.name for g in groups],
+        domains=all_domains,
+    )
+
+
+@main_bp.route('/api/personnel/add', methods=['POST'])
+@login_required
+def api_add_personnel():
+    """Add a new personnel record (external user)."""
+    import re
+    from flask import current_app
+    from app.models.user import Role
+    from app.utils.pinyin import to_pinyin
+    from app.services.audit import log_audit
+
+    EMPLOYEE_ID_RE = r'^[a-z]\d?00\d{6}$'
+    data = request.get_json() or {}
+    eid = (data.get('employee_id') or '').strip()
+    name = (data.get('name') or '').strip()
+    role_id = data.get('role_id')
+    domain = (data.get('domain') or '').strip()
+    group = (data.get('group') or '').strip() or None
+    manager = (data.get('manager') or '').strip() or None
+
+    if not eid or not re.match(EMPLOYEE_ID_RE, eid):
+        return jsonify(ok=False, msg='工号格式错误：1位小写字母 + 8~9位数字，倒数第7、8位为0，如 a00123456')
+    if not name or len(name) < 2:
+        return jsonify(ok=False, msg='姓名至少2个字符')
+    if not role_id:
+        return jsonify(ok=False, msg='请选择角色')
+    if not domain:
+        return jsonify(ok=False, msg='请填写业务领域')
+    if manager and not re.match(r'^\S+\s+[a-z]\d?00\d{6}$', manager):
+        return jsonify(ok=False, msg='主管格式错误，请按"姓名 工号"填写，如：张三 a00123456')
+
+    # Check hidden roles
+    hidden = current_app.config.get('HIDDEN_ROLES', [])
+    role = db.session.get(Role, role_id)
+    if not role or role.name in hidden:
+        return jsonify(ok=False, msg='无效的角色')
+
+    # Check duplicate employee_id
+    if User.query.filter_by(employee_id=eid).first():
+        return jsonify(ok=False, msg=f'工号 {eid} 已存在')
+
+    user = User(
+        employee_id=eid,
+        name=name,
+        ip_address='',
+        pinyin=to_pinyin(name),
+        group=group,
+        domain=domain,
+        manager=manager,
+        is_active=True,
+    )
+    user.roles.append(role)
+    db.session.add(user)
+    db.session.flush()  # get user.id for audit log
+
+    log_audit('create', 'user', user.id, name,
+              f'录入人员 {name} ({eid})，角色 {role.name}，业务领域 {domain}')
+    db.session.commit()
+    return jsonify(ok=True, id=user.id, name=name)
+
+
 @main_bp.route('/api/notifications')
 @login_required
 def api_notifications():

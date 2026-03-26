@@ -232,7 +232,7 @@
                                 {% set pct = 100 if r.status in ('done','closed') else (r.completion or 0) %}
                                 {% set is_overdue = r.due_date < gantt.today and r.status not in ('done','closed') %}
                                 {% set bar_color = '#198754' if pct >= 100 else ('#dc3545' if is_overdue else '#0d6efd') %}
-                                <div class="gantt-bar" data-type="{{ 'child' if r.parent_id else 'parent' }}" data-start-date="{{ r.start_date.strftime('%Y-%m-%d') }}" style="position:absolute;top:{{ bar_top }}px;left:1px;width:{{ bar_w }}px;height:{{ bar_h }}px;background:linear-gradient(to right, {{ bar_color }}30 {{ pct }}%, #f0f0f0 {{ pct }}%);border:1px solid {{ bar_color }}80;border-radius:3px;z-index:1;overflow:hidden;"
+                                <div class="gantt-bar" data-type="{{ 'child' if r.parent_id else 'parent' }}" data-start-date="{{ r.start_date.strftime('%Y-%m-%d') }}" data-end-date="{{ r.due_date.strftime('%Y-%m-%d') }}" data-bar-days="{{ bar_days }}" style="position:absolute;top:{{ bar_top }}px;left:1px;width:{{ bar_w }}px;height:{{ bar_h }}px;background:linear-gradient(to right, {{ bar_color }}30 {{ pct }}%, #f0f0f0 {{ pct }}%);border:1px solid {{ bar_color }}80;border-radius:3px;z-index:1;overflow:hidden;"
                                      data-bs-toggle="tooltip" title="{{ r.number }} {{ r.title }} | {{ r.status_label }} {{ pct }}% | {{ r.source_label }}{{ ' ↳子需求' if r.parent_id else '' }}">
                                     <span style="position:absolute;inset:0;padding:0 2px;font-size:.8em;line-height:{{ bar_h }}px;color:{{ bar_color }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                                         {{ r.title[:6] }}{% if r.title|length > 6 %}…{% endif %} {{ pct }}%
@@ -252,6 +252,42 @@
         var _ganttCard = document.querySelector('.card:has(#ganttBody)') || document.getElementById('ganttBody').closest('.card');
         var _ganttScale = 'day';
 
+        /* Recalculate bar widths based on actual rendered column positions */
+        function recalcGanttBars() {
+            if (_ganttScale !== 'day') return;
+            var headerRow = document.querySelector('#ganttBody thead tr');
+            if (!headerRow) return;
+            // Build a map: date string → actual rendered left offset & width from header cells
+            var dateCells = {};
+            headerRow.querySelectorAll('th.gantt-col').forEach(function(th) {
+                if (th.style.display === 'none') return;
+                var d = th.dataset.date;
+                if (d) dateCells[d] = { left: th.offsetLeft, width: th.offsetWidth };
+            });
+            document.querySelectorAll('.gantt-bar').forEach(function(bar) {
+                var startDate = bar.dataset.startDate;
+                var endDate = bar.dataset.endDate;
+                if (!startDate || !endDate || !dateCells[startDate]) return;
+                var startCell = dateCells[startDate];
+                var endCell = dateCells[endDate];
+                if (!endCell) {
+                    // End date outside visible range: extend to last visible cell
+                    var lastDate = Object.keys(dateCells).sort().pop();
+                    endCell = dateCells[lastDate];
+                }
+                var barW = endCell.left + endCell.width - startCell.left - 2;
+                if (barW < 4) barW = 4;
+                bar.style.width = barW + 'px';
+                bar.dataset.origWidth = barW;
+            });
+        }
+        recalcGanttBars();
+        var _recalcTimer = null;
+        window.addEventListener('resize', function() {
+            clearTimeout(_recalcTimer);
+            _recalcTimer = setTimeout(recalcGanttBars, 100);
+        });
+
         function filterGantt() {
             var start = document.getElementById('ganttStart').value;
             var end = document.getElementById('ganttEnd').value;
@@ -262,6 +298,7 @@
                 var show = (!start || d >= start) && (!end || d <= end);
                 td.style.display = show ? '' : 'none';
             });
+            setTimeout(recalcGanttBars, 0);
             _saveGanttState();
         }
 
@@ -344,9 +381,8 @@
                         td.innerHTML = td.dataset.origHtml;
                     }
                 });
-                // Restore bar widths and positions
+                // Restore bar positions, then recalc widths from actual column sizes
                 document.querySelectorAll('.gantt-bar').forEach(function(bar) {
-                    if (bar.dataset.origWidth) bar.style.width = bar.dataset.origWidth + 'px';
                     bar.style.left = bar.dataset.origLeft || '1px';
                     var span = bar.querySelector('span');
                     if (span) span.style.display = '';
@@ -356,6 +392,7 @@
                         if (origTd && origTd !== bar.parentElement) origTd.appendChild(bar);
                     }
                 });
+                setTimeout(recalcGanttBars, 0);
             }
             _saveGanttState();
         }

@@ -27,6 +27,9 @@
                     <div id="navSearchDropdown" class="position-absolute bg-white border rounded shadow-sm mt-1" style="display:none;width:360px;max-height:50vh;overflow-y:auto;z-index:9999;right:0;font-size:.85em;">
                     </div>
                 </div>
+                <button type="button" class="btn btn-sm btn-outline-light" title="录入人员" onclick="openAddPersonnelModal()" style="font-size:.8em;white-space:nowrap;">
+                    <i class="bi bi-person-plus"></i> +人员
+                </button>
                 {% if current_user.is_authenticated and (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')) %}
                 <button type="button" class="btn btn-sm border-0" id="mgrEyeBtn" title="管理视图" style="font-size:.85em;opacity:.4;color:#fff;">
                     <i class="bi bi-eye-slash" id="mgrEyeIcon"></i>
@@ -252,6 +255,60 @@
 
     {# Search is now inline in navbar #}
 
+    <!-- Add Personnel Modal -->
+    <div class="modal fade" id="addPersonnelModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title"><i class="bi bi-person-plus"></i> 录入人员</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addPersonnelForm">
+                        <div class="mb-2">
+                            <label class="form-label mb-0 small fw-bold">工号 <span class="text-danger">*</span></label>
+                            <input type="text" id="ap_employee_id" class="form-control form-control-sm" placeholder="如 a00123456" required>
+                            <div class="form-text" style="font-size:.75em;">格式：1位小写字母 + 8~9位数字，倒数第7、8位为0</div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label mb-0 small fw-bold">姓名 <span class="text-danger">*</span></label>
+                            <input type="text" id="ap_name" class="form-control form-control-sm" placeholder="请输入姓名" required minlength="2" maxlength="80">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label mb-0 small fw-bold">角色 <span class="text-danger">*</span></label>
+                            <select id="ap_role" class="form-select form-select-sm">
+                                <option value="">加载中...</option>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label mb-0 small fw-bold">业务领域 <span class="text-danger">*</span></label>
+                            <input type="text" id="ap_domain" class="form-control form-control-sm" placeholder="如：后端开发、测试、AI算法" required list="apDomainOptions">
+                            <datalist id="apDomainOptions"></datalist>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label mb-0 small">小组</label>
+                            <select id="ap_group" class="form-select form-select-sm">
+                                <option value="">（不选择）</option>
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label mb-0 small">主管</label>
+                            <input type="text" id="ap_manager" class="form-control form-control-sm" placeholder="如：张三 a00123456">
+                            <div class="form-text" style="font-size:.75em;">格式：姓名 工号，如填写则必须包含空格分隔的姓名和工号</div>
+                        </div>
+                    </form>
+                    <div id="apErrorMsg" class="text-danger small mt-1" style="display:none;"></div>
+                </div>
+                <div class="modal-footer py-1">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-sm btn-primary" onclick="submitAddPersonnel()">
+                        <i class="bi bi-check-lg"></i> 确认录入
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Image Lightbox -->
     <div class="modal fade" id="imgLightbox" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -396,6 +453,100 @@
             }
         });
     })();
+
+    /* --- Add Personnel Modal --- */
+    var _apDataLoaded = false;
+    var AP_EID_RE = /^[a-z]\d?00\d{6}$/;
+
+    function openAddPersonnelModal() {
+        var modal = document.getElementById('addPersonnelModal');
+        var bsModal = bootstrap.Modal.getOrCreateInstance(modal);
+        document.getElementById('apErrorMsg').style.display = 'none';
+        document.getElementById('addPersonnelForm').reset();
+        if (!_apDataLoaded) {
+            fetch('{{ url_for("main.api_personnel_options") }}')
+                .then(r => r.json())
+                .then(data => {
+                    _apDataLoaded = true;
+                    var roleSel = document.getElementById('ap_role');
+                    roleSel.innerHTML = '<option value="">请选择角色</option>';
+                    data.roles.forEach(r => {
+                        roleSel.innerHTML += '<option value="'+r.id+'">'+r.name+' - '+r.desc+'</option>';
+                    });
+                    var grpSel = document.getElementById('ap_group');
+                    grpSel.innerHTML = '<option value="">（不选择）</option>';
+                    data.groups.forEach(g => {
+                        grpSel.innerHTML += '<option value="'+g+'">'+g+'</option>';
+                    });
+                    var dl = document.getElementById('apDomainOptions');
+                    dl.innerHTML = '';
+                    data.domains.forEach(d => {
+                        dl.innerHTML += '<option value="'+d+'">';
+                    });
+                });
+        }
+        bsModal.show();
+        modal.addEventListener('shown.bs.modal', function onShown() {
+            modal.removeEventListener('shown.bs.modal', onShown);
+            document.getElementById('ap_employee_id').focus();
+        });
+    }
+
+    function submitAddPersonnel() {
+        var errEl = document.getElementById('apErrorMsg');
+        errEl.style.display = 'none';
+        var eid = document.getElementById('ap_employee_id').value.trim();
+        var name = document.getElementById('ap_name').value.trim();
+        var roleId = document.getElementById('ap_role').value;
+        var domain = document.getElementById('ap_domain').value.trim();
+        var group = document.getElementById('ap_group').value;
+        var manager = document.getElementById('ap_manager').value.trim();
+
+        if (!eid || !AP_EID_RE.test(eid)) {
+            errEl.textContent = '工号格式错误：1位小写字母 + 8~9位数字，倒数第7、8位为0，如 a00123456';
+            errEl.style.display = 'block'; return;
+        }
+        if (!name || name.length < 2) {
+            errEl.textContent = '请输入姓名（至少2个字符）';
+            errEl.style.display = 'block'; return;
+        }
+        if (!roleId) {
+            errEl.textContent = '请选择角色';
+            errEl.style.display = 'block'; return;
+        }
+        if (!domain) {
+            errEl.textContent = '请填写业务领域';
+            errEl.style.display = 'block'; return;
+        }
+        if (manager && !/^\S+\s+[a-z]\d?00\d{6}$/.test(manager)) {
+            errEl.textContent = '主管格式错误，请按"姓名 工号"填写，如：张三 a00123456';
+            errEl.style.display = 'block'; return;
+        }
+
+        var btn = event.target;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 提交中...';
+
+        apiPost('{{ url_for("main.api_add_personnel") }}', {
+            employee_id: eid, name: name, role_id: parseInt(roleId),
+            domain: domain, group: group, manager: manager
+        }).then(function(data) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-lg"></i> 确认录入';
+            if (data.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('addPersonnelModal')).hide();
+                showToast('人员 ' + name + ' 录入成功', 'success');
+            } else {
+                errEl.textContent = data.msg || '录入失败';
+                errEl.style.display = 'block';
+            }
+        }).catch(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-lg"></i> 确认录入';
+            errEl.textContent = '网络错误，请重试';
+            errEl.style.display = 'block';
+        });
+    }
     </script>
     {% endif %}
     <script>

@@ -116,7 +116,7 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <label class="btn btn-sm btn-light shadow-sm rounded-circle d-flex align-items-center justify-content-center" style="width:28px;height:28px;cursor:pointer;" title="替换照片">
                             <i class="bi bi-camera" style="font-size:.85em;"></i>
-                            <input type="file" name="photo" class="d-none" accept="image/*" onchange="this.form.submit()">
+                            <input type="file" name="photo" class="d-none" accept="image/*" onchange="previewAndSubmitPhoto(this)">
                         </label>
                     </form>
                     {% endif %}
@@ -234,7 +234,10 @@
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">照片</label>
-                        <div class="col-9"><input type="file" name="photo" class="form-control form-control-sm" accept="image/*"></div>
+                        <div class="col-9">
+                            <input type="file" name="photo" class="form-control form-control-sm" accept="image/*" onchange="previewIncPhoto(this)">
+                            <img class="inc-photo-preview rounded mt-1" style="display:none;max-width:120px;max-height:80px;object-fit:cover;">
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">提交推荐</button></div>
@@ -358,7 +361,10 @@
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">照片</label>
-                        <div class="col-9"><input type="file" name="photo" class="form-control form-control-sm" accept="image/*"></div>
+                        <div class="col-9">
+                            <input type="file" name="photo" class="form-control form-control-sm" accept="image/*" onchange="previewIncPhoto(this)">
+                            <img class="inc-photo-preview rounded mt-1" style="display:none;max-width:120px;max-height:80px;object-fit:cover;">
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">保存</button></div>
@@ -457,7 +463,10 @@
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">照片</label>
-                        <div class="col-9"><input type="file" name="photo" class="form-control form-control-sm" accept="image/*"></div>
+                        <div class="col-9">
+                            <input type="file" name="photo" class="form-control form-control-sm" accept="image/*" onchange="previewIncPhoto(this)">
+                            <img class="inc-photo-preview rounded mt-1" style="display:none;max-width:120px;max-height:80px;object-fit:cover;">
+                        </div>
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">首页可见</label>
@@ -479,6 +488,49 @@
 
 {% block extra_js %}
 <script>
+/* Photo preview in modals */
+function previewIncPhoto(input) {
+    var preview = input.parentElement.querySelector('.inc-photo-preview');
+    if (!input.files || !input.files[0] || !preview) return;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        preview.src = e.target.result;
+        preview.style.display = '';
+    };
+    reader.readAsDataURL(input.files[0]);
+}
+
+/* Inline photo replace: preview then submit */
+function previewAndSubmitPhoto(input) {
+    if (!input.files || !input.files[0]) return;
+    var container = input.closest('.flex-shrink-0');
+    var img = container.querySelector('img');
+    if (img) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            img.src = e.target.result;
+            img.dataset.src = e.target.result;
+            img.style.display = '';
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+    // Also show placeholder replacement if no img yet
+    var placeholder = container.querySelector('.bg-light');
+    if (placeholder && !img) {
+        var newImg = document.createElement('img');
+        newImg.className = 'rounded img-lightbox';
+        newImg.style.cssText = 'width:80px;height:80px;object-fit:cover;cursor:pointer;';
+        var reader2 = new FileReader();
+        reader2.onload = function(e) {
+            newImg.src = e.target.result;
+            newImg.dataset.src = e.target.result;
+            placeholder.replaceWith(newImg);
+        };
+        reader2.readAsDataURL(input.files[0]);
+    }
+    input.form.submit();
+}
+
 function aiRecommendCandidates() {
     var btn = document.getElementById('btnAiIncentive');
     btn.disabled = true;

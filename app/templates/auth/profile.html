@@ -14,13 +14,14 @@
                     <div class="d-flex align-items-center gap-3 mb-3 pb-2 border-bottom">
                         <div class="flex-shrink-0" style="position:relative;width:60px;height:60px;">
                             {% if current_user.avatar %}
-                            <img src="{{ url_for('static', filename=current_user.avatar) }}" class="rounded-circle" style="width:60px;height:60px;object-fit:cover;">
+                            <img id="avatarPreview" src="{{ url_for('static', filename=current_user.avatar) }}" class="rounded-circle img-lightbox" style="width:60px;height:60px;object-fit:cover;cursor:pointer;" title="点击查看大图">
                             {% else %}
-                            <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center" style="width:60px;height:60px;font-size:1.5rem;">{{ current_user.name[0] }}</div>
+                            <div id="avatarPlaceholder" class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center" style="width:60px;height:60px;font-size:1.5rem;">{{ current_user.name[0] }}</div>
+                            <img id="avatarPreview" class="rounded-circle img-lightbox" style="width:60px;height:60px;object-fit:cover;cursor:pointer;display:none;" title="点击查看大图">
                             {% endif %}
                             <label class="position-absolute d-flex align-items-center justify-content-center rounded-circle bg-white border" style="bottom:-2px;right:-2px;width:22px;height:22px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.15);" title="更换头像">
                                 <i class="bi bi-camera-fill text-muted" style="font-size:.7em;"></i>
-                                <input type="file" name="avatar" accept="image/*" class="d-none">
+                                <input type="file" name="avatar" accept="image/*" class="d-none" onchange="previewAvatar(this)">
                             </label>
                         </div>
                         <div class="small text-muted">
@@ -137,6 +138,19 @@
 
 {% block extra_js %}
 <script>
+function previewAvatar(input) {
+    if (!input.files || !input.files[0]) return;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        var preview = document.getElementById('avatarPreview');
+        var placeholder = document.getElementById('avatarPlaceholder');
+        preview.src = e.target.result;
+        preview.style.display = '';
+        if (placeholder) placeholder.style.display = 'none';
+    };
+    reader.readAsDataURL(input.files[0]);
+}
+
 function updateRoleLabel() {
     var checked = document.querySelectorAll('.role-cb:checked');
     var label = document.querySelector('.role-label');

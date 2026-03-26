@@ -239,9 +239,8 @@
         <div class="report-stat"><div class="num text-secondary">{{ _pending }}</div><div class="label">待开发</div></div>
         <div class="report-stat"><div class="num text-danger">{{ _overdue_count | length }}</div><div class="label">超期</div></div>
         <div class="report-stat"><div class="num">{{ _est_total | round(1) }}</div><div class="label">总人天</div></div>
-        <div class="report-stat"><div class="num text-info">{{ ((_done / _total * 100) | round | int) if _total else 0 }}%</div><div class="label">完成率</div></div>
-        {% if _ai_days_sum %}<div class="report-stat"><div class="num text-purple" style="color:#7c3aed;">{{ _ai_pct }}%</div><div class="label">AI辅助</div></div>{% endif %}
         {% if report_data.completion_weighted is not none %}<div class="report-stat"><div class="num text-success">{{ report_data.completion_weighted }}%</div><div class="label">加权完成</div></div>{% endif %}
+        {% if _ai_days_sum %}<div class="report-stat"><div class="num text-purple" style="color:#7c3aed;">{{ _ai_pct }}%</div><div class="label">AI辅助</div></div>{% endif %}
     </div>
     <div class="progress mb-2" style="height:8px;">
         <div class="progress-bar bg-success" style="width:{{ (_done / _total * 100) if _total else 0 }}%"></div>
