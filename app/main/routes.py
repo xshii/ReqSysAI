@@ -648,10 +648,12 @@ def api_personnel_options():
     all_domains = sorted(db_domains | set(DEFAULT_DOMAINS))
 
     role_cfg = {r['name']: r.get('desc', '') for r in current_app.config.get('ROLES', [])}
+    active_users = User.query.filter_by(is_active=True).order_by(User.name).all()
     return jsonify(
         roles=[{'id': r.id, 'name': r.name, 'desc': role_cfg.get(r.name, r.description or '')} for r in roles],
         groups=[g.name for g in groups],
         domains=all_domains,
+        users=[{'id': u.id, 'name': u.name, 'eid': u.employee_id, 'pinyin': u.pinyin or '', 'group': u.group or ''} for u in active_users],
     )
 
 

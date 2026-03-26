@@ -68,12 +68,22 @@ def user_create():
             return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title='创建用户')
 
         selected_roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
+        # Normalize manager
+        mgr_val = None
+        if form.manager.data and form.manager.data.strip():
+            from app.utils.manager import normalize_manager
+            mgr_val, mgr_err = normalize_manager(form.manager.data)
+            if mgr_err:
+                flash(mgr_err, 'danger')
+                return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title='创建用户')
         user = User(
             employee_id=form.employee_id.data,
             name=form.name.data,
             pinyin=to_pinyin(form.name.data),
-            ip_address=form.ip_address.data,
+            ip_address=form.ip_address.data or f'pending-{form.employee_id.data}',
             group=form.group.data or None,
+            manager=mgr_val,
+            domain=form.domain.data or None,
             roles=selected_roles,
         )
         db.session.add(user)
