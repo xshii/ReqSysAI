@@ -56,7 +56,7 @@
             <div class="row mb-2">
                 <label class="col-2 col-form-label col-form-label-sm">{{ form.description.label.text }}</label>
                 <div class="col-10">
-                    {{ form.description(class="form-control form-control-sm", rows=2) }}
+                    {{ form.description(class="form-control form-control-sm", rows=5) }}
                 </div>
             </div>
             <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check-lg"></i> {{ form.submit.label.text }}</button>
@@ -74,7 +74,7 @@
                 {% endfor %}
                 {% endif %}
             </select>
-            <input type="date" max="2099-12-31" id="tplStartDate" class="form-control form-control-sm" style="max-width:140px;" title="起始日期">
+            <input type="date" max="2099-12-31" id="tplStartDate" class="form-control form-control-sm" style="max-width:140px;" title="起始日期" value="{{ today if today else '' }}">
             <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" onclick="loadTemplate()">导入</button>
             <button type="button" class="btn btn-sm btn-outline-secondary flex-shrink-0" data-bs-toggle="collapse" data-bs-target="#tplManagePanel"><i class="bi bi-gear"></i></button>
             <span class="flex-grow-1"></span>
@@ -118,23 +118,28 @@
                                 <input type="text" name="name" class="form-control form-control-sm" value="{{ tpl.name }}" style="max-width:180px;">
                                 <input type="text" name="description" class="form-control form-control-sm" value="{{ tpl.description or '' }}" placeholder="描述">
                             </div>
+                            <div class="mb-1">
+                                <label class="form-label small mb-0">基准日期</label>
+                                <input type="date" class="form-control form-control-sm tpl-base-date" style="max-width:140px;" value="{{ today.strftime('%Y-%m-%d') if today is defined else '' }}" onchange="recalcTplDates(this)">
+                            </div>
                             <div id="editTplItems{{ tpl.id }}">
                             {% set ns2 = namespace(prev=0) %}
                             {% for item in tpl.items %}
                             {% set delta = item.offset_days - ns2.prev %}
-                            <div class="input-group input-group-sm mb-1 edit-tpl-drag" draggable="true">
+                            <div class="input-group input-group-sm mb-1 edit-tpl-drag">
                                 <span class="input-group-text" style="cursor:grab;padding:2px 6px;"><i class="bi bi-grip-vertical"></i></span>
                                 <input type="text" name="item_name" class="form-control" value="{{ item.name }}">
-                                <input type="text" name="item_offset" class="form-control" style="max-width:80px;" value="{% if loop.first %}0{% else %}+{{ delta }}天{% endif %}">
-                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>
+                                <input type="number" name="item_offset" class="form-control" style="max-width:70px;" value="{% if loop.first %}0{% else %}{{ delta }}{% endif %}" min="0" oninput="recalcTplDates(this)">
+                                <span class="input-group-text tpl-ref-date text-muted" style="font-size:.75em;min-width:75px;">--</span>
+                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove();recalcTplDates(this)">-</button>
                             </div>
                             {% set ns2.prev = item.offset_days %}
                             {% endfor %}
                             </div>
                             <div class="d-flex gap-1 mb-1">
                                 <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="addEditTplRow('editTplItems{{ tpl.id }}')"><i class="bi bi-plus"></i></button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="bumpEditTplRow('editTplItems{{ tpl.id }}', 7)">+7天</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="bumpEditTplRow('editTplItems{{ tpl.id }}', 30)">+30天</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="bumpEditTplRow('editTplItems{{ tpl.id }}', 7)">+7</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0" onclick="bumpEditTplRow('editTplItems{{ tpl.id }}', 30)">+30</button>
                             </div>
                             <div class="d-flex gap-1">
                                 <button type="submit" class="btn btn-sm btn-primary py-0">保存</button>
@@ -153,6 +158,10 @@
                         <div class="d-flex gap-2 mb-1">
                             <input type="text" name="name" class="form-control form-control-sm" placeholder="模板名称" required style="max-width:180px;">
                             <input type="text" name="description" class="form-control form-control-sm" placeholder="描述（可选）">
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label small mb-0">基准日期</label>
+                            <input type="date" class="form-control form-control-sm tpl-base-date" style="max-width:140px;" value="{{ today.strftime('%Y-%m-%d') if today is defined else '' }}" onchange="recalcTplDates(this)">
                         </div>
                         <div id="newTplItems"></div>
                         <div class="d-flex gap-1 mb-1">
@@ -218,22 +227,22 @@
 
         {# Member list #}
         {% if members %}
-        <table class="table table-sm">
-            <thead><tr><th>成员</th><th>角色</th><th>关键</th><th></th></tr></thead>
+        <table class="table table-sm" id="memberTable">
+            <thead><tr><th style="width:20px;"></th><th>成员</th><th>角色</th><th>关键</th><th></th></tr></thead>
             <tbody>
             {% for m in members %}
-            <tr>
+            <tr data-mid="{{ m.id }}">
+                <td class="text-muted member-drag-handle" style="cursor:grab;" draggable="true"><i class="bi bi-grip-vertical"></i></td>
                 <td class="small">{{ m.display_name }}{% if m.user and m.user.group %} <span class="text-muted">({{ m.user.group }})</span>{% endif %}</td>
                 <td>
                     <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="action" value="role">
                         <input type="hidden" name="member_id" value="{{ m.id }}">
-                        <select name="project_role" class="form-select form-select-sm d-inline" style="max-width:90px;" onchange="this.form.submit()">
-                            {% for k, v in roles.items() %}
-                            <option value="{{ k }}" {% if m.project_role == k %}selected{% endif %}>{{ v }}</option>
-                            {% endfor %}
-                        </select>
+                        <input type="text" name="project_role" class="form-control form-control-sm d-inline" list="roleOptions{{ m.id }}" style="max-width:90px;" value="{{ m.project_role }}" onchange="this.form.submit()">
+                        <datalist id="roleOptions{{ m.id }}">
+                            {% for k, v in roles.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+                        </datalist>
                     </form>
                 </td>
                 <td>
@@ -377,7 +386,7 @@ function applyTplToList(tplId) {
             var itemsDiv = document.getElementById('newTplItems');
             itemsDiv.innerHTML = '';
             tpl.items.forEach(function(item, i) {
-                addNewTplRow(item.name, i === 0 ? '0' : '+' + item.offset + '天');
+                addNewTplRow(item.name, i === 0 ? '0' : item.offset);
             });
 
             if (nameInput) {
@@ -400,20 +409,22 @@ function addEditTplRow(containerId, name, offset) {
     var div = document.getElementById(containerId);
     var row = document.createElement('div');
     row.className = 'input-group input-group-sm mb-1 edit-tpl-drag';
-    row.draggable = true;
-    row.innerHTML = '<span class="input-group-text" style="cursor:grab;padding:2px 6px;"><i class="bi bi-grip-vertical"></i></span>'
+    row.innerHTML = '<span class="input-group-text tpl-drag-handle" style="cursor:grab;padding:2px 6px;" draggable="true"><i class="bi bi-grip-vertical"></i></span>'
         + '<input type="text" name="item_name" class="form-control" placeholder="里程碑名称" value="' + (name || '') + '">'
-        + '<input type="text" name="item_offset" class="form-control" style="max-width:80px;" placeholder="+N天" value="' + (offset || '') + '">'
-        + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>';
+        + '<input type="number" name="item_offset" class="form-control" style="max-width:70px;" placeholder="天" min="0" value="' + (offset || '') + '" oninput="recalcTplDates(this)">'
+        + '<span class="input-group-text tpl-ref-date text-muted" style="font-size:.75em;min-width:75px;">--</span>'
+        + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove();recalcTplDates(this)">-</button>';
     _bindDrag(row, div);
     div.appendChild(row);
+    recalcTplDates(row);
 }
 function bumpEditTplRow(containerId, days) {
     var rows = document.querySelectorAll('#' + containerId + ' .input-group');
-    if (!rows.length) { addEditTplRow(containerId, '', '+' + days + '天'); return; }
+    if (!rows.length) { addEditTplRow(containerId, '', days); return; }
     var lastInput = rows[rows.length - 1].querySelector('input[name="item_offset"]');
-    var cur = parseInt((lastInput.value || '0').replace(/[^0-9]/g, '')) || 0;
-    lastInput.value = '+' + (cur + days) + '天';
+    var cur = parseInt(lastInput.value || '0') || 0;
+    lastInput.value = cur + days;
+    recalcTplDates(lastInput);
 }
 
 // New template item management (inside collapse panel)
@@ -421,15 +432,16 @@ function addNewTplRow(name, offset) {
     var div = document.getElementById('newTplItems');
     var row = document.createElement('div');
     row.className = 'input-group input-group-sm mb-1 tpl-drag-row';
-    row.draggable = true;
     var isFirst = div.querySelectorAll('.tpl-drag-row').length === 0;
-    row.innerHTML = '<span class="input-group-text" style="cursor:grab;padding:2px 6px;" title="拖拽排序"><i class="bi bi-grip-vertical"></i></span>'
+    row.innerHTML = '<span class="input-group-text tpl-drag-handle" style="cursor:grab;padding:2px 6px;" draggable="true" title="拖拽排序"><i class="bi bi-grip-vertical"></i></span>'
         + '<input type="text" name="item_name" class="form-control" placeholder="里程碑名称" value="' + (name || '') + '">'
-        + '<input type="text" name="item_offset" class="form-control" style="max-width:80px;" placeholder="' + (isFirst ? '0' : '+N天') + '" value="' + (offset || (isFirst ? '0' : '')) + '">'
-        + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()">-</button>';
-    // Drag events
-    row.addEventListener('dragstart', function(e) { e.dataTransfer.effectAllowed = 'move'; row.style.opacity = '0.4'; row._src = true; });
-    row.addEventListener('dragend', function() { row.style.opacity = ''; row._src = false; });
+        + '<input type="number" name="item_offset" class="form-control" style="max-width:70px;" placeholder="' + (isFirst ? '0' : '天') + '" min="0" value="' + (offset || (isFirst ? '0' : '')) + '" oninput="recalcTplDates(this)">'
+        + '<span class="input-group-text tpl-ref-date text-muted" style="font-size:.75em;min-width:75px;">--</span>'
+        + '<button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove();recalcTplDates(this)">-</button>';
+    // Drag events — only handle triggers drag
+    var handle = row.querySelector('.tpl-drag-handle');
+    handle.addEventListener('dragstart', function(e) { e.dataTransfer.effectAllowed = 'move'; row.style.opacity = '0.4'; row._src = true; });
+    handle.addEventListener('dragend', function() { row.style.opacity = ''; row._src = false; });
     row.addEventListener('dragover', function(e) { e.preventDefault(); if (!row._src) row.style.borderTop = '2px solid #0d6efd'; });
     row.addEventListener('dragleave', function() { row.style.borderTop = ''; });
     row.addEventListener('drop', function(e) {
@@ -438,19 +450,25 @@ function addNewTplRow(name, offset) {
         if (dragged && dragged !== row) div.insertBefore(dragged, row);
     });
     div.appendChild(row);
+    recalcTplDates(row);
 }
 function bumpNewTplRow(days) {
     var rows = document.querySelectorAll('#newTplItems .input-group');
-    if (!rows.length) { addNewTplRow('', '+' + days + '天'); return; }
+    if (!rows.length) { addNewTplRow('', days); return; }
     var lastInput = rows[rows.length - 1].querySelector('input[name="item_offset"]');
-    var cur = parseInt((lastInput.value || '0').replace(/[^0-9]/g, '')) || 0;
-    lastInput.value = '+' + (cur + days) + '天';
+    var cur = parseInt(lastInput.value || '0') || 0;
+    lastInput.value = cur + days;
+    recalcTplDates(lastInput);
 }
 
-// Shared drag helper
+// Shared drag helper — drag initiated by handle, moves the whole row
 function _bindDrag(row, container) {
-    row.addEventListener('dragstart', function(e) { e.dataTransfer.effectAllowed = 'move'; row.style.opacity = '0.4'; });
-    row.addEventListener('dragend', function() { row.style.opacity = ''; });
+    var handle = row.querySelector('.tpl-drag-handle') || row.querySelector('[style*="cursor:grab"]');
+    if (handle) {
+        handle.setAttribute('draggable', 'true');
+        handle.addEventListener('dragstart', function(e) { e.dataTransfer.effectAllowed = 'move'; row.style.opacity = '0.4'; });
+        handle.addEventListener('dragend', function() { row.style.opacity = ''; });
+    }
     row.addEventListener('dragover', function(e) { e.preventDefault(); row.style.borderTop = '2px solid #0d6efd'; });
     row.addEventListener('dragleave', function() { row.style.borderTop = ''; });
     row.addEventListener('drop', function(e) {
@@ -474,5 +492,67 @@ document.querySelectorAll('.edit-tpl-drag').forEach(function(row) {
         _bindDrag(row, container);
     });
 })();
+
+// Member drag-sort
+(function() {
+    var table = document.getElementById('memberTable');
+    if (!table) return;
+    var tbody = table.querySelector('tbody');
+    var dragRow = null;
+    tbody.querySelectorAll('tr[data-mid]').forEach(function(row) {
+        var handle = row.querySelector('.member-drag-handle');
+        if (handle) {
+            handle.addEventListener('dragstart', function(e) {
+                dragRow = row;
+                row.classList.add('opacity-50');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            handle.addEventListener('dragend', function() {
+                row.classList.remove('opacity-50');
+                dragRow = null;
+            });
+        }
+        row.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            if (!dragRow || dragRow === row) return;
+            var rect = row.getBoundingClientRect();
+            if (e.clientY < rect.top + rect.height / 2) tbody.insertBefore(dragRow, row);
+            else tbody.insertBefore(dragRow, row.nextSibling);
+        });
+    });
+    tbody.addEventListener('dragend', function() {
+        var ids = [];
+        tbody.querySelectorAll('tr[data-mid]').forEach(function(r) { ids.push(r.dataset.mid); });
+        fetch('{{ url_for("project.member_reorder", project_id=project.id) if project is defined else "" }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
+            body: JSON.stringify({ids: ids})
+        });
+    });
+})();
+
+// Recalculate reference dates for template rows
+function recalcTplDates(el) {
+    // Find the closest template section (card-body or collapse)
+    var section = el.closest('.card-body') || el.closest('.collapse') || el.closest('.d-none');
+    if (!section) return;
+    var baseInput = section.querySelector('.tpl-base-date');
+    if (!baseInput || !baseInput.value) {
+        section.querySelectorAll('.tpl-ref-date').forEach(function(s) { s.textContent = '--'; });
+        return;
+    }
+    var base = new Date(baseInput.value + 'T00:00:00');
+    var cumulative = 0;
+    section.querySelectorAll('input[name="item_offset"]').forEach(function(inp) {
+        var days = parseInt(inp.value) || 0;
+        cumulative += days;
+        var d = new Date(base);
+        d.setDate(d.getDate() + cumulative);
+        var ref = inp.parentElement.querySelector('.tpl-ref-date');
+        if (ref) ref.textContent = d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
+    });
+}
+// Init on page load
+document.querySelectorAll('.tpl-base-date').forEach(function(el) { recalcTplDates(el); });
 </script>
 {% endblock %}

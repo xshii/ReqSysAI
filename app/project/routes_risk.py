@@ -74,11 +74,12 @@ def risk_list(project_id):
 
     from app.utils.recipients import compute_default_recipients
     risk_to, risk_cc = compute_default_recipients(project_id)
+    is_pm = current_user.is_admin or project.owner_id == current_user.id
     return render_template('project/risks.html', project=project, risks=risks,
                            reqs=reqs, users=users, today=date.today(),
                            cur_status=status, cur_severity=severity, cur_overdue=overdue_filter,
                            risk_stats=risk_stats, domain_stats=domain_stats, cur_domain=domain_filter,
-                           default_to=risk_to, default_cc=risk_cc)
+                           default_to=risk_to, default_cc=risk_cc, is_pm=is_pm)
 
 
 @project_bp.route('/<int:project_id>/risks/add', methods=['POST'])
@@ -101,6 +102,7 @@ def risk_add(project_id):
         requirement_id=request.form.get('requirement_id', type=int) or None,
         due_date=date.fromisoformat(request.form.get('due_date')) if request.form.get('due_date') else None,
         created_by=current_user.id,
+        owner_since=datetime.now(timezone.utc) if request.form.get('owner', '').strip() else None,
     )
     db.session.add(risk)
     # Notify owner and tracker
@@ -168,9 +170,15 @@ def risk_reopen(risk_id):
 @project_bp.route('/risks/<int:risk_id>/delete', methods=['POST'])
 @login_required
 def risk_delete(risk_id):
-    """Soft delete a risk + audit log."""
+    """Soft delete a risk + audit log. Only PM/Admin."""
     from app.models.risk import RiskAuditLog
     risk = db.get_or_404(Risk, risk_id)
+    project = db.session.get(Project, risk.project_id)
+    if not (current_user.is_admin or (project and project.owner_id == current_user.id)):
+        if request.is_json:
+            return jsonify(ok=False, msg='仅 PM 或管理员可删除风险'), 403
+        flash('仅 PM 或管理员可删除风险', 'danger')
+        return redirect(url_for('project.risk_list', project_id=risk.project_id))
     risk.deleted_at = datetime.now(timezone.utc)
     risk.deleted_by = current_user.id
     db.session.add(RiskAuditLog(risk_id=risk.id, user_id=current_user.id, action='deleted', detail=risk.title))
@@ -292,10 +300,13 @@ def risk_import_csv(project_id):
 @login_required
 def risk_edit(risk_id):
     """Edit risk details."""
+    from app.models.risk import RiskComment
     risk = db.get_or_404(Risk, risk_id)
+    old_owner = risk.owner
     risk.title = request.form.get('title', risk.title).strip()
     risk.severity = request.form.get('severity', risk.severity)
-    risk.owner = request.form.get('owner', '').strip() or None
+    new_owner = request.form.get('owner', '').strip() or None
+    risk.owner = new_owner
     risk.owner_id = _resolve_owner_id(risk.owner)
     tracker_id = request.form.get('tracker_id', type=int)
     risk.tracker_id = tracker_id if tracker_id else None
@@ -305,6 +316,24 @@ def risk_edit(risk_id):
             risk.due_date = datetime.strptime(due, '%Y-%m-%d').date()
         except ValueError:
             pass
+    # Log owner change as comment with hold duration
+    if new_owner != old_owner:
+        now = datetime.now(timezone.utc)
+        if old_owner and risk.owner_since:
+            # 有前任且有接手时间，计算持有时长
+            delta = now - risk.owner_since
+            days = delta.days
+            hours = delta.seconds // 3600
+            duration = f'{days}天{hours}小时' if days else f'{hours}小时'
+            msg = f'责任人由「{old_owner}」变更为「{new_owner or "无"}」（{old_owner}持有{duration}）'
+        elif old_owner:
+            # 有前任但无接手时间（历史数据）
+            msg = f'责任人由「{old_owner}」变更为「{new_owner or "无"}」'
+        else:
+            # 从无人指派到有人
+            msg = f'指派责任人「{new_owner}」'
+        db.session.add(RiskComment(risk_id=risk.id, user_id=current_user.id, content=msg))
+        risk.owner_since = now if new_owner else None
     db.session.commit()
     flash('风险已更新', 'success')
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
@@ -341,6 +370,27 @@ def risk_comment(risk_id):
         db.session.add(RiskComment(risk_id=risk.id, user_id=current_user.id, content=content))
         db.session.commit()
         flash('进展已记录', 'success')
+    return redirect(url_for('project.risk_list', project_id=risk.project_id))
+
+
+@project_bp.route('/risks/comments/<int:comment_id>/delete', methods=['POST'])
+@login_required
+def risk_comment_delete(comment_id):
+    """Delete a risk comment. Anyone can delete, with audit trail."""
+    from app.models.audit import AuditLog
+    from app.models.risk import RiskComment
+    comment = db.get_or_404(RiskComment, comment_id)
+    risk = db.get_or_404(Risk, comment.risk_id)
+    # Audit log before deletion
+    db.session.add(AuditLog(
+        user_id=current_user.id, action='delete', entity_type='risk_comment',
+        entity_id=comment.id, entity_title=f'风险「{risk.title[:50]}」评论',
+        detail=f'作者: {comment.user.name}, 内容: {comment.content[:200]}',
+        ip_address=request.remote_addr,
+    ))
+    db.session.delete(comment)
+    db.session.commit()
+    flash('评论已删除', 'success')
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
 
 

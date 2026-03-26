@@ -36,15 +36,12 @@
             </button>
         </form>
         {% endif %}
-        {% if project.status != 'closed' %}
-        <form method="POST" action="{{ url_for('project.project_close', project_id=project.id) }}" class="d-inline" onsubmit="return confirm('确定关闭项目？关闭后不在导航中显示。')">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-x-circle"></i> 关闭项目</button>
-        </form>
-        {% else %}
+        {% if project.status != 'closed' and (current_user.is_admin or project.owner_id == current_user.id) %}
+        <button type="button" class="btn btn-outline-danger btn-sm py-0" style="font-size:.75em;" data-bs-toggle="modal" data-bs-target="#closeProjectModal"><i class="bi bi-x-circle"></i> 关闭</button>
+        {% elif project.status == 'closed' and (current_user.is_admin or project.owner_id == current_user.id) %}
         <form method="POST" action="{{ url_for('project.project_reopen', project_id=project.id) }}" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-outline-success btn-sm"><i class="bi bi-arrow-counterclockwise"></i> 重新开启</button>
+            <button type="submit" class="btn btn-outline-success btn-sm py-0" style="font-size:.75em;"><i class="bi bi-arrow-counterclockwise"></i> 重新开启</button>
         </form>
         {% endif %}
     </div>
@@ -176,6 +173,191 @@
         </div>
         {% endif %}
 
+        <!-- Gantt Chart -->
+        {% if gantt %}
+        <div class="card mb-3">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                <span class="small fw-bold"><i class="bi bi-bar-chart-steps"></i> 需求甘特图</span>
+                <div class="d-flex gap-1 align-items-center flex-wrap">
+                    <input type="date" id="ganttStart" class="form-control form-control-sm py-0" style="width:115px;font-size:.72em;" value="{{ gantt.start.strftime('%Y-%m-%d') }}" onchange="filterGantt()">
+                    <span class="text-muted" style="font-size:.7em;">~</span>
+                    <input type="date" id="ganttEnd" class="form-control form-control-sm py-0" style="width:115px;font-size:.72em;" value="{{ gantt.end.strftime('%Y-%m-%d') }}" onchange="filterGantt()">
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary py-0 gantt-scale-btn active" style="font-size:.72em;" data-scale="day" onclick="setGanttScale('day',this)">日</button>
+                        <button class="btn btn-outline-secondary py-0 gantt-scale-btn" style="font-size:.72em;" data-scale="week" onclick="setGanttScale('week',this)">周</button>
+                    </div>
+                    <select class="form-select form-select-sm py-0" style="width:80px;font-size:.72em;" id="ganttShow" onchange="filterGanttRows()">
+                        <option value="all">全部</option>
+                        <option value="parent">父需求</option>
+                        <option value="child">子需求</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.72em;" onclick="toggleGanttFullscreen()" title="全屏"><i class="bi bi-fullscreen"></i></button>
+                    <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.72em;" onclick="resetGantt()">重置</button>
+                </div>
+            </div>
+            <div class="card-body p-0" id="ganttBody" style="overflow-x:auto;">
+                {% set g_start = gantt.start %}
+                {% set g_days = gantt.days %}
+                {% set col_w = 24 %}
+                {% set bar_h = 20 %}
+                <table class="table table-sm table-bordered mb-0" style="min-width:{{ 80 + g_days * col_w }}px;table-layout:fixed;font-size:.7em;">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:50px;position:sticky;left:0;z-index:2;background:#f8f9fa;cursor:col-resize;" ondblclick="var w=this.style.width==='50px'?'90px':'50px';this.style.width=w;document.querySelectorAll('td[style*=sticky]').forEach(function(t){t.style.width=w});" title="双击切换列宽">负责人</th>
+                            {% for i in range(g_days) %}
+                            {% set d = g_start + timedelta(days=i) %}
+                            <th class="gantt-col" data-date="{{ d.strftime('%Y-%m-%d') }}" style="width:{{ col_w }}px;padding:1px;text-align:center;font-size:.75em;{{ 'background:#fff3cd;' if d == gantt.today else ('background:#f0f0f0;' if d.weekday() >= 5 else '') }}">
+                                {{ d.strftime('%d') }}{% if d.day == 1 or i == 0 %}<br><span style="font-size:.8em;">{{ d.strftime('%m') }}月</span>{% endif %}
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for person, person_info in gantt.persons.items() %}
+                        {% set reqs_g = person_info[0] %}
+                        {% set lane_count = person_info[1] %}
+                        {% set row_h = lane_count * (bar_h + 2) + 4 %}
+                        <tr>
+                            <td class="text-nowrap fw-bold align-middle" style="position:sticky;left:0;z-index:1;background:#fff;height:{{ row_h }}px;">{{ person }}</td>
+                            {% for i in range(g_days) %}
+                            {% set d = g_start + timedelta(days=i) %}
+                            <td class="gantt-col" data-date="{{ d.strftime('%Y-%m-%d') }}" style="padding:0;position:relative;height:{{ row_h }}px;{{ 'background:#fff3cd;' if d == gantt.today else ('background:#f8f8f8;' if d.weekday() >= 5 else '') }}">
+                                {% if d == gantt.today %}<div style="position:absolute;top:0;bottom:0;left:50%;width:2px;background:#dc3545;z-index:10;opacity:.6;"></div>{% endif %}
+                                {% for r in reqs_g %}
+                                {% if r.start_date == d %}
+                                {% set bar_days = (r.due_date - r.start_date).days + 1 %}
+                                {% set bar_w = bar_days * col_w - 2 %}
+                                {% set lane = r._gantt_lane %}
+                                {% set bar_top = lane * (bar_h + 2) + 2 %}
+                                {% set pct = 100 if r.status in ('done','closed') else (r.completion or 0) %}
+                                {% set is_overdue = r.due_date < gantt.today and r.status not in ('done','closed') %}
+                                {% set bar_color = '#198754' if pct >= 100 else ('#dc3545' if is_overdue else '#0d6efd') %}
+                                <div class="gantt-bar" data-type="{{ 'child' if r.parent_id else 'parent' }}" style="position:absolute;top:{{ bar_top }}px;left:0;width:{{ bar_w }}px;height:{{ bar_h }}px;background:linear-gradient(to right, {{ bar_color }}30 {{ pct }}%, #f0f0f0 {{ pct }}%);border:1px solid {{ bar_color }}80;border-radius:3px;z-index:1;overflow:hidden;"
+                                     data-bs-toggle="tooltip" title="{{ r.number }} {{ r.title }} | {{ r.status_label }} {{ pct }}% | {{ r.source_label }}{{ ' ↳子需求' if r.parent_id else '' }}">
+                                    <span style="position:absolute;inset:0;padding:0 2px;font-size:.8em;line-height:{{ bar_h }}px;color:{{ bar_color }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                        {{ r.title[:6] }}{% if r.title|length > 6 %}…{% endif %} {{ pct }}%
+                                    </span>
+                                </div>
+                                {% endif %}
+                                {% endfor %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <script>
+        var _ganttCard = document.querySelector('.card:has(#ganttBody)') || document.getElementById('ganttBody').closest('.card');
+        var _ganttScale = 'day';
+
+        function filterGantt() {
+            var start = document.getElementById('ganttStart').value;
+            var end = document.getElementById('ganttEnd').value;
+            if (!start || !end) return;
+            document.querySelectorAll('.gantt-col').forEach(function(td) {
+                var d = td.dataset.date;
+                td.style.display = (d >= start && d <= end) ? '' : 'none';
+            });
+            _saveGanttState();
+        }
+
+        function setGanttScale(scale, btn) {
+            _ganttScale = scale;
+            document.querySelectorAll('.gantt-scale-btn').forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            var isWeek = scale === 'week';
+            var w = isWeek ? 4 : 24;
+            // Update table min-width
+            var colCount = document.querySelectorAll('thead .gantt-col').length;
+            var table = document.querySelector('#ganttBody table');
+            if (table) table.style.minWidth = (50 + colCount * w) + 'px';
+            document.querySelectorAll('.gantt-col').forEach(function(td) {
+                td.style.width = w + 'px';
+                // In week mode, hide header text for non-Monday columns
+                if (td.tagName === 'TH' && td.dataset.date) {
+                    if (!td.dataset.origHtml) td.dataset.origHtml = td.innerHTML;
+                    var d = new Date(td.dataset.date + 'T00:00:00');
+                    td.innerHTML = isWeek ? (d.getDay() === 1 ? '<span style="font-size:.7em;">' + td.dataset.date.slice(5) + '</span>' : '') : td.dataset.origHtml;
+                }
+            });
+            // Recalculate bar widths
+            document.querySelectorAll('.gantt-bar').forEach(function(bar) {
+                var origW = parseFloat(bar.dataset.origWidth || bar.style.width);
+                if (!bar.dataset.origWidth) bar.dataset.origWidth = origW;
+                bar.style.width = (origW / 24 * w) + 'px';
+                // Hide text in narrow bars
+                var span = bar.querySelector('span');
+                if (span) span.style.display = isWeek ? 'none' : '';
+            });
+            _saveGanttState();
+        }
+
+        function filterGanttRows() {
+            var show = document.getElementById('ganttShow').value;
+            document.querySelectorAll('.gantt-bar').forEach(function(bar) {
+                if (show === 'all') bar.style.display = '';
+                else if (show === 'parent') bar.style.display = bar.dataset.type === 'parent' ? '' : 'none';
+                else bar.style.display = bar.dataset.type === 'child' ? '' : 'none';
+            });
+            _saveGanttState();
+        }
+
+        function toggleGanttFullscreen() {
+            if (!document.fullscreenElement) {
+                _ganttCard.requestFullscreen().catch(function(){});
+                _ganttCard.style.background = '#fff';
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function resetGantt() {
+            document.getElementById('ganttStart').value = '{{ gantt.start.strftime('%Y-%m-%d') }}';
+            document.getElementById('ganttEnd').value = '{{ gantt.end.strftime('%Y-%m-%d') }}';
+            document.getElementById('ganttShow').value = 'all';
+            _ganttScale = 'day';
+            document.querySelectorAll('.gantt-scale-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.scale === 'day'); });
+            document.querySelectorAll('.gantt-col').forEach(function(td) { td.style.display = ''; td.style.width = '24px'; });
+            document.querySelectorAll('.gantt-bar').forEach(function(b) { b.style.display = ''; });
+            _saveGanttState();
+        }
+
+        // Persist state to server via SiteSetting (shared across all users)
+        function _saveGanttState() {
+            var state = {
+                gs: document.getElementById('ganttStart').value,
+                ge: document.getElementById('ganttEnd').value,
+                scale: _ganttScale,
+                show: document.getElementById('ganttShow').value,
+            };
+            fetch('/api/site-setting', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({key: 'gantt_{{ project.id }}', value: JSON.stringify(state)})
+            });
+        }
+
+        // Restore saved state
+        (function() {
+            var saved = {{ gantt_state | tojson if gantt_state else 'null' }};
+            if (!saved) return;
+            try {
+                var s = typeof saved === 'string' ? JSON.parse(saved) : saved;
+                if (s.gs) document.getElementById('ganttStart').value = s.gs;
+                if (s.ge) document.getElementById('ganttEnd').value = s.ge;
+                if (s.show && s.show !== 'all') { document.getElementById('ganttShow').value = s.show; filterGanttRows(); }
+                if (s.scale === 'week') {
+                    var btn = document.querySelector('.gantt-scale-btn[data-scale="week"]');
+                    if (btn) setGanttScale('week', btn);
+                }
+                if (s.gs && s.ge) filterGantt();
+            } catch(e) {}
+        })();
+        </script>
+        {% endif %}
+
         <!-- Requirements Overview -->
         <div class="card mb-3">
             <div class="card-header py-2 d-flex justify-content-between align-items-center">
@@ -227,12 +409,14 @@
             </div>
             <div class="card-body py-2">
                 {% if key_members %}
+                <div class="row g-1">
                 {% for m in key_members %}
-                <div class="d-flex align-items-center mb-1">
-                    <span class="badge bg-light text-dark border me-2">{{ m.role_label }}</span>
-                    <span class="small">{{ m.display_name }}</span>
+                <div class="col-6 d-flex align-items-center mb-1">
+                    <span class="badge bg-light text-dark border me-1" style="font-size:.7em;">{{ m.role_label }}</span>
+                    <span class="small text-truncate">{{ m.display_name }}</span>
                 </div>
                 {% endfor %}
+                </div>
                 {% else %}
                 <div class="text-muted small">暂无关键成员</div>
                 {% endif %}
@@ -273,4 +457,34 @@
         </div>
     </div>
 </div>
+
+{# Close project confirmation modal #}
+{% if project.status != 'closed' and (current_user.is_admin or project.owner_id == current_user.id) %}
+<div class="modal fade" id="closeProjectModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title text-danger"><i class="bi bi-exclamation-triangle"></i> 关闭项目</h6>
+                <button type="button" class="btn-close btn-close-sm" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('project.project_close', project_id=project.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <p class="small text-muted mb-2">关闭后项目不在导航中显示。请输入项目名称 <strong>{{ project.name }}</strong> 以确认：</p>
+                    <input type="text" name="confirm_name" class="form-control form-control-sm" placeholder="输入项目名称" autocomplete="off" id="closeConfirmInput">
+                </div>
+                <div class="modal-footer py-1">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-sm btn-danger" id="closeConfirmBtn" disabled>确认关闭</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+document.getElementById('closeConfirmInput').addEventListener('input', function() {
+    document.getElementById('closeConfirmBtn').disabled = this.value.trim() !== '{{ project.name }}';
+});
+</script>
+{% endif %}
 {% endblock %}

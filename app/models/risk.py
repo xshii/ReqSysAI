@@ -24,6 +24,7 @@ class Risk(db.Model):
     created_at = db.Column(db.DateTime, default=db.func.now())
     updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
     resolved_at = db.Column(db.DateTime, nullable=True)
+    owner_since = db.Column(db.DateTime, nullable=True)  # 当前责任人接手时间
     deleted_at = db.Column(db.DateTime, nullable=True)  # 软删除
     deleted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 

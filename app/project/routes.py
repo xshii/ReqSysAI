@@ -21,6 +21,18 @@ def _resolve_owner_id(owner_name):
     return u.id if u else None
 
 
+def _get_gantt_state(project_id):
+    from app.models.site_setting import SiteSetting
+    raw = SiteSetting.get(f'gantt_{project_id}', '')
+    if raw:
+        try:
+            import json
+            return json.loads(raw)
+        except Exception:
+            pass
+    return None
+
+
 def _check_project_access(project):
     """Block non-managers from accessing hidden projects. Returns a redirect response or None."""
     if project.is_hidden and not current_user.is_team_manager:
@@ -32,13 +44,37 @@ def _check_project_access(project):
 @login_required
 def project_list():
     status = request.args.get('status', 'active')
+    search = request.args.get('q', '').strip()
     query = Project.query
     if status != 'all':
         query = query.filter_by(status=status)
     if not current_user.is_team_manager:
         query = query.filter_by(is_hidden=False)
-    projects = query.order_by(Project.created_at.desc()).all()
-    return render_template('project/list.html', projects=projects, cur_status=status)
+    if search:
+        query = query.filter(Project.name.contains(search))
+
+    all_projects = query.order_by(Project.created_at.desc()).all()
+    total_count = len(all_projects)
+
+    view = request.args.get('view', '')
+    followed_ids = {p.id for p in current_user.followed_projects.all()}
+    if search:
+        projects = all_projects
+        show_mode = 'all'
+    elif view == 'all':
+        projects = all_projects
+        show_mode = 'all'
+    elif view == 'followed' or (not view and followed_ids):
+        # 有关注项目则默认仅显示关注
+        projects = [p for p in all_projects if p.id in followed_ids]
+        show_mode = 'followed'
+    else:
+        projects = all_projects
+        show_mode = 'all'
+
+    return render_template('project/list.html', projects=projects, cur_status=status,
+                           show_mode=show_mode, total_count=total_count, search=search,
+                           all_projects=all_projects, followed_ids=followed_ids)
 
 
 @project_bp.route('/new', methods=['GET', 'POST'])
@@ -81,7 +117,7 @@ def project_create():
         db.session.commit()
         flash(f'项目「{project.name}」创建成功', 'success')
         return redirect(url_for('project.project_detail', project_id=project.id))
-    return render_template('project/form.html', form=form, title='新建项目', templates=templates)
+    return render_template('project/form.html', form=form, title='新建项目', templates=templates, today=date.today())
 
 
 @project_bp.route('/milestone-templates', methods=['POST'])
@@ -264,7 +300,7 @@ def project_detail(project_id):
     open_risks = Risk.query.filter_by(project_id=project_id, status='open').order_by(Risk.severity).all()
 
     # Key members
-    key_members = ProjectMember.query.filter_by(project_id=project_id, is_key=True).all()
+    key_members = ProjectMember.query.filter_by(project_id=project_id, is_key=True).order_by(ProjectMember.sort_order).all()
 
     # Recent completed todos (last 7 days)
     week_ago = today - timedelta(days=7)
@@ -293,12 +329,46 @@ def project_detail(project_id):
         except Exception:  # noqa: S110
             pass
 
+    # Gantt data: all reqs with start_date and due_date, include children
+    from collections import OrderedDict
+    gantt_reqs = [r for r in reqs if r.start_date and r.due_date]
+    for r in reqs:
+        for c in (r.children or []):
+            if c.start_date and c.due_date:
+                gantt_reqs.append(c)
+    gantt_reqs.sort(key=lambda r: (r.assignee_display, r.start_date))
+    gantt_data = {}
+    if gantt_reqs:
+        g_start = min(r.start_date for r in gantt_reqs)
+        g_end = max(r.due_date for r in gantt_reqs)
+        by_person = OrderedDict()
+        for r in gantt_reqs:
+            by_person.setdefault(r.assignee_display, []).append(r)
+        for name, person_reqs in by_person.items():
+            lanes = []
+            for r in person_reqs:
+                placed = False
+                for li, le in enumerate(lanes):
+                    if r.start_date > le:
+                        lanes[li] = r.due_date
+                        r._gantt_lane = li
+                        placed = True
+                        break
+                if not placed:
+                    r._gantt_lane = len(lanes)
+                    lanes.append(r.due_date)
+            by_person[name] = (person_reqs, len(lanes))
+        gantt_data = {'start': g_start, 'end': g_end, 'days': (g_end - g_start).days + 1,
+                      'persons': by_person, 'today': today}
+
     return render_template('project/detail.html', project=project, today=today,
                            reqs=reqs, req_total=req_total, req_done=req_done,
                            req_overdue=req_overdue, open_risks=open_risks,
                            key_members=key_members, recent_done=recent_done,
                            milestone_color=MILESTONE_COLOR, timeline_img=timeline_img,
-                           milestone_from_parent=milestone_from_parent)
+                           milestone_from_parent=milestone_from_parent,
+                           gantt=gantt_data, timedelta=timedelta,
+                           gantt_state=_get_gantt_state(project_id))
 
 
 @project_bp.route('/<int:project_id>/follow', methods=['POST'])
@@ -341,14 +411,14 @@ def project_edit(project_id):
     from app.models.project import MilestoneTemplate
     from app.models.project_member import ProjectMember
     templates = MilestoneTemplate.query.order_by(MilestoneTemplate.name).all()
-    members = ProjectMember.query.filter_by(project_id=project.id).all()
+    members = ProjectMember.query.filter_by(project_id=project.id).order_by(ProjectMember.sort_order).all()
     member_ids = {m.user_id for m in members}
     available = [u for u in User.query.filter_by(is_active=True).order_by(User.name).all()
                  if u.id not in member_ids]
     return render_template('project/form.html', form=form, project=project,
                            templates=templates, members=members, available=available,
                            roles=ProjectMember.DEFAULT_ROLES,
-                           title=f'编辑项目 - {project.name}')
+                           title=f'编辑项目 - {project.name}', today=date.today())
 
 
 @project_bp.route('/<int:project_id>/toggle-hidden', methods=['POST'])
@@ -368,6 +438,15 @@ def project_toggle_hidden(project_id):
 @login_required
 def project_close(project_id):
     project = db.get_or_404(Project, project_id)
+    # Only PM (owner) or Admin can close
+    if not (current_user.is_admin or project.owner_id == current_user.id):
+        flash('仅项目 PM 或管理员可关闭项目', 'danger')
+        return redirect(url_for('project.project_detail', project_id=project.id))
+    # Require project name confirmation
+    confirm_name = request.form.get('confirm_name', '').strip()
+    if confirm_name != project.name:
+        flash('项目名称不匹配，关闭操作已取消', 'danger')
+        return redirect(url_for('project.project_detail', project_id=project.id))
     project.status = 'closed'
     db.session.commit()
     flash(f'项目 {project.name} 已关闭', 'warning')

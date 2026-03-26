@@ -100,7 +100,7 @@
                 </div>
                 <div class="col-md-2">
                     <label class="form-label small mb-0">截止日期</label>
-                    <input type="date" max="2099-12-31" name="expires_at" class="form-control form-control-sm">
+                    <input type="date" max="2099-12-31" name="expires_at" class="form-control form-control-sm" value="{{ today }}">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label small mb-0">备注</label>
@@ -196,7 +196,7 @@
                         {% for k, v in source_labels.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
                     </select>
                 </div>
-                <div class="mb-2"><label class="form-label small mb-0">截止日期</label><input type="date" max="2099-12-31" id="feExpires" class="form-control form-control-sm"></div>
+                <div class="mb-2"><label class="form-label small mb-0">截止日期</label><input type="date" max="2099-12-31" id="feExpires" class="form-control form-control-sm" value="{{ today }}"></div>
                 <div class="mb-2"><label class="form-label small mb-0">备注</label><input type="text" id="feNote" class="form-control form-control-sm"></div>
             </div>
             <div class="modal-footer py-1"><button type="button" class="btn btn-sm btn-primary" onclick="saveFundEdit()">保存</button></div>

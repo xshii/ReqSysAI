@@ -78,6 +78,12 @@
                             {{ form.test_cases(class="form-control form-control-sm", placeholder="预估用例数") }}
                         </div>
                     </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label class="form-label small mb-0">AI辅助占比(%)</label>
+                            {{ form.ai_ratio(class="form-control form-control-sm", placeholder="0~100", min="0", max="100") }}
+                        </div>
+                    </div>
                     <div class="mb-3">
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <label class="form-label mb-0">子需求</label>
@@ -152,7 +158,7 @@ if (!_subAssigneeList) {
     {% endfor %}
     document.body.appendChild(_subAssigneeList);
 }
-function addSubReq(title, days, type, estLines, estCases) {
+function addSubReq(title, days, type, estLines, estCases, aiRatio) {
     var div = document.getElementById('subReqs');
     var row = document.createElement('div');
     row.className = 'd-flex gap-1 mb-1 align-items-center flex-wrap';
@@ -167,6 +173,7 @@ function addSubReq(title, days, type, estLines, estCases) {
         + '<input type="number" name="sub_days" class="form-control form-control-sm" style="width:65px;flex:0 0 65px;" placeholder="人天" step="0.5" min="0" value="' + d + '" oninput="sumSubDays()">'
         + '<input type="number" name="sub_est_lines" class="form-control form-control-sm sub-lines" style="width:70px;flex:0 0 70px;' + (t==='coding'?'':'display:none;') + '" placeholder="行数" min="0" value="' + (estLines||'') + '">'
         + '<input type="number" name="sub_est_cases" class="form-control form-control-sm sub-cases" style="width:70px;flex:0 0 70px;' + (t==='testing'?'':'display:none;') + '" placeholder="用例" min="0" value="' + (estCases||'') + '">'
+        + '<input type="number" name="sub_ai_ratio" class="form-control form-control-sm" style="width:60px;flex:0 0 60px;" placeholder="AI%" min="0" max="100" value="' + (aiRatio||'') + '">'
         + '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-1" onclick="this.parentElement.remove();sumSubDays()" style="flex:0 0 auto;"><i class="bi bi-x"></i></button>';
     div.appendChild(row);
 }

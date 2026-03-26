@@ -558,10 +558,35 @@ def team():
         Todo.user_id.in_(user_ids),
     ).options(joinedload(Todo.requirements)).order_by(Todo.created_at.desc()).all()
 
+    # Guard: user must belong to a group
+    if not current_user.group:
+        return render_template('todo/team.html',
+            no_group=True, users=[], user_data={}, user_done={}, groups=groups,
+            cur_group='', today=today, timedelta=timedelta, form=None,
+            reqs=[], default_req_ids=[], all_users=[],
+            due_options=[], help_due_options=[], help_todos=[],
+            req_comments={},
+        )
+
+    # Recent requirement comments (last 3 days)
+    from app.models.requirement import Comment as ReqComment
+    three_days_ago = today - timedelta(days=3)
+    all_req_ids = set()
+    for ud in user_data.values():
+        all_req_ids.update(ud.get('req_todos', {}).keys())
+    req_comments = {}  # req_id → [comments]
+    if all_req_ids:
+        recent_comments = ReqComment.query.filter(
+            ReqComment.requirement_id.in_(all_req_ids),
+            ReqComment.created_at >= str(three_days_ago),
+        ).options(joinedload(ReqComment.user)).order_by(ReqComment.created_at.desc()).all()
+        for c in recent_comments:
+            req_comments.setdefault(c.requirement_id, []).append(c)
+
     return render_template('todo/team.html',
         users=users, user_data=user_data, user_done=user_done, groups=groups,
         cur_group=cur_group, today=today, timedelta=timedelta, form=form,
         reqs=reqs, default_req_ids=default_req_ids, all_users=all_users_list,
         due_options=due_options, help_due_options=help_due_options,
-        help_todos=help_todos,
+        help_todos=help_todos, req_comments=req_comments, no_group=False,
     )

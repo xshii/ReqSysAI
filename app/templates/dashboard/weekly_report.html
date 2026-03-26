@@ -140,6 +140,26 @@
 <!-- Section 5: Risks & Issues -->
 <div class="report-section">
     <h6 class="risk-title">五、风险 & 问题</h6>
+    {% set rs = report_data.risk_stats %}
+    {% if rs and rs.total > 0 %}
+    <div class="risk-stats-bar d-flex gap-3 mb-2 ps-2 flex-wrap" style="font-size:.8rem;">
+        <span>总计 <strong>{{ rs.total }}</strong></span>
+        {% if rs.overdue %}<span class="text-danger">超期 <strong>{{ rs.overdue }}</strong></span>{% endif %}
+        {% if rs.open %}<span class="text-danger">未解决 <strong>{{ rs.open }}</strong></span>{% endif %}
+        {% if rs.resolved %}<span class="text-success">已解决 <strong>{{ rs.resolved }}</strong></span>{% endif %}
+        {% if rs.closed %}<span class="text-muted">已关闭 <strong>{{ rs.closed }}</strong></span>{% endif %}
+        <span class="border-start ps-2"></span>
+        {% if rs.high %}<span class="text-danger">高 <strong>{{ rs.high }}/{{ rs.high_total }}</strong></span>{% endif %}
+        {% if rs.medium %}<span class="text-warning">中 <strong>{{ rs.medium }}/{{ rs.medium_total }}</strong></span>{% endif %}
+        {% if rs.low %}<span class="text-muted">低 <strong>{{ rs.low }}/{{ rs.low_total }}</strong></span>{% endif %}
+    </div>
+    {% set ds = report_data.domain_stats %}
+    {% if ds %}
+    <div class="risk-domain-bar ps-2 mb-2" style="font-size:.75rem;">
+        {% for domain, dv in ds.items() %}<span class="badge bg-light text-dark border me-1">{{ domain }} <strong class="text-danger">{{ dv.open }}</strong>/{{ dv.total }}</span>{% endfor %}
+    </div>
+    {% endif %}
+    {% endif %}
     {% if report_data.open_risks %}
     <table class="report-table">
         <thead><tr><th>风险</th><th>严重程度</th><th>责任人</th><th>业务领域</th><th>跟踪人</th><th>预计闭环</th></tr></thead>
@@ -206,6 +226,9 @@
 {% set _overdue_count = [] %}
 {% for r in _overdue %}{% if r.due_date and r.due_date < report_data.today and r.status not in ('done','closed') %}{% if _overdue_count.append(1) %}{% endif %}{% endif %}{% endfor %}
 {% set _est_total = report_data.all_reqs | map(attribute='estimate_days') | select('number') | sum %}
+{% set _ai_weighted_sum = [] %}{% set _ai_days_sum = [] %}
+{% for r in report_data.all_reqs %}{% if r.ai_ratio is not none and r.estimate_days %}{% if _ai_weighted_sum.append(r.ai_ratio * r.estimate_days) %}{% endif %}{% if _ai_days_sum.append(r.estimate_days) %}{% endif %}{% endif %}{% endfor %}
+{% set _ai_pct = ((_ai_weighted_sum | sum) / (_ai_days_sum | sum) + 0.5) | int if _ai_days_sum else 0 %}
 <div class="report-section">
     <h6>七、需求统计</h6>
     <div class="report-stats mb-2">
@@ -217,6 +240,8 @@
         <div class="report-stat"><div class="num text-danger">{{ _overdue_count | length }}</div><div class="label">超期</div></div>
         <div class="report-stat"><div class="num">{{ _est_total | round(1) }}</div><div class="label">总人天</div></div>
         <div class="report-stat"><div class="num text-info">{{ ((_done / _total * 100) | round | int) if _total else 0 }}%</div><div class="label">完成率</div></div>
+        {% if _ai_days_sum %}<div class="report-stat"><div class="num text-purple" style="color:#7c3aed;">{{ _ai_pct }}%</div><div class="label">AI辅助</div></div>{% endif %}
+        {% if report_data.completion_weighted is not none %}<div class="report-stat"><div class="num text-success">{{ report_data.completion_weighted }}%</div><div class="label">加权完成</div></div>{% endif %}
     </div>
     <div class="progress mb-2" style="height:8px;">
         <div class="progress-bar bg-success" style="width:{{ (_done / _total * 100) if _total else 0 }}%"></div>
@@ -229,7 +254,7 @@
 <div class="report-section">
     <h6>八、需求列表{% if report_data.req_list_mode != 'full' %} <span style="font-weight:400;font-size:.75em;color:#64748b;">（{{ _mode_labels[report_data.req_list_mode] }}，共{{ report_data.req_total_with_children }}条）</span>{% endif %}</h6>
     <table class="report-table">
-        <thead><tr><th>编号</th><th>标题</th><th>状态</th><th>负责人</th><th>预估</th><th>预期完成</th></tr></thead>
+        <thead><tr><th>编号</th><th>标题</th><th>状态</th><th>完成率</th><th>负责人</th><th>工作量</th><th>AI%</th><th>预期完成</th></tr></thead>
         <tbody>
         {% for r in report_data.display_reqs %}
         <tr>
@@ -237,8 +262,10 @@
             <td>{{ r.title }}{% if r.parent_id %} <span class="text-muted" style="font-size:.8em;">↳子</span>{% endif %}{% if r.children and report_data.req_list_mode != 'full' %} <span class="text-muted small">({{ r.children | selectattr('status', 'in', ['done','closed']) | list | length }}/{{ r.children | length }})</span>{% endif %}</td>
             <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
                 {% if r.due_date and r.due_date < report_data.today and r.status not in ('done','closed') %}<span class="badge bg-danger">超期</span>{% endif %}</td>
+            <td>{% if r.status in ('done','closed') %}100%{% else %}{{ r.completion or 0 }}%{% endif %}</td>
             <td>{{ r.assignee_display }}</td>
-            <td>{{ r.estimate_days or '-' }}</td>
+            <td>{% if r.source == 'testing' %}{{ r.test_cases|int if r.test_cases else '-' }}用例{% elif r.source == 'coding' %}{{ '%g'|format((r.code_lines or 0) / 1000) if r.code_lines else '-' }}kloc{% else %}{{ r.estimate_days|int if r.estimate_days else '-' }}天{% endif %}</td>
+            <td>{% if r.ai_ratio is not none %}<span style="color:#7c3aed;">{{ r.ai_ratio }}%</span>{% else %}-{% endif %}</td>
             <td>{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
         </tr>
         {% endfor %}
@@ -279,16 +306,16 @@
             <input type="hidden" name="offset" value="{{ offset }}">
             <div class="mb-2">
                 <label class="form-label small fw-bold">整体进展</label>
-                <input type="text" name="summary" class="form-control form-control-sm" value="{{ ai.summary }}">
+                <textarea name="summary" class="form-control form-control-sm" rows="{{ [ai.summary.split('\n')|length, 1]|max }}">{{ ai.summary }}</textarea>
             </div>
             <div class="mb-2">
                 <label class="form-label small fw-bold">风险与问题（每行一条）</label>
-                <textarea name="risks" class="form-control form-control-sm" rows="3">{% for r in ai.risks %}{{ r }}
+                <textarea name="risks" class="form-control form-control-sm" rows="{{ [ai.risks|length, 1]|max }}">{% for r in ai.risks %}{{ r }}
 {% endfor %}</textarea>
             </div>
             <div class="mb-2">
                 <label class="form-label small fw-bold">下周计划（每行一条）</label>
-                <textarea name="plan" class="form-control form-control-sm" rows="3">{% for p in ai.plan %}{{ p }}
+                <textarea name="plan" class="form-control form-control-sm" rows="{{ [ai.plan|length, 1]|max }}">{% for p in ai.plan %}{{ p }}
 {% endfor %}</textarea>
             </div>
             <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-lg"></i> 保存</button>
@@ -550,6 +577,26 @@ function exportEml() {
         sec.querySelectorAll('p').forEach(function(p) {
             if (!p.closest('.report-summary') && !p.closest('table')) body += '<p style="font-size:13px;color:#64748b;margin:4px 0;">' + p.innerHTML + '</p>';
         });
+
+        // Risk stats bar
+        var statsBar = sec.querySelector('.risk-stats-bar');
+        if (statsBar) {
+            var statsHtml = '<table cellpadding="0" cellspacing="0" style="font-size:12px;margin-bottom:6px;"><tr>';
+            statsBar.querySelectorAll('span:not(.border-start)').forEach(function(s) {
+                var color = s.classList.contains('text-danger') ? '#dc3545' : s.classList.contains('text-success') ? '#198754' : s.classList.contains('text-muted') ? '#6c757d' : '#1e3a5f';
+                statsHtml += '<td style="padding:4px 10px;color:' + color + ';">' + s.innerHTML + '</td>';
+            });
+            statsHtml += '</tr></table>';
+            body += statsHtml;
+        }
+        var domainBar = sec.querySelector('.risk-domain-bar');
+        if (domainBar) {
+            var dHtml = '';
+            domainBar.querySelectorAll('.badge').forEach(function(b) {
+                dHtml += '<span style="display:inline-block;padding:2px 8px;margin:2px;font-size:11px;border:1px solid #e2e8f0;border-radius:4px;background:#f8fafc;">' + b.innerHTML + '</span>';
+            });
+            if (dHtml) body += '<div style="margin-bottom:8px;">' + dHtml + '</div>';
+        }
 
         // AI risk analysis
         sec.querySelectorAll('.mt-2.ps-2').forEach(function(d) {

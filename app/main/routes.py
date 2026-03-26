@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from flask import jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -351,15 +351,55 @@ def quick_todo():
                       'helper': helper.name, 'is_help': True}
             return jsonify(**result) if is_ajax else redirect(next_url or url_for('main.index'))
 
-    # Normal todo
+    # Normal todo (auto_done: create as already completed, for activity tracking)
+    auto_done = data.get('auto_done', False) if is_ajax else False
     todo = Todo(
         user_id=todo_user_id, title=title, due_date=today,
         category=category, requirements=reqs,
     )
-    todo.items.append(TodoItem(title=title, sort_order=0))
+    if auto_done:
+        todo.status = TODO_STATUS_DONE
+        todo.done_date = today
+    todo.items.append(TodoItem(title=title, sort_order=0, is_done=auto_done))
     db.session.add(todo)
     db.session.commit()
     return jsonify(ok=True, title=title, todo_id=todo.id) if is_ajax else redirect(next_url or url_for('main.index'))
+
+
+@main_bp.route('/api/site-setting', methods=['POST'])
+@login_required
+def api_site_setting():
+    """Save a site-wide setting (key-value)."""
+    from app.models.site_setting import SiteSetting
+    data = request.get_json() or {}
+    key = data.get('key', '').strip()
+    value = data.get('value', '')
+    if not key:
+        return jsonify(ok=False)
+    SiteSetting.set(key, value)
+    return jsonify(ok=True)
+
+
+@main_bp.route('/api/activity', methods=['POST'])
+@login_required
+def save_activity():
+    """Save a quick activity timer record (meeting/review/break/other)."""
+    from app.models.activity_timer import ActivityTimer
+    data = request.get_json() or {}
+    activity = data.get('activity', '').strip()
+    label = data.get('label', '').strip()
+    started_at_ms = data.get('start')
+    minutes = data.get('minutes', 0)
+    if not activity or not started_at_ms or minutes < 1:
+        return jsonify(ok=False)
+    started_at = datetime.fromtimestamp(started_at_ms / 1000)
+    rec = ActivityTimer(
+        user_id=current_user.id, activity=activity, label=label,
+        started_at=started_at, minutes=minutes, date=started_at.date(),
+    )
+    db.session.add(rec)
+    db.session.commit()
+    return jsonify(ok=True, id=rec.id)
 
 
 @main_bp.route('/api/batch-adopt', methods=['POST'])

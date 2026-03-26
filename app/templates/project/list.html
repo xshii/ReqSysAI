@@ -2,18 +2,27 @@
 {% block title %}项目列表 - {{ site_name }}{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4>项目列表</h4>
-    <div>
-        <div class="btn-group btn-group-sm me-2">
-            <a href="?status=active" class="btn btn-outline-primary {% if cur_status == 'active' %}active{% endif %}">进行中</a>
-            <a href="?status=completed" class="btn btn-outline-primary {% if cur_status == 'completed' %}active{% endif %}">已完成</a>
-            <a href="?status=closed" class="btn btn-outline-primary {% if cur_status == 'closed' %}active{% endif %}">已关闭</a>
-            <a href="?status=archived" class="btn btn-outline-primary {% if cur_status == 'archived' %}active{% endif %}">已归档</a>
-            <a href="?status=all" class="btn btn-outline-primary {% if cur_status == 'all' %}active{% endif %}">全部</a>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">项目列表{% if show_mode == 'followed' %} <span class="text-muted" style="font-size:.5em;">已关注 · 共{{ total_count }}个项目</span>{% endif %}</h4>
+    <div class="d-flex gap-2 align-items-center">
+        <form class="d-flex gap-1" method="GET">
+            <input type="hidden" name="status" value="{{ cur_status }}">
+            <input type="text" name="q" class="form-control form-control-sm" style="width:140px;" placeholder="搜索项目..." value="{{ search or '' }}">
+            <button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-search"></i></button>
+            {% if search %}<a href="?status={{ cur_status }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x"></i></a>{% endif %}
+        </form>
+        <div class="btn-group btn-group-sm">
+            <a href="?status={{ cur_status }}&view=followed" class="btn {{ 'btn-primary' if show_mode == 'followed' else 'btn-outline-secondary' }}"><i class="bi bi-star-fill"></i> 关注</a>
+            <a href="?status={{ cur_status }}&view=all" class="btn {{ 'btn-primary' if show_mode == 'all' and not search else 'btn-outline-secondary' }}">全部</a>
+        </div>
+        <div class="btn-group btn-group-sm">
+            <a href="?status=active&q={{ search or '' }}" class="btn btn-outline-primary {% if cur_status == 'active' %}active{% endif %}">进行中</a>
+            <a href="?status=completed&q={{ search or '' }}" class="btn btn-outline-primary {% if cur_status == 'completed' %}active{% endif %}">已完成</a>
+            <a href="?status=closed&q={{ search or '' }}" class="btn btn-outline-primary {% if cur_status == 'closed' %}active{% endif %}">已关闭</a>
+            <a href="?status=all&q={{ search or '' }}" class="btn btn-outline-primary {% if cur_status == 'all' %}active{% endif %}">全部</a>
         </div>
         <a href="{{ url_for('project.project_create') }}" class="btn btn-primary btn-sm">
-            <i class="bi bi-plus-lg"></i> 新建项目
+            <i class="bi bi-plus-lg"></i> 新建
         </a>
     </div>
 </div>
@@ -38,7 +47,7 @@
                 </div>
             </div>
             <div class="card-footer small text-muted">
-                {{ p.creator.name }} | {{ p.created_at.strftime('%Y-%m-%d') }}
+                {{ p.creator.name if p.creator else '未知' }} | {{ p.created_at.strftime('%Y-%m-%d') if p.created_at else '-' }}
             </div>
         </div>
     </div>
@@ -47,8 +56,27 @@
 {% else %}
 <div class="text-center text-muted py-5">
     <i class="bi bi-folder" style="font-size: 2rem;"></i>
+    {% if show_mode == 'followed' %}
+    <p class="mt-2">暂未关注任何项目，搜索后进入项目详情页点击关注</p>
+    {% else %}
     <p class="mt-2">暂无项目</p>
     <a href="{{ url_for('project.project_create') }}" class="btn btn-primary">创建第一个项目</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if show_mode == 'followed' and all_projects %}
+<hr>
+<div class="d-flex align-items-center gap-2 mb-2">
+    <span class="text-muted small">全部项目（点击进入后可关注）</span>
+</div>
+<div class="d-flex flex-wrap gap-2">
+    {% for p in all_projects %}
+    <a href="{{ url_for('project.project_detail', project_id=p.id) }}" class="btn btn-sm {{ 'btn-outline-primary' if p.id in followed_ids else 'btn-outline-secondary' }}" style="font-size:.75em;">
+        {{ p.name }}
+        {% if p.id in followed_ids %}<i class="bi bi-star-fill" style="font-size:.7em;"></i>{% endif %}
+    </a>
+    {% endfor %}
 </div>
 {% endif %}
 {% endblock %}

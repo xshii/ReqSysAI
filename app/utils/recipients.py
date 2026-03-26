@@ -42,7 +42,7 @@ def compute_default_recipients(cur_project_id):
                 to_set.add(owner_user.employee_id)
     default_to = ';'.join(sorted(to_set))
 
-    # Cc: all To people's managers + risk owners'/trackers' managers
+    # Cc: PM + PM's manager + all To people's managers
     cc_eids = set()
     # Managers of all project members
     all_user_ids = set()
@@ -59,6 +59,25 @@ def compute_default_recipients(cur_project_id):
     from flask_login import current_user as _cu
     if _cu.is_authenticated:
         all_user_ids.add(_cu.id)
+
+    # Ensure PM (project owner) is in Cc
+    from app.models.project import Project
+    project = db.session.get(Project, cur_project_id)
+    pm_eid = ''
+    if project and project.owner_id:
+        pm_user = db.session.get(User, project.owner_id)
+        if pm_user and pm_user.employee_id:
+            pm_eid = pm_user.employee_id
+            if pm_eid not in to_set:
+                cc_eids.add(pm_eid)
+            # PM's manager
+            if pm_user.manager:
+                parts = pm_user.manager.strip().split()
+                pm_mgr_eid = parts[-1] if len(parts) > 1 else parts[0]
+                if pm_mgr_eid:
+                    cc_eids.add(pm_mgr_eid)
+            all_user_ids.add(pm_user.id)
+
     # Extract current user's manager first
     my_mgr_eid = ''
     if _cu.is_authenticated and _cu.manager:

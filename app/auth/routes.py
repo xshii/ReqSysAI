@@ -35,23 +35,27 @@ def login():
 
     client_ip = _get_client_ip()
 
-    # Auto-login by IP: if a user is bound to this IP, login directly
+    # Auto-login by IP: if exactly one user is bound to this IP, login directly
     # Skip if user just logged out (prevent immediate re-login)
+    # Skip if multiple users share the same IP (avoid redirect loop)
     if session.pop('_logged_out', False):
         auto_user = None
     else:
         # Support comma-separated multi-IP (e.g. "192.168.1.100,127.0.0.1")
         # Use exact match first, then check comma-separated with boundary matching
-        auto_user = User.query.filter_by(ip_address=client_ip).first()
-        if not auto_user:
+        exact_matches = User.query.filter_by(ip_address=client_ip).all()
+        if len(exact_matches) == 1:
+            auto_user = exact_matches[0]
+        elif len(exact_matches) == 0:
             # Match ",IP," or "IP," (start) or ",IP" (end) to avoid partial matches
             candidates = User.query.filter(
                 User.ip_address.contains(client_ip)
             ).all()
-            for u in candidates:
-                if client_ip in [ip.strip() for ip in u.ip_address.split(',')]:
-                    auto_user = u
-                    break
+            matched = [u for u in candidates
+                       if client_ip in [ip.strip() for ip in u.ip_address.split(',')]]
+            auto_user = matched[0] if len(matched) == 1 else None
+        else:
+            auto_user = None
     if auto_user and request.method == 'GET':
         login_user(auto_user, remember=False)
         session.permanent = True
@@ -191,7 +195,30 @@ def profile():
         kept_roles = [r for r in current_user.roles if r.name in hidden]
         selected_roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
         current_user.roles = kept_roles + selected_roles
-        current_user.group = form.group.data or None
+        group_name = request.form.get('group', '').strip()
+        if group_name:
+            from app.models.user import Group as UserGroup
+            existing = UserGroup.query.filter_by(name=group_name).first()
+            if not existing:
+                db.session.add(UserGroup(name=group_name, is_hidden=True))
+                db.session.flush()
+        current_user.group = group_name or None
+        new_manager = request.form.get('manager', '').strip()
+        if new_manager:
+            import re
+            if not re.match(r'^.+\s[a-z]\d?00\d{6}$', new_manager):
+                flash('主管格式应为「姓名 工号」，如：John Smith z00880001', 'danger')
+                return render_template('auth/profile.html', form=form)
+        current_user.manager = new_manager or None
+        current_user.domain = request.form.get('domain', '').strip() or None
+        new_email = request.form.get('email', '').strip()
+        if new_email:
+            from app.models.site_setting import SiteSetting
+            allowed_suffix = SiteSetting.get('mail_domain', current_app.config.get('MAIL_DOMAIN', ''))
+            if allowed_suffix and not new_email.endswith('@' + allowed_suffix):
+                flash(f'邮箱必须以 @{allowed_suffix} 结尾', 'danger')
+                return render_template('auth/profile.html', form=form)
+        current_user.email = new_email or None
         current_user.pomodoro_minutes = request.form.get('pomodoro_minutes', type=int) or 45
         # Handle avatar upload
         from app.utils.upload import save_photo

@@ -64,6 +64,12 @@ class Config:
     AI_INPUT_MAX = _yml.get('app', {}).get('ai_input_max', 5000)
     AI_TIMEOUT = _yml.get('app', {}).get('ai_timeout', 120)
 
+    # Mail
+    MAIL_DOMAIN = _yml.get('app', {}).get('mail_domain', 'company.com')
+
+    # Exchange (Outlook calendar sync)
+    EXCHANGE_CONFIG = _yml.get('exchange', {})
+
     # Roles & admin from YAML
     ROLES = _yml.get('roles', [])
     HIDDEN_ROLES = [r['name'] for r in ROLES if r.get('hidden')]

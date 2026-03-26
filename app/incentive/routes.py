@@ -282,16 +282,16 @@ def export_csv():
     buf = io.StringIO()
     buf.write('\ufeff')
     writer = csv.writer(buf)
-    writer.writerow(['ID', '获奖名称', '类别', '导向', '提交人', '成员', '工号', '小组', '金额', '资金池', '激励来源', '获奖年月', '评语'])
+    writer.writerow(['ID', '获奖名称', '类别', '导向', '提交人', '成员', '工号', '小组', '金额', '资金池', '激励来源', '获奖年月', '事迹描述'])
     # Demo row (ID=0)
     writer.writerow([0, '示例奖项', '(自动)', '专业(选填)', '张三(选填)',
                      '获奖人姓名', 'a00123456(选填)', '(自动)', '500(选填)',
                      '资金池名(选填)', '及时激励(选填)', '2026-03(选填)',
-                     '评语(选填) 此行为格式示例，导入时自动跳过'])
+                     '事迹描述(选填) 此行为格式示例，导入时自动跳过'])
     for inc in items:
         fund_name = inc.fund.name if inc.fund else ''
         common = [inc.id, inc.title, inc.award_type, inc.category_label, inc.submitter.name]
-        tail = [inc.amount or '', fund_name, inc.source_label, inc.reviewed_at.strftime('%Y-%m') if inc.reviewed_at else '', inc.review_comment or '']
+        tail = [inc.amount or '', fund_name, inc.source_label, inc.reviewed_at.strftime('%Y-%m') if inc.reviewed_at else '', inc.description or '']
         for u in inc.nominees:
             writer.writerow(common + [u.name, u.employee_id, u.group or ''] + tail)
         if inc.external_nominees:
@@ -375,6 +375,7 @@ def import_csv():
             amount = float(first.get('金额', '').strip())
         except (ValueError, AttributeError):
             pass
+        description = first.get('事迹描述', '').strip()
         comment = first.get('评语', '').strip()[:150]
         month_str = first.get('获奖年月', '').strip()
 
@@ -438,7 +439,7 @@ def import_csv():
                 fund_id = fund.id
 
         inc = Incentive(
-            title=title, description=title, category=category,
+            title=title, description=description or title, category=category,
             submitted_by=submitter_id, status='approved',
             amount=amount, fund_id=fund_id, review_comment=comment,
             reviewed_by=current_user.id, reviewed_at=reviewed_at,

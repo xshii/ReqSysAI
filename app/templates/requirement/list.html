@@ -12,7 +12,10 @@
             <input type="file" name="csv_file" accept=".csv" onchange="this.form.submit();">
         </form>
         <button type="button" class="btn btn-sm btn-outline-primary" onclick="document.querySelector('#csvImportForm input[type=file]').click()"><i class="bi bi-upload"></i> 导入</button>
-        <a href="{{ url_for('requirement.requirement_create') }}" class="btn btn-primary btn-sm">
+        {% if cur_project %}
+        <button class="btn btn-sm btn-outline-warning" id="btnDiagnose" onclick="runDiagnose()"><i class="bi bi-robot"></i> AI诊断</button>
+        {% endif %}
+        <a href="{{ url_for('requirement.requirement_create', project_id=cur_project or '') }}" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-lg"></i> 创建需求
         </a>
     </div>
@@ -41,6 +44,7 @@
                     {% endfor %}
                 </select>
             </div>
+            {% if not cur_project %}
             <div class="col-auto">
                 <select name="project_id" class="form-select form-select-sm">
                     <option value="">全部项目</option>
@@ -49,11 +53,15 @@
                     {% endfor %}
                 </select>
             </div>
+            {% else %}
+            <input type="hidden" name="project_id" value="{{ cur_project }}">
+            {% endif %}
             <div class="col-auto">
                 <select name="sort" class="form-select form-select-sm">
-                    <option value="newest" {% if cur_sort == 'newest' %}selected{% endif %}>最新创建</option>
-                    <option value="oldest" {% if cur_sort == 'oldest' %}selected{% endif %}>最早创建</option>
+                    <option value="urgency" {% if cur_sort in ('urgency', 'newest') %}selected{% endif %}>按紧急度</option>
+                    <option value="due_date" {% if cur_sort == 'due_date' %}selected{% endif %}>按截止日期</option>
                     <option value="priority" {% if cur_sort == 'priority' %}selected{% endif %}>按优先级</option>
+                    <option value="oldest" {% if cur_sort == 'oldest' %}selected{% endif %}>最早创建</option>
                 </select>
             </div>
             <div class="col-auto">
@@ -65,6 +73,12 @@
 </div>
 
 {% if requirements %}
+{% if ai_ratio_weighted is not none %}
+<div class="d-flex gap-3 mb-2 small text-muted align-items-center">
+    <span>加权AI辅助占比 <strong style="color:#7c3aed;">{{ ai_ratio_weighted }}%</strong></span>
+    {% if completion_weighted is not none %}<span>加权完成进度 <strong class="text-success">{{ completion_weighted }}%</strong></span>{% endif %}
+</div>
+{% endif %}
 <div class="table-responsive">
     <table class="table table-hover">
         <thead class="table-light">
@@ -77,6 +91,7 @@
                 <th>负责人</th>
                 <th>进度</th>
                 <th>预估</th>
+                <th>AI%</th>
                 <th>日期</th>
             </tr>
         </thead>
@@ -87,22 +102,19 @@
                 <td><a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}">{{ r.title }}</a></td>
                 <td><span class="text-muted small">{{ r.project.name }}</span></td>
                 <td><span class="badge bg-{{ r.priority_color }}">{{ r.priority_label }}</span></td>
-                <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span></td>
+                <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span> <span class="badge bg-light text-secondary border" style="font-size:.7em;">{{ r.source_label }}</span></td>
                 <td>{{ r.assignee_display }}</td>
                 <td>
-                    {% set counts = todo_counts.get(r.id) %}
-                    {% if counts and counts.total > 0 %}
-                    <div class="d-flex align-items-center gap-1" style="min-width:80px;">
+                    {% set pct = 100 if r.status in ('done','closed') else (r.completion or 0) %}
+                    <div class="d-flex align-items-center gap-1" style="min-width:70px;">
                         <div class="progress flex-grow-1" style="height:6px;">
-                            <div class="progress-bar bg-success" style="width:{{ (counts.done / counts.total * 100) | round }}%"></div>
+                            <div class="progress-bar bg-{{ 'success' if pct >= 90 else ('primary' if pct >= 30 else 'secondary') }}" style="width:{{ pct }}%"></div>
                         </div>
-                        <span class="small text-muted">{{ counts.done }}/{{ counts.total }}</span>
+                        <span class="small text-muted">{{ pct }}%</span>
                     </div>
-                    {% else %}
-                    <span class="text-muted small">-</span>
-                    {% endif %}
                 </td>
                 <td class="small">{{ r.estimate_days or '-' }}天</td>
+                <td class="small">{% if r.ai_ratio is not none %}<span style="color:#7c3aed;">{{ r.ai_ratio }}%</span>{% else %}-{% endif %}</td>
                 <td class="text-muted small">{{ r.created_at.strftime('%m-%d') }}</td>
             </tr>
             {% endfor %}
@@ -137,9 +149,81 @@
 <div class="text-center text-muted py-5">
     <i class="bi bi-inbox" style="font-size: 2rem;"></i>
     <p class="mt-2">暂无需求</p>
-    <a href="{{ url_for('requirement.requirement_create') }}" class="btn btn-primary">
+    <a href="{{ url_for('requirement.requirement_create', project_id=cur_project or '') }}" class="btn btn-primary">
         <i class="bi bi-plus-lg"></i> 创建第一个需求
     </a>
 </div>
 {% endif %}
+
+{# AI Diagnostic panel #}
+<div id="diagnosePanel" class="card border-warning mt-3 d-none">
+    <div class="card-header py-1 bg-warning bg-opacity-10 d-flex justify-content-between">
+        <span class="small fw-bold"><i class="bi bi-search"></i> 需求诊断</span>
+        <button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="document.getElementById('diagnosePanel').classList.add('d-none')"><i class="bi bi-x"></i></button>
+    </div>
+    <div class="card-body py-2 small" id="diagnoseContent"></div>
+</div>
+
+{% block extra_js %}
+<script>
+function runDiagnose() {
+    var btn = document.getElementById('btnDiagnose');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 诊断中...';
+    fetch('/requirements/diagnose?project_id={{ cur_project or 0 }}')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-robot"></i> AI诊断';
+        var panel = document.getElementById('diagnosePanel');
+        var content = document.getElementById('diagnoseContent');
+        if (!d.ok || !d.issues.length) {
+            content.innerHTML = '<div class="text-success"><i class="bi bi-check-circle"></i> 未发现问题，需求状态良好</div>';
+        } else {
+            var summary = '<div class="mb-2 text-muted" style="font-size:.85em;">发现 ' + d.total + ' 个问题' + (d.resolved_count ? '，已处理 ' + d.resolved_count + ' 个' : '') + '</div>';
+            content.innerHTML = summary + d.issues.map(function(i) {
+                var color = i.level === 'danger' ? 'danger' : (i.level === 'warning' ? 'warning' : 'info');
+                var resolved = i.resolved;
+                return '<div class="d-flex gap-2 mb-1 align-items-start' + (resolved ? ' opacity-50' : '') + '" id="issue_' + i.id + '">'
+                    + '<button class="btn btn-sm py-0 px-1 flex-shrink-0 ' + (resolved ? 'btn-success' : 'btn-outline-secondary') + '" style="font-size:.65em;" onclick="toggleResolve(\'' + i.id + '\',' + !resolved + ',this)" title="' + (resolved ? '标记为未处理' : '标记为已处理') + '">'
+                    + '<i class="bi bi-' + (resolved ? 'check-circle-fill' : 'circle') + '"></i></button>'
+                    + '<span class="badge bg-' + color + '" style="font-size:.7em;flex-shrink:0;">' + i.tag + '</span>'
+                    + '<span' + (resolved ? ' class="text-decoration-line-through"' : '') + '>' + i.text + '</span></div>';
+            }).join('');
+        }
+        panel.classList.remove('d-none');
+    })
+    .catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-robot"></i> AI诊断';
+        showToast('诊断失败', 'danger');
+    });
+}
+function toggleResolve(issueId, resolve, btn) {
+    fetch('/requirements/diagnose/resolve', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({project_id: {{ cur_project or 0 }}, issue_id: issueId, resolve: resolve})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (!d.ok) return;
+        var row = document.getElementById('issue_' + issueId);
+        if (resolve) {
+            row.classList.add('opacity-50');
+            btn.className = 'btn btn-sm py-0 px-1 flex-shrink-0 btn-success';
+            btn.innerHTML = '<i class="bi bi-check-circle-fill"></i>';
+            btn.setAttribute('onclick', "toggleResolve('" + issueId + "',false,this)");
+            var span = row.querySelector('span:last-child');
+            if (span) span.classList.add('text-decoration-line-through');
+        } else {
+            row.classList.remove('opacity-50');
+            btn.className = 'btn btn-sm py-0 px-1 flex-shrink-0 btn-outline-secondary';
+            btn.innerHTML = '<i class="bi bi-circle"></i>';
+            btn.setAttribute('onclick', "toggleResolve('" + issueId + "',true,this)");
+            var span = row.querySelector('span:last-child');
+            if (span) span.classList.remove('text-decoration-line-through');
+        }
+    });
+}
+</script>
+{% endblock %}
 {% endblock %}

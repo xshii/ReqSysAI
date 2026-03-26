@@ -38,7 +38,11 @@ roles:
 admin:
   employee_id: a00000001
   name: 管理员
-  ip: 127.0.0.1
+  ip: ""
+
+exchange:
+  server: ""                        # Exchange 服务器地址，如 mail.company.com，留空禁用
+  domain: ""                        # Windows 域名，如 CORP
 
 ai:
   provider: ollama                  # ollama 或 openai

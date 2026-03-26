@@ -18,6 +18,7 @@
 .done-item { padding:4px 0;border-bottom:1px solid #f8f9fa; }
 .done-item:last-child { border-bottom:none; }
 .empty-state { opacity:.5; }
+.timeline-grid:hover { background:rgba(13,110,253,.01); }
 .now-line { position:absolute;left:0;right:0;z-index:15;pointer-events:none; }
 .now-line::before { content:'';position:absolute;left:-4px;top:-4px;width:8px;height:8px;background:#dc3545;border-radius:50%; }
 .now-line::after { content:'';position:absolute;left:0;right:0;top:0;border-top:2px solid #dc3545; }
@@ -31,6 +32,23 @@
         <span class="text-muted small">{{ today.strftime('%Y年%m月%d日') }}</span>
         {% set wk = ['周一','周二','周三','周四','周五','周六','周日'] %}
         <span class="badge bg-primary bg-opacity-10 text-primary">{{ wk[today.weekday()] }}</span>
+        <form method="POST" action="{{ url_for('dashboard.import_ics') }}" enctype="multipart/form-data" id="icsForm" class="d-none">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="ics_file" accept=".ics" onchange="this.form.submit();">
+        </form>
+        <button class="btn btn-sm btn-outline-secondary" onclick="document.querySelector('#icsForm input[type=file]').click()"
+                data-bs-toggle="tooltip" data-bs-placement="bottom"
+                title="Outlook→文件→另存为→.ics，然后上传"><i class="bi bi-calendar-plus"></i> 导入.ics</button>
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#exchangePanel"
+                id="btnExSync"
+                title="从Exchange服务器同步日历（密码仅存浏览器本地）"><i class="bi bi-arrow-repeat"></i> 同步Exchange</button>
+        {% if cal_events %}
+        <form method="POST" action="{{ url_for('dashboard.clear_ics') }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger" title="清除导入的日历事件"><i class="bi bi-calendar-x"></i></button>
+        </form>
+        <span class="badge bg-success bg-opacity-10 text-success small">{{ cal_events|length }}个事件</span>
+        {% endif %}
         <button class="btn btn-sm btn-outline-info" id="btnAiEff" onclick="aiEfficiency()"><i class="bi bi-robot"></i> AI 分析</button>
     </div>
 </div>
@@ -42,6 +60,42 @@
         <button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="document.getElementById('aiEffPanel').classList.add('d-none')"><i class="bi bi-x"></i></button>
     </div>
     <div class="card-body py-2 small" id="aiEffContent" style="white-space:pre-wrap;"></div>
+</div>
+
+{# Exchange sync panel #}
+<div class="collapse mb-3" id="exchangePanel">
+    <div class="card border-primary">
+        <div class="card-body py-2">
+            <div class="d-flex align-items-center gap-2 small mb-2">
+                <i class="bi bi-shield-lock text-primary"></i>
+                <span class="text-muted">密码仅存浏览器本地(localStorage)，不会保存到服务器数据库</span>
+            </div>
+            <div class="row g-2 align-items-end">
+                <div class="col-auto">
+                    <label class="form-label mb-0 small">域账号</label>
+                    <input type="text" id="exUser" class="form-control form-control-sm" style="width:130px;" placeholder="域账号">
+                </div>
+                <div class="col-auto">
+                    <label class="form-label mb-0 small">密码</label>
+                    <input type="password" id="exPass" class="form-control form-control-sm" style="width:130px;" placeholder="域密码">
+                </div>
+                <div class="col-auto small text-muted d-flex align-items-end" style="font-size:.75em;">
+                    {% if current_user.email %}
+                    <span>邮箱：{{ current_user.email }}</span>
+                    {% else %}
+                    <a href="{{ url_for('auth.profile') }}">请先设置邮箱</a>
+                    {% endif %}
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-sm btn-primary" onclick="syncExchange()"><i class="bi bi-arrow-repeat"></i> 同步近5天日历</button>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="clearExCreds()" title="清除本地存储的凭据"><i class="bi bi-trash"></i> 清除凭据</button>
+                </div>
+                <div class="col-auto" id="exStatus"></div>
+            </div>
+        </div>
+    </div>
 </div>
 
 {# Stats cards — modern style #}
@@ -82,10 +136,10 @@
     <div class="col-6 col-md-3">
         <div class="card day-stat-card border-0 shadow-sm">
             <div class="card-body py-2 d-flex align-items-center gap-2">
-                <div class="stat-icon bg-warning bg-opacity-10 text-warning"><i class="bi bi-lightning"></i></div>
+                <div class="stat-icon" style="color:#6f42c1;background:rgba(111,66,193,.1);"><i class="bi bi-camera-video"></i></div>
                 <div>
-                    <div class="fw-bold" style="font-size:1.2em;">{% if total_focus > 0 %}{{ (total_focus / (total_sessions or 1))|round(0)|int }}{% else %}0{% endif %}</div>
-                    <div class="text-muted" style="font-size:.7em;">平均专注/次</div>
+                    <div class="fw-bold" style="font-size:1.2em;">{{ '%d:%02d'|format(act_total_min // 60, act_total_min % 60) }}</div>
+                    <div class="text-muted" style="font-size:.7em;">活动时长</div>
                 </div>
             </div>
         </div>
@@ -120,7 +174,13 @@
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center border-bottom">
                 <span class="fw-bold small"><i class="bi bi-calendar3-week text-primary"></i> 时间线</span>
-                <span class="text-muted" style="font-size:.7em;">8:00 - 22:00 · 每格30分钟</span>
+                <span class="text-muted" style="font-size:.7em;">
+                    8:00 - 22:00
+                    <span class="ms-2" style="display:inline-block;width:8px;height:8px;background:#dc3545;border-radius:1px;"></span> 番茄钟
+                    <span class="ms-1" style="display:inline-block;width:8px;height:8px;background:#0d6efd;border-radius:1px;"></span> 计时
+                    {% if cal_events %}<span class="ms-1" style="display:inline-block;width:8px;height:8px;background:#198754;border-radius:1px;"></span> Outlook{% endif %}
+                    {% if act_events %}<span class="ms-1" style="display:inline-block;width:8px;height:8px;background:#6f42c1;border-radius:1px;"></span> 活动{% endif %}
+                </span>
             </div>
             <div class="card-body p-0" style="overflow-x:auto;">
                 <div class="d-flex">
@@ -147,7 +207,7 @@
                         </div>
 
                         {# Grid + blocks #}
-                        <div class="timeline-grid" style="height:{{ 14 * 40 }}px;">
+                        <div class="timeline-grid" data-date="{{ d.strftime('%Y-%m-%d') }}" style="height:{{ 14 * 40 }}px;cursor:crosshair;" onclick="onTimelineClick(event, this)">
                             {% for h in range(8, 22) %}
                             <div class="timeline-hour" style="position:absolute;top:{{ (h-8)*40 }}px;left:0;right:0;"></div>
                             {# Half-hour dashed line #}
@@ -171,6 +231,48 @@
                                     {% if bh >= 12 %}{{ block.title }}{% endif %}
                                 </span>
                             </div>
+                            {% endfor %}
+
+                            {# Imported calendar events #}
+                            {% for ev in cal_events %}
+                            {% if ev.date == d.strftime('%Y-%m-%d') %}
+                            {% set etop = ((ev.start_hour - 8) * 40 + (ev.start_min / 60 * 40))|int %}
+                            {% set eh = (ev.duration / 60 * 40)|int %}
+                            {% if eh < 8 %}{% set eh = 8 %}{% endif %}
+                            <div class="pomo-block position-absolute px-1 d-flex align-items-center"
+                                 style="top:{{ etop }}px;left:3px;right:3px;height:{{ eh }}px;
+                                        background:linear-gradient(135deg, rgba(25,135,84,.15), rgba(25,135,84,.06));
+                                        border-left:3px solid #198754;
+                                        font-size:.62em;overflow:hidden;z-index:6;"
+                                 data-bs-toggle="tooltip" data-bs-placement="right"
+                                 title="{{ '%02d:%02d'|format(ev.start_hour, ev.start_min) }} - {{ ev.title }} ({{ ev.duration }}min) 📅Outlook">
+                                <span class="text-truncate">
+                                    {% if eh >= 16 %}<strong>{{ '%02d:%02d'|format(ev.start_hour, ev.start_min) }}</strong> {% endif %}
+                                    {% if eh >= 12 %}<i class="bi bi-calendar-event" style="font-size:.8em;"></i> {{ ev.title }}{% endif %}
+                                </span>
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+
+                            {# Activity timer events #}
+                            {% for ev in act_events %}
+                            {% if ev.date == d.strftime('%Y-%m-%d') %}
+                            {% set atop = ((ev.start_hour - 8) * 40 + (ev.start_min / 60 * 40))|int %}
+                            {% set ah = (ev.duration / 60 * 40)|int %}
+                            {% if ah < 8 %}{% set ah = 8 %}{% endif %}
+                            <div class="pomo-block position-absolute px-1 d-flex align-items-center"
+                                 style="top:{{ atop }}px;left:3px;right:3px;height:{{ ah }}px;
+                                        background:linear-gradient(135deg, {{ ev.color }}25, {{ ev.color }}10);
+                                        border-left:3px solid {{ ev.color }};
+                                        font-size:.62em;overflow:hidden;z-index:7;"
+                                 data-bs-toggle="tooltip" data-bs-placement="right"
+                                 title="{{ '%02d:%02d'|format(ev.start_hour, ev.start_min) }} {{ ev.title }} ({{ ev.duration }}min)">
+                                <span class="text-truncate">
+                                    {% if ah >= 16 %}<strong>{{ '%02d:%02d'|format(ev.start_hour, ev.start_min) }}</strong> {% endif %}
+                                    {% if ah >= 12 %}{{ ev.title }}{% endif %}
+                                </span>
+                            </div>
+                            {% endif %}
                             {% endfor %}
 
                             {# Now marker (today only) #}
@@ -413,6 +515,48 @@ document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
     new bootstrap.Tooltip(el);
 });
 
+// Exchange sync: load saved credentials from localStorage
+(function() {
+    var u = localStorage.getItem('ex_user') || '';
+    var p = localStorage.getItem('ex_pass') || '';
+    if (u) document.getElementById('exUser').value = u;
+    if (p) document.getElementById('exPass').value = p;
+})();
+function syncExchange() {
+    var user = document.getElementById('exUser').value.trim();
+    var pass = document.getElementById('exPass').value;
+    if (!user || !pass) { showToast('请输入账号和密码', 'warning'); return; }
+    // Save to localStorage
+    localStorage.setItem('ex_user', user);
+    localStorage.setItem('ex_pass', pass);
+    var status = document.getElementById('exStatus');
+    status.innerHTML = '<span class="spinner-border spinner-border-sm text-primary"></span> <span class="small text-muted">同步中...</span>';
+    fetch('{{ url_for("dashboard.sync_exchange") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username: user, password: pass, email: '{{ current_user.email or "" }}'})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.ok) {
+            status.innerHTML = '<span class="badge bg-success">同步' + d.count + '个事件</span>';
+            setTimeout(function() { location.reload(); }, 800);
+        } else {
+            status.innerHTML = '<span class="badge bg-danger">' + (d.error || '同步失败') + '</span>';
+        }
+    })
+    .catch(function(e) {
+        status.innerHTML = '<span class="badge bg-danger">网络错误</span>';
+    });
+}
+function clearExCreds() {
+    localStorage.removeItem('ex_user');
+    localStorage.removeItem('ex_pass');
+    document.getElementById('exUser').value = '';
+    document.getElementById('exPass').value = '';
+    showToast('本地凭据已清除', 'info');
+}
+
 // AI Efficiency Analysis
 function aiEfficiency() {
     var btn = document.getElementById('btnAiEff');
@@ -426,6 +570,71 @@ function aiEfficiency() {
             document.getElementById('aiEffPanel').classList.remove('d-none');
         } else { alert(d.error || 'AI分析失败'); }
     }).catch(function(e) { loading.stop(); alert('请求失败：' + e.message); });
+}
+
+// Timeline click to add activity
+var _addPopover = null;
+function onTimelineClick(e, grid) {
+    // Ignore clicks on existing blocks
+    if (e.target.closest('.pomo-block')) return;
+    // Calculate time from click position
+    var rect = grid.getBoundingClientRect();
+    var y = e.clientY - rect.top;
+    var totalMin = Math.round(y / 40 * 60);
+    var hour = Math.floor(totalMin / 60) + 8;
+    var min = Math.round((totalMin % 60) / 15) * 15; // snap to 15min
+    if (min >= 60) { hour++; min = 0; }
+    if (hour < 8 || hour >= 22) return;
+    var dateStr = grid.dataset.date;
+    var timeStr = (hour < 10 ? '0' : '') + hour + ':' + (min < 10 ? '0' : '') + min;
+    showAddPopover(grid, y, dateStr, timeStr, hour, min);
+}
+function showAddPopover(grid, topPx, dateStr, timeStr, hour, min) {
+    removeAddPopover();
+    var pop = document.createElement('div');
+    pop.id = 'actAddPopover';
+    pop.style.cssText = 'position:absolute;top:' + topPx + 'px;left:-40px;right:-40px;z-index:50;background:#fff;border:1px solid #0d6efd;border-radius:8px;padding:8px;box-shadow:0 4px 16px rgba(0,0,0,.18);';
+    pop.innerHTML =
+        '<div class="d-flex gap-2 mb-2 align-items-center">'
+        + '<input type="time" id="addTime" class="form-control form-control-sm" style="width:auto;" value="' + timeStr + '">'
+        + '<input type="number" id="addDur" class="form-control form-control-sm" style="width:65px;" value="30" min="5" max="480" step="5" placeholder="时长">'
+        + '<span class="text-muted" style="font-size:.75em;">分钟</span>'
+        + '</div>'
+        + '<div class="d-flex gap-1 align-items-center">'
+        + '<input type="text" id="addLabel" class="form-control form-control-sm flex-grow-1" placeholder="活动名称">'
+        + '<button class="btn btn-sm btn-primary px-2" onclick="saveAddActivity(\'' + dateStr + '\')"><i class="bi bi-check-lg"></i></button>'
+        + '<button class="btn btn-sm btn-outline-secondary px-1" onclick="removeAddPopover()"><i class="bi bi-x-lg"></i></button>'
+        + '</div>';
+    grid.appendChild(pop);
+    _addPopover = pop;
+    pop.querySelector('#addLabel').focus();
+    // Enter key to save
+    pop.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Enter') saveAddActivity(dateStr);
+        if (ev.key === 'Escape') removeAddPopover();
+    });
+    // Stop click from bubbling back to grid
+    pop.addEventListener('click', function(ev) { ev.stopPropagation(); });
+}
+function removeAddPopover() {
+    if (_addPopover) { _addPopover.remove(); _addPopover = null; }
+}
+function saveAddActivity(dateStr) {
+    var time = document.getElementById('addTime').value;
+    var dur = parseInt(document.getElementById('addDur').value) || 30;
+    var label = document.getElementById('addLabel').value.trim();
+    if (!label) { document.getElementById('addLabel').focus(); return; }
+    var parts = time.split(':');
+    var h = parseInt(parts[0]), m = parseInt(parts[1]);
+    var startMs = new Date(dateStr + 'T' + time + ':00').getTime();
+    fetch('/api/activity', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({activity: 'manual', label: label, start: startMs, minutes: dur})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.ok) location.reload();
+        else alert('保存失败');
+    });
 }
 </script>
 {% endblock %}

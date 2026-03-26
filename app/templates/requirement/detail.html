@@ -42,7 +42,7 @@
             </div>
             <div class="card-body p-0">
                 <table class="table table-hover small mb-0">
-                    <thead class="table-light"><tr><th>编号</th><th>标题</th><th>状态</th><th>负责人</th><th>操作</th></tr></thead>
+                    <thead class="table-light"><tr><th>编号</th><th>标题</th><th>状态</th><th>负责人</th><th>AI%</th><th>操作</th></tr></thead>
                     <tbody>
                     {% for c in req.children %}
                     <tr>
@@ -50,6 +50,7 @@
                         <td>{{ c.title }}</td>
                         <td><span class="badge bg-{{ c.status_color }}">{{ c.status_label }}</span></td>
                         <td>{{ c.assignee_display }}</td>
+                        <td>{% if c.ai_ratio is not none %}<span style="color:#7c3aed;">{{ c.ai_ratio }}%</span>{% else %}-{% endif %}</td>
                         <td class="sub-req-actions" data-req-id="{{ c.id }}">
                             {% for s in c.allowed_next_statuses %}
                             <form method="POST" action="{{ url_for('requirement.requirement_status', req_id=c.id) }}" class="d-inline sub-status-form">
@@ -66,6 +67,44 @@
         </div>
         {% endif %}
 
+        <!-- Dependencies -->
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">依赖关系</h6>
+            </div>
+            <div class="card-body">
+                {# This req depends on #}
+                <div class="mb-2">
+                    <span class="small text-muted">前置依赖（本需求依赖于）</span>
+                    <div id="depList">
+                    {% for d in req.dependencies %}
+                        <div class="d-flex align-items-center gap-2 mb-1" id="dep-{{ d.id }}">
+                            <span class="badge bg-{{ d.status_color }}" style="font-size:.7em;">{{ d.status_label }}</span>
+                            <a href="{{ url_for('requirement.requirement_detail', req_id=d.id) }}" class="small">{{ d.number }} {{ d.title }}</a>
+                            <button class="btn btn-link btn-sm text-muted p-0" style="font-size:.7em;" onclick="removeDep({{ d.id }})" title="移除"><i class="bi bi-x-lg"></i></button>
+                        </div>
+                    {% endfor %}
+                    </div>
+                    <div class="input-group input-group-sm mt-1" style="max-width:400px;">
+                        <input type="text" id="depSearch" class="form-control" placeholder="搜索需求编号或标题..." autocomplete="off">
+                    </div>
+                    <div id="depResults" class="list-group small" style="max-width:400px;max-height:200px;overflow-y:auto;"></div>
+                </div>
+                {# Other reqs depend on this #}
+                {% if req.dependents %}
+                <div class="mt-2">
+                    <span class="small text-muted">被依赖（以下需求依赖于本需求）</span>
+                    {% for d in req.dependents %}
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="badge bg-{{ d.status_color }}" style="font-size:.7em;">{{ d.status_label }}</span>
+                        <a href="{{ url_for('requirement.requirement_detail', req_id=d.id) }}" class="small">{{ d.number }} {{ d.title }}</a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
         <!-- Comments -->
         <div class="card mb-3">
             <div class="card-header"><h6 class="mb-0">评论 ({{ req.comments | length }})</h6></div>
@@ -73,7 +112,13 @@
             <div class="card-body border-bottom">
                 <div class="d-flex justify-content-between">
                     <strong class="small">{{ c.user.name }}</strong>
-                    <span class="text-muted small">{{ c.created_at.strftime('%m-%d %H:%M') }}</span>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-muted small">{{ c.created_at.strftime('%m-%d %H:%M') }}</span>
+                        <form method="POST" action="{{ url_for('requirement.delete_comment', req_id=req.id, comment_id=c.id) }}" class="d-inline" onsubmit="return confirm('删除该评论？')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-link btn-sm text-muted p-0" style="font-size:.75em;" title="删除"><i class="bi bi-x-lg"></i></button>
+                        </form>
+                    </div>
                 </div>
                 <div class="mt-1">{{ c.content }}</div>
             </div>
@@ -124,6 +169,7 @@
                     <tr><td class="text-muted">预估</td><td>{{ req.estimate_days or '-' }} 人天</td></tr>
                     <tr><td class="text-muted">代码量</td><td>{{ req.code_lines or '-' }} 行</td></tr>
                     <tr><td class="text-muted">测试用例</td><td>{{ req.test_cases or '-' }} 个</td></tr>
+                    {% if req.ai_ratio is not none %}<tr><td class="text-muted">AI辅助</td><td><span style="color:#7c3aed;font-weight:600;">{{ req.ai_ratio }}%</span></td></tr>{% endif %}
                     <tr><td class="text-muted">创建者</td><td>{{ req.creator.name }}</td></tr>
                     <tr><td class="text-muted">创建日期</td><td>{{ req.created_at.strftime('%Y-%m-%d') }}</td></tr>
                 </table>
@@ -195,6 +241,69 @@
         })
         .catch(function() { showToast('网络错误', 'danger'); btn.disabled = false; });
     });
+
+    // --- Dependency management ---
+    var depTimer = null;
+    var depInput = document.getElementById('depSearch');
+    var depResults = document.getElementById('depResults');
+    if (depInput) {
+        depInput.addEventListener('input', function() {
+            clearTimeout(depTimer);
+            var q = this.value.trim();
+            if (q.length < 1) { depResults.innerHTML = ''; return; }
+            depTimer = setTimeout(function() {
+                fetch('/requirements/search-api?q=' + encodeURIComponent(q) + '&project_id={{ req.project_id }}&exclude_id={{ req.id }}')
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    depResults.innerHTML = '';
+                    (d.results || []).forEach(function(r) {
+                        var item = document.createElement('a');
+                        item.href = '#';
+                        item.className = 'list-group-item list-group-item-action py-1 px-2';
+                        item.innerHTML = '<span class="text-muted">' + r.number + '</span> ' + r.title + ' <span class="badge bg-secondary" style="font-size:.65em;">' + r.status + '</span>' + (r.project ? ' <span class="text-muted" style="font-size:.8em;">' + r.project + '</span>' : '');
+                        item.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            addDep(r.id);
+                        });
+                        depResults.appendChild(item);
+                    });
+                });
+            }, 300);
+        });
+    }
+
+    function addDep(depId) {
+        apiPost('/requirements/{{ req.id }}/dependencies', {dep_id: depId})
+        .then(function(d) {
+            if (!d.ok) { showToast(d.msg || '添加失败', 'danger'); return; }
+            var dep = d.dep;
+            var row = document.createElement('div');
+            row.className = 'd-flex align-items-center gap-2 mb-1';
+            row.id = 'dep-' + dep.id;
+            row.innerHTML = '<span class="badge bg-' + dep.color + '" style="font-size:.7em;">' + dep.status + '</span>'
+                + '<a href="/requirements/' + dep.id + '" class="small">' + dep.number + ' ' + dep.title + '</a>'
+                + '<button class="btn btn-link btn-sm text-muted p-0" style="font-size:.7em;" onclick="removeDep(' + dep.id + ')" title="移除"><i class="bi bi-x-lg"></i></button>';
+            document.getElementById('depList').appendChild(row);
+            depInput.value = '';
+            depResults.innerHTML = '';
+            showToast('依赖已添加', 'success');
+        });
+    }
+    window.addDep = addDep;
+
+    window.removeDep = function(depId) {
+        if (!confirm('移除该依赖？')) return;
+        fetch('/requirements/{{ req.id }}/dependencies/' + depId, {
+            method: 'DELETE',
+            headers: {'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || ''}
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (d.ok) {
+                var el = document.getElementById('dep-' + depId);
+                if (el) el.remove();
+                showToast('依赖已移除', 'success');
+            }
+        });
+    };
 })();
 </script>
 {% endblock %}

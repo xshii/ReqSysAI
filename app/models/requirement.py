@@ -1,5 +1,12 @@
 from app.extensions import db
 
+# Many-to-many: requirement dependencies
+requirement_dependencies = db.Table(
+    'requirement_dependencies',
+    db.Column('from_id', db.Integer, db.ForeignKey('requirements.id'), primary_key=True),
+    db.Column('to_id', db.Integer, db.ForeignKey('requirements.id'), primary_key=True),
+)
+
 
 class Requirement(db.Model):
     __tablename__ = 'requirements'
@@ -20,7 +27,9 @@ class Requirement(db.Model):
     start_date = db.Column(db.Date, nullable=True)
     due_date = db.Column(db.Date, nullable=True)
     parent_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=True)
-    source = db.Column(db.String(50), nullable=True)  # 需求类型: analysis/coding/testing
+    source = db.Column(db.String(50), default='coding')  # 需求类型: analysis/coding/testing
+    ai_ratio = db.Column(db.Integer, nullable=True)  # AI辅助占比(%)
+    completion = db.Column(db.Integer, default=0)  # 完成率(%) 0/30/60/90/100
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=db.func.now())
     updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
@@ -29,6 +38,14 @@ class Requirement(db.Model):
     project = db.relationship('Project', back_populates='requirements')
     assignee = db.relationship('User', foreign_keys=[assignee_id], backref='assigned_requirements')
     creator = db.relationship('User', foreign_keys=[created_by], backref='created_requirements')
+
+    # Dependencies: this requirement depends on (blocked by) these
+    dependencies = db.relationship(
+        'Requirement', secondary=requirement_dependencies,
+        primaryjoin='Requirement.id == requirement_dependencies.c.from_id',
+        secondaryjoin='Requirement.id == requirement_dependencies.c.to_id',
+        backref='dependents',
+    )
 
     @property
     def assignee_display(self):
@@ -42,8 +59,8 @@ class Requirement(db.Model):
 
     # Single source of truth: (label, color)
     _STATUS_META = {
-        'pending_review': ('待评估', 'secondary'),
-        'pending_dev':    ('待开发', 'dark'),
+        'pending_review': ('待启动', 'secondary'),
+        'pending_dev':    ('分析中', 'dark'),
         'in_dev':         ('开发中', 'primary'),
         'in_test':        ('测试中', 'warning text-dark'),
         'done':           ('已完成', 'success'),

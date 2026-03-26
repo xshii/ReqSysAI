@@ -63,6 +63,7 @@ class PermissionApplication(db.Model):
     applicant_eid = db.Column(db.String(30), nullable=True)  # 单人时的工号（兼容）
     reason = db.Column(db.String(300), nullable=True)
     status = db.Column(db.String(20), default='pending')  # pending/approved/rejected
+    is_frozen = db.Column(db.Boolean, default=False)  # 冻结后不允许同权限项新申请
     submitted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=db.func.now())
@@ -72,7 +73,7 @@ class PermissionApplication(db.Model):
     submitter = db.relationship('User', foreign_keys=[submitted_by])
     approver = db.relationship('User', foreign_keys=[approved_by])
 
-    STATUS_LABELS = {'pending': '待审批', 'approved': '已通过', 'rejected': '已拒绝'}
+    STATUS_LABELS = {'pending': '待审批', 'approved': '已通过', 'rejected': '已拒绝', 'frozen': '已冻结'}
 
     @property
     def status_label(self):

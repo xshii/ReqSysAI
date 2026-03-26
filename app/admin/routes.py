@@ -821,10 +821,15 @@ def ai_test_one():
 @admin_bp.route('/site-settings')
 @admin_required
 def site_settings():
-    from app.models.site_setting import SiteSetting
     from app.constants import DEFAULT_SITE_NAME
+    from app.models.site_setting import SiteSetting
     site_name = SiteSetting.get('site_name', current_app.config.get('SITE_NAME', DEFAULT_SITE_NAME))
-    return render_template('admin/site_settings.html', current_site_name=site_name)
+    exc_cfg = current_app.config.get('EXCHANGE_CONFIG', {})
+    return render_template('admin/site_settings.html',
+                           current_site_name=site_name,
+                           exchange_server=SiteSetting.get('exchange_server', exc_cfg.get('server', '')),
+                           exchange_domain=SiteSetting.get('exchange_domain', exc_cfg.get('domain', '')),
+                           mail_domain=SiteSetting.get('mail_domain', current_app.config.get('MAIL_DOMAIN', 'company.com')))
 
 
 @admin_bp.route('/site-settings/save', methods=['POST'])
@@ -836,9 +841,25 @@ def site_settings_save():
         flash('站点名称不能为空', 'danger')
         return redirect(url_for('admin.site_settings'))
     SiteSetting.set('site_name', new_name)
-    # Also update runtime config so CSV exports etc. pick it up immediately
     current_app.config['SITE_NAME'] = new_name
     flash('站点名称已更新', 'success')
+    return redirect(url_for('admin.site_settings'))
+
+
+@admin_bp.route('/site-settings/exchange', methods=['POST'])
+@admin_required
+def exchange_settings_save():
+    from app.models.site_setting import SiteSetting
+    server = request.form.get('exchange_server', '').strip()
+    domain = request.form.get('exchange_domain', '').strip()
+    mail = request.form.get('mail_domain', '').strip()
+    SiteSetting.set('exchange_server', server)
+    SiteSetting.set('exchange_domain', domain)
+    SiteSetting.set('mail_domain', mail or 'company.com')
+    # Update runtime config
+    current_app.config['EXCHANGE_CONFIG'] = {'server': server, 'domain': domain}
+    current_app.config['MAIL_DOMAIN'] = mail or 'company.com'
+    flash('Exchange 配置已保存' + ('（已启用）' if server else '（已禁用）'), 'success')
     return redirect(url_for('admin.site_settings'))
 
 

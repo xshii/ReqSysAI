@@ -146,6 +146,53 @@ checkHelpAlert();
         {% endif %}
     </div>
 </div>
+
+<div class="d-flex gap-2 mb-2 align-items-center" id="quickActivityBar"></div>
+<script>
+// Render activity buttons from localStorage config (or defaults)
+(function() {
+    var defaults = [
+        {key:'meeting', label:'开会', icon:'bi-camera-video-fill', color:'#6f42c1'},
+        {key:'review', label:'评审', icon:'bi-eye-fill', color:'#0d6efd'},
+        {key:'writing', label:'写材料', icon:'bi-pencil-square', color:'#d63384'},
+        {key:'bug_fill', label:'问题定位', icon:'bi-bug-fill', color:'#dc3545'},
+        {key:'break', label:'休息', icon:'bi-cup-hot-fill', color:'#fd7e14'},
+    ];
+    var acts = JSON.parse(localStorage.getItem('_act_config') || 'null') || defaults;
+    var bar = document.getElementById('quickActivityBar');
+    acts.forEach(function(a) {
+        var btn = document.createElement('button');
+        btn.className = 'btn btn-light quick-act-btn d-flex align-items-center justify-content-center';
+        btn.dataset.key = a.key;
+        btn.onclick = function() { toggleActivity(a.key, btn); };
+        btn.style.cssText = 'width:38px;height:38px;border-radius:50%;border:2px solid ' + a.color + '30;color:' + a.color + ';font-size:1.1em;padding:0;transition:all .15s;';
+        btn.innerHTML = '<i class="bi ' + a.icon + '"></i>';
+        btn.setAttribute('data-bs-toggle', 'tooltip');
+        btn.setAttribute('data-bs-placement', 'bottom');
+        btn.title = a.label;
+        bar.appendChild(btn);
+    });
+    // Settings button (always last)
+    var setBtn = document.createElement('a');
+    setBtn.href = '{{ url_for("auth.profile") }}';
+    setBtn.className = 'btn btn-light d-flex align-items-center justify-content-center';
+    setBtn.style.cssText = 'width:32px;height:32px;border-radius:50%;border:1px dashed #adb5bd;color:#adb5bd;font-size:.9em;padding:0;';
+    setBtn.innerHTML = '<i class="bi bi-gear"></i>';
+    setBtn.setAttribute('data-bs-toggle', 'tooltip');
+    setBtn.setAttribute('data-bs-placement', 'bottom');
+    setBtn.title = '自定义按钮';
+    bar.appendChild(setBtn);
+    // Timer display (next to buttons)
+    var timer = document.createElement('span');
+    timer.id = 'actTimer';
+    timer.className = 'd-none d-flex align-items-center gap-1';
+    timer.style.cssText = 'font-size:.78em;color:#198754;';
+    timer.innerHTML = '<span id="actTimerLabel" class="fw-bold"></span> <span id="actTimerElapsed">0:00</span>';
+    bar.appendChild(timer);
+    // Init tooltips on new elements
+    bar.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) { new bootstrap.Tooltip(el); });
+})();
+</script>
 {% if unclosed_meetings %}
 <div id="unclosedMeetings" class="d-none mb-2">
     <div class="card border-warning">
@@ -231,6 +278,15 @@ checkHelpAlert();
                         {% if r.due_date and r.due_date < today %}<span class="badge bg-danger" style="font-size:.65em;flex-shrink:0;">超期</span>{% endif %}
                         <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="small fw-bold text-primary text-nowrap text-decoration-none" style="overflow:hidden;text-overflow:ellipsis;" title="{{ r.number }} {{ r.title }}">{{ r.number }} {{ r.title }}</a>
                     </div>
+                    {% if r.status not in ('done', 'closed') %}
+                    <select class="form-select form-select-sm py-0 flex-shrink-0 req-pct-select" data-req-id="{{ r.id }}" data-status="{{ r.status }}"
+                            style="width:62px;font-size:.7em;padding-right:18px;" onchange="updateReqPct(this)">
+                        {% set cur_pct = r.completion or 0 %}
+                        {% for p in range(0, 110, 10) %}
+                        <option value="{{ p }}" {{ 'selected' if cur_pct == p }}>{{ p }}%</option>
+                        {% endfor %}
+                    </select>
+                    {% endif %}
                     <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-grow-1 quick-todo-form">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="req_id" value="{{ r.id }}">
@@ -401,7 +457,7 @@ checkHelpAlert();
                     </div>
                 </div>
                 {% else %}
-                <div class="text-muted small ps-2"><a href="{{ url_for('main.recurring_list') }}">添加周期任务</a></div>
+                <div class="text-center py-1"><a href="{{ url_for('main.recurring_list') }}" class="btn btn-sm btn-outline-secondary py-0" style="font-size:.75em;"><i class="bi bi-plus"></i> 添加周期任务</a></div>
                 {% endif %}
             </div>
         </div>
@@ -595,6 +651,151 @@ checkHelpAlert();
 
 {% block extra_js %}
 <script>
+// Activity quick timer (meeting/review/break/other)
+var _actInterval = null;
+var _actConfig = JSON.parse(localStorage.getItem('_act_config') || 'null') || [
+    {key:'meeting',label:'开会'},{key:'review',label:'评审'},{key:'writing',label:'写材料'},{key:'break',label:'休息'}
+];
+var _actLabels = {};
+_actConfig.forEach(function(a) { _actLabels[a.key] = a.label; });
+(function() {
+    // Restore running activity from localStorage
+    var saved = localStorage.getItem('_activity');
+    if (saved) {
+        try {
+            var a = JSON.parse(saved);
+            if (a && a.key && a.start) {
+                // Auto-stop if > 4 hours
+                if (Date.now() - a.start > 2 * 3600 * 1000) { _saveActivity(); localStorage.removeItem('_activity'); }
+                else _resumeActivity(a.key, a.start);
+            }
+        } catch(e) {}
+    }
+})();
+function toggleActivity(key, btn) {
+    var running = localStorage.getItem('_activity');
+    if (running) {
+        var a = JSON.parse(running);
+        if (a.key === key) { stopActivity(); return; }
+        // Switch: stop current, start new
+        _saveActivity();
+    }
+    var now = Date.now();
+    localStorage.setItem('_activity', JSON.stringify({key: key, start: now}));
+    _resumeActivity(key, now);
+    // Highlight active button
+    document.querySelectorAll('.quick-act-btn').forEach(function(b) {
+        var isActive = b.dataset.key === key;
+        b.style.opacity = isActive ? '1' : '.4';
+        b.style.transform = isActive ? 'scale(1.15)' : '';
+        b.style.boxShadow = isActive ? '0 0 0 3px ' + b.style.color + '40' : '';
+        // Pause overlay on active button
+        var overlay = b.querySelector('.act-pause-overlay');
+        if (isActive && !overlay) {
+            overlay = document.createElement('span');
+            overlay.className = 'act-pause-overlay';
+            overlay.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);border-radius:50%;color:#fff;font-size:1em;';
+            overlay.innerHTML = '<i class="bi bi-pause-fill"></i>';
+            b.style.position = 'relative';
+            b.appendChild(overlay);
+        } else if (!isActive && overlay) {
+            overlay.remove();
+        }
+    });
+}
+function _resumeActivity(key, startMs) {
+    var timer = document.getElementById('actTimer');
+    var label = document.getElementById('actTimerLabel');
+    var elapsed = document.getElementById('actTimerElapsed');
+    timer.classList.remove('d-none');
+    label.textContent = _actLabels[key] || key;
+    // Highlight button
+    document.querySelectorAll('.quick-act-btn').forEach(function(b) {
+        var isActive = b.dataset.key === key;
+        b.style.opacity = isActive ? '1' : '.4';
+        b.style.transform = isActive ? 'scale(1.15)' : '';
+        b.style.boxShadow = isActive ? '0 0 0 3px ' + b.style.color + '40' : '';
+        // Pause overlay on active button
+        var overlay = b.querySelector('.act-pause-overlay');
+        if (isActive && !overlay) {
+            overlay = document.createElement('span');
+            overlay.className = 'act-pause-overlay';
+            overlay.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);border-radius:50%;color:#fff;font-size:1em;';
+            overlay.innerHTML = '<i class="bi bi-pause-fill"></i>';
+            b.style.position = 'relative';
+            b.appendChild(overlay);
+        } else if (!isActive && overlay) {
+            overlay.remove();
+        }
+    });
+    if (_actInterval) clearInterval(_actInterval);
+    function tick() {
+        var sec = Math.floor((Date.now() - startMs) / 1000);
+        var m = Math.floor(sec / 60), s = sec % 60;
+        elapsed.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+    }
+    tick();
+    _actInterval = setInterval(tick, 1000);
+}
+function stopActivity() {
+    _saveActivity();
+    localStorage.removeItem('_activity');
+    if (_actInterval) { clearInterval(_actInterval); _actInterval = null; }
+    document.getElementById('actTimer').classList.add('d-none');
+    document.querySelectorAll('.quick-act-btn').forEach(function(b) {
+        b.style.opacity = '1'; b.style.transform = ''; b.style.boxShadow = '';
+        var ov = b.querySelector('.act-pause-overlay'); if (ov) ov.remove();
+    });
+}
+function _saveActivity() {
+    var raw = localStorage.getItem('_activity');
+    if (!raw) return;
+    var a = JSON.parse(raw);
+    var min = Math.round((Date.now() - a.start) / 60000);
+    if (min < 1) return; // ignore < 1 min
+    // Save to server
+    apiPost('/api/activity', {activity: a.key, label: _actLabels[a.key] || a.key, start: a.start, minutes: min});
+}
+
+// Requirement completion % selector
+function updateReqPct(sel) {
+    var reqId = sel.dataset.reqId;
+    var pct = parseInt(sel.value);
+    var curStatus = sel.dataset.status;
+    // Save completion
+    apiPost('/requirements/' + reqId + '/completion-api', {completion: pct}).then(function(d) {
+        if (!d || !d.ok) { showToast('更新失败', 'danger'); return; }
+    });
+    // Auto-advance status when hitting 100%
+    if (pct === 100) {
+        var nextMap = {"pending_review":"pending_dev","pending_dev":"in_dev","in_dev":"in_test","in_test":"done"};
+        var next = nextMap[curStatus];
+        if (next) {
+            apiPost('/requirements/' + reqId + '/status-api', {status: next}).then(function(d) {
+                if (d && d.ok) {
+                    // Reset completion to 0 for new stage
+                    apiPost('/requirements/' + reqId + '/completion-api', {completion: 0});
+                    showToast('已完成 → ' + d.label, 'success');
+                    if (d.status === 'done') {
+                        // Hide selector for done status
+                        sel.style.display = 'none';
+                    } else {
+                        sel.dataset.status = d.status;
+                        sel.value = '0';
+                    }
+                    // Update badge text + color
+                    var card = sel.closest('.card');
+                    var badge = card.querySelector('.badge');
+                    if (badge) {
+                        badge.textContent = d.label;
+                        badge.className = 'badge bg-' + (d.color || 'secondary');
+                    }
+                }
+            });
+        }
+    }
+}
+
 // Sync chevron icon on all Bootstrap collapse toggles
 document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function(trigger) {
     var target = document.querySelector(trigger.dataset.bsTarget);
@@ -1212,7 +1413,8 @@ document.addEventListener('dragend', function() {
 document.addEventListener('mouseover', function(e) {
     var el = e.target.closest('[data-bs-toggle="tooltip"]');
     if (el && !bootstrap.Tooltip.getInstance(el)) {
-        new bootstrap.Tooltip(el);
+        var tip = new bootstrap.Tooltip(el);
+        tip.show();
     }
 });
 

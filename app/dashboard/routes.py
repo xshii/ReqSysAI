@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 
-from flask import current_app, flash, jsonify, redirect, render_template, request, send_file, url_for
+from flask import current_app, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
@@ -124,7 +124,7 @@ def requirement_progress():
 # ---- Stats / Weekly Report / Excel Export ----
 
 @dashboard_bp.route('/stats')
-@manager_required
+@login_required
 def stats():
 
     offset = request.args.get('week', 0, type=int)
@@ -144,7 +144,7 @@ def stats():
 
 
 @dashboard_bp.route('/metrics')
-@manager_required
+@login_required
 def metrics():
     """Delivery cycle time and estimate-vs-actual deviation analytics."""
     import statistics as _stats
@@ -177,7 +177,7 @@ def metrics():
 
 
 @dashboard_bp.route('/stats/export')
-@manager_required
+@login_required
 def stats_export():
     """Export weekly stats as Excel."""
     import openpyxl
@@ -312,7 +312,7 @@ def weekly_report():
         req_overview_q = Requirement.query.filter(Requirement.parent_id.is_(None))
         if cur_project_id:
             req_overview_q = req_overview_q.filter_by(project_id=cur_project_id)
-        all_reqs = req_overview_q.order_by(Requirement.number).all()
+        all_reqs = req_overview_q.order_by(Requirement.due_date.asc().nullslast(), Requirement.number).all()
 
         # 6. Per-person stats this week
         from collections import Counter
@@ -513,6 +513,37 @@ def weekly_report():
         # Package all data for template and Excel
         sub_projects = _build_sub_projects(cur_project, monday)
 
+        # Risk stats & domain stats for report
+        all_project_risks = Risk.query.filter_by(project_id=cur_project_id).filter(Risk.deleted_at.is_(None)).all() if cur_project_id else open_risks
+        risk_stats = {
+            'total': len(all_project_risks),
+            'open': sum(1 for r in all_project_risks if r.status == 'open'),
+            'overdue': sum(1 for r in all_project_risks if r.is_overdue),
+            'resolved': sum(1 for r in all_project_risks if r.status == 'resolved'),
+            'closed': sum(1 for r in all_project_risks if r.status == 'closed'),
+            'high': sum(1 for r in all_project_risks if r.status == 'open' and r.severity == 'high'),
+            'high_total': sum(1 for r in all_project_risks if r.severity == 'high'),
+            'medium': sum(1 for r in all_project_risks if r.status == 'open' and r.severity == 'medium'),
+            'medium_total': sum(1 for r in all_project_risks if r.severity == 'medium'),
+            'low': sum(1 for r in all_project_risks if r.status == 'open' and r.severity == 'low'),
+            'low_total': sum(1 for r in all_project_risks if r.severity == 'low'),
+        }
+        from collections import defaultdict as _defaultdict
+        domain_stats = _defaultdict(lambda: {'total': 0, 'open': 0})
+        for r in all_project_risks:
+            domain = (r.owner_user.domain if r.owner_user and r.owner_user.domain else '未分类')
+            domain_stats[domain]['total'] += 1
+            if r.status == 'open':
+                domain_stats[domain]['open'] += 1
+        domain_stats = {k: v for k, v in sorted(domain_stats.items(), key=lambda x: (-x[1]['open'], -x[1]['total'])) if v['open'] > 0}
+
+        # Weighted completion progress
+        _active = [r for r in all_reqs if r.status != 'closed']
+        _comp_pct = lambda r: 100 if r.status == 'done' else (r.completion or 0)
+        _comp_w_sum = sum(_comp_pct(r) * (r.estimate_days or 1) for r in _active)
+        _comp_d_sum = sum((r.estimate_days or 1) for r in _active)
+        completion_weighted = round(_comp_w_sum / _comp_d_sum) if _comp_d_sum else None
+
         report_data = {
             'project_name': project_name,
             'project_goal': cur_project.description if cur_project else '',
@@ -523,12 +554,15 @@ def weekly_report():
             'milestones': milestones,
             'all_reqs': all_reqs, 'display_reqs': display_reqs, 'req_list_mode': req_list_mode, 'req_total_with_children': len(all_with_children),
             'req_investment': req_investment,
+            'completion_weighted': completion_weighted,
             'person_done': dict(person_done),
             'person_active': dict(person_active),
             'all_persons': all_persons,
             'todos_done': todos_done,
             'todos_active': todos_active,
             'open_risks': open_risks,
+            'risk_stats': risk_stats,
+            'domain_stats': domain_stats,
             'people_map': people_map,
             'people_map_reqs': people_map_reqs,
             'people_roles': {m.display_name: m.role_label for m in ProjectMember.query.filter_by(project_id=cur_project_id).all()},
@@ -581,7 +615,7 @@ def weekly_report():
         req_overview_q = Requirement.query.filter(Requirement.parent_id.is_(None))
         if cur_project_id:
             req_overview_q = req_overview_q.filter_by(project_id=cur_project_id)
-        all_reqs = req_overview_q.order_by(Requirement.number).all()
+        all_reqs = req_overview_q.order_by(Requirement.due_date.asc().nullslast(), Requirement.number).all()
 
         # Todos
         done_q = Todo.query.filter(Todo.done_date >= monday, Todo.done_date <= sunday)\
@@ -661,6 +695,37 @@ def weekly_report():
                     'summary': child_saved.summary if child_saved and child_saved.summary else None,
                 })
 
+        # Risk stats & domain stats for saved report
+        all_project_risks2 = Risk.query.filter_by(project_id=cur_project_id).filter(Risk.deleted_at.is_(None)).all() if cur_project_id else open_risks
+        risk_stats2 = {
+            'total': len(all_project_risks2),
+            'open': sum(1 for r in all_project_risks2 if r.status == 'open'),
+            'overdue': sum(1 for r in all_project_risks2 if r.is_overdue),
+            'resolved': sum(1 for r in all_project_risks2 if r.status == 'resolved'),
+            'closed': sum(1 for r in all_project_risks2 if r.status == 'closed'),
+            'high': sum(1 for r in all_project_risks2 if r.status == 'open' and r.severity == 'high'),
+            'high_total': sum(1 for r in all_project_risks2 if r.severity == 'high'),
+            'medium': sum(1 for r in all_project_risks2 if r.status == 'open' and r.severity == 'medium'),
+            'medium_total': sum(1 for r in all_project_risks2 if r.severity == 'medium'),
+            'low': sum(1 for r in all_project_risks2 if r.status == 'open' and r.severity == 'low'),
+            'low_total': sum(1 for r in all_project_risks2 if r.severity == 'low'),
+        }
+        from collections import defaultdict as _defaultdict
+        domain_stats2 = _defaultdict(lambda: {'total': 0, 'open': 0})
+        for r in all_project_risks2:
+            domain = (r.owner_user.domain if r.owner_user and r.owner_user.domain else '未分类')
+            domain_stats2[domain]['total'] += 1
+            if r.status == 'open':
+                domain_stats2[domain]['open'] += 1
+        domain_stats2 = {k: v for k, v in sorted(domain_stats2.items(), key=lambda x: (-x[1]['open'], -x[1]['total'])) if v['open'] > 0}
+
+        # Weighted completion progress
+        _active2 = [r for r in all_reqs if r.status != 'closed']
+        _comp_pct2 = lambda r: 100 if r.status == 'done' else (r.completion or 0)
+        _comp_w_sum2 = sum(_comp_pct2(r) * (r.estimate_days or 1) for r in _active2)
+        _comp_d_sum2 = sum((r.estimate_days or 1) for r in _active2)
+        completion_weighted2 = round(_comp_w_sum2 / _comp_d_sum2) if _comp_d_sum2 else None
+
         report_data = {
             'project_name': project_name,
             'project_goal': cur_project.description if cur_project else '',
@@ -671,12 +736,15 @@ def weekly_report():
             'milestones': milestones,
             'all_reqs': all_reqs, 'display_reqs': all_reqs, 'req_list_mode': 'full', 'req_total_with_children': 0,
             'req_investment': req_investment,
+            'completion_weighted': completion_weighted2,
             'person_done': dict(person_done),
             'person_active': dict(person_active),
             'all_persons': all_persons,
             'todos_done': todos_done,
             'todos_active': todos_active,
             'open_risks': open_risks,
+            'risk_stats': risk_stats2,
+            'domain_stats': domain_stats2,
             'people_map': people_map,
             'people_map_reqs': people_map_reqs,
             'people_roles': {m.display_name: m.role_label for m in ProjectMember.query.filter_by(project_id=cur_project_id).all()},
@@ -807,7 +875,7 @@ def weekly_report_export():
     req_q = Requirement.query.filter(Requirement.parent_id.is_(None))
     if cur_project_id:
         req_q = req_q.filter_by(project_id=cur_project_id)
-    all_reqs = req_q.order_by(Requirement.number).all()
+    all_reqs = req_q.order_by(Requirement.due_date.asc().nullslast(), Requirement.number).all()
 
     milestones = cur_project.milestones if cur_project else []
 
@@ -1098,6 +1166,26 @@ def my_day():
         db.func.sum(Todo.actual_minutes),
     ).filter(Todo.user_id == uid, Todo.actual_minutes > 0).scalar() or 0) / 60, 1)
 
+    # Activity timer records (meeting/review/break/other)
+    from app.models.activity_timer import ActivityTimer
+    act_records = ActivityTimer.query.filter(
+        ActivityTimer.user_id == current_user.id,
+        ActivityTimer.date.in_(days),
+    ).order_by(ActivityTimer.started_at).all()
+    act_events = []
+    act_colors = {'meeting': '#6f42c1', 'review': '#0d6efd', 'writing': '#d63384', 'break': '#fd7e14', 'manual': '#0d6efd', 'other': '#6c757d'}
+    act_total_min = sum(a.minutes for a in act_records if a.date == today)
+    for a in act_records:
+        dt = a.started_at
+        act_events.append({
+            'date': a.date.strftime('%Y-%m-%d'),
+            'start_hour': dt.hour,
+            'start_min': dt.minute,
+            'duration': a.minutes,
+            'title': a.label,
+            'color': act_colors.get(a.activity, '#6c757d'),
+        })
+
     return render_template('dashboard/my_day.html',
                            today=today, days=days, day_data=day_data,
                            total_focus=total_focus, total_sessions=total_sessions,
@@ -1109,7 +1197,147 @@ def my_day():
                            incentive_count=incentive_count,
                            heatmap=heatmap, heatmap_start=year_ago,
                            all_focus_hours=all_focus_hours,
-                           timedelta=timedelta)
+                           timedelta=timedelta,
+                           cal_events=session.get('_cal_events', []),
+                           act_events=act_events, act_total_min=act_total_min)
+
+
+@dashboard_bp.route('/my-day/import-ics', methods=['POST'])
+@login_required
+def import_ics():
+    """Import Outlook calendar .ics file and store events in session for timeline display."""
+    from icalendar import Calendar
+
+    f = request.files.get('ics_file')
+    if not f or not f.filename.endswith('.ics'):
+        flash('请上传 .ics 文件', 'warning')
+        return redirect(url_for('dashboard.my_day'))
+
+    try:
+        cal = Calendar.from_ical(f.read())
+    except Exception:
+        flash('ICS 文件解析失败', 'danger')
+        return redirect(url_for('dashboard.my_day'))
+
+    today = date.today()
+    events = []
+    for component in cal.walk():
+        if component.name != 'VEVENT':
+            continue
+        dtstart = component.get('dtstart')
+        dtend = component.get('dtend')
+        summary = str(component.get('summary', ''))
+        if not dtstart:
+            continue
+        dt = dtstart.dt
+        # Handle all-day events (date, not datetime)
+        if isinstance(dt, date) and not isinstance(dt, datetime):
+            continue  # skip all-day events for timeline
+        # Convert to local naive datetime
+        import zoneinfo
+        try:
+            local_tz = zoneinfo.ZoneInfo('Asia/Shanghai')
+        except Exception:
+            local_tz = timezone(timedelta(hours=8))
+        if dt.tzinfo:
+            dt = dt.astimezone(local_tz).replace(tzinfo=None)
+        # Duration
+        duration_min = 30  # default
+        if dtend:
+            dte = dtend.dt
+            if isinstance(dte, datetime):
+                if dte.tzinfo:
+                    dte = dte.astimezone(local_tz).replace(tzinfo=None)
+                duration_min = max(5, int((dte - dt).total_seconds() / 60))
+
+        events.append({
+            'date': dt.strftime('%Y-%m-%d'),
+            'start_hour': dt.hour,
+            'start_min': dt.minute,
+            'duration': duration_min,
+            'title': summary[:50],
+        })
+
+    # Store in session (keep events within 5-day range)
+    day_range = {(today - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(5)}
+    events = [e for e in events if e['date'] in day_range]
+    session['_cal_events'] = events
+    flash(f'已导入 {len(events)} 个日历事件', 'success')
+    return redirect(url_for('dashboard.my_day'))
+
+
+@dashboard_bp.route('/my-day/sync-exchange', methods=['POST'])
+@login_required
+def sync_exchange():
+    """Pull calendar events from Exchange using credentials passed from client (not stored)."""
+    data = request.get_json(silent=True) or {}
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    if not username or not password:
+        return jsonify(ok=False, error='请输入账号和密码')
+
+    from app.models.site_setting import SiteSetting
+    exc_cfg = current_app.config.get('EXCHANGE_CONFIG', {})
+    server = SiteSetting.get('exchange_server', exc_cfg.get('server', ''))
+    domain = SiteSetting.get('exchange_domain', exc_cfg.get('domain', ''))
+    if not server:
+        return jsonify(ok=False, error='Exchange 服务器未配置，请联系管理员在后台设置')
+
+    try:
+        from exchangelib import Account, Configuration, Credentials, DELEGATE, EWSDateTime, EWSTimeZone
+
+        tz = EWSTimeZone('Asia/Shanghai')
+        today = date.today()
+        start = today - timedelta(days=4)
+        end = today + timedelta(days=1)
+
+        creds = Credentials(username=f'{domain}\\{username}' if domain else username, password=password)
+        email = data.get('email', '').strip()
+        if not email:
+            return jsonify(ok=False, error='请先在个人设置中填写邮箱')
+        config = Configuration(server=server, credentials=creds)
+        account = Account(email, config=config, autodiscover=False, access_type=DELEGATE)
+
+        events = []
+        cal_start = tz.localize(EWSDateTime(start.year, start.month, start.day, 0, 0))
+        cal_end = tz.localize(EWSDateTime(end.year, end.month, end.day, 23, 59))
+
+        for item in account.calendar.view(start=cal_start, end=cal_end):
+            if item.is_all_day:
+                continue
+            dt = item.start
+            if hasattr(dt, 'astimezone'):
+                dt = dt.astimezone(tz)
+            duration_min = 30
+            if item.end:
+                dte = item.end
+                if hasattr(dte, 'astimezone'):
+                    dte = dte.astimezone(tz)
+                duration_min = max(5, int((dte - dt).total_seconds() / 60))
+            events.append({
+                'date': dt.strftime('%Y-%m-%d'),
+                'start_hour': dt.hour,
+                'start_min': dt.minute,
+                'duration': duration_min,
+                'title': (item.subject or '')[:50],
+            })
+
+        session['_cal_events'] = events
+        return jsonify(ok=True, count=len(events))
+    except Exception as e:
+        msg = str(e)
+        if 'Unauthorized' in msg or '401' in msg:
+            return jsonify(ok=False, error='账号或密码错误')
+        return jsonify(ok=False, error=f'连接失败: {msg[:100]}')
+
+
+@dashboard_bp.route('/my-day/clear-ics', methods=['POST'])
+@login_required
+def clear_ics():
+    """Clear imported calendar events from session."""
+    session.pop('_cal_events', None)
+    flash('已清除导入的日历事件', 'info')
+    return redirect(url_for('dashboard.my_day'))
 
 
 # ---- Personal weekly report ----
@@ -1135,7 +1363,7 @@ def my_weekly():
     for t in my_done + my_active:
         for r in t.requirements:
             my_reqs.add(r)
-    my_reqs = sorted(my_reqs, key=lambda r: r.number)
+    my_reqs = sorted(my_reqs, key=lambda r: (r.due_date or date(9999, 12, 31), r.number))
 
     req_days = {}
     for t in my_done:
@@ -1311,7 +1539,7 @@ def my_weekly():
 # ---- Resource allocation map ----
 
 @dashboard_bp.route('/resource-map')
-@manager_required
+@login_required
 def resource_map():
     from collections import defaultdict
 
@@ -1446,7 +1674,7 @@ def resource_map():
 
 
 @dashboard_bp.route('/resource-map/export')
-@manager_required
+@login_required
 def resource_map_export():
     """Export resource map as CSV."""
     import csv

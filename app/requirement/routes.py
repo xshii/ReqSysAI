@@ -69,12 +69,26 @@ def requirement_list():
             query = query.filter(Requirement.project_id.notin_(hidden_pids))
 
     # Sort
-    order = {
-        'newest': Requirement.created_at.desc(),
-        'oldest': Requirement.created_at.asc(),
-        'priority': db.case({'high': 0, 'medium': 1, 'low': 2}, value=Requirement.priority),
-    }.get(sort, Requirement.created_at.desc())
-    query = query.order_by(order)
+    today_ = date.today()
+    if sort == 'urgency' or sort == 'newest':
+        # Default: overdue first, then by daily remaining % (higher = more urgent)
+        is_overdue = db.case(
+            (db.and_(Requirement.due_date < today_, Requirement.status.notin_(['done', 'closed'])), 0),
+            else_=1,
+        )
+        # remaining_pct / remaining_days → higher = more urgent → sort desc
+        # Use julianday for SQLite date diff
+        remaining_days = db.func.max(db.func.julianday(Requirement.due_date) - db.func.julianday(str(today_)), 1)
+        remaining_pct = 100 - db.func.coalesce(Requirement.completion, 0)
+        urgency = remaining_pct / remaining_days
+        query = query.order_by(is_overdue, urgency.desc(), Requirement.due_date.asc().nullslast())
+    else:
+        order = {
+            'oldest': Requirement.created_at.asc(),
+            'priority': db.case({'high': 0, 'medium': 1, 'low': 2}, value=Requirement.priority),
+            'due_date': Requirement.due_date.asc().nullslast(),
+        }.get(sort, Requirement.created_at.desc())
+        query = query.order_by(order)
 
     page = request.args.get('page', 1, type=int)
     pagination = query.paginate(page=page, per_page=PER_PAGE, error_out=False)
@@ -93,6 +107,19 @@ def requirement_list():
         for rid, total, done in rows:
             todo_counts[rid] = TodoProgress(total=total, done=int(done or 0))
 
+    # Weighted AI ratio for current filter
+    ai_weighted_sum = sum(r.ai_ratio * r.estimate_days for r in pagination.items if r.ai_ratio and r.estimate_days)
+    ai_days_sum = sum(r.estimate_days for r in pagination.items if r.ai_ratio is not None and r.estimate_days)
+    ai_ratio_weighted = round(ai_weighted_sum / ai_days_sum) if ai_days_sum else None
+
+    # Weighted completion progress for current filter
+    _active_reqs = [r for r in pagination.items if r.status != 'closed']
+    def _pct(r):
+        return 100 if r.status == 'done' else (r.completion or 0)
+    comp_weighted_sum = sum(_pct(r) * (r.estimate_days or 1) for r in _active_reqs)
+    comp_days_sum = sum((r.estimate_days or 1) for r in _active_reqs)
+    completion_weighted = round(comp_weighted_sum / comp_days_sum) if comp_days_sum else None
+
     return render_template('requirement/list.html',
         pagination=pagination, requirements=pagination.items,
         projects=[p for p in Project.query.all() if not p.is_hidden or current_user.is_team_manager],
@@ -100,7 +127,8 @@ def requirement_list():
         statuses=Requirement.STATUS_LABELS, priorities=Requirement.PRIORITY_LABELS,
         cur_status=status, cur_priority=priority, cur_project=project_id,
         cur_assignee=assignee_id, cur_search=search, cur_sort=sort,
-        todo_counts=todo_counts,
+        todo_counts=todo_counts, ai_ratio_weighted=ai_ratio_weighted,
+        completion_weighted=completion_weighted,
     )
 
 
@@ -108,6 +136,13 @@ def requirement_list():
 @login_required
 def requirement_create():
     form = _build_requirement_form()
+    if request.method == 'GET':
+        from datetime import date
+        form.start_date.data = form.start_date.data or date.today()
+        form.due_date.data = form.due_date.data or date.today()
+        pid = request.args.get('project_id', type=int)
+        if pid and any(pid == c[0] for c in form.project_id.choices):
+            form.project_id.data = pid
     if form.validate_on_submit():
         a_id, a_name = _resolve_assignee(request.form.get('assignee_name', ''))
         req = Requirement(
@@ -123,7 +158,8 @@ def requirement_create():
             estimate_days=form.estimate_days.data,
             code_lines=form.code_lines.data,
             test_cases=form.test_cases.data,
-            source=form.source.data or None,
+            ai_ratio=form.ai_ratio.data,
+            source=form.source.data or 'coding',
             created_by=current_user.id,
         )
         db.session.add(req)
@@ -137,6 +173,7 @@ def requirement_create():
         sub_days = request.form.getlist('sub_days')
         sub_est_lines = request.form.getlist('sub_est_lines')
         sub_est_cases = request.form.getlist('sub_est_cases')
+        sub_ai_ratios = request.form.getlist('sub_ai_ratio')
         for i, st in enumerate(sub_titles):
             st = st.strip()
             if st:
@@ -174,6 +211,7 @@ def requirement_create():
                     estimate_days=days,
                     code_lines=est_lines if sub_type == 'coding' else None,
                     test_cases=est_cases if sub_type == 'testing' else None,
+                    ai_ratio=int(sub_ai_ratios[i]) if i < len(sub_ai_ratios) and sub_ai_ratios[i] else None,
                     parent_id=req.id,
                     source=sub_type,
                     created_by=current_user.id,
@@ -224,7 +262,8 @@ def requirement_edit(req_id):
         req.estimate_days = form.estimate_days.data
         req.code_lines = form.code_lines.data
         req.test_cases = form.test_cases.data
-        req.source = form.source.data or req.source
+        req.ai_ratio = form.ai_ratio.data
+        req.source = form.source.data or 'coding'
         # Handle new sub-requirements (same as create)
         sub_titles = request.form.getlist('sub_title')
         sub_types = request.form.getlist('sub_type')
@@ -232,6 +271,7 @@ def requirement_edit(req_id):
         sub_assignees = request.form.getlist('sub_assignee')
         sub_est_lines = request.form.getlist('sub_est_lines')
         sub_est_cases = request.form.getlist('sub_est_cases')
+        sub_ai_ratios = request.form.getlist('sub_ai_ratio')
         for i, st in enumerate(sub_titles):
             st = st.strip()
             if not st:
@@ -331,8 +371,11 @@ def requirement_status_api(req_id):
     req = db.get_or_404(Requirement, req_id)
     data = request.get_json() or {}
     new_status = data.get('status', '')
-    if new_status not in req.allowed_next_statuses:
+    force = data.get('force', False)  # kanban drag allows free transition
+    if not force and new_status not in req.allowed_next_statuses:
         return jsonify(ok=False, msg=f'不允许从「{req.status_label}」流转到该状态')
+    if new_status not in Requirement.STATUS_LABELS:
+        return jsonify(ok=False, msg='无效的状态')
     old_status = req.status
     old_label = req.status_label
     req.status = new_status
@@ -340,7 +383,230 @@ def requirement_status_api(req_id):
     db.session.commit()
     from app.services.events import fire, requirement_status_changed
     fire(requirement_status_changed, requirement=req, old_status=old_status, new_status=new_status)
-    return jsonify(ok=True, status=new_status, label=req.status_label)
+    return jsonify(ok=True, status=new_status, label=req.status_label, color=req.status_color)
+
+
+@requirement_bp.route('/<int:req_id>/completion-api', methods=['POST'])
+@login_required
+def requirement_completion_api(req_id):
+    """JSON API for kanban drag completion change."""
+    req = db.get_or_404(Requirement, req_id)
+    data = request.get_json() or {}
+    pct = data.get('completion', 0)
+    if pct < 0 or pct > 100 or pct % 10 != 0:
+        return jsonify(ok=False, msg='完成率须为0-100的10的倍数')
+    req.completion = pct
+    db.session.commit()
+    return jsonify(ok=True, completion=pct)
+
+
+def _load_project_reqs(project_id):
+    """Load all requirements for a project including sub-projects."""
+    from app.models.project import Project
+    all_reqs = Requirement.query.filter_by(project_id=project_id)\
+        .options(joinedload(Requirement.children), joinedload(Requirement.assignee),
+                 joinedload(Requirement.comments)).all()
+    project = db.session.get(Project, project_id)
+    if project and project.children:
+        for cp in project.children:
+            all_reqs.extend(Requirement.query.filter_by(project_id=cp.id)
+                .options(joinedload(Requirement.children), joinedload(Requirement.assignee),
+                         joinedload(Requirement.comments)).all())
+    return all_reqs
+
+
+def _build_req_data_text(all_reqs, today_):
+    """Build text summary of requirements for AI prompt, including comments."""
+    lines = []
+    for r in all_reqs:
+        pct = 100 if r.status == 'done' else (r.completion or 0)
+        parent_info = f' (父需求ID={r.parent_id})' if r.parent_id else ''
+        children_info = f' [子需求{len(r.children)}个]' if r.children else ''
+        overdue = f' 超期{(today_ - r.due_date).days}天' if r.due_date and r.due_date < today_ and r.status not in ('done', 'closed') else ''
+        line = (
+            f'{r.number} | {r.title} | 状态:{r.status_label} | 完成率:{pct}% | '
+            f'类型:{r.source_label} | 负责人:{r.assignee_display} | '
+            f'预估:{r.estimate_days or "?"}天 | '
+            f'启动:{r.start_date or "无"} | 截止:{r.due_date or "无"}'
+            f'{parent_info}{children_info}{overdue}'
+        )
+        # Append recent comments (last 3)
+        if hasattr(r, 'comments') and r.comments:
+            recent = r.comments[:3]
+            for c in recent:
+                line += f'\n  评论[{c.user.name} {c.created_at.strftime("%m-%d")}]: {c.content[:80]}'
+        lines.append(line)
+    return '\n'.join(lines)
+
+
+def _code_based_diagnose(all_reqs, today_):
+    """Fallback: pure code-based requirement diagnosis."""
+    import hashlib
+    from collections import Counter, defaultdict
+
+    active = [r for r in all_reqs if r.status not in ('done', 'closed')]
+    issues = []
+
+    def _id(tag, key):
+        return hashlib.md5(f'{tag}:{key}'.encode()).hexdigest()[:8]
+
+    for r in active:
+        if r.due_date and r.due_date < today_:
+            days = (today_ - r.due_date).days
+            issues.append({'id': _id('overdue', r.id), 'level': 'danger', 'tag': '超期',
+                'text': f'<strong>{r.number} {r.title}</strong> 超期 {days} 天，负责人：{r.assignee_display}'})
+    for r in active:
+        if not r.due_date:
+            continue
+        left = (r.due_date - today_).days
+        pct = r.completion or 0
+        if 0 < left <= 7 and pct < 60:
+            issues.append({'id': _id('risk', r.id), 'level': 'danger', 'tag': '进度风险',
+                'text': f'<strong>{r.number} {r.title}</strong> 剩余 {left} 天，完成率仅 {pct}%'})
+    person_parents = defaultdict(set)
+    for r in active:
+        name = r.assignee_display
+        if not name or name == '-':
+            continue
+        if r.parent_id:
+            parent = next((p for p in all_reqs if p.id == r.parent_id), None)
+            person_parents[name].add(parent.title if parent else f'ID={r.parent_id}')
+        else:
+            person_parents[name].add(r.title)
+    for name, parents in person_parents.items():
+        if len(parents) > 1:
+            issues.append({'id': _id('spread', name), 'level': 'warning', 'tag': '人力分散',
+                'text': f'<strong>{name}</strong> 同时参与 {len(parents)} 个父需求：{"、".join(list(parents)[:3])}'})
+    person_days = defaultdict(float)
+    for r in active:
+        name = r.assignee_display
+        if name and name != '-':
+            person_days[name] += r.estimate_days or 1
+    if len(person_days) >= 2:
+        avg = sum(person_days.values()) / len(person_days)
+        for name, days in person_days.items():
+            if days > avg * 2:
+                issues.append({'id': _id('load', name), 'level': 'warning', 'tag': '负荷过高',
+                    'text': f'<strong>{name}</strong> 承担 {days:.0f} 人天（均值 {avg:.0f}），超出 {days/avg:.1f} 倍'})
+    for r in active:
+        if not r.parent_id and (r.estimate_days or 0) > 10 and not r.children:
+            issues.append({'id': _id('large', r.id), 'level': 'warning', 'tag': '粒度过大',
+                'text': f'<strong>{r.number} {r.title}</strong> 预估 {r.estimate_days} 天，建议拆分子需求'})
+    for r in all_reqs:
+        if r.parent_id and r.due_date:
+            parent = next((p for p in all_reqs if p.id == r.parent_id), None)
+            if parent and parent.due_date and r.due_date > parent.due_date:
+                issues.append({'id': _id('dateconflict', r.id), 'level': 'warning', 'tag': '日期冲突',
+                    'text': f'子需求 <strong>{r.number}</strong> 截止({r.due_date.strftime("%m-%d")})晚于父需求 {parent.number}({parent.due_date.strftime("%m-%d")})'})
+    no_assignee = [r for r in active if not r.assignee_id and not r.assignee_name]
+    if no_assignee:
+        nums = '、'.join(r.number for r in no_assignee[:5])
+        issues.append({'id': _id('noassign', 'all'), 'level': 'warning', 'tag': '无负责人',
+            'text': f'{len(no_assignee)} 个需求未指定负责人：{nums}{"..." if len(no_assignee) > 5 else ""}'})
+    no_dates = [r for r in active if not r.start_date or not r.due_date]
+    if no_dates:
+        nums = '、'.join(r.number for r in no_dates[:5])
+        issues.append({'id': _id('nodate', 'all'), 'level': 'info', 'tag': '缺少日期',
+            'text': f'{len(no_dates)} 个需求缺启动/截止日期：{nums}{"..." if len(no_dates) > 5 else ""}'})
+    source_counts = Counter(r.source for r in active)
+    coding_count = source_counts.get('coding', 0)
+    testing_count = source_counts.get('testing', 0)
+    if coding_count > 3 and testing_count < coding_count * 0.3:
+        issues.append({'id': _id('testcov', 'all'), 'level': 'info', 'tag': '测试不足',
+            'text': f'编码类 {coding_count} 个，测试类仅 {testing_count} 个（{testing_count/coding_count*100:.0f}%），建议补充'})
+    for r in active:
+        if r.start_date and (r.completion or 0) == 0 and (today_ - r.start_date).days > 14:
+            issues.append({'id': _id('stale', r.id), 'level': 'info', 'tag': '长期停滞',
+                'text': f'<strong>{r.number} {r.title}</strong> 已启动 {(today_ - r.start_date).days} 天但完成率 0%'})
+
+    level_order = {'danger': 0, 'warning': 1, 'info': 2}
+    issues.sort(key=lambda i: level_order.get(i['level'], 9))
+    return issues
+
+
+@requirement_bp.route('/diagnose')
+@login_required
+def diagnose_api():
+    """Code diagnosis first, then enhance with AI. Fallback to code results if AI fails."""
+    import hashlib
+    import json
+
+    from app.models.site_setting import SiteSetting
+
+    project_id = request.args.get('project_id', type=int)
+    if not project_id:
+        return jsonify(ok=False, issues=[])
+
+    all_reqs = _load_project_reqs(project_id)
+    today_ = date.today()
+
+    # Step 1: Code-based diagnosis (always works)
+    issues = _code_based_diagnose(all_reqs, today_)
+    ai_source = False
+
+    # Step 2: Try AI enhancement
+    try:
+        from flask import current_app
+        if current_app.config.get('AI_ENABLED', True):
+            from app.services.ai import call_ollama
+            from app.services.prompts import get_prompt
+            prompt = get_prompt('req_diagnose')
+            if prompt:
+                data_text = _build_req_data_text(all_reqs, today_)
+                code_summary = '\n'.join(f'[{i["tag"]}] {i["text"]}' for i in issues[:10])
+                user_msg = f'今天日期：{today_}\n\n已知问题（代码预分析）：\n{code_summary}\n\n完整需求数据：\n{data_text}'
+                ai_result = call_ollama(prompt, user_msg)
+                if ai_result:
+                    ai_issues = json.loads(ai_result)
+                    if isinstance(ai_issues, list) and ai_issues:
+                        for idx, issue in enumerate(ai_issues):
+                            issue['id'] = hashlib.md5(f'ai:{issue.get("tag","")}:{idx}'.encode()).hexdigest()[:8]
+                        issues = ai_issues
+                        ai_source = True
+    except Exception:
+        pass  # Fallback to code issues
+
+    # Load resolved state
+    resolved_raw = SiteSetting.get(f'diag_resolved_{project_id}', '[]')
+    try:
+        resolved = set(json.loads(resolved_raw))
+    except Exception:
+        resolved = set()
+    for i in issues:
+        i['resolved'] = i.get('id', '') in resolved
+
+    # Auto-save
+    SiteSetting.set(f'diag_issues_{project_id}', json.dumps(issues, ensure_ascii=False))
+
+    return jsonify(ok=True, issues=issues, total=len(issues),
+                   resolved_count=sum(1 for i in issues if i['resolved']),
+                   ai=ai_source)
+
+
+@requirement_bp.route('/diagnose/resolve', methods=['POST'])
+@login_required
+def diagnose_resolve():
+    """Mark a diagnostic issue as resolved or unresolved."""
+    import json
+
+    from app.models.site_setting import SiteSetting
+    data = request.get_json() or {}
+    project_id = data.get('project_id')
+    issue_id = data.get('issue_id', '')
+    resolve = data.get('resolve', True)
+    if not project_id or not issue_id:
+        return jsonify(ok=False)
+    key = f'diag_resolved_{project_id}'
+    try:
+        resolved = set(json.loads(SiteSetting.get(key, '[]')))
+    except Exception:
+        resolved = set()
+    if resolve:
+        resolved.add(issue_id)
+    else:
+        resolved.discard(issue_id)
+    SiteSetting.set(key, json.dumps(list(resolved)))
+    return jsonify(ok=True)
 
 
 @requirement_bp.route('/board')
@@ -351,7 +617,7 @@ def requirement_board():
     assignee_id = request.args.get('assignee_id', type=int)
     swimlane = request.args.get('swimlane', '')  # '' or 'assignee'
 
-    show_sub = request.args.get('show_sub', '0') == '1'
+    show_sub = request.args.get('show_sub', '1') == '1'
 
     query = Requirement.query.filter(Requirement.parent_id.is_(None)).options(
         joinedload(Requirement.project), joinedload(Requirement.assignee),
@@ -385,6 +651,10 @@ def requirement_board():
     for c in sub_reqs:
         if c.status in board:
             board[c.status].append(c)
+
+    # Sort each column by completion ascending
+    for col_reqs in board.values():
+        col_reqs.sort(key=lambda r: r.completion or 0)
 
     return render_template('requirement/board.html',
         board=board, columns=columns, show_sub=show_sub,
@@ -429,6 +699,106 @@ def add_comment(req_id):
         _log_activity(req, 'commented', form.content.data[:100])
         db.session.commit()
     return redirect(url_for('requirement.requirement_detail', req_id=req.id))
+
+
+@requirement_bp.route('/<int:req_id>/comments/<int:comment_id>/delete', methods=['POST'])
+@login_required
+def delete_comment(req_id, comment_id):
+    from app.models.audit import AuditLog
+    comment = db.get_or_404(Comment, comment_id)
+    if comment.requirement_id != req_id:
+        flash('评论不属于该需求', 'danger')
+        return redirect(url_for('requirement.requirement_detail', req_id=req_id))
+    req = db.get_or_404(Requirement, req_id)
+    # Audit log before deletion
+    db.session.add(AuditLog(
+        user_id=current_user.id, action='delete', entity_type='comment',
+        entity_id=comment.id, entity_title=f'{req.number} 评论',
+        detail=f'作者: {comment.user.name}, 内容: {comment.content[:200]}',
+        ip_address=request.remote_addr,
+    ))
+    db.session.delete(comment)
+    db.session.commit()
+    flash('评论已删除', 'success')
+    return redirect(url_for('requirement.requirement_detail', req_id=req_id))
+
+
+# --- Dependencies ---
+
+@requirement_bp.route('/search-api')
+@login_required
+def requirement_search_api():
+    """Autocomplete API: search requirements by title/number within project scope."""
+    q = request.args.get('q', '').strip()
+    project_id = request.args.get('project_id', type=int)
+    exclude_id = request.args.get('exclude_id', type=int)
+    if not q or len(q) < 1:
+        return jsonify(results=[])
+    query = Requirement.query
+    if project_id:
+        # Include project and its sub-projects
+        sub_ids = [p.id for p in Project.query.filter_by(parent_id=project_id).all()]
+        query = query.filter(Requirement.project_id.in_([project_id] + sub_ids))
+    query = query.filter(
+        db.or_(
+            Requirement.title.ilike(f'%{q}%'),
+            Requirement.number.ilike(f'%{q}%'),
+        )
+    )
+    if exclude_id:
+        query = query.filter(Requirement.id != exclude_id)
+    reqs = query.order_by(Requirement.number).limit(15).all()
+    return jsonify(results=[
+        {'id': r.id, 'number': r.number, 'title': r.title,
+         'project': r.project.name if r.project else '', 'status': r.status_label}
+        for r in reqs
+    ])
+
+
+@requirement_bp.route('/<int:req_id>/dependencies', methods=['POST'])
+@login_required
+def add_dependency(req_id):
+    """Add a dependency: req_id depends on dep_id."""
+    req = db.get_or_404(Requirement, req_id)
+    dep_id = request.json.get('dep_id') if request.is_json else request.form.get('dep_id', type=int)
+    if not dep_id:
+        return jsonify(ok=False, msg='缺少依赖需求ID')
+    dep = Requirement.query.get(dep_id)
+    if not dep:
+        return jsonify(ok=False, msg='依赖需求不存在')
+    if dep.id == req.id:
+        return jsonify(ok=False, msg='不能依赖自身')
+    if dep in req.dependencies:
+        return jsonify(ok=False, msg='已存在该依赖')
+    # Prevent circular: dep should not depend on req (direct or indirect)
+    visited = set()
+    stack = [dep]
+    while stack:
+        node = stack.pop()
+        if node.id == req.id:
+            return jsonify(ok=False, msg='添加后会产生循环依赖')
+        if node.id not in visited:
+            visited.add(node.id)
+            stack.extend(node.dependencies)
+    req.dependencies.append(dep)
+    _log_activity(req, 'edited', f'添加依赖 {dep.number}')
+    db.session.commit()
+    return jsonify(ok=True, dep={'id': dep.id, 'number': dep.number, 'title': dep.title, 'status': dep.status_label, 'color': dep.status_color})
+
+
+@requirement_bp.route('/<int:req_id>/dependencies/<int:dep_id>', methods=['DELETE', 'POST'])
+@login_required
+def remove_dependency(req_id, dep_id):
+    """Remove a dependency."""
+    req = db.get_or_404(Requirement, req_id)
+    dep = Requirement.query.get(dep_id)
+    if dep and dep in req.dependencies:
+        req.dependencies.remove(dep)
+        _log_activity(req, 'edited', f'移除依赖 {dep.number}')
+        db.session.commit()
+    if request.is_json or request.method == 'DELETE':
+        return jsonify(ok=True)
+    return redirect(url_for('requirement.requirement_detail', req_id=req_id))
 
 
 # ---- AI: Smart Assign ----
@@ -498,7 +868,10 @@ def ai_quality_check():
 
 def _build_requirement_form(obj=None):
     form = RequirementForm(obj=obj)
-    form.project_id.choices = [(p.id, p.name) for p in Project.query.filter_by(status='active').all()]
+    projects = Project.query.filter_by(status='active')
+    if not current_user.is_team_manager:
+        projects = projects.filter_by(is_hidden=False)
+    form.project_id.choices = [(p.id, p.name) for p in projects.all()]
     form.assignee_id.choices = [(0, '-- 未分配 --')] + [
         (u.id, u.name) for u in User.query.filter_by(is_active=True).all()
     ]

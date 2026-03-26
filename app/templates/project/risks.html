@@ -34,8 +34,8 @@
 <!-- Filters + Stats (merged) -->
 <div class="d-flex gap-2 mb-3 flex-wrap align-items-center" id="riskStats">
     <a href="?status=&severity=" class="btn btn-sm {% if not cur_status and not cur_severity %}btn-primary{% else %}btn-outline-secondary{% endif %}">全部 <span class="badge bg-light text-dark">{{ risk_stats.total }}</span></a>
-    <a href="?status=open" class="btn btn-sm {% if cur_status == 'open' %}btn-danger{% else %}btn-outline-danger{% endif %}">未解决 <span class="badge {{ 'bg-light text-danger' if cur_status == 'open' else 'bg-danger' }}">{{ risk_stats.open }}</span></a>
     <a href="?overdue=1" class="btn btn-sm {% if cur_overdue %}btn-danger{% else %}btn-outline-danger{% endif %}" title="超期未解决">超期 <span class="badge {{ 'bg-light text-danger' if cur_overdue else 'bg-danger' }}">{{ risk_stats.overdue }}</span></a>
+    <a href="?status=open" class="btn btn-sm {% if cur_status == 'open' %}btn-danger{% else %}btn-outline-danger{% endif %}">未解决 <span class="badge {{ 'bg-light text-danger' if cur_status == 'open' else 'bg-danger' }}">{{ risk_stats.open }}</span></a>
     <a href="?status=resolved" class="btn btn-sm {% if cur_status == 'resolved' %}btn-success{% else %}btn-outline-success{% endif %}">已解决 <span class="badge {{ 'bg-light text-success' if cur_status == 'resolved' else 'bg-success' }}">{{ risk_stats.resolved }}</span></a>
     <a href="?status=closed" class="btn btn-sm {% if cur_status == 'closed' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">已关闭 <span class="badge {{ 'bg-light text-secondary' if cur_status == 'closed' else 'bg-secondary' }}">{{ risk_stats.closed }}</span></a>
     <span class="border-start ms-1 ps-2"></span>
@@ -85,7 +85,13 @@
                 {% if r.comments %}
                 <div class="mt-1 border-top pt-1">
                     {% for c in r.comments %}
-                    <div class="small text-muted"><strong>{{ c.user.name }}</strong> <span style="font-size:.8em;">{{ c.created_at.strftime('%m-%d %H:%M') }}</span>：{{ c.content }}</div>
+                    <div class="small text-muted d-flex align-items-start gap-1">
+                        <span class="flex-grow-1"><strong>{{ c.user.name }}</strong> <span style="font-size:.8em;">{{ c.created_at.strftime('%m-%d %H:%M') }}</span>：{{ c.content }}</span>
+                        <form method="POST" action="{{ url_for('project.risk_comment_delete', comment_id=c.id) }}" class="d-inline flex-shrink-0" onsubmit="return confirm('删除该评论？')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-link btn-sm text-muted p-0" style="font-size:.7em;" title="删除"><i class="bi bi-x-lg"></i></button>
+                        </form>
+                    </div>
                     {% endfor %}
                 </div>
                 {% endif %}
@@ -135,9 +141,11 @@
                     <button type="submit" class="btn btn-sm btn-outline-warning py-0">重开</button>
                 </form>
                 {% endif %}
+                {% if is_pm %}
                 <button class="btn btn-sm btn-outline-danger py-0" onclick="if(confirm('确认删除？')){apiPost('{{ url_for('project.risk_delete', risk_id=r.id) }}',{}).then(function(d){if(d&&d.ok)location.reload();});}">
                     <i class="bi bi-trash"></i>
                 </button>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}
@@ -178,7 +186,7 @@
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">预计闭环 <span class="text-danger">*</span></label>
-                            <input type="date" max="2099-12-31" name="due_date" class="form-control form-control-sm" required>
+                            <input type="date" max="2099-12-31" name="due_date" class="form-control form-control-sm" required value="{{ today.strftime('%Y-%m-%d') }}">
                         </div>
                     </div>
                     {% from "_user_picker.html" import user_picker %}
@@ -346,8 +354,8 @@ function exportRiskEml() {
     // ── Section: 总体概况 ──
     var _stats = [
         {label:'总计', value:'{{ risk_stats.total }}', color:'#1e3a5f'},
-        {label:'未解决', value:'{{ risk_stats.open }}', color:'#dc3545'},
         {label:'超期', value:'{{ risk_stats.overdue }}', color:'#dc3545'},
+        {label:'未解决', value:'{{ risk_stats.open }}', color:'#dc3545'},
         {label:'已解决', value:'{{ risk_stats.resolved }}', color:'#198754'},
         {label:'已关闭', value:'{{ risk_stats.closed }}', color:'#6c757d'},
         {label:'高', value:'{{ risk_stats.high }}/{{ risk_stats.high_total }}', color:'#dc3545'},
@@ -370,19 +378,16 @@ function exportRiskEml() {
     if (domainStats) {
         var tags = domainStats.querySelectorAll('a.border');
         if (tags.length) {
-            var dHtml = '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;">'
-                + '<tr style="background:#f8fafc;"><th style="' + S + 'padding:7px 12px;text-align:left;color:#475569;">业务领域</th>'
-                + '<th style="' + S + 'padding:7px 12px;text-align:center;color:#475569;width:120px;">未闭环 / 总数</th></tr>';
+            var dHtml = '';
             tags.forEach(function(tag) {
                 var num = tag.querySelector('.fw-bold');
                 var label = tag.querySelector('.text-muted');
                 var isRed = num && num.classList.contains('text-danger');
                 var c = isRed ? '#dc3545' : '#198754';
-                var bg = isRed ? 'background:#fef2f2;' : '';
-                dHtml += '<tr><td style="' + S + 'padding:6px 12px;' + bg + '">' + (label ? label.textContent.trim() : '') + '</td>'
-                    + '<td style="' + S + 'padding:6px 12px;text-align:center;font-weight:700;color:' + c + ';' + bg + '">' + (num ? num.textContent.trim() : '') + '</td></tr>';
+                var bg = isRed ? '#fef2f2' : '#f8fafc';
+                dHtml += '<span style="display:inline-block;padding:4px 10px;margin:3px;font-size:12px;border:1px solid #e2e8f0;border-radius:6px;background:' + bg + ';">'
+                    + (label ? label.textContent.trim() : '') + ' <strong style="color:' + c + ';">' + (num ? num.textContent.trim() : '') + '</strong></span>';
             });
-            dHtml += '</table>';
             rows += '<tr><td style="padding:0 20px 16px;">'
                 + '<div style="font-size:13px;font-weight:700;color:#1e3a5f;border-left:4px solid #1e3a5f;padding-left:10px;margin-bottom:10px;">各领域风险分布</div>'
                 + dHtml + '</td></tr>';

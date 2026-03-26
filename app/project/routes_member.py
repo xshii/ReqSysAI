@@ -1,5 +1,5 @@
 """Project member routes for the project blueprint."""
-from flask import flash, make_response, redirect, render_template, request, url_for
+from flask import flash, jsonify, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.extensions import db
@@ -63,7 +63,7 @@ def member_list(project_id):
         next_url = request.form.get('next') or url_for('project.member_list', project_id=project_id)
         return redirect(next_url)
 
-    members = ProjectMember.query.filter_by(project_id=project_id).all()
+    members = ProjectMember.query.filter_by(project_id=project_id).order_by(ProjectMember.sort_order).all()
     all_users = User.query.filter_by(is_active=True).order_by(User.name).all()
     member_ids = {m.user_id for m in members}
     available = [u for u in all_users if u.id not in member_ids]
@@ -83,7 +83,7 @@ def member_export_csv(project_id):
     import csv
     import io
     project = db.get_or_404(Project, project_id)
-    members = ProjectMember.query.filter_by(project_id=project_id).all()
+    members = ProjectMember.query.filter_by(project_id=project_id).order_by(ProjectMember.sort_order).all()
 
     from datetime import date as _date
 
@@ -165,3 +165,18 @@ def member_import_csv(project_id):
     db.session.commit()
     flash(f'导入完成：新增 {created} 人，更新 {updated} 人', 'success')
     return redirect(url_for('project.project_edit', project_id=project_id, tab='members'))
+
+
+@project_bp.route('/<int:project_id>/members/reorder', methods=['POST'])
+@login_required
+def member_reorder(project_id):
+    """Reorder project members via drag-and-drop."""
+    ids = request.json.get('ids', [])
+    if not ids:
+        return jsonify(ok=False), 400
+    for i, mid in enumerate(ids):
+        m = db.session.get(ProjectMember, int(mid))
+        if m and m.project_id == project_id:
+            m.sort_order = i
+    db.session.commit()
+    return jsonify(ok=True)

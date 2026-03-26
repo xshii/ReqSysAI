@@ -2,76 +2,133 @@
 {% block title %}个人设置 - {{ site_name }}{% endblock %}
 
 {% block content %}
-<h4 class="mb-4">个人设置</h4>
+<h4 class="mb-3">个人设置</h4>
 
 <div class="row">
-    <div class="col-md-6 col-lg-4">
+    <div class="col-md-6 col-lg-5">
         <div class="card">
-            <div class="card-body">
-                <div class="mb-3 text-muted small">
-                    工号：<strong>{{ current_user.employee_id }}</strong>
-                    &nbsp; IP：<code>{{ current_user.ip_address }}</code>
-                </div>
+            <div class="card-body py-3">
                 <form method="POST" enctype="multipart/form-data">
                     {{ form.hidden_tag() }}
-                    <div class="mb-3 text-center">
-                        {% if current_user.avatar %}
-                        <img src="{{ url_for('static', filename=current_user.avatar) }}" class="rounded-circle mb-2" style="width:80px;height:80px;object-fit:cover;">
-                        {% else %}
-                        <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center mb-2" style="width:80px;height:80px;font-size:2rem;">{{ current_user.name[0] }}</div>
-                        {% endif %}
-                        <div><input type="file" name="avatar" class="form-control form-control-sm" accept="image/*" style="max-width:250px;margin:0 auto;"></div>
+                    {# Avatar + basic info #}
+                    <div class="d-flex align-items-center gap-3 mb-3 pb-2 border-bottom">
+                        <div class="flex-shrink-0" style="position:relative;width:60px;height:60px;">
+                            {% if current_user.avatar %}
+                            <img src="{{ url_for('static', filename=current_user.avatar) }}" class="rounded-circle" style="width:60px;height:60px;object-fit:cover;">
+                            {% else %}
+                            <div class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center" style="width:60px;height:60px;font-size:1.5rem;">{{ current_user.name[0] }}</div>
+                            {% endif %}
+                            <label class="position-absolute d-flex align-items-center justify-content-center rounded-circle bg-white border" style="bottom:-2px;right:-2px;width:22px;height:22px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.15);" title="更换头像">
+                                <i class="bi bi-camera-fill text-muted" style="font-size:.7em;"></i>
+                                <input type="file" name="avatar" accept="image/*" class="d-none">
+                            </label>
+                        </div>
+                        <div class="small text-muted">
+                            <div>工号：<strong>{{ current_user.employee_id }}</strong></div>
+                            <div>IP：<code>{{ current_user.ip_address or '未绑定' }}</code></div>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ form.name.label.text }}</label>
-                        {{ form.name(class="form-control") }}
-                        {% for error in form.name.errors %}
-                        <div class="invalid-feedback d-block">{{ error }}</div>
-                        {% endfor %}
+                    {# Form rows: label left, input right #}
+                    <div class="row mb-2 align-items-center">
+                        <label class="col-3 col-form-label small">姓名</label>
+                        <div class="col-9">
+                            {{ form.name(class="form-control form-control-sm") }}
+                            {% for error in form.name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">角色</label>
-                        <div class="dropdown">
-                            <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">
-                                <span class="role-label">请选择</span>
-                            </button>
-                            <div class="dropdown-menu w-100 px-2">
-                                {% for value, label in form.role_ids.choices %}
-                                <div class="form-check">
-                                    <input class="form-check-input role-cb" type="checkbox" name="role_ids" value="{{ value }}" id="role_{{ value }}"
-                                           {% if value in form.role_ids.data %}checked{% endif %}>
-                                    <label class="form-check-label" for="role_{{ value }}">{{ label }}</label>
+                    <div class="row mb-2 align-items-center">
+                        <label class="col-3 col-form-label small">角色</label>
+                        <div class="col-9">
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100 text-start" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+                                    <span class="role-label">请选择</span>
+                                </button>
+                                <div class="dropdown-menu w-100 px-2">
+                                    {% for value, label in form.role_ids.choices %}
+                                    <div class="form-check">
+                                        <input class="form-check-input role-cb" type="checkbox" name="role_ids" value="{{ value }}" id="role_{{ value }}"
+                                               {% if value in form.role_ids.data %}checked{% endif %}>
+                                        <label class="form-check-label" for="role_{{ value }}">{{ label }}</label>
+                                    </div>
+                                    {% endfor %}
                                 </div>
-                                {% endfor %}
                             </div>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">{{ form.group.label.text }}</label>
-                        {{ form.group(class="form-select") }}
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">番茄钟时长（分钟）</label>
-                        <input type="number" name="pomodoro_minutes" class="form-control" value="{{ current_user.pomodoro_minutes or 45 }}" min="5" max="120" step="5">
-                    </div>
-                    <div class="mb-3">
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="onlyMyGroup"
-                                   {% if current_user.only_my_group %}checked{% endif %}
-                                   onchange="fetch('/profile/toggle-my-group',{method:'POST'}).then(function(){location.reload();});">
-                            <label class="form-check-label" for="onlyMyGroup">团队 Todo 只显示本组</label>
+                    <div class="row mb-2 align-items-center">
+                        <label class="col-3 col-form-label small">小组</label>
+                        <div class="col-9">
+                            <input type="text" name="group" class="form-control form-control-sm" list="groupList" value="{{ current_user.group or '' }}" placeholder="输入或选择小组">
+                            <datalist id="groupList">
+                                {% for val, label in form.group.choices %}
+                                {% if val %}<option value="{{ val }}">{% endif %}
+                                {% endfor %}
+                            </datalist>
                         </div>
-                        <div class="form-text">关闭后可查看所有组的 Todo</div>
                     </div>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-check-lg"></i> 保存
-                    </button>
-                    {% if current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR') %}
-                    <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="localStorage.removeItem('mgr_pwd');localStorage.removeItem('mgr_view');localStorage.removeItem('mgr_view_ts');alert('已重置，下次开眼时重新设置密码');">
-                        <i class="bi bi-eye"></i> 重置管理视图密码
-                    </button>
-                    {% endif %}
+                    <div class="row mb-2 align-items-center">
+                        <label class="col-3 col-form-label small">主管</label>
+                        <div class="col-9">
+                            <input type="text" name="manager" class="form-control form-control-sm" value="{{ current_user.manager or '' }}" placeholder="姓名 工号，如 周明 z00880001">
+                            <div class="form-text" style="font-size:.65em;">格式：姓名（允许空格）+ 空格 + 工号</div>
+                        </div>
+                    </div>
+                    <div class="row mb-2 align-items-center">
+                        <label class="col-3 col-form-label small">领域</label>
+                        <div class="col-9">
+                            <input type="text" name="domain" class="form-control form-control-sm" value="{{ current_user.domain or '' }}" placeholder="如：后端开发、测试、AI算法">
+                        </div>
+                    </div>
+                    <div class="row mb-2 align-items-center">
+                        <label class="col-3 col-form-label small">邮箱</label>
+                        <div class="col-9">
+                            <input type="email" class="form-control form-control-sm" name="email" value="{{ current_user.email or '' }}" placeholder="yourname@company.com">
+                            {% if config.MAIL_DOMAIN %}<div class="form-text" style="font-size:.7em;">须以 @{{ config.MAIL_DOMAIN }} 结尾</div>{% endif %}
+                        </div>
+                    </div>
+                    <div class="row mb-2 align-items-center">
+                        <label class="col-3 col-form-label small">番茄钟</label>
+                        <div class="col-9">
+                            <div class="input-group input-group-sm">
+                                <input type="number" name="pomodoro_minutes" class="form-control" value="{{ current_user.pomodoro_minutes or 45 }}" min="5" max="120" step="5">
+                                <span class="input-group-text">分钟</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-2 align-items-center">
+                        <label class="col-3 col-form-label small">团队Todo</label>
+                        <div class="col-9">
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" id="onlyMyGroup"
+                                       {% if current_user.only_my_group %}checked{% endif %}
+                                       onchange="fetch('/profile/toggle-my-group',{method:'POST'}).then(function(r){return r.json()}).then(function(d){showToast(d.only_my_group?'已切换为只看本组':'已切换为看所有组','success')});">
+                                <label class="form-check-label small" for="onlyMyGroup">只显示本组</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 mt-3">
+                        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-check-lg"></i> 保存</button>
+                        {% if current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR') %}
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="localStorage.removeItem('mgr_pwd');localStorage.removeItem('mgr_view');localStorage.removeItem('mgr_view_ts');alert('已重置，下次开眼时重新设置密码');">
+                            <i class="bi bi-eye"></i> 重置管理视图密码
+                        </button>
+                        {% endif %}
+                    </div>
                 </form>
+            </div>
+        </div>
+    </div>
+    {# Activity timer config #}
+    <div class="col-md-6 col-lg-5">
+        <div class="card">
+            <div class="card-header py-2"><span class="fw-bold small"><i class="bi bi-stopwatch"></i> 快捷计时按钮</span></div>
+            <div class="card-body py-2">
+                <div class="small text-muted mb-2">记录不适合关联 Todo 的活动（开会、评审、写材料等）</div>
+                <div class="mb-2" id="iconPicker" style="font-size:.8em;"></div>
+                <div id="actConfigList"></div>
+                <button class="btn btn-sm btn-outline-primary mt-2" onclick="addActItem()"><i class="bi bi-plus"></i> 添加</button>
+                <button class="btn btn-sm btn-primary mt-2" onclick="saveActConfig()"><i class="bi bi-check-lg"></i> 保存</button>
+                <button class="btn btn-sm btn-outline-secondary mt-2" onclick="resetActConfig()">恢复默认</button>
             </div>
         </div>
     </div>
@@ -104,5 +161,109 @@ document.querySelectorAll('.role-cb').forEach(function(cb) {
     });
 });
 updateRoleLabel();
+
+// Activity timer config
+// Preset icons: [icon, default label, default color]
+var _presetGroups = [
+    ['会议沟通', [
+        ['bi-camera-video-fill', '开会', '#6f42c1'],
+        ['bi-telephone-fill', '电话', '#6c757d'],
+        ['bi-chat-dots-fill', '沟通', '#20c997'],
+        ['bi-people-fill', '协作', '#0dcaf0'],
+        ['bi-share-fill', '分享', '#0d6efd'],
+    ]],
+    ['工作事务', [
+        ['bi-eye-fill', '评审', '#0d6efd'],
+        ['bi-pencil-square', '写材料', '#d63384'],
+        ['bi-file-earmark-text-fill', '文档', '#198754'],
+        ['bi-bug-fill', '问题定位', '#dc3545'],
+        ['bi-car-front-fill', '出差', '#495057'],
+    ]],
+    ['学习生活', [
+        ['bi-book-fill', '学习', '#198754'],
+        ['bi-mortarboard-fill', '培训', '#6f42c1'],
+        ['bi-cup-hot-fill', '休息', '#fd7e14'],
+        ['bi-bicycle', '运动', '#0d6efd'],
+        ['bi-person-arms-up', '拉伸', '#198754'],
+        ['bi-thermometer-half', '生病', '#dc3545'],
+        ['bi-emoji-smile', '摸鱼', '#ffc107'],
+    ]],
+];
+
+function renderIconPicker() {
+    var picker = document.getElementById('iconPicker');
+    var usedIcons = _actData.map(function(a) { return a.icon; });
+    picker.innerHTML = '';
+    _presetGroups.forEach(function(group) {
+        var groupName = group[0], items = group[1];
+        var row = document.createElement('div');
+        row.className = 'd-flex align-items-center gap-1 mb-1';
+        row.innerHTML = '<span class="text-muted flex-shrink-0" style="font-size:.7em;width:50px;">' + groupName + '</span>';
+        items.forEach(function(p) {
+            var used = usedIcons.indexOf(p[0]) >= 0;
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-sm p-0';
+            btn.style.cssText = 'width:28px;height:28px;border-radius:50%;border:1.5px solid ' + (used ? '#dee2e6' : p[2]) + ';color:' + (used ? '#dee2e6' : p[2]) + ';font-size:.85em;' + (used ? 'cursor:default;' : '');
+            btn.innerHTML = '<i class="bi ' + p[0] + '"></i>';
+            btn.title = used ? p[1] + '（已添加）' : p[1];
+            btn.setAttribute('data-bs-toggle', 'tooltip');
+            btn.setAttribute('data-bs-placement', 'top');
+            if (!used) {
+                btn.onclick = function() {
+                    _actData.push({key: p[0].replace('bi-','').replace(/-/g,'_'), label: p[1], icon: p[0], color: p[2]});
+                    renderActConfig();
+                    renderIconPicker();
+                };
+            }
+            row.appendChild(btn);
+        });
+        picker.appendChild(row);
+    });
+    picker.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) { new bootstrap.Tooltip(el); });
+}
+
+var _actDefaults = [
+    {key:'meeting', label:'开会', icon:'bi-camera-video-fill', color:'#6f42c1'},
+    {key:'review', label:'评审', icon:'bi-eye-fill', color:'#0d6efd'},
+    {key:'writing', label:'写材料', icon:'bi-pencil-square', color:'#d63384'},
+    {key:'bug_fill', label:'问题定位', icon:'bi-bug-fill', color:'#dc3545'},
+    {key:'break', label:'休息', icon:'bi-cup-hot-fill', color:'#fd7e14'},
+];
+var _actData = JSON.parse(localStorage.getItem('_act_config') || 'null') || _actDefaults;
+
+function renderActConfig() {
+    var list = document.getElementById('actConfigList');
+    list.innerHTML = '';
+    _actData.forEach(function(a, i) {
+        var row = document.createElement('div');
+        row.className = 'd-flex gap-1 align-items-center mb-1';
+        row.innerHTML =
+            '<span class="d-flex align-items-center justify-content-center" style="width:32px;height:32px;border-radius:50%;border:2px solid ' + a.color + ';color:' + a.color + ';font-size:1em;flex-shrink:0;"><i class="bi ' + a.icon + '"></i></span>'
+            + '<input type="text" class="form-control form-control-sm" style="width:70px;" value="' + a.label + '" placeholder="名称" onchange="_actData[' + i + '].label=this.value">'
+            + '<input type="color" class="form-control form-control-sm p-0" style="width:30px;height:28px;" value="' + a.color + '" onchange="_actData[' + i + '].color=this.value;updateActPreview(' + i + ')">'
+            + '<button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="_actData.splice(' + i + ',1);renderActConfig();renderIconPicker()"><i class="bi bi-x"></i></button>';
+        list.appendChild(row);
+    });
+}
+function updateActPreview(i, input) {
+    renderActConfig(); renderIconPicker();
+}
+function addActItem() {
+    var key = 'custom_' + Date.now();
+    _actData.push({key: key, label:'新建', icon:'bi-circle', color:'#198754'});
+    renderActConfig(); renderIconPicker();
+}
+function saveActConfig() {
+    localStorage.setItem('_act_config', JSON.stringify(_actData));
+    showToast('已保存，首页刷新后生效', 'success');
+}
+function resetActConfig() {
+    _actData = JSON.parse(JSON.stringify(_actDefaults));
+    localStorage.removeItem('_act_config');
+    renderActConfig(); renderIconPicker();
+    showToast('已恢复默认', 'info');
+}
+renderActConfig(); renderIconPicker();
 </script>
 {% endblock %}

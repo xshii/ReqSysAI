@@ -45,6 +45,13 @@ def permission_list(project_id):
                 item.description = request.form.get('description', '').strip() or None
                 db.session.commit()
                 flash('已更新', 'success')
+        elif action == 'toggle_freeze_app' and is_pm:
+            app_record = db.session.get(PermissionApplication, request.form.get('app_id', type=int))
+            if app_record and app_record.item.project_id == project_id:
+                app_record.is_frozen = not app_record.is_frozen
+                db.session.commit()
+                flash(f'申请记录已{"冻结" if app_record.is_frozen else "解冻"}', 'success')
+            return redirect(url_for('project.permission_list', project_id=project_id))
         elif action == 'delete_item' and is_pm:
             item = db.session.get(PermissionItem, request.form.get('item_id', type=int))
             if item and item.project_id == project_id:
@@ -54,6 +61,12 @@ def permission_list(project_id):
         elif action == 'quick_apply':
             item = db.session.get(PermissionItem, request.form.get('item_id', type=int))
             if item and item.project_id == project_id:
+                # Block if any application for this item is frozen
+                frozen = PermissionApplication.query.filter_by(
+                    item_id=item.id, is_frozen=True).first()
+                if frozen:
+                    flash('该权限申请已冻结，不允许新申请', 'warning')
+                    return redirect(url_for('project.permission_list', project_id=project_id))
                 py = to_pinyin(current_user.name).split()[-1] if current_user.name else ''
                 name = f"{current_user.name}({py}) {current_user.employee_id or ''}".strip()
                 # Check duplicate
@@ -68,6 +81,12 @@ def permission_list(project_id):
                         item_id=item.id, applicant_name=name,
                         submitted_by=current_user.id))
                     db.session.commit()
+                    # Notify PM
+                    from app.services.notify import notify
+                    if project.owner_id:
+                        link = url_for('project.permission_list', project_id=project_id)
+                        notify(project.owner_id, 'permission',
+                               f'{current_user.name} 申请权限「{item.resource}」', link)
                     flash(f'已申请 {item.resource}', 'success')
             return redirect(url_for('project.permission_list', project_id=project_id))
         elif action == 'apply':
@@ -89,6 +108,12 @@ def permission_list(project_id):
                 count += 1
             if count:
                 db.session.commit()
+                # Notify PM
+                from app.services.notify import notify
+                if project.owner_id:
+                    link = url_for('project.permission_list', project_id=project_id)
+                    notify(project.owner_id, 'permission',
+                           f'{current_user.name} 申请了 {count} 项权限', link)
                 flash(f'已申请 {count} 项权限', 'success')
             else:
                 flash('未选择权限或已在申请列表中', 'info')

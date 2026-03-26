@@ -1,6 +1,60 @@
 // ReqSysAI - Main JavaScript
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Global tooltip init: delay=0, no animation for instant display
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+        new bootstrap.Tooltip(el, {delay: {show: 0, hide: 0}, animation: false});
+    });
+    // Also intercept dynamically created tooltips
+    var _origTooltip = bootstrap.Tooltip;
+    bootstrap.Tooltip = function(el, opts) {
+        opts = opts || {};
+        if (!opts.delay) opts.delay = {show: 0, hide: 0};
+        if (opts.animation === undefined) opts.animation = false;
+        return new _origTooltip(el, opts);
+    };
+    bootstrap.Tooltip.prototype = _origTooltip.prototype;
+    bootstrap.Tooltip.getInstance = _origTooltip.getInstance;
+    bootstrap.Tooltip.getOrCreateInstance = _origTooltip.getOrCreateInstance;
+    bootstrap.Tooltip.Default = _origTooltip.Default;
+    bootstrap.Tooltip.NAME = _origTooltip.NAME;
+
+    // File upload loading overlay with progress bar and close button
+    document.querySelectorAll('form[enctype="multipart/form-data"], form').forEach(function(form) {
+        var fileInput = form.querySelector('input[type="file"]');
+        if (!fileInput) return;
+        form.addEventListener('submit', function() {
+            if (!fileInput.value) return;
+            var overlay = document.createElement('div');
+            overlay.id = '_uploadOverlay';
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(255,255,255,.8);display:flex;align-items:center;justify-content:center;';
+            overlay.innerHTML =
+                '<div class="text-center" style="min-width:200px;">'
+                + '<div class="spinner-border text-primary mb-2"></div>'
+                + '<div class="small text-muted mb-2">上传中...</div>'
+                + '<div class="progress mb-2" style="height:6px;"><div class="progress-bar progress-bar-striped progress-bar-animated" id="_uploadBar" style="width:0%;"></div></div>'
+                + '<div class="small text-muted mb-2" id="_uploadTimer">0s</div>'
+                + '<button class="btn btn-sm btn-outline-secondary" onclick="this.closest(\'#_uploadOverlay\').remove()"><i class="bi bi-x-lg"></i> 关闭</button>'
+                + '</div>';
+            document.body.appendChild(overlay);
+            // Simulate progress + timer
+            var start = Date.now(), pct = 0;
+            var bar = overlay.querySelector('#_uploadBar');
+            var timer = overlay.querySelector('#_uploadTimer');
+            var iv = setInterval(function() {
+                var sec = Math.round((Date.now() - start) / 1000);
+                timer.textContent = sec + 's';
+                if (pct < 90) { pct += Math.random() * 15; bar.style.width = Math.min(pct, 90) + '%'; }
+            }, 500);
+            // Auto-close after 30s as safety net
+            setTimeout(function() {
+                clearInterval(iv);
+                var el = document.getElementById('_uploadOverlay');
+                if (el) { el.querySelector('.small').textContent = '超时，请刷新页面'; }
+            }, 30000);
+        });
+    });
+
     // Auto-dismiss alerts after 5 seconds
     var alerts = document.querySelectorAll('.alert-dismissible');
     alerts.forEach(function(alert) {

@@ -126,7 +126,7 @@
 <div class="report-section">
     <h6>参与需求状态</h6>
     <table class="report-table">
-        <thead><tr><th style="width:55px;">编号</th><th>需求</th><th style="width:55px;">状态</th><th style="width:40px;">投入</th><th style="width:85px;">截止</th></tr></thead>
+        <thead><tr><th style="width:55px;">编号</th><th>需求</th><th style="width:55px;">状态</th><th style="width:45px;">完成率</th><th style="width:35px;">AI%</th><th style="width:50px;">工作量</th><th style="width:40px;">投入</th><th style="width:85px;">截止</th></tr></thead>
         <tbody>
         {% for r in my_reqs %}
         {% set is_overdue = r.due_date and r.due_date < today and r.status not in ('done','closed') %}
@@ -134,6 +134,9 @@
             <td class="text-muted">{{ r.number }}</td>
             <td>{{ r.title }}</td>
             <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span></td>
+            <td class="text-center">{% if r.status in ('done','closed') %}100%{% else %}{{ r.completion or 0 }}%{% endif %}</td>
+            <td class="text-center">{% if r.ai_ratio is not none %}<span style="color:#7c3aed;">{{ r.ai_ratio }}</span>{% else %}-{% endif %}</td>
+            <td class="text-center">{% if r.source == 'testing' %}{{ r.test_cases|int if r.test_cases else '-' }}用例{% elif r.source == 'coding' %}{{ '%g'|format((r.code_lines or 0) / 1000) if r.code_lines else '-' }}kloc{% else %}{{ r.estimate_days|int if r.estimate_days else '-' }}天{% endif %}</td>
             <td class="text-center">{{ req_days.get(r.number, 0) }}</td>
             <td>
                 {{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}
@@ -150,7 +153,7 @@
 <div class="report-section">
     <h6>名下未闭环需求</h6>
     <table class="report-table">
-        <thead><tr><th style="width:55px;">编号</th><th>需求</th><th style="width:55px;">优先级</th><th style="width:55px;">状态</th><th style="width:85px;">截止</th></tr></thead>
+        <thead><tr><th style="width:55px;">编号</th><th>需求</th><th style="width:55px;">优先级</th><th style="width:55px;">状态</th><th style="width:45px;">完成率</th><th style="width:35px;">AI%</th><th style="width:85px;">截止</th></tr></thead>
         <tbody>
         {% for r in my_open_reqs %}
         {% set is_overdue = r.due_date and r.due_date < today %}
@@ -159,6 +162,8 @@
             <td>{{ r.title }}</td>
             <td><span class="badge bg-{{ r.priority_color }}">{{ r.priority_label }}</span></td>
             <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span></td>
+            <td class="text-center">{{ r.completion or 0 }}%</td>
+            <td class="text-center">{% if r.ai_ratio is not none %}<span style="color:#7c3aed;">{{ r.ai_ratio }}</span>{% else %}-{% endif %}</td>
             <td>
                 {{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}
                 {% if is_overdue %}<span class="fw-bold text-danger"> (+{{ (today - r.due_date).days }}天)</span>{% endif %}
