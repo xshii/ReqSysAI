@@ -203,7 +203,7 @@
                 <table class="table table-sm table-bordered mb-0" style="min-width:{{ 80 + g_days * col_w }}px;table-layout:fixed;font-size:.7em;">
                     <thead class="table-light">
                         <tr>
-                            <th style="width:50px;position:sticky;left:0;z-index:2;background:#f8f9fa;cursor:col-resize;" ondblclick="var w=this.style.width==='50px'?'90px':'50px';this.style.width=w;document.querySelectorAll('td[style*=sticky]').forEach(function(t){t.style.width=w});" title="双击切换列宽">负责人</th>
+                            <th id="ganttNameCol" style="width:50px;position:sticky;left:0;z-index:2;background:#f8f9fa;cursor:col-resize;" title="拖拽调整列宽">负责人<div id="ganttColHandle" style="position:absolute;right:0;top:0;bottom:0;width:4px;cursor:col-resize;"></div></th>
                             {% for i in range(g_days) %}
                             {% set d = g_start + timedelta(days=i) %}
                             <th class="gantt-col" data-date="{{ d.strftime('%Y-%m-%d') }}" style="width:{{ col_w }}px;padding:1px;text-align:center;font-size:.75em;{{ 'background:#fff3cd;' if d == gantt.today else ('background:#f0f0f0;' if d.weekday() >= 5 else '') }}">
@@ -354,6 +354,30 @@
                 }
                 if (s.gs && s.ge) filterGantt();
             } catch(e) {}
+        })();
+
+        // Drag-resize name column
+        (function() {
+            var handle = document.getElementById('ganttColHandle');
+            var th = document.getElementById('ganttNameCol');
+            if (!handle || !th) return;
+            var startX, startW;
+            handle.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                startX = e.pageX;
+                startW = th.offsetWidth;
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
+            function onMove(e) {
+                var w = Math.max(40, startW + e.pageX - startX);
+                th.style.width = w + 'px';
+                document.querySelectorAll('td[style*="sticky"]').forEach(function(t) { t.style.width = w + 'px'; });
+            }
+            function onUp() {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            }
         })();
         </script>
         {% endif %}
