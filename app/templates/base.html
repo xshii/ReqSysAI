@@ -473,7 +473,7 @@
 
         function applyView(open) {
             document.querySelectorAll('.mgr-only').forEach(function(el) {
-                if (open) { el.classList.remove('d-none'); } else { el.classList.add('d-none'); }
+                if (open) el.classList.add('mgr-visible'); else el.classList.remove('mgr-visible');
             });
             var icon = document.getElementById('mgrEyeIcon');
             var btn = document.getElementById('mgrEyeBtn');
