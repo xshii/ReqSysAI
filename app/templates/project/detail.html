@@ -328,6 +328,8 @@
             if (isWeek) {
                 // Hide non-Monday columns, widen Monday columns
                 var _lastWeekMonth = 0;
+                // Build map of Monday th positions for bar width calculation
+                var _mondayThs = {};
                 document.querySelectorAll('.gantt-col').forEach(function(td) {
                     if (!td.dataset.date) return;
                     var d = new Date(td.dataset.date + 'T00:00:00');
@@ -342,40 +344,68 @@
                             var label = (m !== _lastWeekMonth) ? (m + '月第' + weekNum + '周') : ('第' + weekNum + '周');
                             _lastWeekMonth = m;
                             td.innerHTML = '<span style="white-space:nowrap;">' + label + '</span>';
+                            _mondayThs[td.dataset.date] = td;
                         }
                     } else {
                         td.style.display = 'none';
                     }
                 });
-                // Process bars: save originals, recalculate width, move to Monday cell
+                // Sorted Monday dates for lookup
+                var _mondayDates = Object.keys(_mondayThs).sort();
+
+                // Process bars: use data-bar-days and actual Monday positions
                 document.querySelectorAll('.gantt-bar').forEach(function(bar) {
                     if (!bar.dataset.origWidth) bar.dataset.origWidth = parseFloat(bar.style.width);
                     if (!bar.dataset.origLeft) bar.dataset.origLeft = bar.style.left;
                     var startDate = bar.dataset.startDate;
-                    if (!startDate) return;
-                    var origDays = Math.round(parseFloat(bar.dataset.origWidth) / dayColW);
-                    var weekWidth = Math.max(origDays / 7 * weekColW, 6);
+                    var endDate = bar.dataset.endDate;
+                    if (!startDate || !endDate) return;
+
+                    // Find Monday of start and end dates
+                    var startMon = _getMondayStr(startDate);
+                    var sd = new Date(startDate + 'T00:00:00');
+                    var ed = new Date(endDate + 'T00:00:00');
+                    // End Monday = Monday of the week containing end date
+                    var endMon = _getMondayStr(endDate);
+
+                    // Calculate width: from start position to end of end-week
+                    var startTh = _mondayThs[startMon];
+                    var endTh = _mondayThs[endMon];
+                    if (!startTh) {
+                        // Start before range: use first Monday
+                        startTh = _mondayThs[_mondayDates[0]];
+                        startMon = _mondayDates[0];
+                    }
+                    if (!endTh) {
+                        // End after visible range: use last Monday
+                        endTh = _mondayThs[_mondayDates[_mondayDates.length - 1]];
+                        endMon = _mondayDates[_mondayDates.length - 1];
+                    }
+
+                    // Offset within start week (days from Monday)
+                    var offsetDays = (sd.getDay() || 7) - 1;
+                    var startPx = Math.round(offsetDays / 7 * weekColW);
+                    // End position: offset within end week
+                    var endDow = (ed.getDay() || 7) - 1;
+                    var endPx = endTh.offsetLeft + Math.round((endDow + 1) / 7 * weekColW);
+                    var barStartPx = startTh.offsetLeft + startPx;
+                    var weekWidth = Math.max(endPx - barStartPx, 6);
+
                     bar.style.width = weekWidth + 'px';
+                    bar.style.left = startPx + 'px';
                     var span = bar.querySelector('span');
                     if (span) span.style.display = weekWidth < 40 ? 'none' : '';
-                    // Find Monday of start date and move bar there
-                    var mondayStr = _getMondayStr(startDate);
+
+                    // Move bar to start Monday's td cell
                     var tr = bar.closest('tr');
-                    var mondayTd = tr.querySelector('td.gantt-col[data-date="' + mondayStr + '"]');
+                    var mondayTd = tr.querySelector('td.gantt-col[data-date="' + startMon + '"]');
                     if (!mondayTd) {
-                        // Monday before gantt range: use first visible td
                         var allTds = tr.querySelectorAll('td.gantt-col');
                         for (var _i = 0; _i < allTds.length; _i++) {
                             if (allTds[_i].style.display !== 'none') { mondayTd = allTds[_i]; break; }
                         }
                     }
-                    if (mondayTd) {
-                        // Offset within the week
-                        var sd = new Date(startDate + 'T00:00:00');
-                        var offsetDays = (sd.getDay() || 7) - 1;
-                        bar.style.left = Math.round(offsetDays / 7 * weekColW) + 'px';
-                        if (bar.parentElement !== mondayTd) mondayTd.appendChild(bar);
-                    }
+                    if (mondayTd && bar.parentElement !== mondayTd) mondayTd.appendChild(bar);
                 });
             } else {
                 // Day mode: restore all columns
