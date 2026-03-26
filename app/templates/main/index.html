@@ -651,7 +651,7 @@ checkHelpAlert();
 // Activity quick timer (meeting/review/break/other)
 var _actInterval = null;
 var _actConfig = JSON.parse(localStorage.getItem('_act_config') || 'null') || [
-    {key:'meeting',label:'开会'},{key:'review',label:'评审'},{key:'writing',label:'写材料'},{key:'break',label:'休息'}
+    {key:'meeting',label:'开会'},{key:'review',label:'评审'},{key:'writing',label:'写材料'},{key:'bug_fill',label:'问题定位'},{key:'break',label:'休息'}
 ];
 var _actLabels = {};
 _actConfig.forEach(function(a) { _actLabels[a.key] = a.label; });
