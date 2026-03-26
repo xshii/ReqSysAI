@@ -7,11 +7,11 @@
 <span class="pomodoro-area ms-1" title="共{{ todo.actual_minutes or 0 }}分钟 {{ todo.pomodoros|length }}次">
 {%- for s in todo.pomodoros -%}
 {% set pct = (s.minutes / pomo * 100)|int -%}
-{% if s.completed %}<i class="bi bi-circle-fill text-danger" style="font-size:.6em;cursor:default;" data-bs-toggle="tooltip" title="{{ s.minutes }}分钟 ✓"></i>
-{%- elif pct >= 80 %}<i class="bi bi-circle-fill text-primary" style="font-size:.6em;cursor:default;" data-bs-toggle="tooltip" title="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
-{%- elif pct >= 50 %}<i class="bi bi-circle-half text-warning" style="font-size:.6em;cursor:default;" data-bs-toggle="tooltip" title="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
-{%- elif pct >= 20 %}<i class="bi bi-circle-half text-secondary" style="font-size:.6em;cursor:default;" data-bs-toggle="tooltip" title="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
-{%- else %}<i class="bi bi-circle text-secondary" style="font-size:.6em;cursor:default;" data-bs-toggle="tooltip" title="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
+{% if s.completed %}<i class="bi bi-circle-fill text-danger" style="font-size:.6em;cursor:default;" data-tip="{{ s.minutes }}分钟 ✓"></i>
+{%- elif pct >= 80 %}<i class="bi bi-circle-fill text-primary" style="font-size:.6em;cursor:default;" data-tip="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
+{%- elif pct >= 50 %}<i class="bi bi-circle-half text-warning" style="font-size:.6em;cursor:default;" data-tip="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
+{%- elif pct >= 20 %}<i class="bi bi-circle-half text-secondary" style="font-size:.6em;cursor:default;" data-tip="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
+{%- else %}<i class="bi bi-circle text-secondary" style="font-size:.6em;cursor:default;" data-tip="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
 {%- endif %}
 {%- endfor -%}
 </span>
@@ -114,19 +114,11 @@ document.querySelectorAll('form[action*="/todo/"][action*="/toggle"]').forEach(f
 // Delete todo
 document.querySelectorAll('.btn-delete-home').forEach(function(btn) {
     btn.addEventListener('click', function() {
-        // Destroy tooltip before removing element to prevent orphan
-        var tip = bootstrap.Tooltip.getInstance(btn);
-        if (tip) tip.dispose();
         var row = btn.closest('.d-flex');
         var wasDone = row && row.classList.contains('text-decoration-line-through');
         var container = row.closest('.todo-list-for-req');
         apiPost('/todos/' + btn.dataset.id + '/edit', {title: ''}).then(function(d) {
             if (d && d.ok) {
-                // Destroy all tooltips in the row before removing
-                row.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
-                    var t = bootstrap.Tooltip.getInstance(el);
-                    if (t) t.dispose();
-                });
                 row.remove();
                 if (typeof _todoTotal !== 'undefined') {
                     _todoTotal--;
