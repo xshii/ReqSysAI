@@ -81,7 +81,9 @@ def requirement_list():
         remaining_days = db.func.max(db.func.julianday(Requirement.due_date) - db.func.julianday(str(today_)), 1)
         remaining_pct = 100 - db.func.coalesce(Requirement.completion, 0)
         urgency = remaining_pct / remaining_days
-        query = query.order_by(sort_group, urgency.desc(), Requirement.due_date.asc().nullslast())
+        # Done/closed: sort by days finished ahead of due_date (due - updated), desc
+        ahead_days = db.func.julianday(Requirement.due_date) - db.func.julianday(Requirement.updated_at)
+        query = query.order_by(sort_group, urgency.desc(), ahead_days.desc(), Requirement.due_date.asc().nullslast())
     else:
         order = {
             'oldest': Requirement.created_at.asc(),
