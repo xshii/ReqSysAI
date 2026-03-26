@@ -75,7 +75,8 @@ def _build_sub_projects(cur_project, monday):
         child_saved = WeeklyReport.query.filter_by(
             project_id=child.id, week_start=monday).first()
         from app.models.project_member import ProjectMember as PM_
-        fo = PM_.query.filter_by(project_id=child.id, project_role='FO').first()
+        pm = PM_.query.filter_by(project_id=child.id, project_role='PM').first()
+        fo = pm or PM_.query.filter_by(project_id=child.id, project_role='FO').first()
         summary = child_saved.summary if child_saved and child_saved.summary else None
         if summary is None:
             # AI generate one-line summary for child project
@@ -440,7 +441,8 @@ def weekly_report():
                 c_total = len(child_reqs)
                 c_done = sum(1 for r in child_reqs if r.status in ('done', 'closed'))
                 from app.models.project_member import ProjectMember as PM_
-                fo = PM_.query.filter_by(project_id=child.id, project_role='FO').first()
+                pm = PM_.query.filter_by(project_id=child.id, project_role='PM').first()
+                fo = pm or PM_.query.filter_by(project_id=child.id, project_role='FO').first()
                 fo_name = fo.display_name if fo else (child.owner.name if child.owner else '未分配')
                 lines.append(f'- {child.name}（负责人：{fo_name}，需求 {c_done}/{c_total} 完成，进度 {child.progress}%）')
 
@@ -704,7 +706,8 @@ def weekly_report():
                 child_saved = WeeklyReport.query.filter_by(
                     project_id=child.id, week_start=monday).first()
                 from app.models.project_member import ProjectMember as PM_
-                fo = PM_.query.filter_by(project_id=child.id, project_role='FO').first()
+                pm = PM_.query.filter_by(project_id=child.id, project_role='PM').first()
+                fo = pm or PM_.query.filter_by(project_id=child.id, project_role='FO').first()
                 sub_projects.append({
                     'project': child,
                     'owner': fo.user if fo and fo.user else (child.owner if child.owner else None),
