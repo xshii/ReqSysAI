@@ -13,6 +13,27 @@ from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.report import PersonalWeekly, WeeklyReport
 from app.models.requirement import Requirement
+
+
+def _urgency_sort(reqs, limit=None):
+    """Sort requirements: overdue → active(urgency desc) → done(ahead days desc)."""
+    today_ = date.today()
+
+    def _key(r):
+        is_done = r.status in ('done', 'closed')
+        is_overdue = (r.due_date and r.due_date < today_ and not is_done)
+        group = 0 if is_overdue else (2 if is_done else 1)
+        pct = 100 if is_done else (r.completion or 0)
+        remain = 100 - pct
+        days_left = max((r.due_date - today_).days, 1) if r.due_date else 999
+        urgency = -(remain / days_left)  # negate for asc sort
+        ahead = 0
+        if is_done and r.due_date and r.updated_at:
+            ahead = -(r.due_date - r.updated_at.date()).days
+        return (group, urgency, ahead)
+
+    result = sorted(reqs, key=_key)
+    return result[:limit] if limit else result
 from app.models.risk import Risk
 from app.models.todo import Todo, todo_requirements
 from app.models.user import Group, Role, User
@@ -312,7 +333,7 @@ def weekly_report():
         req_overview_q = Requirement.query.filter(Requirement.parent_id.is_(None))
         if cur_project_id:
             req_overview_q = req_overview_q.filter_by(project_id=cur_project_id)
-        all_reqs = req_overview_q.order_by(Requirement.due_date.asc().nullslast(), Requirement.number).all()
+        all_reqs = _urgency_sort(req_overview_q.all(), limit=50)
 
         # 6. Per-person stats this week
         from collections import Counter
@@ -501,13 +522,8 @@ def weekly_report():
             req_list_mode = 'parent_only'
 
         if len(display_reqs) > 40:
-            # Tier 4: overdue first, then by due_date
-            today_ = date.today()
-            def _sort_key(r):
-                overdue = 0 if (r.due_date and r.due_date < today_ and r.status not in ('done', 'closed')) else 1
-                due = r.due_date or date(9999, 12, 31)
-                return (overdue, due)
-            display_reqs = sorted(display_reqs, key=_sort_key)[:40]
+            # Tier 4: urgency sort with limit
+            display_reqs = _urgency_sort(display_reqs, limit=40)
             req_list_mode = 'priority'
 
         # Package all data for template and Excel
@@ -615,7 +631,7 @@ def weekly_report():
         req_overview_q = Requirement.query.filter(Requirement.parent_id.is_(None))
         if cur_project_id:
             req_overview_q = req_overview_q.filter_by(project_id=cur_project_id)
-        all_reqs = req_overview_q.order_by(Requirement.due_date.asc().nullslast(), Requirement.number).all()
+        all_reqs = _urgency_sort(req_overview_q.all(), limit=50)
 
         # Todos
         done_q = Todo.query.filter(Todo.done_date >= monday, Todo.done_date <= sunday)\
@@ -875,7 +891,7 @@ def weekly_report_export():
     req_q = Requirement.query.filter(Requirement.parent_id.is_(None))
     if cur_project_id:
         req_q = req_q.filter_by(project_id=cur_project_id)
-    all_reqs = req_q.order_by(Requirement.due_date.asc().nullslast(), Requirement.number).all()
+    all_reqs = _urgency_sort(req_q.all(), limit=50)
 
     milestones = cur_project.milestones if cur_project else []
 
@@ -1363,7 +1379,7 @@ def my_weekly():
     for t in my_done + my_active:
         for r in t.requirements:
             my_reqs.add(r)
-    my_reqs = sorted(my_reqs, key=lambda r: (r.due_date or date(9999, 12, 31), r.number))
+    my_reqs = _urgency_sort(list(my_reqs), limit=30)
 
     req_days = {}
     for t in my_done:
