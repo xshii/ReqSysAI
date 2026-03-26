@@ -203,7 +203,7 @@
                 <table class="table table-sm table-bordered mb-0" style="min-width:{{ 80 + g_days * col_w }}px;table-layout:fixed;font-size:.7em;">
                     <thead class="table-light">
                         <tr>
-                            <th id="ganttNameCol" style="width:50px;position:sticky;left:0;z-index:2;background:#f8f9fa;cursor:col-resize;" title="拖拽调整列宽">负责人<div id="ganttColHandle" style="position:absolute;right:0;top:0;bottom:0;width:4px;cursor:col-resize;"></div></th>
+                            <th id="ganttNameCol" style="width:50px;position:sticky;left:0;z-index:2;background:#f8f9fa;cursor:col-resize;" title="拖拽调整列宽">负责人</th>
                             {% for i in range(g_days) %}
                             {% set d = g_start + timedelta(days=i) %}
                             <th class="gantt-col" data-date="{{ d.strftime('%Y-%m-%d') }}" style="width:{{ col_w }}px;padding:1px;text-align:center;font-size:.75em;{{ 'background:#fff3cd;' if d == gantt.today else ('background:#f0f0f0;' if d.weekday() >= 5 else '') }}">
@@ -272,7 +272,8 @@
             // Update table min-width
             var colCount = document.querySelectorAll('thead .gantt-col').length;
             var table = document.querySelector('#ganttBody table');
-            if (table) table.style.minWidth = (50 + colCount * w) + 'px';
+            var nameW = document.getElementById('ganttNameCol') ? document.getElementById('ganttNameCol').offsetWidth : 50;
+            if (table) table.style.minWidth = (nameW + colCount * w) + 'px';
             document.querySelectorAll('.gantt-col').forEach(function(td) {
                 td.style.width = w + 'px';
                 // In week mode, hide header text for non-Monday columns
@@ -356,25 +357,39 @@
             } catch(e) {}
         })();
 
-        // Drag-resize name column
+        // Drag-resize name column (mousedown on th right edge)
         (function() {
-            var handle = document.getElementById('ganttColHandle');
             var th = document.getElementById('ganttNameCol');
-            if (!handle || !th) return;
-            var startX, startW;
-            handle.addEventListener('mousedown', function(e) {
+            if (!th) return;
+            var startX, startW, dragging = false;
+            th.addEventListener('mousedown', function(e) {
+                // Only start drag if clicking near the right edge (last 10px)
+                var rect = th.getBoundingClientRect();
+                if (e.clientX < rect.right - 10) return;
                 e.preventDefault();
+                dragging = true;
                 startX = e.pageX;
                 startW = th.offsetWidth;
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
                 document.addEventListener('mousemove', onMove);
                 document.addEventListener('mouseup', onUp);
             });
             function onMove(e) {
+                if (!dragging) return;
                 var w = Math.max(40, startW + e.pageX - startX);
                 th.style.width = w + 'px';
                 document.querySelectorAll('td[style*="sticky"]').forEach(function(t) { t.style.width = w + 'px'; });
+                // Update table min-width
+                var colW = _ganttScale === 'week' ? 4 : 24;
+                var colCount = document.querySelectorAll('thead .gantt-col').length;
+                var table = document.querySelector('#ganttBody table');
+                if (table) table.style.minWidth = (w + colCount * colW) + 'px';
             }
             function onUp() {
+                dragging = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
                 document.removeEventListener('mousemove', onMove);
                 document.removeEventListener('mouseup', onUp);
             }
