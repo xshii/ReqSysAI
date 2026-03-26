@@ -13,6 +13,7 @@
 .kanban-card:active { cursor: grabbing; transform: scale(0.97); }
 .kanban-card.drag-over { border-top: 3px solid #0d6efd; }
 .kanban-col.drag-target { background: #e8f0fe; }
+.drag-ghost { opacity:.35;border:2px dashed #0d6efd;background:#e8f0fe;pointer-events:none; }
 .sub-req-item { font-weight: normal !important; font-size: .68em !important; color: #6c757d; border-left: 2px solid #ced4da; margin-left: 4px; padding-left: 6px !important; }
 .highlight-related { box-shadow: 0 0 0 2px #0d6efd !important; border-radius: 0.25rem; }
 </style>
@@ -85,6 +86,7 @@
 <script>
 var csrfToken = '{{ csrf_token() }}';
 var dragId = null;
+var dragGhost = null;
 var showSub = {{ 'true' if show_sub else 'false' }};
 
 function applyFilter() {
@@ -103,31 +105,75 @@ function cardClick(e, card) {
     if (href) window.location = href;
 }
 
+function removeGhost() {
+    if (dragGhost && dragGhost.parentNode) dragGhost.parentNode.removeChild(dragGhost);
+    dragGhost = null;
+}
+
 function onDragStart(e, card) {
     dragId = card.dataset.id;
     e.dataTransfer.effectAllowed = 'move';
     card.classList.add('opacity-50');
-    setTimeout(function() { card.classList.remove('opacity-50'); }, 200);
+    // Create ghost preview
+    removeGhost();
+    dragGhost = card.cloneNode(true);
+    dragGhost.classList.add('drag-ghost');
+    dragGhost.removeAttribute('draggable');
+    dragGhost.removeAttribute('ondragstart');
+    dragGhost.removeAttribute('onclick');
+    dragGhost.style.cursor = 'default';
 }
 
+function onDragEnd() {
+    // Restore opacity on source card
+    var card = dragId ? document.querySelector('.kanban-card[data-id="' + dragId + '"]:not(.drag-ghost)') : null;
+    if (card) card.classList.remove('opacity-50');
+    removeGhost();
+}
+document.addEventListener('dragend', onDragEnd);
+
 function onDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
-/* Legacy col handlers (unused now, kept for sub-req-item drag) */
+/* Legacy col handlers */
 function onDragEnter(e, col) { e.preventDefault(); col.classList.add('drag-target'); }
 function onDragLeave(col) { col.classList.remove('drag-target'); }
 
 /* Zone-aware drag handlers */
-function onZoneEnter(e, zone) { e.preventDefault(); zone.classList.add('drag-target'); }
-function onZoneLeave(zone) { zone.classList.remove('drag-target'); }
+function onZoneEnter(e, zone) {
+    e.preventDefault();
+    zone.classList.add('drag-target');
+    // Show ghost in this zone
+    if (dragGhost) {
+        removeGhost();
+        // Re-create from source card (it may have been removed)
+        var src = dragId ? document.querySelector('.kanban-card[data-id="' + dragId + '"]:not(.drag-ghost)') : null;
+        if (src) {
+            dragGhost = src.cloneNode(true);
+            dragGhost.classList.add('drag-ghost');
+            dragGhost.removeAttribute('draggable');
+            dragGhost.removeAttribute('ondragstart');
+            dragGhost.removeAttribute('onclick');
+            dragGhost.style.cursor = 'default';
+        }
+        if (dragGhost) zone.appendChild(dragGhost);
+    }
+}
+function onZoneLeave(zone) {
+    zone.classList.remove('drag-target');
+    // Remove ghost from this zone
+    if (dragGhost && dragGhost.parentNode === zone) zone.removeChild(dragGhost);
+}
 
 function onZoneDrop(e, zone) {
     e.preventDefault();
     zone.classList.remove('drag-target');
+    removeGhost();
     if (!dragId) return;
     var newStatus = zone.dataset.status;
     var newPct = parseInt(zone.dataset.pct) || 0;
 
-    var card = document.querySelector('.kanban-card[data-id="' + dragId + '"]');
+    var card = document.querySelector('.kanban-card[data-id="' + dragId + '"]:not(.drag-ghost)');
     if (!card) return;
+    card.classList.remove('opacity-50');
     var curStatus = card.dataset.status;
 
     var promises = [];
