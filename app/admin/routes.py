@@ -139,7 +139,7 @@ def ip_request_approve(req_id):
     r = db.get_or_404(IPChangeRequest, req_id)
     r.status = 'approved'
     r.reviewed_by = current_user.id
-    r.reviewed_at = datetime.now(timezone.utc)
+    r.reviewed_at = datetime.now()
     # Update user IP
     user = db.session.get(User, r.user_id)
     if user:
@@ -155,7 +155,7 @@ def ip_request_reject(req_id):
     r = db.get_or_404(IPChangeRequest, req_id)
     r.status = 'rejected'
     r.reviewed_by = current_user.id
-    r.reviewed_at = datetime.now(timezone.utc)
+    r.reviewed_at = datetime.now()
     db.session.commit()
     flash('已拒绝 IP 更换申请', 'info')
     return redirect(url_for('admin.user_list'))

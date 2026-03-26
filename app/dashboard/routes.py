@@ -594,7 +594,7 @@ def weekly_report():
             saved.summary = ai_analysis['summary']
             saved.risks_json = json_lib.dumps(ai_analysis['risks'], ensure_ascii=False)
             saved.plan_json = json_lib.dumps(ai_analysis['plan'], ensure_ascii=False)
-            saved.updated_at = datetime.now(timezone.utc)
+            saved.updated_at = datetime.now()
         else:
             saved = WeeklyReport(
                 project_id=cur_project_id,
@@ -826,7 +826,7 @@ def weekly_report_save():
     plan = [p.strip() for p in request.form.get('plan', '').strip().splitlines() if p.strip()]
     saved.risks_json = json_lib.dumps(risks, ensure_ascii=False)
     saved.plan_json = json_lib.dumps(plan, ensure_ascii=False)
-    saved.updated_at = datetime.now(timezone.utc)
+    saved.updated_at = datetime.now()
     db.session.commit()
     flash('周报已保存', 'success')
 
@@ -858,7 +858,7 @@ def weekly_report_freeze():
     if action == 'freeze':
         saved.is_frozen = True
         saved.frozen_by = current_user.id
-        saved.frozen_at = datetime.now(timezone.utc)
+        saved.frozen_at = datetime.now()
         flash('周报已冻结', 'success')
     else:
         saved.is_frozen = False

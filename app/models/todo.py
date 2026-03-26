@@ -105,7 +105,7 @@ class Todo(db.Model):
     def elapsed_minutes(self):
         if not self.started_at:
             return 0
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now()
         return int((now - self.started_at).total_seconds() / 60)
 
     def __repr__(self):
