@@ -306,8 +306,8 @@ def weekly_report():
 
         # 3. Requirement changes
         req_q = Requirement.query.filter(
-            Requirement.updated_at >= str(monday),
-            Requirement.updated_at <= str(sunday + timedelta(days=1)),
+            Requirement.updated_at >= monday,
+            Requirement.updated_at <= sunday + timedelta(days=1),
         )
         if cur_project_id:
             req_q = req_q.filter_by(project_id=cur_project_id)
@@ -408,7 +408,7 @@ def weekly_report():
                 owner_info = f'{r.owner}' if r.owner else '无'
                 if r.owner_user:
                     owner_info += f' {r.owner_user.employee_id}'
-                tracker_info = f'{r.tracker.name} {r.tracker.employee_id}' if r.tracker else '无'
+                tracker_info = f'{r.tracker.name} {r.tracker.employee_id}' if r.tracker else (r.tracker_name or '无')
                 lines.append(f'- {r.title}（{r.severity_label}，{r_status}，责任人：{owner_info}，跟踪人：{tracker_info}）')
 
         if req_changes:
@@ -548,7 +548,7 @@ def weekly_report():
         from collections import defaultdict as _defaultdict
         domain_stats = _defaultdict(lambda: {'total': 0, 'open': 0})
         for r in all_project_risks:
-            domain = (r.owner_user.domain if r.owner_user and r.owner_user.domain else '未分类')
+            domain = (r.domain_display or '未分类')
             domain_stats[domain]['total'] += 1
             if r.status == 'open':
                 domain_stats[domain]['open'] += 1
@@ -731,7 +731,7 @@ def weekly_report():
         from collections import defaultdict as _defaultdict
         domain_stats2 = _defaultdict(lambda: {'total': 0, 'open': 0})
         for r in all_project_risks2:
-            domain = (r.owner_user.domain if r.owner_user and r.owner_user.domain else '未分类')
+            domain = (r.domain_display or '未分类')
             domain_stats2[domain]['total'] += 1
             if r.status == 'open':
                 domain_stats2[domain]['open'] += 1

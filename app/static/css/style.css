@@ -185,6 +185,10 @@ body {
 /* Pure CSS tooltip: no JS, no residue, instant */
 [data-tip] {
     position: relative;
+    z-index: auto;
+}
+[data-tip]:hover {
+    z-index: 9999;
 }
 [data-tip]::after {
     content: attr(data-tip);
@@ -202,16 +206,11 @@ body {
     pointer-events: none;
     opacity: 0;
     transition: opacity .15s;
-    z-index: 9999;
+    z-index: 99999;
     margin-bottom: 4px;
 }
 [data-tip]:hover::after {
     opacity: 1;
-}
-/* Ensure tooltip is not clipped by parent card boundaries */
-.card:has([data-tip]:hover) {
-    z-index: 100;
-    overflow: visible;
 }
 [data-tip-pos="bottom"]::after {
     bottom: auto;

@@ -33,7 +33,7 @@
 
 <!-- Filters + Stats (merged) -->
 <div class="d-flex gap-2 mb-3 flex-wrap align-items-center" id="riskStats">
-    <a href="?status=&severity=" class="btn btn-sm {% if not cur_status and not cur_severity %}btn-primary{% else %}btn-outline-secondary{% endif %}">全部 <span class="badge bg-light text-dark">{{ risk_stats.total }}</span></a>
+    <a href="?status=all&severity=" class="btn btn-sm {% if cur_status == 'all' %}btn-primary{% else %}btn-outline-secondary{% endif %}">全部 <span class="badge bg-light text-dark">{{ risk_stats.total }}</span></a>
     <a href="?overdue=1" class="btn btn-sm {% if cur_overdue %}btn-danger{% else %}btn-outline-danger{% endif %}" title="超期未解决">超期 <span class="badge {{ 'bg-light text-danger' if cur_overdue else 'bg-danger' }}">{{ risk_stats.overdue }}</span></a>
     <a href="?status=open" class="btn btn-sm {% if cur_status == 'open' %}btn-danger{% else %}btn-outline-danger{% endif %}">未解决 <span class="badge {{ 'bg-light text-danger' if cur_status == 'open' else 'bg-danger' }}">{{ risk_stats.open }}</span></a>
     <a href="?status=resolved" class="btn btn-sm {% if cur_status == 'resolved' %}btn-success{% else %}btn-outline-success{% endif %}">已解决 <span class="badge {{ 'bg-light text-success' if cur_status == 'resolved' else 'bg-success' }}">{{ risk_stats.resolved }}</span></a>
@@ -82,27 +82,19 @@
                 <div>{{ r.title }}</div>
                 {% if r.description %}<div class="text-muted small">{{ r.description[:80] }}{% if r.description|length > 80 %}...{% endif %}</div>{% endif %}
                 {% if r.resolution %}<div class="text-success small"><i class="bi bi-check-circle"></i> {{ r.resolution }}</div>{% endif %}
-                {% if r.comments %}
-                <div class="mt-1 border-top pt-1">
+                <div class="mt-1 border-top pt-1 risk-comments" data-risk-id="{{ r.id }}" style="max-height:72px;overflow-y:auto;">
                     {% for c in r.comments %}
-                    <div class="small text-muted d-flex align-items-start gap-1">
+                    <div class="small text-muted d-flex align-items-start gap-1 comment-item" data-comment-id="{{ c.id }}">
                         <span class="flex-grow-1"><strong>{{ c.user.name }}</strong> <span style="font-size:.8em;">{{ c.created_at.strftime('%m-%d %H:%M') }}</span>：{{ c.content }}</span>
-                        <form method="POST" action="{{ url_for('project.risk_comment_delete', comment_id=c.id) }}" class="d-inline flex-shrink-0" onsubmit="return confirm('删除该评论？')">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-link btn-sm text-muted p-0" style="font-size:.7em;" title="删除"><i class="bi bi-x-lg"></i></button>
-                        </form>
+                        <button class="btn btn-link btn-sm text-muted p-0 flex-shrink-0 btn-del-comment" style="font-size:.7em;" title="删除" data-id="{{ c.id }}"><i class="bi bi-x-lg"></i></button>
                     </div>
                     {% endfor %}
                 </div>
-                {% endif %}
                 {% if r.status == 'open' %}
-                <form method="POST" action="{{ url_for('project.risk_comment', risk_id=r.id) }}" class="mt-1">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <div class="input-group input-group-sm">
-                        <input type="text" name="content" class="form-control" placeholder="记录进展..." maxlength="500" required>
-                        <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-send"></i></button>
-                    </div>
-                </form>
+                <div class="input-group input-group-sm mt-1">
+                    <input type="text" class="form-control comment-input" data-risk-id="{{ r.id }}" placeholder="记录进展..." maxlength="500">
+                    <button class="btn btn-outline-secondary btn-add-comment" data-risk-id="{{ r.id }}"><i class="bi bi-send"></i></button>
+                </div>
                 {% endif %}
             </td>
             <td><span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span></td>
@@ -111,8 +103,8 @@
                 {% if r.is_overdue %}<span class="badge bg-danger">超期</span>{% endif %}
             </td>
             <td>{{ r.owner or '-' }}</td>
-            <td class="small text-muted">{{ r.owner_user.domain if r.owner_user and r.owner_user.domain else '-' }}</td>
-            <td>{{ r.tracker.name if r.tracker else '-' }}</td>
+            <td class="small text-muted">{{ r.domain_display or '-' }}</td>
+            <td>{{ r.tracker_display or '-' }}</td>
             <td class="small text-muted">{{ r.created_at.strftime('%m-%d') }}</td>
             <td class="small">
                 {{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}
@@ -124,7 +116,8 @@
             <td>
                 {% if r.status == 'open' %}
                 <button class="btn btn-sm btn-outline-primary py-0" data-bs-toggle="modal" data-bs-target="#editRiskModal"
-                        onclick="setEditRisk({{ r.id }}, '{{ r.title }}', '{{ r.severity }}', '{{ r.owner or '' }}', '{{ r.owner or '' }}', '{{ r.tracker_id or '' }}', '{{ r.tracker.name if r.tracker else '' }}', '{{ r.due_date.strftime('%Y-%m-%d') if r.due_date else '' }}')" title="编辑"><i class="bi bi-pencil"></i></button>
+                        data-desc="{{ r.description or '' }}"
+                        onclick="setEditRisk({{ r.id }}, '{{ r.title }}', '{{ r.severity }}', '{{ r.owner or '' }}', '{{ r.owner or '' }}', '{{ r.tracker_display }}', '{{ r.tracker_display }}', '{{ r.due_date.strftime('%Y-%m-%d') if r.due_date else '' }}', '{{ r.created_at.strftime('%Y-%m-%d') if r.created_at else '' }}', '{{ r.domain_display }}', this.dataset.desc)" title="编辑"><i class="bi bi-pencil"></i></button>
                 <button class="btn btn-sm btn-outline-success py-0" data-bs-toggle="modal" data-bs-target="#resolveModal" onclick="setResolveId({{ r.id }})">解决</button>
                 {% elif r.status == 'resolved' %}
                 <form method="POST" action="{{ url_for('project.risk_close', risk_id=r.id) }}" class="d-inline">
@@ -176,7 +169,7 @@
                         <textarea name="description" class="form-control form-control-sm" rows="2" placeholder="影响范围、原因分析等"></textarea>
                     </div>
                     <div class="row">
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label class="form-label">严重程度</label>
                             <select name="severity" class="form-select form-select-sm">
                                 <option value="high">高</option>
@@ -184,20 +177,33 @@
                                 <option value="low">低</option>
                             </select>
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label class="form-label">预计闭环 <span class="text-danger">*</span></label>
                             <input type="date" max="2099-12-31" name="due_date" class="form-control form-control-sm" required value="{{ today.strftime('%Y-%m-%d') }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">提出日期</label>
+                            <input type="date" max="2099-12-31" name="created_at" class="form-control form-control-sm" value="{{ today.strftime('%Y-%m-%d') }}">
                         </div>
                     </div>
                     {% from "_user_picker.html" import user_picker %}
                     <div class="row">
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label class="form-label">责任人</label>
                             {{ user_picker('owner', users, mode='text', placeholder='搜索或输入外部人员') }}
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label class="form-label">跟踪人</label>
-                            {{ user_picker('tracker_id', users, mode='id', placeholder='搜索姓名/工号...') }}
+                            {{ user_picker('tracker_id', users, mode='text', placeholder='搜索或输入外部人员') }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">业务领域</label>
+                            <input type="text" name="domain" class="form-control form-control-sm" list="domainList" placeholder="选择或输入">
+                            <datalist id="domainList">
+                                {% for u in users|map(attribute='domain')|select|unique %}
+                                <option value="{{ u }}">
+                                {% endfor %}
+                            </datalist>
                         </div>
                     </div>
                     <div class="mb-3 position-relative">
@@ -207,7 +213,7 @@
                         <div class="list-group position-absolute shadow-sm d-none" id="reqSearchList" style="z-index:1060;max-height:180px;overflow-y:auto;width:100%;">
                             {% for r in reqs %}
                             <a href="#" class="list-group-item list-group-item-action py-1 small req-search-opt"
-                               data-id="{{ r.id }}" data-assignee="{{ r.assignee_id or '' }}"
+                               data-id="{{ r.id }}" data-assignee="{{ r.assignee_id or '' }}" data-assignee-name="{{ r.assignee_display if r.assignee_display != '未分配' else '' }}"
                                data-text="{{ r.number }} {{ r.title[:30] }}{% if r.assignee_display != '未分配' %} ({{ r.assignee_display }}){% endif %}">
                                 {{ r.number }} {{ r.title[:30] }}{% if r.assignee_display != '未分配' %} <span class="text-muted">({{ r.assignee_display }})</span>{% endif %}
                             </a>
@@ -240,6 +246,10 @@
                         <div class="col-9"><input type="text" name="title" id="editRiskTitle" class="form-control form-control-sm" required></div>
                     </div>
                     <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">详细描述</label>
+                        <div class="col-9"><textarea name="description" id="editRiskDesc" class="form-control form-control-sm" rows="2"></textarea></div>
+                    </div>
+                    <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">严重程度</label>
                         <div class="col-9">
                             <select name="severity" id="editRiskSeverity" class="form-select form-select-sm">
@@ -255,11 +265,25 @@
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">跟踪人</label>
-                        <div class="col-9">{{ user_picker('tracker_id', users, mode='id', placeholder='搜索姓名/工号...') }}</div>
+                        <div class="col-9">{{ user_picker('tracker_id', users, mode='text', placeholder='搜索或输入外部人员') }}</div>
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">闭环日期</label>
                         <div class="col-9"><input type="date" max="2099-12-31" name="due_date" id="editRiskDue" class="form-control form-control-sm" required></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">提出日期</label>
+                        <div class="col-9"><input type="date" max="2099-12-31" name="created_at" id="editRiskCreated" class="form-control form-control-sm"></div>
+                    </div>
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">业务领域</label>
+                        <div class="col-9"><input type="text" name="domain" id="editRiskDomain" class="form-control form-control-sm" list="domainListEdit" placeholder="选择或输入">
+                            <datalist id="domainListEdit">
+                                {% for u in users|map(attribute='domain')|select|unique %}
+                                <option value="{{ u }}">
+                                {% endfor %}
+                            </datalist>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer py-1">
@@ -578,22 +602,22 @@ function setResolveId(id) {
     document.getElementById('resolveForm').action = '/projects/risks/' + id + '/resolve';
 }
 
-function setEditRisk(id, title, severity, owner, ownerName, trackerId, trackerName, dueDate) {
+function setEditRisk(id, title, severity, owner, ownerName, trackerId, trackerName, dueDate, createdAt, domain, desc) {
     document.getElementById('editRiskForm').action = '/projects/risks/' + id + '/edit';
     document.getElementById('editRiskTitle').value = title;
+    document.getElementById('editRiskDesc').value = desc || '';
     document.getElementById('editRiskSeverity').value = severity;
     document.getElementById('editRiskDue').value = dueDate;
-    // Set user pickers in edit modal
+    document.getElementById('editRiskCreated').value = createdAt || '';
+    document.getElementById('editRiskDomain').value = domain || '';
     var editModal = document.getElementById('editRiskModal');
     var pickers = editModal.querySelectorAll('.user-picker-wrap');
-    // First picker = owner (text mode)
     if (pickers[0]) {
         pickers[0].querySelector('.user-picker-val').value = ownerName || '';
         pickers[0].querySelector('.user-picker-input').value = ownerName || '';
     }
-    // Second picker = tracker (id mode)
     if (pickers[1]) {
-        pickers[1].querySelector('.user-picker-val').value = trackerId || '';
+        pickers[1].querySelector('.user-picker-val').value = trackerName || '';
         pickers[1].querySelector('.user-picker-input').value = trackerName || '';
     }
 }
@@ -646,7 +670,14 @@ function selectReqOpt(o) {
     reqInput.value = o.dataset.text;
     reqList.classList.add('d-none');
     reqHighlight = -1;
-    if (o.dataset.assignee) document.getElementById('trackerId').value = o.dataset.assignee;
+    if (o.dataset.assigneeName) {
+        var addModal = document.getElementById('addModal');
+        var tp = addModal.querySelectorAll('.user-picker-wrap')[1];
+        if (tp) {
+            tp.querySelector('.user-picker-val').value = o.dataset.assigneeName;
+            tp.querySelector('.user-picker-input').value = o.dataset.assigneeName;
+        }
+    }
 }
 
 reqOpts.forEach(function(o) {
@@ -660,6 +691,53 @@ document.addEventListener('click', function(e) {
 /* Clear requirement */
 reqInput.addEventListener('input', function() {
     if (reqInput.value.trim() === '') { reqHidden.value = ''; }
+});
+
+/* AJAX comments: add */
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.btn-add-comment');
+    if (!btn) return;
+    var riskId = btn.dataset.riskId;
+    var input = btn.parentElement.querySelector('.comment-input');
+    var content = input.value.trim();
+    if (!content) return;
+    btn.disabled = true;
+    apiPost('/projects/risks/' + riskId + '/comment', {content: content})
+    .then(function(d) {
+        btn.disabled = false;
+        if (!d.ok) { showToast(d.msg || '发送失败', 'danger'); return; }
+        input.value = '';
+        var box = btn.closest('td').querySelector('.risk-comments');
+        var div = document.createElement('div');
+        div.className = 'small text-muted d-flex align-items-start gap-1 comment-item';
+        div.dataset.commentId = d.comment.id;
+        div.innerHTML = '<span class="flex-grow-1"><strong>' + d.comment.user + '</strong> <span style="font-size:.8em;">' + d.comment.time + '</span>：' + d.comment.content + '</span>'
+            + '<button class="btn btn-link btn-sm text-muted p-0 flex-shrink-0 btn-del-comment" style="font-size:.7em;" title="删除" data-id="' + d.comment.id + '"><i class="bi bi-x-lg"></i></button>';
+        box.insertBefore(div, box.firstChild);
+        showToast('已记录', 'success');
+    }).catch(function() { btn.disabled = false; showToast('网络错误', 'danger'); });
+});
+/* Enter to send */
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && e.target.classList.contains('comment-input')) {
+        e.preventDefault();
+        var btn = e.target.parentElement.querySelector('.btn-add-comment');
+        if (btn) btn.click();
+    }
+});
+/* AJAX comments: delete */
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.btn-del-comment');
+    if (!btn) return;
+    if (!confirm('删除该评论？')) return;
+    var cid = btn.dataset.id;
+    apiPost('/projects/risks/comments/' + cid + '/delete', {})
+    .then(function(d) {
+        if (!d.ok) { showToast('删除失败', 'danger'); return; }
+        var item = btn.closest('.comment-item');
+        if (item) item.remove();
+        showToast('已删除', 'success');
+    }).catch(function() { showToast('网络错误', 'danger'); });
 });
 </script>
 {% endblock %}

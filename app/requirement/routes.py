@@ -78,7 +78,7 @@ def requirement_list():
             else_=1,
         )
         # remaining_pct / remaining_days → higher = more urgent → sort desc
-        remaining_days = db.func.max(db.func.julianday(Requirement.due_date) - db.func.julianday(str(today_)), 1)
+        remaining_days = db.func.max(db.func.julianday(Requirement.due_date) - db.func.julianday(today_.isoformat()), 1)
         remaining_pct = 100 - db.func.coalesce(Requirement.completion, 0)
         urgency = remaining_pct / remaining_days
         # Done/closed: sort by days finished ahead of due_date (due - updated), desc
@@ -215,17 +215,24 @@ def requirement_create():
                     est_cases = int(sub_est_cases[i]) if i < len(sub_est_cases) and sub_est_cases[i] else None
                 except (ValueError, IndexError):
                     est_cases = None
+                sub_ai = None
+                try:
+                    sub_ai = int(sub_ai_ratios[i]) if i < len(sub_ai_ratios) and sub_ai_ratios[i] else None
+                except (ValueError, IndexError):
+                    pass
                 sub = Requirement(
                     number=Requirement.generate_child_number(req.number),
                     title=st,
                     project_id=req.project_id,
                     priority=req.priority,
+                    start_date=req.start_date,
+                    due_date=req.due_date,
                     assignee_id=assignee,
                     assignee_name=assignee_name_ext,
                     estimate_days=days,
                     code_lines=est_lines if sub_type == 'coding' else None,
                     test_cases=est_cases if sub_type == 'testing' else None,
-                    ai_ratio=int(sub_ai_ratios[i]) if i < len(sub_ai_ratios) and sub_ai_ratios[i] else None,
+                    ai_ratio=sub_ai if sub_ai is not None else req.ai_ratio,
                     parent_id=req.id,
                     source=sub_type,
                     created_by=current_user.id,
@@ -305,13 +312,20 @@ def requirement_edit(req_id):
                 est_cases = int(sub_est_cases[i]) if i < len(sub_est_cases) and sub_est_cases[i] else None
             except (ValueError, IndexError):
                 est_cases = None
+            sub_ai = None
+            try:
+                sub_ai = int(sub_ai_ratios[i]) if i < len(sub_ai_ratios) and sub_ai_ratios[i] else None
+            except (ValueError, IndexError):
+                pass
             sub = Requirement(
                 number=Requirement.generate_child_number(req.number),
                 title=st, project_id=req.project_id, priority=req.priority,
+                start_date=req.start_date, due_date=req.due_date,
                 assignee_id=a_id_sub, assignee_name=a_name_sub,
                 estimate_days=days,
                 code_lines=est_lines if sub_type == 'coding' else None,
                 test_cases=est_cases if sub_type == 'testing' else None,
+                ai_ratio=sub_ai if sub_ai is not None else req.ai_ratio,
                 parent_id=req.id, source=sub_type, created_by=current_user.id,
             )
             db.session.add(sub)

@@ -4,11 +4,11 @@
 {% block extra_css %}
 <style>
 .kanban-board { height: calc(100vh - 120px); }
-.kanban-col { display:flex;flex-direction:column;height:100%;overflow-y:auto; }
-.pct-zone { min-height:30px;position:relative; }
+.kanban-col { height:100%;overflow-y:auto; }
+.pct-zone { min-height:30px;flex-shrink:0; }
 .pct-zone.drag-target { background:rgba(13,110,253,.06); }
-.pct-overlay { position:absolute;left:4px;right:4px;border-top:1px dashed #adb5bd;pointer-events:none;z-index:3; }
-.pct-overlay span { position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:#f8f9fa;padding:0 4px;font-size:.6em;color:#6c757d; }
+.pct-divider { border-top:1px dashed #adb5bd;text-align:center;margin:2px 4px;pointer-events:none;position:relative;flex-shrink:0; }
+.pct-divider span { position:relative;top:-8px;background:#f8f9fa;padding:0 4px;font-size:.6em;color:#6c757d; }
 .kanban-card { cursor: grab; transition: transform 0.1s; }
 .kanban-card:active { cursor: grabbing; transform: scale(0.97); }
 .kanban-card.drag-over { border-top: 3px solid #0d6efd; }
@@ -46,12 +46,10 @@
             <span class="text-muted small">{{ reqs | length }}</span>
         </div>
         {% set has_zones = status not in ('pending_review', 'done') %}
-        <div class="kanban-col rounded p-1 bg-light" data-status="{{ status }}" style="position:relative;">
+        <div class="kanban-col rounded p-1 bg-light" data-status="{{ status }}">
             {% if has_zones %}
-                <div class="pct-overlay" style="top:25%;"><span>30%</span></div>
-                <div class="pct-overlay" style="top:50%;"><span>60%</span></div>
-                <div class="pct-overlay" style="top:75%;"><span>90%</span></div>
                 {% for z in [0, 30, 60, 90] %}
+                {% if z > 0 %}<div class="pct-divider"><span>{{ z }}%</span></div>{% endif %}
                 <div class="pct-zone" data-status="{{ status }}" data-pct="{{ z }}"
                      ondragover="onDragOver(event)" ondragenter="onZoneEnter(event, this)" ondragleave="onZoneLeave(event, this)" ondrop="onZoneDrop(event, this)">
                 {% for r in reqs %}

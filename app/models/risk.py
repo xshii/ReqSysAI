@@ -14,7 +14,9 @@ class Risk(db.Model):
     status = db.Column(db.String(20), default='open')  # open / resolved / closed
     owner = db.Column(db.String(100), nullable=True)  # 责任人姓名（外部人员或显示名）
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # 责任人（系统用户）
-    tracker_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # 跟踪人（内部员工）
+    tracker_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # 跟踪人（系统用户）
+    tracker_name = db.Column(db.String(100), nullable=True)  # 跟踪人姓名（外部人员时）
+    domain = db.Column(db.String(100), nullable=True)  # 业务领域（覆盖owner_user.domain）
     requirement_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=True)  # 关联子需求
     meeting_id = db.Column(db.Integer, db.ForeignKey('meetings.id'), nullable=True)  # 来源会议
     aar_id = db.Column(db.Integer, db.ForeignKey('aars.id'), nullable=True)  # 来源AAR
@@ -35,7 +37,7 @@ class Risk(db.Model):
     requirement = db.relationship('Requirement', backref='risks')
     meeting = db.relationship('Meeting', backref='linked_risks')
     comments = db.relationship('RiskComment', backref='risk', cascade='all, delete-orphan',
-                               order_by='RiskComment.created_at')
+                               order_by='RiskComment.created_at.desc()')
 
     _SEVERITY_META = {
         'high':   ('高', 'danger'),
@@ -68,6 +70,20 @@ class Risk(db.Model):
     @property
     def status_color(self):
         return self.STATUS_COLORS.get(self.status, 'secondary')
+
+    @property
+    def tracker_display(self):
+        if self.tracker:
+            return self.tracker.name
+        return self.tracker_name or ''
+
+    @property
+    def domain_display(self):
+        if self.domain:
+            return self.domain
+        if self.owner_user and self.owner_user.domain:
+            return self.owner_user.domain
+        return ''
 
     @property
     def is_deleted(self):

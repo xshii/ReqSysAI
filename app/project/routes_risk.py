@@ -20,13 +20,13 @@ def risk_list(project_id):
     denied = _check_project_access(project)
     if denied:
         return denied
-    status = request.args.get('status', '')
+    status = request.args.get('status', 'open')  # default: show open only
     severity = request.args.get('severity', '')
     overdue_filter = request.args.get('overdue', '')
     domain_filter = request.args.get('domain', '')
 
     query = Risk.query.filter_by(project_id=project_id).filter(Risk.deleted_at.is_(None))
-    if status:
+    if status and status != 'all':
         query = query.filter_by(status=status)
     if overdue_filter:
         query = query.filter(Risk.status == 'open', Risk.due_date < date.today())
@@ -34,12 +34,24 @@ def risk_list(project_id):
         query = query.filter_by(severity=severity)
     if domain_filter:
         if domain_filter == '未分类':
-            query = query.filter(db.or_(Risk.owner_id.is_(None),
-                                        ~Risk.owner_id.in_(db.session.query(User.id).filter(User.domain.isnot(None), User.domain != ''))))
+            query = query.filter(db.or_(
+                Risk.domain.is_(None), Risk.domain == '',
+                db.and_(Risk.owner_id.isnot(None),
+                         ~Risk.owner_id.in_(db.session.query(User.id).filter(User.domain.isnot(None), User.domain != ''))),
+            ))
         else:
-            query = query.filter(Risk.owner_id.in_(db.session.query(User.id).filter_by(domain=domain_filter)))
+            query = query.filter(db.or_(
+                Risk.domain == domain_filter,
+                db.and_(Risk.domain.is_(None),
+                         Risk.owner_id.in_(db.session.query(User.id).filter_by(domain=domain_filter))),
+            ))
+    # Sort: overdue first, then by severity, then by due_date
+    overdue_order = db.case(
+        (db.and_(Risk.status == 'open', Risk.due_date < date.today()), 0),
+        else_=1,
+    )
     severity_order = db.case({'high': 0, 'medium': 1, 'low': 2}, value=Risk.severity)
-    risks = query.order_by(severity_order, Risk.status, Risk.due_date).all()
+    risks = query.order_by(overdue_order, severity_order, Risk.due_date).all()
 
     from app.models.requirement import Requirement
     reqs = Requirement.query.filter_by(project_id=project_id).order_by(Requirement.number).all()
@@ -65,7 +77,7 @@ def risk_list(project_id):
     from collections import defaultdict
     domain_stats = defaultdict(lambda: {'total': 0, 'open': 0})
     for r in all_risks:
-        domain = (r.owner_user.domain if r.owner_user and r.owner_user.domain else '未分类')
+        domain = (r.domain_display or '未分类')
         domain_stats[domain]['total'] += 1
         if r.status == 'open':
             domain_stats[domain]['open'] += 1
@@ -98,11 +110,14 @@ def risk_add(project_id):
         severity=request.form.get('severity', 'medium'),
         owner=request.form.get('owner', '').strip() or None,
         owner_id=_resolve_owner_id(request.form.get('owner', '').strip()),
-        tracker_id=request.form.get('tracker_id', type=int) or None,
+        tracker_name=request.form.get('tracker_id', '').strip() or None,
+        tracker_id=_resolve_owner_id(request.form.get('tracker_id', '').strip()),
         requirement_id=request.form.get('requirement_id', type=int) or None,
         due_date=date.fromisoformat(request.form.get('due_date')) if request.form.get('due_date') else None,
+        domain=request.form.get('domain', '').strip() or None,
         created_by=current_user.id,
-        owner_since=datetime.now(timezone.utc) if request.form.get('owner', '').strip() else None,
+        created_at=datetime.strptime(request.form.get('created_at'), '%Y-%m-%d') if request.form.get('created_at') else None,
+        owner_since=datetime.utcnow() if request.form.get('owner', '').strip() else None,
     )
     db.session.add(risk)
     # Notify owner and tracker
@@ -125,14 +140,14 @@ def risk_resolve(risk_id):
     # If no resolution provided, use latest comment from last 24h
     if not resolution and risk.comments:
         latest = risk.comments[0]  # ordered desc
-        if (datetime.now(timezone.utc).replace(tzinfo=None) - latest.created_at).total_seconds() < 86400:
+        if (datetime.utcnow() - latest.created_at).total_seconds() < 86400:
             resolution = latest.content
     if not resolution:
         flash('请填写解决方案（或先添加评论）', 'danger')
         return redirect(url_for('project.risk_list', project_id=risk.project_id))
     risk.status = 'resolved'
     risk.resolution = resolution
-    risk.resolved_at = datetime.now(timezone.utc)
+    risk.resolved_at = datetime.utcnow()
     from app.models.risk import RiskAuditLog
     db.session.add(RiskAuditLog(risk_id=risk.id, user_id=current_user.id, action='resolved', detail=resolution[:200]))
     db.session.commit()
@@ -179,7 +194,7 @@ def risk_delete(risk_id):
             return jsonify(ok=False, msg='仅 PM 或管理员可删除风险'), 403
         flash('仅 PM 或管理员可删除风险', 'danger')
         return redirect(url_for('project.risk_list', project_id=risk.project_id))
-    risk.deleted_at = datetime.now(timezone.utc)
+    risk.deleted_at = datetime.utcnow()
     risk.deleted_by = current_user.id
     db.session.add(RiskAuditLog(risk_id=risk.id, user_id=current_user.id, action='deleted', detail=risk.title))
     from app.services.audit import log_audit
@@ -211,7 +226,7 @@ def risk_export_csv(project_id):
     for r in risks:
         comments = '\n'.join(f'{c.user.name} {c.created_at.strftime("%m-%d")}：{c.content}' for c in r.comments) if r.comments else ''
         writer.writerow([r.id, r.title, r.severity_label, r.status_label,
-            r.owner or '', r.tracker.name if r.tracker else '',
+            r.owner or '', r.tracker_display or '',
             r.due_date.isoformat() if r.due_date else '', r.resolution or '', r.description or '', comments])
     from urllib.parse import quote
     p = db.session.get(Project, project_id)
@@ -278,6 +293,7 @@ def risk_import_csv(project_id):
             status=status_val,
             owner=(row.get('责任人') or '').strip() or None,
             owner_id=_resolve_owner_id((row.get('责任人') or '').strip()),
+            tracker_name=tracker_name or None,
             tracker_id=user_map.get(tracker_name),
             due_date=due,
             description=(row.get('描述') or '').strip() or None,
@@ -285,7 +301,7 @@ def risk_import_csv(project_id):
             created_by=current_user.id,
         )
         if status_val == 'resolved' and resolution_text:
-            risk.resolved_at = datetime.now(timezone.utc)
+            risk.resolved_at = datetime.utcnow()
         db.session.add(risk)
         created += 1
     db.session.commit()
@@ -303,22 +319,34 @@ def risk_edit(risk_id):
     from app.models.risk import RiskComment
     risk = db.get_or_404(Risk, risk_id)
     old_owner = risk.owner
+    old_due = risk.due_date
     risk.title = request.form.get('title', risk.title).strip()
+    risk.description = request.form.get('description', risk.description or '').strip() or None
     risk.severity = request.form.get('severity', risk.severity)
     new_owner = request.form.get('owner', '').strip() or None
     risk.owner = new_owner
     risk.owner_id = _resolve_owner_id(risk.owner)
-    tracker_id = request.form.get('tracker_id', type=int)
-    risk.tracker_id = tracker_id if tracker_id else None
+    tracker_val = request.form.get('tracker_id', '').strip()
+    risk.tracker_name = tracker_val or None
+    risk.tracker_id = _resolve_owner_id(tracker_val)
     due = request.form.get('due_date', '')
+    new_due = None
     if due:
         try:
-            risk.due_date = datetime.strptime(due, '%Y-%m-%d').date()
+            new_due = datetime.strptime(due, '%Y-%m-%d').date()
+            risk.due_date = new_due
         except ValueError:
             pass
+    created_str = request.form.get('created_at', '').strip()
+    if created_str:
+        try:
+            risk.created_at = datetime.strptime(created_str, '%Y-%m-%d')
+        except ValueError:
+            pass
+    risk.domain = request.form.get('domain', '').strip() or None
     # Log owner change as comment with hold duration
     if new_owner != old_owner:
-        now = datetime.now(timezone.utc)
+        now = datetime.utcnow()
         if old_owner and risk.owner_since:
             # 有前任且有接手时间，计算持有时长
             delta = now - risk.owner_since
@@ -334,6 +362,16 @@ def risk_edit(risk_id):
             msg = f'指派责任人「{new_owner}」'
         db.session.add(RiskComment(risk_id=risk.id, user_id=current_user.id, content=msg))
         risk.owner_since = now if new_owner else None
+    # Due date changed with owner → commitment comment from owner
+    if new_due and old_due and new_due != old_due and (risk.owner_id or risk.owner):
+        old_str = old_due.strftime('%m-%d')
+        new_str = new_due.strftime('%m-%d')
+        if risk.owner_id:
+            commit_msg = f'闭环日期由 {old_str} 变更为 {new_str}，承诺按期闭环'
+            db.session.add(RiskComment(risk_id=risk.id, user_id=risk.owner_id, content=commit_msg))
+        else:
+            commit_msg = f'[代 {risk.owner}] 闭环日期由 {old_str} 变更为 {new_str}，承诺按期闭环'
+            db.session.add(RiskComment(risk_id=risk.id, user_id=current_user.id, content=commit_msg))
     db.session.commit()
     flash('风险已更新', 'success')
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
@@ -351,7 +389,7 @@ def risk_inline_edit(risk_id):
         risk.severity = value
     elif field == 'status' and value in ('open', 'resolved', 'closed'):
         if value == 'resolved' and risk.status == 'open':
-            risk.resolved_at = datetime.now(timezone.utc)
+            risk.resolved_at = datetime.utcnow()
         risk.status = value
     else:
         return jsonify(ok=False, msg='无效字段或值')
@@ -365,11 +403,22 @@ def risk_comment(risk_id):
     """Add progress comment to a risk."""
     from app.models.risk import RiskComment
     risk = db.get_or_404(Risk, risk_id)
-    content = request.form.get('content', '').strip()[:500]
-    if content:
-        db.session.add(RiskComment(risk_id=risk.id, user_id=current_user.id, content=content))
-        db.session.commit()
-        flash('进展已记录', 'success')
+    data = request.get_json(silent=True) or {}
+    content = (data.get('content') or request.form.get('content', '')).strip()[:500]
+    if not content:
+        if request.is_json:
+            return jsonify(ok=False, msg='内容不能为空')
+        return redirect(url_for('project.risk_list', project_id=risk.project_id))
+    c = RiskComment(risk_id=risk.id, user_id=current_user.id, content=content)
+    db.session.add(c)
+    db.session.commit()
+    if request.is_json:
+        return jsonify(ok=True, comment={
+            'id': c.id, 'user': current_user.name,
+            'content': c.content,
+            'time': c.created_at.strftime('%m-%d %H:%M'),
+        })
+    flash('进展已记录', 'success')
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
 
 
@@ -381,7 +430,6 @@ def risk_comment_delete(comment_id):
     from app.models.risk import RiskComment
     comment = db.get_or_404(RiskComment, comment_id)
     risk = db.get_or_404(Risk, comment.risk_id)
-    # Audit log before deletion
     db.session.add(AuditLog(
         user_id=current_user.id, action='delete', entity_type='risk_comment',
         entity_id=comment.id, entity_title=f'风险「{risk.title[:50]}」评论',
@@ -390,6 +438,8 @@ def risk_comment_delete(comment_id):
     ))
     db.session.delete(comment)
     db.session.commit()
+    if request.is_json:
+        return jsonify(ok=True)
     flash('评论已删除', 'success')
     return redirect(url_for('project.risk_list', project_id=risk.project_id))
 

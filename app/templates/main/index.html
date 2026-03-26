@@ -1402,15 +1402,7 @@ document.addEventListener('dragend', function() {
     if (_dragScrollTimer) { clearInterval(_dragScrollTimer); _dragScrollTimer = null; }
 });
 
-// Lazy-init Bootstrap tooltips for dynamically created elements
-document.addEventListener('mouseover', function(e) {
-    var el = e.target.closest('[data-bs-toggle="tooltip"]');
-    if (el && !bootstrap.Tooltip.getInstance(el)) {
-        new bootstrap.Tooltip(el);
-        // Trigger via Bootstrap's internal handler (re-dispatch mouseenter)
-        el.dispatchEvent(new MouseEvent('mouseenter', {bubbles: false}));
-    }
-});
+// Bootstrap tooltips disabled — use native title only to avoid residue
 
 // Drag-sort todos (supports cross-container move)
 (function() {

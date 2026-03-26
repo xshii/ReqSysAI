@@ -65,8 +65,9 @@ def index():
     todo_total = len(my_todos)
     todo_done = sum(1 for t in my_todos if t.status == TODO_STATUS_DONE)
 
-    # My assigned requirements (active, exclude hidden projects)
-    _hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
+    # 隐藏项目仅管理层+eye打开时可见（隐私模式，见 routes.py _mgr_view_open 注释）
+    from app.project.routes import _mgr_view_open
+    _hidden_pids = [] if _mgr_view_open() else [p.id for p in Project.query.filter_by(is_hidden=True).all()]
     _req_q = Requirement.query.filter_by(assignee_id=current_user.id)\
         .filter(Requirement.status.notin_(REQ_INACTIVE_STATUSES))
     if _hidden_pids:
@@ -102,8 +103,9 @@ def index():
                         req_map[r.id] = r  # Add requirement not in my_reqs
             else:
                 team_todos.append(t)
-    # Merge any extra requirements from todos into display list
-    display_reqs = list(my_reqs) + [r for rid, r in req_map.items() if rid not in {x.id for x in my_reqs}]
+    # Merge any extra requirements from todos into display list (exclude hidden projects)
+    _hidden_set = set(_hidden_pids)
+    display_reqs = list(my_reqs) + [r for rid, r in req_map.items() if rid not in {x.id for x in my_reqs} and r.project_id not in _hidden_set]
 
     # Risk titles already in today's todos (for +Todo button state)
     risk_todo_titles = {t.title for t in my_todos if t.category == 'risk'}
@@ -113,6 +115,7 @@ def index():
         Risk.status == 'open',
         Risk.deleted_at.is_(None),
         db.or_(Risk.tracker_id == current_user.id, Risk.owner_id == current_user.id),
+        Risk.project_id.notin_(_hidden_pids) if _hidden_pids else True,
     ).order_by(
         db.case((Risk.due_date < today, 0), (Risk.due_date == today, 1), else_=2),
         db.case({'high': 0, 'medium': 1, 'low': 2}, value=Risk.severity),
@@ -141,8 +144,8 @@ def index():
         approved_incentives = Incentive.query.filter(
             Incentive.status == 'approved',
             Incentive.is_public == True,
-            Incentive.reviewed_at >= str(inc_start),
-            Incentive.reviewed_at <= str(inc_end),
+            Incentive.reviewed_at >= inc_start,
+            Incentive.reviewed_at <= inc_end,
         ).order_by(Incentive.reviewed_at.desc()).all()
         if approved_incentives:
             break
@@ -181,7 +184,7 @@ def index():
     month_start = today.replace(day=1)
     top_rants = Rant.query.filter(Rant.likes > 0).order_by(Rant.likes.desc()).limit(3).all()
     top_ids = {r.id for r in top_rants}
-    month_q = Rant.query.filter(Rant.created_at >= str(month_start))
+    month_q = Rant.query.filter(Rant.created_at >= month_start)
     if top_ids:
         month_q = month_q.filter(~Rant.id.in_(top_ids))
     rants = top_rants + month_q.order_by(Rant.created_at.desc()).limit(20).all()

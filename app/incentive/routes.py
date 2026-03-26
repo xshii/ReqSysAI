@@ -41,8 +41,8 @@ def index():
             else:
                 m_end = m_start.replace(month=m_start.month + 1)
             q = Incentive.query.filter(
-                Incentive.created_at >= str(m_start),
-                Incentive.created_at < str(m_end),
+                Incentive.created_at >= m_start,
+                Incentive.created_at < m_end,
             )
         except ValueError:
             month_filter = ''
@@ -50,7 +50,7 @@ def index():
     if not month_filter:
         period_days = {'1m': 30, '3m': 90, '6m': 180, '1y': 365}.get(period, 30)
         since = date.today() - timedelta(days=period_days)
-        q = Incentive.query.filter(Incentive.created_at >= str(since))
+        q = Incentive.query.filter(Incentive.created_at >= since)
 
     if not is_reviewer:
         # Ordinary users: see own items + all approved
@@ -276,7 +276,7 @@ def export_csv():
 
     items = Incentive.query.filter(
         Incentive.status == 'approved',
-        Incentive.created_at >= str(since),
+        Incentive.created_at >= since,
     ).order_by(Incentive.reviewed_at.desc()).all()
 
     buf = io.StringIO()
@@ -547,7 +547,7 @@ def ai_describe():
         # Active/done requirements
         reqs = Requirement.query.filter(
             Requirement.assignee_id == u.id,
-            Requirement.updated_at >= str(since),
+            Requirement.updated_at >= since,
         ).limit(5).all()
         if reqs:
             lines.append('参与的需求：' + '、'.join(

@@ -76,8 +76,8 @@ def gather_project_data(monday, sunday, project_id=None):
 
     # Requirement changes this week
     req_changes_q = Requirement.query.filter(
-        Requirement.updated_at >= str(monday),
-        Requirement.updated_at <= str(sunday + timedelta(days=1)),
+        Requirement.updated_at >= monday,
+        Requirement.updated_at <= sunday + timedelta(days=1),
     )
     if project_id:
         req_changes_q = req_changes_q.filter_by(project_id=project_id)

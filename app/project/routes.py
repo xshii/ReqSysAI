@@ -13,6 +13,16 @@ from app.project import project_bp
 from app.project.forms import MilestoneForm, ProjectForm
 
 
+def _mgr_view_open():
+    """管理层隐私模式：管理层 + eye按钮打开时才能看到隐藏项目。
+    eye按钮状态通过 cookie 'mgr_view' 同步（base.html applyView）。
+    - 非管理层 → 永远看不到隐藏项目
+    - 管理层 + eye关闭（共享屏幕模式）→ 看不到隐藏项目
+    - 管理层 + eye打开 → 可以看到隐藏项目
+    """
+    return current_user.is_team_manager and request.cookies.get('mgr_view') == '1'
+
+
 def _resolve_owner_id(owner_name):
     """Match owner name to system user, return user_id or None."""
     if not owner_name:
@@ -34,8 +44,8 @@ def _get_gantt_state(project_id):
 
 
 def _check_project_access(project):
-    """Block non-managers from accessing hidden projects. Returns a redirect response or None."""
-    if project.is_hidden and not current_user.is_team_manager:
+    """隐藏项目访问控制：仅管理层+eye打开时可访问（隐私模式）。"""
+    if project.is_hidden and not _mgr_view_open():
         flash('无权访问该项目', 'danger')
         return redirect(url_for('project.project_list'))
 
@@ -48,7 +58,9 @@ def project_list():
     query = Project.query
     if status != 'all':
         query = query.filter_by(status=status)
-    query = query.filter_by(is_hidden=False)
+    # 隐藏项目仅管理层+eye打开时可见（隐私模式，见 _mgr_view_open 注释）
+    if not _mgr_view_open():
+        query = query.filter_by(is_hidden=False)
     if search:
         query = query.filter(Project.name.contains(search))
 

@@ -169,8 +169,8 @@
             <td>{{ r.title }}{% if r.is_overdue %} <span class="fw-bold">(超期)</span>{% endif %}</td>
             <td>{{ r.severity_label }}</td>
             <td>{{ r.owner or '-' }}{% if r.owner_user %} {{ r.owner_user.employee_id }}{% endif %}</td>
-            <td>{{ r.owner_user.domain if r.owner_user and r.owner_user.domain else '-' }}</td>
-            <td>{{ r.tracker.name if r.tracker else '-' }}{% if r.tracker %} {{ r.tracker.employee_id }}{% endif %}</td>
+            <td>{{ r.domain_display or '-' }}</td>
+            <td>{{ r.tracker_display or '-' }}{% if r.tracker %} {{ r.tracker.employee_id }}{% endif %}</td>
             <td class="{{ 'text-danger fw-bold' if r.is_overdue else '' }}">{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
         </tr>
         {% endfor %}

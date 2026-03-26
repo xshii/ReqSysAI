@@ -81,7 +81,12 @@ def create_app(config_name=None):
             cur_group = req.args.get('group', current_user.group or '')
             if not cur_group and groups:
                 cur_group = groups[0]
-            all_projects = Project.query.filter_by(status='active', is_hidden=False).order_by(Project.name).all()
+            # 侧边栏项目：隐藏项目仅管理层+eye打开时显示（隐私模式 cookie mgr_view）
+            _show_hidden = current_user.is_team_manager and req.cookies.get('mgr_view') == '1'
+            _pq = Project.query.filter_by(status='active')
+            if not _show_hidden:
+                _pq = _pq.filter_by(is_hidden=False)
+            all_projects = _pq.order_by(Project.name).all()
             followed_ids = set(p.id for p in current_user.followed_projects.all())
             # Followed projects first, then others
             followed = [p for p in all_projects if p.id in followed_ids]
