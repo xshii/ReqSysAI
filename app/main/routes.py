@@ -64,9 +64,11 @@ def index():
     todo_total = len(my_todos)
     todo_done = sum(1 for t in my_todos if t.status == TODO_STATUS_DONE)
 
-    # My assigned requirements (active)
+    # My assigned requirements (active, exclude hidden projects)
+    _hidden_pids = {p.id for p in Project.query.filter_by(is_hidden=True).all()}
     my_reqs = Requirement.query.filter_by(assignee_id=current_user.id)\
         .filter(Requirement.status.notin_(REQ_INACTIVE_STATUSES))\
+        .filter(Requirement.project_id.notin_(_hidden_pids) if _hidden_pids else True)\
         .options(joinedload(Requirement.project), joinedload(Requirement.comments))\
         .order_by(Requirement.due_date.asc().nullslast(), Requirement.priority, Requirement.updated_at.desc()).limit(10).all()
 
