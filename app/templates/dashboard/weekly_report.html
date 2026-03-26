@@ -105,7 +105,7 @@
     <div class="report-summary">{{ ai.summary }}</div>
     {% set high_risks = report_data.open_risks | selectattr('severity', 'equalto', 'high') | list %}
     {% if high_risks %}
-    <div style="background:#fef2f2;padding:8px 12px;font-size:.84rem;margin-top:4px;">
+    <div style="padding:8px 12px;font-size:.84rem;margin-top:4px;">
         <strong>高风险通报：</strong>
         {% for r in high_risks %}{{ r.title }}{% if not loop.last %}；{% endif %}{% endfor %}
     </div>
@@ -447,7 +447,7 @@ function _emlTable(tableEl) {
     if (!tableEl) return '';
     var h = '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">';
     tableEl.querySelectorAll('tr').forEach(function(tr, ri) {
-        h += '<tr' + (tr.classList.contains('row-risk') ? ' style="background:#fef2f2;"' : (ri > 0 && ri % 2 === 0 ? ' style="background:#fafbfc;"' : '')) + '>';
+        h += '<tr' + (tr.classList.contains('row-risk') ? ' style=""' : (ri > 0 && ri % 2 === 0 ? ' style="background:#fafbfc;"' : '')) + '>';
         tr.querySelectorAll('th,td').forEach(function(cell) {
             var tag = cell.tagName.toLowerCase();
             var bg = tag === 'th' ? 'background:#f7fafc;font-weight:600;color:#4a5568;' : '';
@@ -533,17 +533,17 @@ function exportEml() {
         var summary = sec.querySelector('.report-summary');
         if (summary) {
             var sumText = summary.innerHTML.replace(/\n/g, '<br>');
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:6px;"><tr><td style="background:#f8fafc;padding:12px 16px;font-size:13px;line-height:1.6;">' + sumText + '</td></tr></table>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:6px;"><tr><td style="padding:12px 16px;font-size:13px;line-height:1.6;">' + sumText + '</td></tr></table>';
         }
 
         // Highlights box (green)
         sec.querySelectorAll('div[style*="f8fafc"][style*="e2e8f0"]').forEach(function(d) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;"><tr><td style="background:#f8fafc;padding:8px 12px;font-size:13px;">' + d.innerHTML + '</td></tr></table>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;"><tr><td style="padding:8px 12px;font-size:13px;">' + d.innerHTML + '</td></tr></table>';
         });
 
         // High risk box (red)
         sec.querySelectorAll('div[style*="fef2f2"]').forEach(function(d) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;"><tr><td style="background:#fef2f2;padding:8px 12px;font-size:13px;">' + _inlineStyles(d.innerHTML) + '</td></tr></table>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;"><tr><td style="padding:8px 12px;font-size:13px;">' + _inlineStyles(d.innerHTML) + '</td></tr></table>';
         });
 
         // Sub-headers (e.g., "下周计划：")
@@ -592,14 +592,14 @@ function exportEml() {
         if (domainBar) {
             var dHtml = '';
             domainBar.querySelectorAll('.badge').forEach(function(b) {
-                dHtml += '<span style="display:inline-block;padding:2px 8px;margin:2px;font-size:11px;border:1px solid #a0aec0;border-radius:4px;background:#f8fafc;">' + b.innerHTML + '</span>';
+                dHtml += '<span style="display:inline-block;padding:2px 8px;margin:2px;font-size:11px;border:1px solid #a0aec0;border-radius:4px;">' + b.innerHTML + '</span>';
             });
             if (dHtml) body += '<div style="margin-bottom:8px;">' + dHtml + '</div>';
         }
 
         // AI risk analysis
         sec.querySelectorAll('.mt-2.ps-2').forEach(function(d) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;"><tr><td style="padding:6px 12px;font-size:12px;color:#64748b;background:#f8fafc;border-left:3px solid #94a3b8;">' + d.innerHTML + '</td></tr></table>';
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;"><tr><td style="padding:6px 12px;font-size:12px;color:#64748b;border-left:3px solid #94a3b8;">' + d.innerHTML + '</td></tr></table>';
         });
 
         rows += _emlSection(title, body, isRisk ? '#c53030' : '#4a5568');
