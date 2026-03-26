@@ -547,6 +547,7 @@ function filterAvailUsers() {
     var q = input ? input.value.toLowerCase() : '';
     var visible = 0, total = 0;
     list.querySelectorAll('.avail-user-row').forEach(function(row) {
+        if (row.dataset.added) return;  // already added as member
         total++;
         var matchGroup = !g || row.dataset.group === g;
         var matchSearch = !q || (row.dataset.name || '').toLowerCase().includes(q)
@@ -599,7 +600,7 @@ function ajaxAddMember(name, role, btn) {
             // Hide from available list
             if (btn) {
                 var row = btn.closest('.avail-user-row');
-                if (row) row.style.display = 'none';
+                if (row) { row.dataset.added = '1'; row.style.display = 'none'; }
             }
             showToast(m.name + ' 已添加', 'success');
         } else {
@@ -627,8 +628,9 @@ document.addEventListener('click', function(e) {
                 // Show back in available list if internal user
                 if (d.user_id) {
                     var row = document.querySelector('.avail-user-row[data-uid="' + d.user_id + '"]');
-                    if (row) row.style.display = '';
+                    if (row) { delete row.dataset.added; }
                 }
+                filterAvailUsers();
                 showToast(d.name + ' 已移除', 'info');
             }
         });
