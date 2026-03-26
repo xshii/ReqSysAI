@@ -55,7 +55,7 @@ def _guard_hidden_project(cur_project_id):
     if not cur_project_id:
         return cur_project_id, None
     p = db.session.get(Project, cur_project_id)
-    if p and p.is_hidden and not current_user.is_team_manager:
+    if p and p.is_hidden:
         return None, None
     return cur_project_id, p
 
@@ -63,7 +63,7 @@ def _guard_hidden_project(cur_project_id):
 def _visible_projects():
     """Active projects visible to current user."""
     return [p for p in Project.query.filter_by(status='active').order_by(Project.name).all()
-            if not p.is_hidden or current_user.is_team_manager]
+            if not p.is_hidden]
 
 
 def _build_sub_projects(cur_project, monday):
