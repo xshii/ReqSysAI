@@ -298,10 +298,7 @@
                         </div>
                         <div class="mb-2">
                             <label class="form-label mb-0 small">主管</label>
-                            <div class="d-flex gap-1">
-                                <input type="text" id="ap_mgr_name" class="form-control form-control-sm" style="flex:2;" placeholder="姓名">
-                                <input type="text" id="ap_mgr_eid" class="form-control form-control-sm" style="flex:3;" placeholder="工号，如 a00123456">
-                            </div>
+                            <input type="text" id="ap_manager" class="form-control form-control-sm" placeholder="如：张三 a00123456">
                         </div>
                     </form>
                     <div id="apErrorMsg" class="text-danger small mt-1" style="display:none;"></div>
@@ -518,8 +515,7 @@
         var roleId = document.getElementById('ap_role').value;
         var domain = document.getElementById('ap_domain').value.trim();
         var group = document.getElementById('ap_group').value;
-        var mgrName = document.getElementById('ap_mgr_name').value.trim();
-        var mgrEid = document.getElementById('ap_mgr_eid').value.trim();
+        var manager = document.getElementById('ap_manager').value.trim();
 
         if (!name || name.length < 2) {
             errEl.textContent = '请输入姓名（至少2个字符）';
@@ -537,15 +533,6 @@
             errEl.textContent = '请填写业务领域';
             errEl.style.display = 'block'; return;
         }
-        if ((mgrName && !mgrEid) || (!mgrName && mgrEid)) {
-            errEl.textContent = '主管需同时填写姓名和工号';
-            errEl.style.display = 'block'; return;
-        }
-        if (mgrEid && !/^[a-z](00\d{6}|\d00\d{7})$/.test(mgrEid)) {
-            errEl.textContent = '主管工号格式错误，如 a00123456';
-            errEl.style.display = 'block'; return;
-        }
-        var manager = mgrName && mgrEid ? mgrName + ' ' + mgrEid : '';
 
         var btn = event.target;
         btn.disabled = true;

@@ -106,15 +106,7 @@ def user_edit(user_id):
         user.pinyin = to_pinyin(form.name.data)
         user.ip_address = form.ip_address.data or f'pending-{user.employee_id}'
         user.group = form.group.data or None
-        mgr_name = request.form.get('manager_name', '').strip()
-        mgr_eid = request.form.get('manager_eid', '').strip()
-        if mgr_name and mgr_eid:
-            user.manager = f'{mgr_name} {mgr_eid}'
-        elif not mgr_name and not mgr_eid:
-            user.manager = None
-        else:
-            flash('主管需同时填写姓名和工号', 'danger')
-            return render_template('admin/user_form.html', form=form, title=f'编辑用户 - {user.name}', user=user)
+        user.manager = form.manager.data.strip() or None
         user.domain = form.domain.data or None
         user.roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
         user.is_active = form.is_active.data

@@ -702,8 +702,10 @@ def api_add_personnel():
         return jsonify(ok=False, msg='请选择角色')
     if not domain:
         return jsonify(ok=False, msg='请填写业务领域')
-    if manager and not re.match(r'^\S+\s+[a-z](00\d{6}|\d00\d{7})$', manager):
-        return jsonify(ok=False, msg='主管格式错误，请按"姓名 工号"填写，如：张三 a00123456')
+    if manager:
+        mgr_parts = manager.rsplit(' ', 1)
+        if len(mgr_parts) != 2 or not re.match(r'^[a-z](00\d{6}|\d00\d{7})$', mgr_parts[1]):
+            return jsonify(ok=False, msg='主管格式：姓名 工号，如 张三 a00123456')
 
     # Check hidden roles
     hidden = current_app.config.get('HIDDEN_ROLES', [])

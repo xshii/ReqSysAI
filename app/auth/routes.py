@@ -203,19 +203,14 @@ def profile():
                 db.session.add(UserGroup(name=group_name, is_hidden=True))
                 db.session.flush()
         current_user.group = group_name or None
-        mgr_name = request.form.get('manager_name', '').strip()
-        mgr_eid = request.form.get('manager_eid', '').strip()
-        if mgr_name and mgr_eid:
+        new_manager = request.form.get('manager', '').strip()
+        if new_manager:
             import re
-            if not re.match(r'^[a-z](00\d{6}|\d00\d{7})$', mgr_eid):
-                flash('主管工号格式错误，如 a00123456', 'danger')
+            parts = new_manager.rsplit(' ', 1)
+            if len(parts) != 2 or not re.match(r'^[a-z](00\d{6}|\d00\d{7})$', parts[1]):
+                flash('主管格式：姓名 工号，如 张三 a00123456', 'danger')
                 return render_template('auth/profile.html', form=form)
-            current_user.manager = f'{mgr_name} {mgr_eid}'
-        elif mgr_name or mgr_eid:
-            flash('主管需同时填写姓名和工号', 'danger')
-            return render_template('auth/profile.html', form=form)
-        else:
-            current_user.manager = None
+        current_user.manager = new_manager or None
         current_user.domain = request.form.get('domain', '').strip() or None
         new_email = request.form.get('email', '').strip()
         if new_email:
