@@ -70,8 +70,14 @@
                     <div class="row mb-2 align-items-center">
                         <label class="col-3 col-form-label small">主管</label>
                         <div class="col-9">
-                            <input type="text" name="manager" class="form-control form-control-sm" value="{{ current_user.manager or '' }}" placeholder="姓名 工号，如 周明 z00880001">
-                            <div class="form-text" style="font-size:.65em;">格式：姓名（允许空格）+ 空格 + 工号</div>
+                            {% set _mgr_parts = (current_user.manager or '').rsplit(' ', 1) %}
+                            {% set _mgr_name = _mgr_parts[0] if _mgr_parts|length > 1 else '' %}
+                            {% set _mgr_eid = _mgr_parts[1] if _mgr_parts|length > 1 else (current_user.manager or '') %}
+                            <div class="d-flex gap-1">
+                                <input type="text" name="manager_name" class="form-control form-control-sm" style="flex:2;" value="{{ _mgr_name }}" placeholder="姓名">
+                                <input type="text" name="manager_eid" class="form-control form-control-sm" style="flex:3;" value="{{ _mgr_eid }}" placeholder="工号，如 a00123456">
+                            </div>
+                            <input type="hidden" name="manager" value="{{ current_user.manager or '' }}">
                         </div>
                     </div>
                     <div class="row mb-2 align-items-center">
