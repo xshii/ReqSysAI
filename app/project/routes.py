@@ -48,8 +48,7 @@ def project_list():
     query = Project.query
     if status != 'all':
         query = query.filter_by(status=status)
-    if not current_user.is_team_manager:
-        query = query.filter_by(is_hidden=False)
+    query = query.filter_by(is_hidden=False)
     if search:
         query = query.filter(Project.name.contains(search))
 
