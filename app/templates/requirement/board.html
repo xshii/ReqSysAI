@@ -7,7 +7,7 @@
 .kanban-col { display:flex;flex-direction:column;height:100%;overflow-y:auto; }
 .pct-zone { min-height:30px;position:relative; }
 .pct-zone.drag-target { background:rgba(13,110,253,.06); }
-.pct-divider { border-top:1px dashed #adb5bd;position:relative;margin:0 4px; }
+.pct-divider { border-top:1px dashed #adb5bd;position:sticky;top:0;margin:0 4px;z-index:5;background:#f8f9fa; }
 .pct-divider span { position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:#f8f9fa;padding:0 4px;font-size:.6em;color:#6c757d; }
 .kanban-card { cursor: grab; transition: transform 0.1s; }
 .kanban-card:active { cursor: grabbing; transform: scale(0.97); }
@@ -132,7 +132,17 @@ function onDragEnd() {
 }
 document.addEventListener('dragend', onDragEnd);
 
-function onDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+function onDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    // Auto-scroll kanban column when dragging near edges
+    var col = e.target.closest('.kanban-col');
+    if (!col) return;
+    var rect = col.getBoundingClientRect();
+    var edge = 40;
+    if (e.clientY - rect.top < edge) col.scrollTop -= 8;
+    else if (rect.bottom - e.clientY < edge) col.scrollTop += 8;
+}
 /* Legacy col handlers */
 function onDragEnter(e, col) { e.preventDefault(); col.classList.add('drag-target'); }
 function onDragLeave(col) { col.classList.remove('drag-target'); }
