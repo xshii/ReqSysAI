@@ -34,7 +34,7 @@
         <div class="card h-100">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
-                    <h5><a href="{{ url_for('project.project_detail', project_id=p.id) }}" class="text-decoration-none">{{ p.name }}</a></h5>
+                    <h5><a href="{{ url_for('project.project_detail', project_id=p.id) }}" class="text-decoration-none">{{ p.name }}</a>{% if p.is_hidden %} <span class="badge bg-light text-muted border" style="font-size:.55em;vertical-align:middle;">隐藏</span>{% endif %}</h5>
                     <span class="badge bg-{{ 'success' if p.status == 'active' else ('secondary' if p.status == 'completed' else 'light text-dark border') }} h-100">{{ p.status_label }}</span>
                 </div>
                 <p class="text-muted small mb-2">{{ p.description or '暂无描述' }}</p>
