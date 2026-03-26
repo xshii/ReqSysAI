@@ -112,13 +112,19 @@ def index():
         Risk.due_date,
     ).all()
 
-    # Alerts: overdue requirements + overdue risks
+    # Alerts: overdue/due-today requirements + overdue/due-today risks
     alerts = [
-        f'需求 [{r.number}] {r.title} 已超期 ({r.due_date.strftime("%m-%d")})'
-        for r in my_reqs if r.due_date and r.due_date <= today
+        {'text': f'需求 [{r.number}] {r.title} 已超期 ({r.due_date.strftime("%m-%d")})', 'level': 'danger'}
+        for r in my_reqs if r.due_date and r.due_date < today
     ] + [
-        f'风险「{r.title}」已超期 ({r.due_date.strftime("%m-%d") if r.due_date else ""})'
+        {'text': f'风险「{r.title}」已超期 ({r.due_date.strftime("%m-%d") if r.due_date else ""})', 'level': 'danger'}
         for r in my_risks if r.is_overdue
+    ] + [
+        {'text': f'需求 [{r.number}] {r.title} 今日到期', 'level': 'warning'}
+        for r in my_reqs if r.due_date and r.due_date == today and r.status not in ('done', 'closed')
+    ] + [
+        {'text': f'风险「{r.title}」今日到期', 'level': 'warning'}
+        for r in my_risks if r.is_due_today
     ]
 
     # Approved incentives: last 2 months excluding recent 7 days; fallback to 3 months if empty

@@ -23,14 +23,27 @@
 {% from "_todo_macros.html" import pomodoro_icons, todo_row, block_popover_html, todo_row_js with context %}
 
 {% block content %}
-{% if alerts %}
-<div class="alert alert-danger py-2 mb-3 small">
+{% set danger_alerts = alerts|selectattr('level', 'equalto', 'danger')|list %}
+{% set warning_alerts = alerts|selectattr('level', 'equalto', 'warning')|list %}
+{% if danger_alerts %}
+<div class="alert alert-danger py-2 mb-2 small">
     <div class="d-flex align-items-center mb-1">
         <i class="bi bi-exclamation-triangle-fill me-1"></i>
-        <strong>预警 ({{ alerts|length }})</strong>
+        <strong>超期预警 ({{ danger_alerts|length }})</strong>
     </div>
-    {% for a in alerts %}
-    <div class="py-1 {% if not loop.last %}border-bottom border-danger border-opacity-25{% endif %}">{{ a }}</div>
+    {% for a in danger_alerts %}
+    <div class="py-1 {% if not loop.last %}border-bottom border-danger border-opacity-25{% endif %}">{{ a.text }}</div>
+    {% endfor %}
+</div>
+{% endif %}
+{% if warning_alerts %}
+<div class="alert alert-warning py-2 mb-2 small">
+    <div class="d-flex align-items-center mb-1">
+        <i class="bi bi-clock-fill me-1"></i>
+        <strong>临期提醒 ({{ warning_alerts|length }})</strong>
+    </div>
+    {% for a in warning_alerts %}
+    <div class="py-1 {% if not loop.last %}border-bottom border-warning border-opacity-25{% endif %}">{{ a.text }}</div>
     {% endfor %}
 </div>
 {% endif %}
