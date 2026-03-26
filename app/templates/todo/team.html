@@ -339,7 +339,28 @@ document.querySelectorAll('.quick-todo-form').forEach(function(form) {
             if (d && d.ok) {
                 input.value = '';
                 if (d.action === 'comment') {
-                    showToast('评论已添加：' + d.title, 'success');
+                    // Insert comment into DOM
+                    var container = form.closest('.mb-2');
+                    var commentArea = container ? container.querySelector('.ps-2.mt-1[style*="border-left"]') : null;
+                    if (!commentArea && container) {
+                        commentArea = document.createElement('div');
+                        commentArea.className = 'ps-2 mt-1';
+                        commentArea.style.borderLeft = '2px solid #e9ecef';
+                        form.parentElement.insertBefore(commentArea, form);
+                    }
+                    if (commentArea) {
+                        var now = new Date();
+                        var mm = String(now.getMonth()+1).padStart(2,'0');
+                        var dd = String(now.getDate()).padStart(2,'0');
+                        var hh = String(now.getHours()).padStart(2,'0');
+                        var mi = String(now.getMinutes()).padStart(2,'0');
+                        var div = document.createElement('div');
+                        div.className = 'small text-muted';
+                        div.style.fontSize = '.7em';
+                        div.innerHTML = '<strong>{{ current_user.name }}</strong> <span style="font-size:.85em;">' + mm + '-' + dd + ' ' + hh + ':' + mi + '</span>：' + d.title;
+                        commentArea.appendChild(div);
+                    }
+                    showToast('评论已添加', 'success');
                 } else {
                     if (d.is_help) {
                         showToast('求助已发送 → ' + d.helper, 'success');
