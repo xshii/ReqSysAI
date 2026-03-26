@@ -272,10 +272,21 @@
             var weekColW = 80;  // width per week when merged
             var dayColW = 24;
 
+            function _localDateStr(d) {
+                return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+            }
+            function _getMondayStr(dateStr) {
+                var d = new Date(dateStr + 'T00:00:00');
+                var dow = d.getDay() || 7; // Sun=7
+                d.setDate(d.getDate() - (dow - 1));
+                return _localDateStr(d);
+            }
+
             if (isWeek) {
                 // Hide non-Monday columns, widen Monday columns
                 var _lastWeekMonth = 0;
                 document.querySelectorAll('.gantt-col').forEach(function(td) {
+                    if (!td.dataset.date) return;
                     var d = new Date(td.dataset.date + 'T00:00:00');
                     var isMonday = d.getDay() === 1;
                     if (isMonday) {
@@ -293,38 +304,31 @@
                         td.style.display = 'none';
                     }
                 });
-                // Recalculate bar widths: original is days*24, now days/7*weekColW
+                // Process bars: save originals, recalculate width, move to Monday cell
                 document.querySelectorAll('.gantt-bar').forEach(function(bar) {
-                    var origW = parseFloat(bar.dataset.origWidth || bar.style.width);
-                    if (!bar.dataset.origWidth) bar.dataset.origWidth = origW;
-                    var origDays = origW / dayColW;
-                    bar.style.width = Math.max(origDays / 7 * weekColW, 8) + 'px';
+                    if (!bar.dataset.origWidth) bar.dataset.origWidth = parseFloat(bar.style.width);
+                    if (!bar.dataset.origLeft) bar.dataset.origLeft = bar.style.left;
+                    var startDate = bar.dataset.startDate;
+                    if (!startDate) return;
+                    var origDays = Math.round(parseFloat(bar.dataset.origWidth) / dayColW);
+                    var weekWidth = Math.max(origDays / 7 * weekColW, 6);
+                    bar.style.width = weekWidth + 'px';
                     var span = bar.querySelector('span');
-                    if (span) span.style.display = origDays < 5 ? 'none' : '';
-                });
-                // Move bars in hidden cells to nearest visible Monday
-                document.querySelectorAll('.gantt-bar').forEach(function(bar) {
-                    var parentTd = bar.parentElement;
-                    if (parentTd && parentTd.style.display === 'none') {
-                        // Find the Monday of this week
-                        var d = new Date(parentTd.dataset.date + 'T00:00:00');
-                        var dayOfWeek = d.getDay() || 7; // Sun=7
-                        var mondayDate = new Date(d);
-                        mondayDate.setDate(d.getDate() - (dayOfWeek - 1));
-                        var mondayStr = mondayDate.toISOString().slice(0, 10);
-                        var mondayTd = parentTd.closest('tr').querySelector('td[data-date="' + mondayStr + '"], th[data-date="' + mondayStr + '"]');
-                        if (!mondayTd) {
-                            // Monday might be before the gantt range, use first visible cell
-                            mondayTd = parentTd.closest('tr').querySelector('td.gantt-col[style*="display: "]') ||
-                                       parentTd.closest('tr').querySelector('td.gantt-col:not([style*="display: none"])');
-                        }
-                        if (mondayTd && mondayTd !== parentTd) {
-                            // Adjust left offset: days from Monday
-                            var offsetDays = dayOfWeek - 1;
-                            var offsetPx = offsetDays / 7 * weekColW;
-                            bar.style.left = offsetPx + 'px';
-                            mondayTd.appendChild(bar);
-                        }
+                    if (span) span.style.display = weekWidth < 40 ? 'none' : '';
+                    // Find Monday of start date and move bar there
+                    var mondayStr = _getMondayStr(startDate);
+                    var tr = bar.closest('tr');
+                    var mondayTd = tr.querySelector('td.gantt-col[data-date="' + mondayStr + '"]');
+                    if (!mondayTd) {
+                        // Monday before gantt range: use first visible Monday
+                        mondayTd = tr.querySelector('td.gantt-col[style*="width: ' + weekColW + 'px"]');
+                    }
+                    if (mondayTd) {
+                        // Offset within the week
+                        var sd = new Date(startDate + 'T00:00:00');
+                        var offsetDays = (sd.getDay() || 7) - 1;
+                        bar.style.left = Math.round(offsetDays / 7 * weekColW) + 'px';
+                        if (bar.parentElement !== mondayTd) mondayTd.appendChild(bar);
                     }
                 });
             } else {
@@ -339,13 +343,12 @@
                 // Restore bar widths and positions
                 document.querySelectorAll('.gantt-bar').forEach(function(bar) {
                     if (bar.dataset.origWidth) bar.style.width = bar.dataset.origWidth + 'px';
-                    bar.style.left = '1px';
+                    bar.style.left = bar.dataset.origLeft || '1px';
                     var span = bar.querySelector('span');
                     if (span) span.style.display = '';
-                    // Move bars back to original parent if needed
                     var origDate = bar.dataset.startDate;
                     if (origDate) {
-                        var origTd = bar.closest('tr').querySelector('td[data-date="' + origDate + '"]');
+                        var origTd = bar.closest('tr').querySelector('td.gantt-col[data-date="' + origDate + '"]');
                         if (origTd && origTd !== bar.parentElement) origTd.appendChild(bar);
                     }
                 });
@@ -382,10 +385,10 @@
             document.querySelectorAll('.gantt-bar').forEach(function(b) {
                 b.style.display = '';
                 if (b.dataset.origWidth) b.style.width = b.dataset.origWidth + 'px';
-                b.style.left = '1px';
+                b.style.left = b.dataset.origLeft || '1px';
                 var span = b.querySelector('span'); if (span) span.style.display = '';
                 var origDate = b.dataset.startDate;
-                if (origDate) { var origTd = b.closest('tr').querySelector('td[data-date="' + origDate + '"]'); if (origTd && origTd !== b.parentElement) origTd.appendChild(b); }
+                if (origDate) { var origTd = b.closest('tr').querySelector('td.gantt-col[data-date="' + origDate + '"]'); if (origTd && origTd !== b.parentElement) origTd.appendChild(b); }
             });
             _saveGanttState();
         }
