@@ -4,8 +4,8 @@
 {% block extra_css %}
 <style>
 .kanban-board { height: calc(100vh - 120px); }
-.kanban-col { display:flex;flex-direction:column;height:100%; }
-.pct-zone { min-height:40px;flex:1;position:relative;overflow-y:auto; }
+.kanban-col { display:flex;flex-direction:column;height:100%;overflow-y:auto; }
+.pct-zone { min-height:30px;position:relative; }
 .pct-zone.drag-target { background:rgba(13,110,253,.06); }
 .pct-divider { border-top:1px dashed #adb5bd;position:relative;margin:0 4px; }
 .pct-divider span { position:absolute;top:-8px;left:50%;transform:translateX(-50%);background:#f8f9fa;padding:0 4px;font-size:.6em;color:#6c757d; }
@@ -61,7 +61,7 @@
                 </div>
                 {% endfor %}
             {% else %}
-                <div class="pct-zone" style="flex:1;" data-status="{{ status }}" data-pct="0"
+                <div class="pct-zone" data-status="{{ status }}" data-pct="0"
                      ondragover="onDragOver(event)" ondragenter="onZoneEnter(event, this)" ondragleave="onZoneLeave(this)" ondrop="onZoneDrop(event, this)">
                 {% for r in reqs %}
                     {% set is_child = r.parent_id is not none %}
