@@ -71,17 +71,17 @@ def requirement_list():
     # Sort
     today_ = date.today()
     if sort == 'urgency' or sort == 'newest':
-        # Default: overdue first, then by daily remaining % (higher = more urgent)
-        is_overdue = db.case(
+        # Group: 0=overdue, 1=active(not done/closed), 2=done/closed
+        sort_group = db.case(
             (db.and_(Requirement.due_date < today_, Requirement.status.notin_(['done', 'closed'])), 0),
+            (Requirement.status.in_(['done', 'closed']), 2),
             else_=1,
         )
         # remaining_pct / remaining_days → higher = more urgent → sort desc
-        # Use julianday for SQLite date diff
         remaining_days = db.func.max(db.func.julianday(Requirement.due_date) - db.func.julianday(str(today_)), 1)
         remaining_pct = 100 - db.func.coalesce(Requirement.completion, 0)
         urgency = remaining_pct / remaining_days
-        query = query.order_by(is_overdue, urgency.desc(), Requirement.due_date.asc().nullslast())
+        query = query.order_by(sort_group, urgency.desc(), Requirement.due_date.asc().nullslast())
     else:
         order = {
             'oldest': Requirement.created_at.asc(),

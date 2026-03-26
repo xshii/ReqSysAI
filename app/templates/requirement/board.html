@@ -96,6 +96,13 @@ function applyFilter() {
     window.location = url;
 }
 
+function cardClick(e, card) {
+    // Don't navigate if clicking a link or dragging
+    if (e.target.closest('a') || e.target.closest('button') || e.target.closest('.sub-req-item')) return;
+    var href = card.dataset.href;
+    if (href) window.location = href;
+}
+
 function onDragStart(e, card) {
     dragId = card.dataset.id;
     e.dataTransfer.effectAllowed = 'move';
