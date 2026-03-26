@@ -208,6 +208,11 @@ body {
 [data-tip]:hover::after {
     opacity: 1;
 }
+/* Ensure tooltip is not clipped by parent card boundaries */
+.card:has([data-tip]:hover) {
+    z-index: 100;
+    overflow: visible;
+}
 [data-tip-pos="bottom"]::after {
     bottom: auto;
     top: 100%;

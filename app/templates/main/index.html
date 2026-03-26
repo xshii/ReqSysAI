@@ -1140,8 +1140,8 @@ function createTodoRow(todoId, title, opts) {
         : '<i class="bi bi-circle text-secondary btn-toggle-r" style="cursor:pointer;"></i>';
     row.innerHTML = icon
         + ' <span class="small">' + title + '</span>' + badge
-        + ' <button class="btn btn-sm py-0 px-0 btn-outline-secondary btn-timer-r todo-action-btn" data-id="' + todoId + '" style="font-size:.7em;line-height:1;" data-tip="启动番茄钟"><i class="bi bi-clock"></i></button>'
-        + ' <button class="btn btn-sm py-0 px-0 text-muted btn-block-r todo-action-btn" data-id="' + todoId + '" style="font-size:.7em;line-height:1;" data-tip="标记阻塞"><i class="bi bi-pause-circle"></i></button>'
+        + ' <button class="btn btn-sm py-0 px-0 btn-outline-secondary btn-timer-r todo-action-btn" data-id="' + todoId + '" style="font-size:.7em;line-height:1;" data-tip="启动番茄钟" data-tip-pos="bottom"><i class="bi bi-clock"></i></button>'
+        + ' <button class="btn btn-sm py-0 px-0 text-muted btn-block-r todo-action-btn" data-id="' + todoId + '" style="font-size:.7em;line-height:1;" data-tip="标记阻塞" data-tip-pos="bottom"><i class="bi bi-pause-circle"></i></button>'
         + ' <button class="btn btn-sm py-0 px-0 text-muted btn-del-r" data-id="' + todoId + '" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>';
     wrapper.appendChild(row);
     // Bind toggle done
