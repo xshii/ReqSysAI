@@ -13,6 +13,19 @@ from app.models.project import Project
 from app.models.project_member import ProjectMember
 from app.models.report import PersonalWeekly, WeeklyReport
 from app.models.requirement import Requirement
+from app.models.risk import Risk
+from app.models.todo import Todo, todo_requirements
+from app.models.user import Group, Role, User
+from app.services.ai import call_ollama
+from app.services.prompts import get_prompt
+from app.services.statistics import (
+    gather_week_stats,
+    get_delivery_metrics,
+    get_estimate_deviation,
+    get_reviewer,
+    get_todo_progress,
+    week_range,
+)
 
 
 def _urgency_sort(reqs, limit=None):
@@ -34,20 +47,6 @@ def _urgency_sort(reqs, limit=None):
 
     result = sorted(reqs, key=_key)
     return result[:limit] if limit else result
-from app.models.risk import Risk
-from app.models.todo import Todo, todo_requirements
-from app.models.user import Group, Role, User
-from app.services.ai import call_ollama
-from app.services.prompts import get_prompt
-from app.services.statistics import (
-    gather_week_stats,
-    get_delivery_metrics,
-    get_estimate_deviation,
-    get_reviewer,
-    get_todo_progress,
-    week_range,
-)
-
 
 
 def _guard_hidden_project(cur_project_id):

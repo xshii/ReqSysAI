@@ -321,8 +321,11 @@
                     var tr = bar.closest('tr');
                     var mondayTd = tr.querySelector('td.gantt-col[data-date="' + mondayStr + '"]');
                     if (!mondayTd) {
-                        // Monday before gantt range: use first visible Monday
-                        mondayTd = tr.querySelector('td.gantt-col[style*="width: ' + weekColW + 'px"]');
+                        // Monday before gantt range: use first visible td
+                        var allTds = tr.querySelectorAll('td.gantt-col');
+                        for (var _i = 0; _i < allTds.length; _i++) {
+                            if (allTds[_i].style.display !== 'none') { mondayTd = allTds[_i]; break; }
+                        }
                     }
                     if (mondayTd) {
                         // Offset within the week
