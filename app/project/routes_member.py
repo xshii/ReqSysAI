@@ -9,8 +9,17 @@ from app.models.user import User
 from app.project import project_bp
 from app.project.routes import _check_project_access
 
-# System role → project role mapping
-_ROLE_MAP = {
+# Domain keyword → project role mapping (checked first)
+_DOMAIN_ROLE_MAP = [
+    (['测试', 'test', 'TE'], 'TE'),
+    (['质量', 'QA', 'quality'], 'QA'),
+    (['产品', 'product', 'PM'], 'PM'),
+    (['架构', 'architect'], 'PL'),
+    (['设计', 'UI', 'UX', 'design'], 'UI'),
+]
+
+# System role → project role fallback
+_SYS_ROLE_MAP = {
     'SE': 'DEV', 'DE': 'DEV', 'MDE': 'DEV', 'Committer': 'DEV',
     'TE': 'TE', 'QA': 'QA', 'PM': 'PM', 'PL': 'PL',
     'FO': 'PL', 'SEC': 'DEV', 'Admin': 'DEV',
@@ -18,12 +27,19 @@ _ROLE_MAP = {
 
 
 def _default_project_role(user):
-    """Derive project role from user's system roles."""
-    if not user or not user.roles:
+    """Derive project role from user's domain first, then system roles."""
+    if not user:
         return 'DEV'
-    for r in user.roles:
-        if r.name in _ROLE_MAP:
-            return _ROLE_MAP[r.name]
+    # 1. Match by domain keywords
+    domain = (user.domain or '').lower()
+    if domain:
+        for keywords, role in _DOMAIN_ROLE_MAP:
+            if any(kw.lower() in domain for kw in keywords):
+                return role
+    # 2. Fallback to system role
+    for r in (user.roles or []):
+        if r.name in _SYS_ROLE_MAP:
+            return _SYS_ROLE_MAP[r.name]
     return 'DEV'
 
 
