@@ -418,13 +418,25 @@ function exportRiskEml() {
                 var content = '';
                 // Column-specific formatting
                 if (j === 0) {
-                    // Title: first div only (skip comments/forms)
+                    // Title + description + resolution + comments
                     var titleDiv = td.querySelector('div');
                     content = titleDiv ? titleDiv.textContent.trim() : td.textContent.trim();
                     var desc = td.querySelectorAll('div.text-muted.small');
                     if (desc.length) content += '<br><span style="color:#94a3b8;font-size:11px;">' + desc[0].textContent.trim() + '</span>';
                     var res = td.querySelector('.text-success');
                     if (res) content += '<br><span style="color:#198754;font-size:11px;">✓ ' + res.textContent.trim() + '</span>';
+                    // Comments as progress entries
+                    var commentBlock = td.querySelector('.border-top');
+                    if (commentBlock) {
+                        var comments = commentBlock.querySelectorAll('.small.text-muted');
+                        if (comments.length) {
+                            content += '<br><span style="font-size:11px;color:#475569;font-weight:600;">进展：</span>';
+                            comments.forEach(function(c) {
+                                var txt = c.textContent.trim().replace(/\s*删除$/, '');
+                                content += '<br><span style="font-size:11px;color:#64748b;padding-left:8px;">· ' + txt + '</span>';
+                            });
+                        }
+                    }
                 } else if (j === 1 || j === 2) {
                     // Severity / Status badge
                     var badge = td.querySelector('.badge');

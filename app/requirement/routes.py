@@ -122,6 +122,18 @@ def requirement_list():
     comp_days_sum = sum((r.estimate_days or 1) for r in _active_reqs)
     completion_weighted = round(comp_weighted_sum / comp_days_sum) if comp_days_sum else None
 
+    # Load saved diagnostic results for this project
+    saved_diag = []
+    if project_id:
+        import json
+        from app.models.site_setting import SiteSetting
+        raw = SiteSetting.get(f'diag_issues_{project_id}', '')
+        if raw:
+            try:
+                saved_diag = json.loads(raw)
+            except Exception:
+                pass
+
     return render_template('requirement/list.html',
         pagination=pagination, requirements=pagination.items,
         projects=[p for p in Project.query.all() if not p.is_hidden or current_user.is_team_manager],
@@ -130,7 +142,7 @@ def requirement_list():
         cur_status=status, cur_priority=priority, cur_project=project_id,
         cur_assignee=assignee_id, cur_search=search, cur_sort=sort,
         todo_counts=todo_counts, ai_ratio_weighted=ai_ratio_weighted,
-        completion_weighted=completion_weighted,
+        completion_weighted=completion_weighted, saved_diag=saved_diag,
     )
 
 

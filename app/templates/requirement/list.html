@@ -199,6 +199,28 @@ function runDiagnose() {
         showToast('诊断失败', 'danger');
     });
 }
+// Auto-show saved diagnosis on page load
+var _savedDiag = {{ saved_diag | tojson }};
+if (_savedDiag && _savedDiag.length) {
+    var unresolvedCount = _savedDiag.filter(function(i) { return !i.resolved; }).length;
+    if (unresolvedCount > 0) {
+        var panel = document.getElementById('diagnosePanel');
+        var content = document.getElementById('diagnoseContent');
+        var resolved_count = _savedDiag.length - unresolvedCount;
+        var summary = '<div class="mb-2 text-muted" style="font-size:.85em;">发现 ' + _savedDiag.length + ' 个问题' + (resolved_count ? '，已处理 ' + resolved_count + ' 个' : '') + '</div>';
+        content.innerHTML = summary + _savedDiag.map(function(i) {
+            var color = i.level === 'danger' ? 'danger' : (i.level === 'warning' ? 'warning' : 'info');
+            var resolved = i.resolved;
+            return '<div class="d-flex gap-2 mb-1 align-items-start' + (resolved ? ' opacity-50' : '') + '" id="issue_' + i.id + '">'
+                + '<button class="btn btn-sm py-0 px-1 flex-shrink-0 ' + (resolved ? 'btn-success' : 'btn-outline-secondary') + '" style="font-size:.65em;" onclick="toggleResolve(\'' + i.id + '\',' + !resolved + ',this)" title="' + (resolved ? '标记为未处理' : '标记为已处理') + '">'
+                + '<i class="bi bi-' + (resolved ? 'check-circle-fill' : 'circle') + '"></i></button>'
+                + '<span class="badge bg-' + color + '" style="font-size:.7em;flex-shrink:0;">' + i.tag + '</span>'
+                + '<span' + (resolved ? ' class="text-decoration-line-through"' : '') + '>' + i.text + '</span></div>';
+        }).join('');
+        panel.classList.remove('d-none');
+    }
+}
+
 function toggleResolve(issueId, resolve, btn) {
     fetch('/requirements/diagnose/resolve', {
         method: 'POST',
