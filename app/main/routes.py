@@ -679,7 +679,8 @@ def api_add_personnel():
     from app.utils.pinyin import to_pinyin
     from app.services.audit import log_audit
 
-    EMPLOYEE_ID_RE = r'^[a-z](00\d{6}|\d00\d{7})$'
+    EID_FULL_RE = r'^[a-z](00\d{6}|\d00\d{7})$'
+    EID_NUM_RE = r'^(00\d{6}|\d00\d{7})$'
     data = request.get_json() or {}
     eid = (data.get('employee_id') or '').strip()
     name = (data.get('name') or '').strip()
@@ -690,23 +691,33 @@ def api_add_personnel():
 
     if not name or len(name) < 2:
         return jsonify(ok=False, msg='姓名至少2个字符')
-    if not eid or not re.match(EMPLOYEE_ID_RE, eid):
-        return jsonify(ok=False, msg='工号格式错误，如 a00123456 或 q3001234567')
+    if not eid:
+        return jsonify(ok=False, msg='请输入工号')
+    if re.match(EID_NUM_RE, eid):
+        # No prefix, auto-generate from name pinyin
+        py = to_pinyin(name)
+        prefix = py[0].lower() if py and py[0].isalpha() else ''
+        if not prefix:
+            return jsonify(ok=False, msg='无法从姓名生成工号首字母')
+        eid = prefix + eid
+    elif not re.match(EID_FULL_RE, eid):
+        return jsonify(ok=False, msg='工号格式错误，如 a00123456、00123456 或 3001234567')
     if not role_id:
         return jsonify(ok=False, msg='请选择角色')
     if not domain:
         return jsonify(ok=False, msg='请填写业务领域')
     if manager:
         mgr_parts = manager.rsplit(' ', 1)
-        if len(mgr_parts) == 2 and re.match(r'^[a-z](00\d{6}|\d00\d{7})$', mgr_parts[1]):
-            pass  # already "姓名 工号" format
+        if len(mgr_parts) == 2 and re.match(r'^[a-z]?(00\d{6}|\d00\d{7})$', mgr_parts[1]):
+            pass  # "姓名 工号" or "姓名 纯数字工号"
         else:
-            # Try to match system user by name
             mgr_user = User.query.filter_by(name=manager.strip(), is_active=True).first()
+            if not mgr_user and len(mgr_parts) == 2:
+                mgr_user = User.query.filter_by(name=mgr_parts[0].strip(), is_active=True).first()
             if mgr_user:
                 manager = f'{mgr_user.name} {mgr_user.employee_id}'
             else:
-                return jsonify(ok=False, msg='主管格式：姓名 工号，或输入系统用户姓名自动匹配')
+                return jsonify(ok=False, msg='主管未找到，请输入 姓名 工号')
 
     # Check hidden roles
     hidden = current_app.config.get('HIDDEN_ROLES', [])

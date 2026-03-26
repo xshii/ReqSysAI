@@ -207,13 +207,16 @@ def profile():
         if new_manager:
             import re
             parts = new_manager.rsplit(' ', 1)
-            if len(parts) != 2 or not re.match(r'^[a-z](00\d{6}|\d00\d{7})$', parts[1]):
-                # Try to match system user by name
+            if len(parts) == 2 and re.match(r'^[a-z]?(00\d{6}|\d00\d{7})$', parts[1]):
+                pass  # valid format
+            else:
                 mgr_user = User.query.filter_by(name=new_manager, is_active=True).first()
+                if not mgr_user and len(parts) == 2:
+                    mgr_user = User.query.filter_by(name=parts[0].strip(), is_active=True).first()
                 if mgr_user:
                     new_manager = f'{mgr_user.name} {mgr_user.employee_id}'
                 else:
-                    flash('主管：请从下拉选择，或输入 姓名 工号', 'danger')
+                    flash('主管未找到，请从下拉选择或输入 姓名 工号', 'danger')
                     users = User.query.filter_by(is_active=True).order_by(User.name).all()
                     return render_template('auth/profile.html', form=form, users=users)
         current_user.manager = new_manager or None

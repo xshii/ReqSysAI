@@ -450,7 +450,7 @@
 
     /* --- Add Personnel Modal --- */
     var _apDataLoaded = false;
-    var AP_EID_RE = /^[a-z](00\d{6}|\d00\d{7})$/;
+    var AP_EID_RE = /^[a-z]?(00\d{6}|\d00\d{7})$/;
 
     function openAddPersonnelModal() {
         var modal = document.getElementById('addPersonnelModal');
@@ -508,7 +508,7 @@
             errEl.style.display = 'block'; return;
         }
         if (!AP_EID_RE.test(eid)) {
-            errEl.textContent = '工号格式错误，如 a00123456 或 q3001234567';
+            errEl.textContent = '工号格式错误，如 a00123456、00123456 或 3001234567';
             errEl.style.display = 'block'; return;
         }
         if (!roleId) {

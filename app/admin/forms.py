@@ -27,7 +27,7 @@ class UserEditForm(FlaskForm):
     ip_address = StringField('IP 地址', validators=[Optional(), Length(max=45)])
     group = StringField('小组', validators=[Optional(), Length(max=50)])
     manager = StringField('主管', validators=[Optional(), Length(max=100),
-                          Regexp(r'^$|^.+\s[a-z](00\d{6}|\d00\d{7})$', message='格式：姓名 工号，如 张三 a00123456')])
+                          Regexp(r'^$|^.+\s[a-z]?(00\d{6}|\d00\d{7})$', message='格式：姓名 工号，如 张三 a00123456 或 张三 00123456')])
     domain = StringField('业务领域', validators=[Optional(), Length(max=100)])
     role_ids = SelectMultipleField('角色', coerce=int, validators=[DataRequired()])
     is_active = BooleanField('启用')

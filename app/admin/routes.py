@@ -322,12 +322,16 @@ def user_update_manager(user_id):
     raw = request.form.get('manager', '').strip()
     if raw:
         parts = raw.rsplit(' ', 1)
-        if len(parts) != 2 or not re.match(r'^[a-z](00\d{6}|\d00\d{7})$', parts[1]):
+        if len(parts) == 2 and re.match(r'^[a-z]?(00\d{6}|\d00\d{7})$', parts[1]):
+            pass
+        else:
             mgr_user = User.query.filter_by(name=raw, is_active=True).first()
+            if not mgr_user and len(parts) == 2:
+                mgr_user = User.query.filter_by(name=parts[0].strip(), is_active=True).first()
             if mgr_user:
                 raw = f'{mgr_user.name} {mgr_user.employee_id}'
             else:
-                flash('主管：请输入 姓名 工号，或系统用户姓名', 'danger')
+                flash('主管未找到，请输入 姓名 工号', 'danger')
                 return redirect(request.referrer or url_for('admin.user_list'))
     user.manager = raw or None
     db.session.commit()
