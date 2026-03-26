@@ -1381,6 +1381,14 @@ def my_weekly():
     for t in my_done + my_active:
         for r in t.requirements:
             my_reqs.add(r)
+    # Also include requirements (and child requirements) directly assigned to me
+    from app.models.requirement import Requirement
+    assigned_reqs = Requirement.query.filter(
+        Requirement.assignee_id == current_user.id,
+        Requirement.status.notin_(['done', 'closed']),
+    ).all()
+    for r in assigned_reqs:
+        my_reqs.add(r)
     my_reqs = _urgency_sort(list(my_reqs), limit=30)
 
     req_days = {}
