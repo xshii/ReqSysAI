@@ -63,9 +63,10 @@ def requirement_list():
         query = query.filter(
             db.or_(Requirement.title.contains(search), Requirement.description.contains(search))
         )
-    hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
-    if hidden_pids:
-        query = query.filter(Requirement.project_id.notin_(hidden_pids))
+    if not current_user.is_team_manager:
+        hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
+        if hidden_pids:
+            query = query.filter(Requirement.project_id.notin_(hidden_pids))
 
     # Sort
     today_ = date.today()
@@ -135,7 +136,7 @@ def requirement_list():
 
     return render_template('requirement/list.html',
         pagination=pagination, requirements=pagination.items,
-        projects=[p for p in Project.query.all() if not p.is_hidden],
+        projects=[p for p in Project.query.all() if not p.is_hidden or current_user.is_team_manager],
         users=User.query.filter_by(is_active=True).all(),
         statuses=Requirement.STATUS_LABELS, priorities=Requirement.PRIORITY_LABELS,
         cur_status=status, cur_priority=priority, cur_project=project_id,
@@ -249,7 +250,7 @@ def requirement_create():
 @login_required
 def requirement_detail(req_id):
     req = db.get_or_404(Requirement, req_id)
-    if req.project and req.project.is_hidden:
+    if req.project and req.project.is_hidden and not current_user.is_team_manager:
         flash('无权访问该需求', 'danger')
         return redirect(url_for('requirement.requirement_list'))
     comment_form = CommentForm()
@@ -660,9 +661,10 @@ def requirement_board():
         query = query.filter_by(project_id=project_id)
     if assignee_id:
         query = query.filter_by(assignee_id=assignee_id)
-    hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
-    if hidden_pids:
-        query = query.filter(Requirement.project_id.notin_(hidden_pids))
+    if not current_user.is_team_manager:
+        hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
+        if hidden_pids:
+            query = query.filter(Requirement.project_id.notin_(hidden_pids))
 
     reqs = query.order_by(Requirement.priority, Requirement.updated_at.desc()).all()
 
@@ -692,7 +694,7 @@ def requirement_board():
         board=board, columns=columns, show_sub=show_sub,
         status_meta=Requirement._STATUS_META,
         projects=[p for p in Project.query.filter_by(status='active').all()
-                  if not p.is_hidden],
+                  if not p.is_hidden or current_user.is_team_manager],
         users=User.query.filter_by(is_active=True).order_by(User.name).all(),
         cur_project=project_id, cur_assignee=assignee_id, swimlane=swimlane,
         today=date.today(),
@@ -901,7 +903,8 @@ def ai_quality_check():
 def _build_requirement_form(obj=None):
     form = RequirementForm(obj=obj)
     projects = Project.query.filter_by(status='active')
-    projects = projects.filter_by(is_hidden=False)
+    if not current_user.is_team_manager:
+        projects = projects.filter_by(is_hidden=False)
     form.project_id.choices = [(p.id, p.name) for p in projects.all()]
     form.assignee_id.choices = [(0, '-- 未分配 --')] + [
         (u.id, u.name) for u in User.query.filter_by(is_active=True).all()

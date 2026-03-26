@@ -35,7 +35,7 @@ def _get_gantt_state(project_id):
 
 def _check_project_access(project):
     """Block non-managers from accessing hidden projects. Returns a redirect response or None."""
-    if project.is_hidden:
+    if project.is_hidden and not current_user.is_team_manager:
         flash('无权访问该项目', 'danger')
         return redirect(url_for('project.project_list'))
 
@@ -48,7 +48,8 @@ def project_list():
     query = Project.query
     if status != 'all':
         query = query.filter_by(status=status)
-    query = query.filter_by(is_hidden=False)
+    if not current_user.is_team_manager:
+        query = query.filter_by(is_hidden=False)
     if search:
         query = query.filter(Project.name.contains(search))
 

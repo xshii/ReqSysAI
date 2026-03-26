@@ -55,7 +55,7 @@ def _guard_hidden_project(cur_project_id):
     if not cur_project_id:
         return cur_project_id, None
     p = db.session.get(Project, cur_project_id)
-    if p and p.is_hidden:
+    if p and p.is_hidden and not current_user.is_team_manager:
         return None, None
     return cur_project_id, p
 
@@ -63,7 +63,7 @@ def _guard_hidden_project(cur_project_id):
 def _visible_projects():
     """Active projects visible to current user."""
     return [p for p in Project.query.filter_by(status='active').order_by(Project.name).all()
-            if not p.is_hidden]
+            if not p.is_hidden or current_user.is_team_manager]
 
 
 def _build_sub_projects(cur_project, monday):
@@ -126,9 +126,10 @@ def requirement_progress():
         query = query.filter_by(status=cur_status)
     if cur_project_id:
         query = query.filter_by(project_id=cur_project_id)
-    hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
-    if hidden_pids:
-        query = query.filter(Requirement.project_id.notin_(hidden_pids))
+    if not current_user.is_team_manager:
+        hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
+        if hidden_pids:
+            query = query.filter(Requirement.project_id.notin_(hidden_pids))
     requirements = query.order_by(Requirement.updated_at.desc()).all()
 
     todo_counts = get_todo_progress([r.id for r in requirements])
@@ -1616,12 +1617,13 @@ def resource_map():
     project_ids = sorted(set(pid for (_, pid) in user_project_days))
     projects = {p.id: p for p in Project.query.filter(Project.id.in_(project_ids)).all()} if project_ids else {}
 
-    # Filter out hidden projects
-    hidden_ids = {pid for pid, p in projects.items() if p.is_hidden}
-    if hidden_ids:
-        project_ids = [pid for pid in project_ids if pid not in hidden_ids]
-        projects = {pid: p for pid, p in projects.items() if pid not in hidden_ids}
-        user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in hidden_ids}
+    # Filter out hidden projects for non-managers
+    if not current_user.is_team_manager:
+        hidden_ids = {pid for pid, p in projects.items() if p.is_hidden}
+        if hidden_ids:
+            project_ids = [pid for pid in project_ids if pid not in hidden_ids]
+            projects = {pid: p for pid, p in projects.items() if pid not in hidden_ids}
+            user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in hidden_ids}
 
     # Per-user total days
     user_total = defaultdict(float)
@@ -1753,12 +1755,13 @@ def resource_map_export():
     project_ids = sorted(set(pid for (_, pid) in user_project_days))
     projects = {p.id: p for p in Project.query.filter(Project.id.in_(project_ids)).all()} if project_ids else {}
 
-    # Filter out hidden projects
-    hidden_ids = {pid for pid, p in projects.items() if p.is_hidden}
-    if hidden_ids:
-        project_ids = [pid for pid in project_ids if pid not in hidden_ids]
-        projects = {pid: p for pid, p in projects.items() if pid not in hidden_ids}
-        user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in hidden_ids}
+    # Filter out hidden projects for non-managers
+    if not current_user.is_team_manager:
+        hidden_ids = {pid for pid, p in projects.items() if p.is_hidden}
+        if hidden_ids:
+            project_ids = [pid for pid in project_ids if pid not in hidden_ids]
+            projects = {pid: p for pid, p in projects.items() if pid not in hidden_ids}
+            user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in hidden_ids}
 
     user_total = defaultdict(float)
     for (uid, _pid), d in user_project_days.items():
