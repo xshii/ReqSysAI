@@ -427,10 +427,13 @@ def project_edit(project_id):
     available = [u for u in User.query.filter_by(is_active=True).order_by(User.name).all()
                  if u.id not in member_ids]
     from app.models.user import Group
-    visible_groups = [g.name for g in Group.query.filter_by(is_hidden=False).order_by(Group.name).all()]
+    all_group_objs = Group.query.order_by(Group.name).all()
+    visible_groups = [g.name for g in all_group_objs if not g.is_hidden]
+    hidden_groups = [g.name for g in all_group_objs if g.is_hidden]
     return render_template('project/form.html', form=form, project=project,
                            templates=templates, members=members, available=available,
-                           roles=ProjectMember.DEFAULT_ROLES, visible_groups=visible_groups,
+                           roles=ProjectMember.DEFAULT_ROLES,
+                           visible_groups=visible_groups, hidden_groups=hidden_groups,
                            title=f'编辑项目 - {project.name}', today=date.today())
 
 

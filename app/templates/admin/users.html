@@ -35,7 +35,9 @@
         <select id="groupFilter" class="form-select form-select-sm" style="width:auto;" onchange="filterByGroup(this.value)">
             <option value="">全部小组</option>
             <option value="_visible" {% if filter_group == '_visible' %}selected{% endif %}>内部小组</option>
-            {% for g in all_groups %}<option value="{{ g }}" {% if filter_group == g %}selected{% endif %}>{{ g }}{% if g in hidden_groups %} (隐藏){% endif %}</option>{% endfor %}
+            {% for g in all_groups if g not in hidden_groups %}<option value="{{ g }}" {% if filter_group == g %}selected{% endif %}>{{ g }}</option>{% endfor %}
+            {% if hidden_groups %}<option disabled>──────</option>{% endif %}
+            {% for g in all_groups if g in hidden_groups %}<option value="{{ g }}" {% if filter_group == g %}selected{% endif %}>{{ g }}</option>{% endfor %}
             <option value="_none" {% if filter_group == '_none' %}selected{% endif %}>未分组</option>
         </select>
         <span class="text-muted small">共 {{ users | length }} 人</span>
