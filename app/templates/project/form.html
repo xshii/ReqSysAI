@@ -235,34 +235,13 @@
                         <td class="text-muted member-drag-handle" style="cursor:grab;" draggable="true"><i class="bi bi-grip-vertical"></i></td>
                         <td class="small">{{ m.display_name }}{% if m.user and m.user.group %} <span class="text-muted">({{ m.user.group }})</span>{% endif %}</td>
                         <td>
-                            <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="d-inline">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="action" value="role">
-                                <input type="hidden" name="member_id" value="{{ m.id }}">
-                                <input type="text" name="project_role" class="form-control form-control-sm d-inline" list="roleOpt{{ m.id }}" style="max-width:80px;" value="{{ m.project_role }}" onchange="this.form.submit()">
-                                <datalist id="roleOpt{{ m.id }}">
-                                    {% for k, v in roles.items() %}<option value="{{ k }}" label="{{ k }} - {{ v }}">{% endfor %}
-                                </datalist>
-                            </form>
+                            <input type="text" class="form-control form-control-sm d-inline member-role-input" data-mid="{{ m.id }}" list="roleOpt{{ m.id }}" style="max-width:80px;" value="{{ m.project_role }}">
+                            <datalist id="roleOpt{{ m.id }}">
+                                {% for k, v in roles.items() %}<option value="{{ k }}" label="{{ k }} - {{ v }}">{% endfor %}
+                            </datalist>
                         </td>
-                        <td>
-                            <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="d-inline">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="action" value="toggle_key">
-                                <input type="hidden" name="member_id" value="{{ m.id }}">
-                                <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent">
-                                    <i class="bi bi-{{ 'star-fill text-warning' if m.is_key else 'star text-muted' }}"></i>
-                                </button>
-                            </form>
-                        </td>
-                        <td>
-                            <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="d-inline">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="action" value="remove">
-                                <input type="hidden" name="member_id" value="{{ m.id }}">
-                                <button type="submit" class="btn btn-sm btn-outline-danger py-0" onclick="return confirm('移除该成员？')"><i class="bi bi-x"></i></button>
-                            </form>
-                        </td>
+                        <td><button class="btn btn-sm p-0 border-0 bg-transparent btn-toggle-key" data-mid="{{ m.id }}"><i class="bi bi-{{ 'star-fill text-warning' if m.is_key else 'star text-muted' }}"></i></button></td>
+                        <td><button class="btn btn-sm btn-outline-danger py-0 btn-remove-member" data-mid="{{ m.id }}" data-uid="{{ m.user_id or '' }}"><i class="bi bi-x"></i></button></td>
                     </tr>
                     {% endfor %}
                     </tbody>
@@ -286,15 +265,8 @@
                 </div>
                 <div id="availUserList" style="max-height:380px;overflow-y:auto;font-size:.85em;">
                     {% for u in available|sort(attribute='pinyin') %}
-                    <div class="d-flex align-items-center gap-2 py-1 px-2 avail-user-row border-bottom" data-name="{{ u.name }}" data-eid="{{ u.employee_id }}" data-pinyin="{{ u.pinyin or '' }}" data-group="{{ u.group or '未分组' }}">
-                        <form method="POST" action="{{ url_for('project.member_list', project_id=project.id) }}" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="action" value="add">
-                            <input type="hidden" name="member_name" value="{{ u.name }}">
-                            <input type="hidden" name="project_role" value="DEV">
-                            <input type="hidden" name="next" value="{{ url_for('project.project_edit', project_id=project.id) }}?tab=members">
-                            <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="添加"><i class="bi bi-plus-circle text-primary"></i></button>
-                        </form>
+                    <div class="d-flex align-items-center gap-2 py-1 px-2 avail-user-row border-bottom" data-name="{{ u.name }}" data-eid="{{ u.employee_id }}" data-pinyin="{{ u.pinyin or '' }}" data-group="{{ u.group or '未分组' }}" data-uid="{{ u.id }}">
+                        <button class="btn btn-sm p-0 border-0 bg-transparent btn-add-member" title="添加" data-name="{{ u.name }}"><i class="bi bi-plus-circle text-primary"></i></button>
                         <span>{{ u.name }}</span>
                         <span class="text-muted">{{ u.employee_id }}{% if u.group %} · {{ u.group }}{% endif %}</span>
                     </div>
@@ -587,6 +559,99 @@ function filterAvailUsers() {
     if (countEl) countEl.textContent = (g || q) ? '匹配 ' + visible + ' / ' + total + ' 人' : '共 ' + total + ' 人';
 }
 filterAvailUsers();
+
+// AJAX member operations
+var _memberAjaxUrl = '{{ url_for("project.member_ajax", project_id=project.id) if is_edit else "" }}';
+
+function ajaxAddMember(name, role, btn) {
+    if (!_memberAjaxUrl) return;
+    apiPost(_memberAjaxUrl, {action: 'add', member_name: name, project_role: role || 'DEV'}).then(function(d) {
+        if (d.ok) {
+            // Add row to member table
+            var tbody = document.querySelector('#memberTable tbody');
+            if (!tbody) {
+                // Create table if first member
+                var placeholder = document.querySelector('#tabMembers .text-muted.text-center');
+                if (placeholder) placeholder.remove();
+                var tbl = document.createElement('table');
+                tbl.className = 'table table-sm mb-0';
+                tbl.id = 'memberTable';
+                tbl.innerHTML = '<thead><tr><th style="width:20px;"></th><th>成员</th><th>角色</th><th>关键</th><th></th></tr></thead><tbody></tbody>';
+                var container = document.querySelector('#tabMembers .col-md-7 form:first-of-type');
+                if (container) container.parentElement.appendChild(tbl);
+                tbody = tbl.querySelector('tbody');
+            }
+            var m = d.member;
+            var tr = document.createElement('tr');
+            tr.dataset.mid = m.id;
+            tr.innerHTML = '<td class="text-muted"><i class="bi bi-grip-vertical"></i></td>'
+                + '<td class="small">' + m.name + (m.group ? ' <span class="text-muted">(' + m.group + ')</span>' : '') + '</td>'
+                + '<td><span class="small">' + m.role + '</span></td>'
+                + '<td><button class="btn btn-sm p-0 border-0 bg-transparent btn-toggle-key" data-mid="' + m.id + '"><i class="bi bi-' + (m.is_key ? 'star-fill text-warning' : 'star text-muted') + '"></i></button></td>'
+                + '<td><button class="btn btn-sm btn-outline-danger py-0 btn-remove-member" data-mid="' + m.id + '"><i class="bi bi-x"></i></button></td>';
+            tbody.appendChild(tr);
+            // Update member count
+            var countLabel = document.querySelector('#tabMembers .fw-bold.small');
+            if (countLabel) {
+                var cnt = tbody.querySelectorAll('tr').length;
+                countLabel.textContent = '项目成员 (' + cnt + ')';
+            }
+            // Hide from available list
+            if (btn) {
+                var row = btn.closest('.avail-user-row');
+                if (row) row.style.display = 'none';
+            }
+            showToast(m.name + ' 已添加', 'success');
+        } else {
+            showToast(d.msg || '添加失败', 'danger');
+        }
+    });
+}
+
+// Right side: + button click
+document.querySelectorAll('.btn-add-member').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        ajaxAddMember(btn.dataset.name, 'DEV', btn);
+    });
+});
+
+// Left side: remove member (delegate)
+document.addEventListener('click', function(e) {
+    var rmBtn = e.target.closest('.btn-remove-member');
+    if (rmBtn && _memberAjaxUrl) {
+        if (!confirm('移除该成员？')) return;
+        apiPost(_memberAjaxUrl, {action: 'remove', member_id: parseInt(rmBtn.dataset.mid)}).then(function(d) {
+            if (d.ok) {
+                var tr = rmBtn.closest('tr');
+                if (tr) tr.remove();
+                // Show back in available list if internal user
+                if (d.user_id) {
+                    var row = document.querySelector('.avail-user-row[data-uid="' + d.user_id + '"]');
+                    if (row) row.style.display = '';
+                }
+                showToast(d.name + ' 已移除', 'info');
+            }
+        });
+        return;
+    }
+    var keyBtn = e.target.closest('.btn-toggle-key');
+    if (keyBtn && _memberAjaxUrl) {
+        apiPost(_memberAjaxUrl, {action: 'toggle_key', member_id: parseInt(keyBtn.dataset.mid)}).then(function(d) {
+            if (d.ok) {
+                var icon = keyBtn.querySelector('i');
+                icon.className = 'bi bi-' + (d.is_key ? 'star-fill text-warning' : 'star text-muted');
+            }
+        });
+    }
+});
+
+// Role inline edit via AJAX
+document.addEventListener('change', function(e) {
+    var inp = e.target.closest('.member-role-input');
+    if (inp && _memberAjaxUrl) {
+        apiPost(_memberAjaxUrl, {action: 'role', member_id: parseInt(inp.dataset.mid), project_role: inp.value.trim()});
+    }
+});
 
 // Recalculate reference dates for template rows
 function recalcTplDates(el) {
