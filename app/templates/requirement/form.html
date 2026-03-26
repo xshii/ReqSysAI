@@ -227,29 +227,74 @@ function sumSubDays() {
     });
     if (hasAny) {
         document.getElementById('reqDays').value = total;
-        updateDueDate(total);
+        onDateOrDaysChange('days');
     }
 }
 
-function updateDueDate(days) {
-    if (!days || days <= 0) return;
-    var d = new Date();
-    var remaining = Math.ceil(days);
-    while (remaining > 0) {
-        d.setDate(d.getDate() + 1);
+function calcWorkdays(startStr, endStr) {
+    // Count workdays (Mon-Fri) between two dates, inclusive
+    if (!startStr || !endStr) return 0;
+    var s = new Date(startStr + 'T00:00:00');
+    var e = new Date(endStr + 'T00:00:00');
+    if (s > e) return 0;
+    var count = 0;
+    var d = new Date(s);
+    while (d <= e) {
         var dow = d.getDay();
-        if (dow !== 0 && dow !== 6) remaining--;
+        if (dow !== 0 && dow !== 6) count++;
+        d.setDate(d.getDate() + 1);
     }
-    var yyyy = d.getFullYear();
-    var mm = String(d.getMonth() + 1).padStart(2, '0');
-    var dd = String(d.getDate()).padStart(2, '0');
-    document.getElementById('reqDueDate').value = yyyy + '-' + mm + '-' + dd;
+    return count;
 }
 
-document.getElementById('reqDays').addEventListener('input', function() {
-    var v = parseFloat(this.value);
-    if (v > 0) updateDueDate(v);
-});
+function calcStartFromDue(dueStr, days) {
+    // From due_date, go back `days` calendar days (not excluding weekends)
+    if (!dueStr || !days || days <= 0) return '';
+    var d = new Date(dueStr + 'T00:00:00');
+    d.setDate(d.getDate() - Math.ceil(days) + 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+var _startSetByUser = false;  // true = user manually edited start_date
+
+function onDateOrDaysChange(source) {
+    var startInput = document.querySelector('[name="start_date"]');
+    var dueInput = document.getElementById('reqDueDate');
+    var daysInput = document.getElementById('reqDays');
+    var startVal = startInput ? startInput.value : '';
+    var dueVal = dueInput ? dueInput.value : '';
+    var daysVal = parseFloat(daysInput ? daysInput.value : '');
+
+    if (source === 'start') {
+        // User manually set start_date
+        _startSetByUser = !!startVal;
+        if (startVal && dueVal) {
+            var wd = calcWorkdays(startVal, dueVal);
+            if (wd > 0) daysInput.value = wd;
+        }
+    } else if (source === 'due') {
+        if (_startSetByUser && startVal && dueVal) {
+            var wd = calcWorkdays(startVal, dueVal);
+            if (wd > 0) daysInput.value = wd;
+        } else if (!_startSetByUser && daysVal > 0 && dueVal) {
+            startInput.value = calcStartFromDue(dueVal, daysVal);
+        }
+    } else {
+        // source === 'days' or sub-total
+        if (!_startSetByUser && dueVal && daysVal > 0) {
+            startInput.value = calcStartFromDue(dueVal, daysVal);
+        }
+    }
+}
+
+document.getElementById('reqDays').addEventListener('change', function() { onDateOrDaysChange('days'); });
+document.getElementById('reqDueDate').addEventListener('change', function() { onDateOrDaysChange('due'); });
+var _startInput = document.querySelector('[name="start_date"]');
+if (_startInput) {
+    _startInput.addEventListener('change', function() { onDateOrDaysChange('start'); });
+    // If start_date already has value on page load (editing), mark as user-set
+    if (_startInput.value) _startSetByUser = true;
+}
 
 var aiData = null;
 
