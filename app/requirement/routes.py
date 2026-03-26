@@ -1122,7 +1122,7 @@ def import_csv():
             title=title,
             priority=priority_rev.get((row.get('优先级') or '').strip(), 'medium'),
             status=status_rev.get((row.get('状态') or '').strip(), 'pending_review'),
-            source=source_rev.get((row.get('需求类型') or '').strip()),
+            source=source_rev.get((row.get('需求类型') or '').strip(), 'coding'),
             assignee_id=assignee_id,
             assignee_name=assignee_name,
             description=(row.get('描述') or '').strip() or None,

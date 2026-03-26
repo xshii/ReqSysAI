@@ -1252,6 +1252,11 @@ def fund_import_csv():
             # Update existing
             existing.total_amount = amt
             existing.note = note or existing.note
+            if expires:
+                try:
+                    existing.expires_at = date.fromisoformat(expires)
+                except ValueError:
+                    pass
             skipped += 1
             continue
         fund = IncentiveFund(
