@@ -253,11 +253,14 @@
         var _ganttScale = 'day';
 
         function filterGantt() {
-            var start = document.getElementById('ganttStart').value || '{{ gantt.start.strftime('%Y-%m-%d') }}';
-            var end = document.getElementById('ganttEnd').value || '{{ gantt.end.strftime('%Y-%m-%d') }}';
+            var start = document.getElementById('ganttStart').value;
+            var end = document.getElementById('ganttEnd').value;
+            if (!start && !end) return;
             document.querySelectorAll('.gantt-col').forEach(function(td) {
                 var d = td.dataset.date;
-                td.style.display = (d >= start && d <= end) ? '' : 'none';
+                if (!d) return;
+                var show = (!start || d >= start) && (!end || d <= end);
+                td.style.display = show ? '' : 'none';
             });
             _saveGanttState();
         }
