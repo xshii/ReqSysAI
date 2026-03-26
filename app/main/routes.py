@@ -100,13 +100,17 @@ def index():
     # Merge any extra requirements from todos into display list
     display_reqs = list(my_reqs) + [r for rid, r in req_map.items() if rid not in {x.id for x in my_reqs}]
 
-    # My related risks
+    # My related risks — overdue/due-today first, then severity, then due_date
     my_risks = Risk.query.filter(
         Risk.status == 'open',
         Risk.deleted_at.is_(None),
         db.or_(Risk.tracker_id == current_user.id, Risk.created_by == current_user.id,
                Risk.owner_id == current_user.id),
-    ).order_by(Risk.due_date).all()
+    ).order_by(
+        db.case((Risk.due_date < today, 0), (Risk.due_date == today, 1), else_=2),
+        db.case({'high': 0, 'medium': 1, 'low': 2}, value=Risk.severity),
+        Risk.due_date,
+    ).all()
 
     # Alerts: overdue requirements + overdue risks
     alerts = [
