@@ -50,6 +50,12 @@ def create_app(config_name=None):
     register_events()
 
 
+    @app.after_request
+    def _no_cache(response):
+        if 'text/html' in response.content_type:
+            response.headers['Cache-Control'] = 'no-store'
+        return response
+
     # Template filters
     import json as _json
     app.jinja_env.filters['from_json'] = lambda s: _json.loads(s) if s else []
@@ -75,9 +81,7 @@ def create_app(config_name=None):
             cur_group = req.args.get('group', current_user.group or '')
             if not cur_group and groups:
                 cur_group = groups[0]
-            all_projects = Project.query.filter_by(status='active').order_by(Project.name).all()
-            if not current_user.is_team_manager:
-                all_projects = [p for p in all_projects if not p.is_hidden]
+            all_projects = Project.query.filter_by(status='active', is_hidden=False).order_by(Project.name).all()
             followed_ids = set(p.id for p in current_user.followed_projects.all())
             # Followed projects first, then others
             followed = [p for p in all_projects if p.id in followed_ids]
