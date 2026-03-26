@@ -939,7 +939,7 @@ def export_csv():
     writer.writerow([
         'ID', '需求编号', '层级', '需求类型', '标题', '项目', '优先级', '状态',
         '负责人', '工号', '预估工期(天)', '代码行数', '用例数', 'AI辅助(%)', '完成率(%)',
-        '开始日期', '截止日期', '父需求编号', '依赖需求', '描述',
+        '开始日期', '截止日期', '父需求编号', '依赖需求', '描述', '评论',
     ])
     # Demo row (id=0)
     writer.writerow([
@@ -947,7 +947,7 @@ def export_csv():
         '待评估(选填)', '张三(选填)', '(自动)', '5(选填)', '1000(选填)', '20(选填)',
         '30(选填)', '60(选填)',
         '2026-01-01(选填)', '2026-03-31(选填)', '(选填)', 'REQ-001,REQ-002(选填)',
-        '描述(选填) 此行为格式示例，导入时自动跳过',
+        '描述(选填)', '(只读,导入时忽略) 此行为格式示例，导入时自动跳过',
     ])
     for r in reqs:
         assignee_eid = r.assignee.employee_id if r.assignee else ''
@@ -973,6 +973,7 @@ def export_csv():
             r.parent.number if r.parent else '',
             ','.join(d.number for d in r.dependencies) if r.dependencies else '',
             r.description or '',
+            '\n'.join(f'{c.user.name} {c.created_at.strftime("%m-%d")}：{c.content}' for c in r.comments) if r.comments else '',
         ])
 
     from urllib.parse import quote
