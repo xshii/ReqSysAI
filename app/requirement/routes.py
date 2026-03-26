@@ -938,13 +938,14 @@ def export_csv():
     writer = csv.writer(buf)
     writer.writerow([
         'ID', '需求编号', '层级', '需求类型', '标题', '项目', '优先级', '状态',
-        '负责人', '工号', '预估工期(天)', '代码行数', '用例数',
+        '负责人', '工号', '预估工期(天)', '代码行数', '用例数', 'AI辅助(%)', '完成率(%)',
         '开始日期', '截止日期', '父需求编号', '描述',
     ])
     # Demo row (id=0)
     writer.writerow([
         0, 'REQ-000(选填)', '(自动)', '编码(选填)', '示例需求标题', '项目名称', '高(选填)',
         '待评估(选填)', '张三(选填)', '(自动)', '5(选填)', '1000(选填)', '20(选填)',
+        '30(选填)', '60(选填)',
         '2026-01-01(选填)', '2026-03-31(选填)', '(选填)', '描述(选填) 此行为格式示例，导入时自动跳过',
     ])
     for r in reqs:
@@ -964,6 +965,8 @@ def export_csv():
             r.estimate_days or '',
             r.code_lines or '',
             r.test_cases or '',
+            r.ai_ratio if r.ai_ratio is not None else '',
+            r.completion or '',
             r.start_date.isoformat() if r.start_date else '',
             r.due_date.isoformat() if r.due_date else '',
             r.parent.number if r.parent else '',
@@ -1092,6 +1095,18 @@ def import_csv():
                     existing.test_cases = int(tc)
                 except ValueError:
                     pass
+            ai = (row.get('AI辅助(%)') or '').strip()
+            if ai:
+                try:
+                    existing.ai_ratio = int(ai)
+                except ValueError:
+                    pass
+            comp = (row.get('完成率(%)') or '').strip()
+            if comp:
+                try:
+                    existing.completion = int(comp)
+                except ValueError:
+                    pass
             desc = (row.get('描述') or '').strip()
             if desc:
                 existing.description = desc
@@ -1139,6 +1154,18 @@ def import_csv():
         if tc:
             try:
                 req.test_cases = int(tc)
+            except ValueError:
+                pass
+        ai = (row.get('AI辅助(%)') or '').strip()
+        if ai:
+            try:
+                req.ai_ratio = int(ai)
+            except ValueError:
+                pass
+        comp = (row.get('完成率(%)') or '').strip()
+        if comp:
+            try:
+                req.completion = int(comp)
             except ValueError:
                 pass
         db.session.add(req)

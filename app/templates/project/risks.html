@@ -400,11 +400,11 @@ function exportRiskEml() {
         var hdrStyle = S + 'padding:7px 10px;font-size:11px;font-weight:600;color:#475569;background:#f8fafc;white-space:nowrap;';
         var cellStyle = S + 'padding:6px 10px;font-size:12px;vertical-align:top;';
         var riskHtml = '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">';
-        // Build header (skip last col = action)
+        // Build header (skip last col = action, add "进展" col)
         var ths = table.querySelectorAll('thead th');
         riskHtml += '<tr>';
         for (var i = 0; i < ths.length - 1; i++) riskHtml += '<th style="' + hdrStyle + '">' + ths[i].textContent.trim() + '</th>';
-        riskHtml += '</tr>';
+        riskHtml += '<th style="' + hdrStyle + '">进展</th></tr>';
         // Build rows
         var sevColors = {高:'#dc3545',中:'#e67e22',低:'#6c757d'};
         var statusColors = {'未解决':'#dc3545','已解决':'#198754','已关闭':'#6c757d'};
@@ -425,18 +425,6 @@ function exportRiskEml() {
                     if (desc.length) content += '<br><span style="color:#94a3b8;font-size:11px;">' + desc[0].textContent.trim() + '</span>';
                     var res = td.querySelector('.text-success');
                     if (res) content += '<br><span style="color:#198754;font-size:11px;">✓ ' + res.textContent.trim() + '</span>';
-                    // Comments as progress entries
-                    var commentBlock = td.querySelector('.border-top');
-                    if (commentBlock) {
-                        var comments = commentBlock.querySelectorAll('.small.text-muted');
-                        if (comments.length) {
-                            content += '<br><span style="font-size:11px;color:#475569;font-weight:600;">进展：</span>';
-                            comments.forEach(function(c) {
-                                var txt = c.textContent.trim().replace(/\s*删除$/, '');
-                                content += '<br><span style="font-size:11px;color:#64748b;padding-left:8px;">· ' + txt + '</span>';
-                            });
-                        }
-                    }
                 } else if (j === 1 || j === 2) {
                     // Severity / Status badge
                     var badge = td.querySelector('.badge');
@@ -451,6 +439,20 @@ function exportRiskEml() {
                 }
                 riskHtml += '<td style="' + cellStyle + rowBg + '">' + content + '</td>';
             }
+            // Extra column: comments/progress
+            var commentContent = '';
+            var firstTd = tds[0];
+            if (firstTd) {
+                var commentBlock = firstTd.querySelector('.border-top');
+                if (commentBlock) {
+                    var comments = commentBlock.querySelectorAll('.small.text-muted');
+                    comments.forEach(function(c) {
+                        var txt = c.textContent.trim().replace(/\s*删除$/, '');
+                        commentContent += (commentContent ? '<br>' : '') + '<span style="font-size:11px;color:#64748b;">· ' + txt + '</span>';
+                    });
+                }
+            }
+            riskHtml += '<td style="' + cellStyle + rowBg + '">' + (commentContent || '-') + '</td>';
             riskHtml += '</tr>';
         });
         riskHtml += '</table>';
