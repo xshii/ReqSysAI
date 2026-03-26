@@ -137,11 +137,24 @@ function onDragOver(e) {
     e.dataTransfer.dropEffect = 'move';
     // Auto-scroll kanban column when dragging near edges
     var col = e.target.closest('.kanban-col');
-    if (!col) return;
-    var rect = col.getBoundingClientRect();
-    var edge = 40;
-    if (e.clientY - rect.top < edge) col.scrollTop -= 8;
-    else if (rect.bottom - e.clientY < edge) col.scrollTop += 8;
+    if (col) {
+        var colRect = col.getBoundingClientRect();
+        var edge = 40;
+        if (e.clientY - colRect.top < edge) col.scrollTop -= 8;
+        else if (colRect.bottom - e.clientY < edge) col.scrollTop += 8;
+    }
+    // Position ghost at cursor location among cards
+    if (!dragGhost) return;
+    var zone = e.target.closest('.pct-zone');
+    if (!zone || dragGhost.parentNode !== zone) return;
+    var cards = Array.from(zone.querySelectorAll('.kanban-card:not(.drag-ghost)'));
+    var insertBefore = null;
+    for (var i = 0; i < cards.length; i++) {
+        var r = cards[i].getBoundingClientRect();
+        if (e.clientY < r.top + r.height / 2) { insertBefore = cards[i]; break; }
+    }
+    if (insertBefore) zone.insertBefore(dragGhost, insertBefore);
+    else zone.appendChild(dragGhost);
 }
 /* Legacy col handlers */
 function onDragEnter(e, col) { e.preventDefault(); col.classList.add('drag-target'); }
