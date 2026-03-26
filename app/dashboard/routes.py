@@ -381,6 +381,13 @@ def weekly_report():
                     children_str = f'，子需求 {done_children}/{len(r.children)} 完成'
                 assignee = r.assignee_display
                 lines.append(f'- [{r.number}] {r.title}（{r.status_label}，{assignee}{days_str}{due_str}{children_str}）{overdue}')
+                for c in (r.children or []):
+                    c_due = f'，预期 {c.due_date.strftime("%m-%d")}' if c.due_date else ''
+                    c_days = f'，预估 {c.estimate_days}人天' if c.estimate_days else ''
+                    c_overdue = ''
+                    if c.due_date and c.due_date < date.today() and c.status not in REQ_INACTIVE_STATUSES:
+                        c_overdue = f'⚠️已延期{(date.today() - c.due_date).days}天'
+                    lines.append(f'  - ↳[{c.number}] {c.title}（{c.status_label}，{c.assignee_display}{c_days}{c_due}）{c_overdue}')
 
         if todos_done:
             lines.append('\n本周已完成的任务：')
