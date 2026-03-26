@@ -1470,7 +1470,8 @@ def my_weekly():
                         days_left = (r.due_date - date.today()).days
                         due_info = f'，已延期{-days_left}天' if days_left < 0 else f'，剩{days_left}天'
                     child_tag = '，↳子需求' if r.parent_id else ''
-                    lines.append(f'- [{r.number}] {r.title}（{r.status_label}{due_info}{child_tag}）')
+                    start_info = f'，开始 {r.start_date.strftime("%m-%d")}' if r.start_date else ''
+                    lines.append(f'- {r.title}（{r.status_label}{start_info}{due_info}{child_tag}）')
 
             # Recurring todo stats this week
             from app.models.recurring_completion import RecurringCompletion
