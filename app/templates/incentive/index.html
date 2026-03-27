@@ -284,7 +284,7 @@
                         <div class="col-9">
                             <textarea name="description" id="reviewDesc" class="form-control form-control-sm" rows="3" oninput="updateCharCount(this,'reviewDescCount')"></textarea>
                             <div class="d-flex gap-2 mt-1">
-                                <button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="aiPolish('reviewDesc','reviewDescHint')"><i class="bi bi-robot"></i> AI润色</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="aiPolishReview()"><i class="bi bi-robot"></i> AI润色</button>
                                 <button type="button" class="btn btn-sm btn-outline-success py-0" onclick="aiDescribe('generate','reviewDesc','reviewDescHint')"><i class="bi bi-robot"></i> AI生成</button>
                                 <span class="small text-muted align-self-center" id="reviewDescHint"></span>
                                 <span class="small text-muted align-self-center ms-auto" id="reviewDescCount">0字</span>
@@ -294,8 +294,11 @@
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">评语</label>
                         <div class="col-9">
-                            <input type="text" name="review_comment" id="reviewComment" class="form-control form-control-sm" maxlength="150" placeholder="选填，150字以内">
-                            <span class="small text-muted float-end" id="charCount">0/150</span>
+                            <textarea name="review_comment" id="reviewComment" class="form-control form-control-sm" rows="2" maxlength="150" placeholder="选填，150字以内" oninput="document.getElementById('charCount').textContent=this.value.length+'/150'"></textarea>
+                            <div class="d-flex justify-content-between mt-1">
+                                <button type="button" class="btn btn-sm btn-outline-info py-0" onclick="aiSummarizeComment()"><i class="bi bi-robot"></i> AI润色&总结</button>
+                                <span class="small text-muted" id="charCount">0/150</span>
+                            </div>
                         </div>
                     </div>
                     <div class="row mb-2">
@@ -522,6 +525,54 @@ function batchTogglePublic(pub) {
         if (d && d.ok) location.reload();
         else showToast(d.msg || '操作失败', 'danger');
     });
+}
+
+/* AI polish description + generate comment in review scene */
+function aiPolishReview() {
+    var desc = document.getElementById('reviewDesc').value.trim();
+    if (!desc) { showToast('请先填写描述', 'warning'); return; }
+    var btn = event.target.closest('button');
+    var loading = aiLoading(btn, 'AI润色');
+    checkAI().then(function() {
+        return fetch('{{ url_for("incentive.ai_polish") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+            body: JSON.stringify({text: desc, type: 'desc', scene: 'review'})
+        });
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        loading.stop();
+        if (d.ok) {
+            document.getElementById('reviewDesc').value = d.text;
+            updateCharCount(document.getElementById('reviewDesc'), 'reviewDescCount');
+            if (d.comment) {
+                document.getElementById('reviewComment').value = d.comment;
+                document.getElementById('charCount').textContent = d.comment.length + '/150';
+            }
+        } else { showToast(d.msg || 'AI润色失败', 'danger'); }
+    }).catch(function() { loading.stop(); });
+}
+
+/* AI polish & summarize: use description to generate comment */
+function aiSummarizeComment() {
+    var desc = document.getElementById('reviewDesc').value.trim();
+    var existing = document.getElementById('reviewComment').value.trim();
+    var text = existing || desc;
+    if (!text) { showToast('请先填写描述或评语', 'warning'); return; }
+    var btn = event.target.closest('button');
+    var loading = aiLoading(btn, 'AI润色');
+    checkAI().then(function() {
+        return fetch('{{ url_for("incentive.ai_polish") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+            body: JSON.stringify({text: text, type: 'comment'})
+        });
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        loading.stop();
+        if (d.ok) {
+            document.getElementById('reviewComment').value = d.text;
+            document.getElementById('charCount').textContent = d.text.length + '/150';
+        } else { showToast(d.msg || 'AI润色失败', 'danger'); }
+    }).catch(function() { loading.stop(); });
 }
 
 /* Char count for textarea */

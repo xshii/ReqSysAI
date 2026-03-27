@@ -280,6 +280,34 @@ def batch_public():
     return jsonify(ok=True, count=len(ids))
 
 
+@incentive_bp.route('/ai-summarize-comment', methods=['POST'])
+@login_required
+def ai_summarize_comment():
+    """AI summarize description into a short review comment."""
+    data = request.get_json() or {}
+    desc = (data.get('description') or '').strip()
+    if not desc:
+        return jsonify(ok=False, msg='描述为空')
+    from app.services.ai import call_ollama
+    prompt = (
+        '根据以下激励事迹描述，提炼2~3个关键行为特征作为评语。\n'
+        '要求：\n'
+        '- 每个特征用"；"分隔，单行输出\n'
+        '- 每个特征不超过25个字\n'
+        '- 必须SMART化描述（量化、具体、可衡量）\n'
+        '- 关键词为具体行为，禁止杜撰不存在的数据\n'
+        '- 直接返回评语文本，不要JSON\n'
+        '- 示例：主动攻关推理延迟降低30%；跨团队协作支援移动端联调\n\n'
+        f'事迹描述：{desc}'
+    )
+    result, _ = call_ollama(prompt)
+    comment = result if isinstance(result, str) else str(result)
+    # Trim to 150 chars
+    if len(comment) > 150:
+        comment = comment[:147] + '...'
+    return jsonify(ok=True, comment=comment.strip())
+
+
 @incentive_bp.route('/export-csv')
 @login_required
 def export_csv():
@@ -517,15 +545,34 @@ def update_photo(inc_id):
 @incentive_bp.route('/ai-polish', methods=['POST'])
 @login_required
 def ai_polish():
-    """AI polish review comment."""
+    """AI polish description and/or generate comment.
+    scene=submit: polish desc only (no comment)
+    scene=review: polish desc + generate comment from desc
+    """
     from app.services.ai import call_ollama
-    data = request.get_json()
-    text = (data.get('text') or '').strip() if data else ''
-    if not text:
-        return jsonify(ok=False, msg='请输入评语')
     from app.services.prompts import get_prompt
-    _, raw = call_ollama(get_prompt('incentive_polish_comment') + f'\n{text}')
-    return jsonify(ok=True, text=raw.strip()[:150] if raw else text)
+    data = request.get_json() or {}
+    text = (data.get('text') or '').strip()
+    scene = data.get('scene', 'submit')  # 'submit' or 'review'
+    target = data.get('type', 'comment')  # 'comment' or 'desc'
+
+    if not text:
+        return jsonify(ok=False, msg='请输入内容')
+
+    if target == 'comment':
+        # Generate comment from description text
+        _, raw = call_ollama(get_prompt('incentive_polish_comment') + f'\n{text}')
+        return jsonify(ok=True, text=raw.strip()[:150] if raw else text)
+    else:
+        # Polish description
+        _, raw = call_ollama(get_prompt('incentive_polish_desc') + f'\n{text}')
+        result = {'ok': True, 'text': raw.strip()[:500] if raw else text}
+        # In review scene, also generate comment
+        if scene == 'review':
+            desc_polished = result['text']
+            _, comment_raw = call_ollama(get_prompt('incentive_polish_comment') + f'\n{desc_polished}')
+            result['comment'] = comment_raw.strip()[:150] if comment_raw else ''
+        return jsonify(**result)
 
 
 @incentive_bp.route('/ai-describe', methods=['POST'])
