@@ -137,8 +137,8 @@ def index():
         for r in my_risks if r.is_due_today
     ]
 
-    # Approved incentives: last 2 months excluding recent 7 days; fallback to 3 months if empty
-    inc_end = today - timedelta(days=7)
+    # Approved incentives: last 2 months; fallback to 3 months if empty
+    inc_end = today
     for months in (60, 90):
         inc_start = today - timedelta(days=months)
         approved_incentives = Incentive.query.filter(

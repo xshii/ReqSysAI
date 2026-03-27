@@ -68,7 +68,13 @@ def index():
             Incentive.title.contains(search_q),
             Incentive.description.contains(search_q),
         ))
-    items = q.order_by(Incentive.created_at.desc()).all() if status_filter not in ('funds', 'stats') else []
+    if status_filter not in ('funds', 'stats'):
+        if status_filter == 'approved':
+            items = q.order_by(Incentive.reviewed_at.desc()).all()
+        else:
+            items = q.order_by(Incentive.created_at.desc()).all()
+    else:
+        items = []
 
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
 
@@ -165,8 +171,8 @@ def edit(inc_id):
     if current_user.id != inc.submitted_by and not current_user.is_admin:
         flash('无权限', 'danger')
         return redirect(url_for('incentive.index'))
-    if inc.status not in ('submitted', 'pending'):
-        flash('已通过的激励不可编辑', 'warning')
+    if inc.status not in ('submitted', 'pending', 'approved'):
+        flash('该激励不可编辑', 'warning')
         return redirect(url_for('incentive.index'))
 
     title = request.form.get('title', '').strip()

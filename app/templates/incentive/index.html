@@ -160,7 +160,7 @@
                         data-nominee-ids="{{ inc.nominees|map(attribute='id')|list|join(',') }}"
                         data-public="{{ '1' if inc.is_public else '0' }}">评审</button>
                 {% endif %}
-                {% if (current_user.id == inc.submitted_by or current_user.is_admin) and inc.status in ('submitted', 'pending') %}
+                {% if (current_user.id == inc.submitted_by or current_user.is_admin) and inc.status in ('submitted', 'pending', 'approved') %}
                 <button class="btn btn-sm btn-outline-secondary mt-1 btn-edit-inc"
                         data-bs-toggle="modal" data-bs-target="#editModal"
                         data-inc-id="{{ inc.id }}" data-category="{{ inc.category }}"
