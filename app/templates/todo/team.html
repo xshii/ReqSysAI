@@ -77,10 +77,20 @@
                 {% set r_todos = ud.req_todos.get(r.id, []) %}
                 <div class="mb-2">
                     <div class="d-flex align-items-center gap-1 mb-1">
-                        <span class="badge bg-{{ r.status_color }}" style="font-size:.6em;">{{ r.status_label }}</span>
+                        <select class="form-select form-select-sm req-status-sel" data-req-id="{{ r.id }}" style="width:68px;font-size:.6em;padding:0 .15rem;height:20px;display:inline-block;">
+                            {% for sk, sv in statuses.items() %}
+                            <option value="{{ sk }}" {% if sk == r.status %}selected{% endif %} {% if sk not in r.allowed_next_statuses and sk != r.status %}disabled{% endif %}>{{ sv }}</option>
+                            {% endfor %}
+                        </select>
                         {% if r_todos %}<span class="badge bg-secondary bg-opacity-50" style="font-size:.5em;">{{ r_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ r_todos|length }}</span>{% endif %}
                         {% if r.due_date and r.due_date < today %}<span class="badge bg-danger" style="font-size:.55em;">超期</span>{% endif %}
                         <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="small fw-bold text-primary text-decoration-none" style="overflow:hidden;text-overflow:ellipsis;">{{ r.number }} {{ r.title }}</a>
+                        {% set rpct = 100 if r.status in ('done','closed') else (r.completion or 0) %}
+                        <select class="form-select form-select-sm req-completion-sel" data-req-id="{{ r.id }}" style="width:62px;font-size:.65em;padding:0 .2rem;height:20px;display:inline-block;">
+                            {% for v in range(0, 110, 10) %}
+                            <option value="{{ v }}" {% if v == rpct %}selected{% endif %}>{{ v }}%</option>
+                            {% endfor %}
+                        </select>
                         {% if not r_todos %}<span class="text-muted" style="font-size:.65em;">暂无Todo</span>{% endif %}
                     </div>
                     {% for t in r_todos %}{{ todo_row(t) }}{% endfor %}
@@ -439,6 +449,56 @@ function genStandup() {
         }
     }).catch(function() { loading.stop(); });
 }
+
+/* Requirement status change */
+document.querySelectorAll('.req-status-sel').forEach(function(sel) {
+    sel.addEventListener('change', function() {
+        var reqId = sel.dataset.reqId;
+        var newStatus = sel.value;
+        fetch('/requirements/' + reqId + '/status-api', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({status: newStatus})
+        }).then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.ok) {
+                showToast('状态已更新 → ' + d.label, 'success');
+                // Update allowed options after status change
+                setTimeout(function() { location.reload(); }, 600);
+            } else {
+                showToast(d.msg || '更新失败', 'danger');
+                location.reload();
+            }
+        }).catch(function() { showToast('网络错误', 'danger'); });
+    });
+});
+
+/* Requirement completion change */
+document.querySelectorAll('.req-completion-sel').forEach(function(sel) {
+    sel.addEventListener('change', function() {
+        var reqId = sel.dataset.reqId;
+        var pct = parseInt(sel.value);
+        fetch('/requirements/' + reqId + '/completion-api', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({completion: pct})
+        }).then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.ok) {
+                if (d.status_label) {
+                    var badge = document.querySelector('.req-status-badge[data-req-id="' + reqId + '"]');
+                    if (badge) {
+                        badge.textContent = d.status_label;
+                        badge.className = 'badge bg-' + d.status_color + ' req-status-badge';
+                    }
+                }
+                showToast('进度已更新 ' + pct + '%' + (d.status_label ? ' → ' + d.status_label : ''), 'success');
+            } else {
+                showToast(d.msg || '更新失败', 'danger');
+            }
+        }).catch(function() { showToast('网络错误', 'danger'); });
+    });
+});
 
 // Lazy-init Bootstrap tooltips
 document.addEventListener('mouseover', function(e) {

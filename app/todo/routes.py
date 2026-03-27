@@ -613,4 +613,5 @@ def team():
         reqs=reqs, default_req_ids=default_req_ids, all_users=all_users_list,
         due_options=due_options, help_due_options=help_due_options,
         help_todos=help_todos, req_comments=req_comments, no_group=False,
+        statuses=Requirement.STATUS_LABELS,
     )

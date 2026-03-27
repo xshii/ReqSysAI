@@ -150,6 +150,7 @@ def requirement_progress():
         projects=_visible_projects(),
         statuses=Requirement.STATUS_LABELS,
         cur_status=cur_status, cur_project=cur_project_id,
+        today=date.today(),
     )
 
 

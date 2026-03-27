@@ -92,6 +92,7 @@ def project_list():
 @login_required
 def project_create():
     from app.models.project import MilestoneTemplate
+    from app.models.project_member import ProjectMember
 
     form = ProjectForm()
     form.parent_id.choices = [(0, '-- 无（顶级项目）--')] + [
@@ -128,7 +129,7 @@ def project_create():
         db.session.commit()
         flash(f'项目「{project.name}」创建成功', 'success')
         return redirect(url_for('project.project_detail', project_id=project.id))
-    return render_template('project/form.html', form=form, title='新建项目', templates=templates, today=date.today())
+    return render_template('project/form.html', form=form, title='新建项目', templates=templates, today=date.today(), roles=ProjectMember.DEFAULT_ROLES)
 
 
 @project_bp.route('/milestone-templates', methods=['POST'])

@@ -445,8 +445,26 @@ def requirement_completion_api(req_id):
     if pct < 0 or pct > 100 or pct % 10 != 0:
         return jsonify(ok=False, msg='完成率须为0-100的10的倍数')
     req.completion = pct
+    new_status = None
+    if pct == 100 and req.status not in ('done', 'closed'):
+        allowed = req.allowed_next_statuses
+        # Pick the forward (higher-index) transition
+        _FORWARD = ['pending_review', 'pending_dev', 'in_dev', 'in_test', 'done']
+        cur_idx = _FORWARD.index(req.status) if req.status in _FORWARD else -1
+        for target in _FORWARD[cur_idx + 1:]:
+            if target in allowed:
+                old_status = req.status
+                req.status = target
+                new_status = target
+                _log_activity(req, 'status', f'{old_status} → {target}（完成率100%自动推进）')
+                from app.services.events import fire, requirement_status_changed
+                fire(requirement_status_changed, requirement=req, old_status=old_status, new_status=target)
+                break
     db.session.commit()
-    return jsonify(ok=True, completion=pct)
+    resp = dict(ok=True, completion=pct)
+    if new_status:
+        resp.update(status=new_status, status_label=req.status_label, status_color=req.status_color)
+    return jsonify(resp)
 
 
 def _load_project_reqs(project_id):
