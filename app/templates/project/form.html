@@ -235,7 +235,7 @@
                         <td class="text-muted member-drag-handle" style="cursor:grab;" draggable="true"><i class="bi bi-grip-vertical"></i></td>
                         <td class="small">{{ m.display_name }}{% if m.user and m.user.group %} <span class="text-muted">({{ m.user.group }})</span>{% endif %}</td>
                         <td>
-                            <input type="text" class="form-control form-control-sm d-inline member-role-input" data-mid="{{ m.id }}" list="roleOpt{{ m.id }}" style="max-width:80px;" value="{{ m.project_role }}">
+                            <input type="text" class="form-control form-control-sm d-inline member-role-input" data-mid="{{ m.id }}" list="roleOpt{{ m.id }}" style="max-width:160px;" value="{{ m.project_role }}">
                             <datalist id="roleOpt{{ m.id }}">
                                 {% for k, v in roles.items() %}<option value="{{ k }}" label="{{ k }} - {{ v }}">{% endfor %}
                             </datalist>
@@ -547,21 +547,23 @@ function filterAvailUsers() {
     var q = input ? input.value.toLowerCase() : '';
     var visible = 0, total = 0;
     list.querySelectorAll('.avail-user-row').forEach(function(row) {
-        if (row.dataset.added) return;  // already added as member
+        if (row.dataset.added) { row.classList.add('d-none'); return; }
         total++;
         var matchGroup = !g || row.dataset.group === g;
         var matchSearch = !q || (row.dataset.name || '').toLowerCase().includes(q)
             || (row.dataset.eid || '').toLowerCase().includes(q)
             || (row.dataset.pinyin || '').toLowerCase().includes(q);
         var show = matchGroup && matchSearch;
-        row.style.display = show ? '' : 'none';
-        if (show) visible++;
+        if (show) { row.classList.remove('d-none'); visible++; }
+        else { row.classList.add('d-none'); }
     });
     if (countEl) countEl.textContent = (g || q) ? '匹配 ' + visible + ' / ' + total + ' 人' : '共 ' + total + ' 人';
 }
 // Bind filter events
-document.getElementById('availGroupFilter').addEventListener('change', filterAvailUsers);
-document.getElementById('availUserSearch').addEventListener('input', filterAvailUsers);
+var _gf = document.getElementById('availGroupFilter');
+var _us = document.getElementById('availUserSearch');
+if (_gf) _gf.addEventListener('change', filterAvailUsers);
+if (_us) _us.addEventListener('input', filterAvailUsers);
 // Initial filter
 filterAvailUsers();
 // Re-filter when switching to members tab
@@ -569,11 +571,11 @@ var _membersTab = document.querySelector('a[href="#tabMembers"], button[data-bs-
 if (_membersTab) _membersTab.addEventListener('shown.bs.tab', filterAvailUsers);
 
 // AJAX member operations
-var _memberAjaxUrl = '{{ url_for("project.member_ajax", project_id=project.id) if is_edit else "" }}';
+var _memberAjaxUrl = '{{ url_for("project.member_ajax", project_id=project.id) if project is defined and project else "" }}';
 
 function ajaxAddMember(name, role, btn) {
     if (!_memberAjaxUrl) return;
-    apiPost(_memberAjaxUrl, {action: 'add', member_name: name, project_role: role || 'DEV'}).then(function(d) {
+    apiPost(_memberAjaxUrl, {action: 'add', member_name: name, project_role: role}).then(function(d) {
         if (d.ok) {
             // Add row to member table
             var tbody = document.querySelector('#memberTable tbody');
@@ -592,11 +594,12 @@ function ajaxAddMember(name, role, btn) {
             var m = d.member;
             var tr = document.createElement('tr');
             tr.dataset.mid = m.id;
-            tr.innerHTML = '<td class="text-muted"><i class="bi bi-grip-vertical"></i></td>'
+            tr.innerHTML = '<td class="text-muted member-drag-handle" style="cursor:grab;" draggable="true"><i class="bi bi-grip-vertical"></i></td>'
                 + '<td class="small">' + m.name + (m.group ? ' <span class="text-muted">(' + m.group + ')</span>' : '') + '</td>'
-                + '<td><span class="small">' + m.role + '</span></td>'
+                + '<td><input type="text" class="form-control form-control-sm d-inline member-role-input" data-mid="' + m.id + '" list="roleOpt' + m.id + '" style="max-width:160px;" value="' + m.role + '">'
+                + '<datalist id="roleOpt' + m.id + '">{% for k, v in roles.items() %}<option value="{{ k }}" label="{{ k }} - {{ v }}">{% endfor %}</datalist></td>'
                 + '<td><button class="btn btn-sm p-0 border-0 bg-transparent btn-toggle-key" data-mid="' + m.id + '"><i class="bi bi-' + (m.is_key ? 'star-fill text-warning' : 'star text-muted') + '"></i></button></td>'
-                + '<td><button class="btn btn-sm btn-outline-danger py-0 btn-remove-member" data-mid="' + m.id + '"><i class="bi bi-x"></i></button></td>';
+                + '<td><button class="btn btn-sm btn-outline-danger py-0 btn-remove-member" data-mid="' + m.id + '" data-uid="' + (m.user_id || '') + '"><i class="bi bi-x"></i></button></td>';
             tbody.appendChild(tr);
             // Update member count
             var countLabel = document.querySelector('#tabMembers .fw-bold.small');
@@ -607,8 +610,9 @@ function ajaxAddMember(name, role, btn) {
             // Hide from available list
             if (btn) {
                 var row = btn.closest('.avail-user-row');
-                if (row) { row.dataset.added = '1'; row.style.display = 'none'; }
+                if (row) { row.dataset.added = '1'; row.classList.add('d-none'); }
             }
+            filterAvailUsers();
             showToast(m.name + ' 已添加', 'success');
         } else {
             showToast(d.msg || '添加失败', 'danger');
@@ -635,7 +639,29 @@ document.addEventListener('click', function(e) {
                 // Show back in available list if internal user
                 if (d.user_id) {
                     var row = document.querySelector('.avail-user-row[data-uid="' + d.user_id + '"]');
-                    if (row) { delete row.dataset.added; }
+                    if (row) {
+                        delete row.dataset.added;
+                        row.classList.remove('d-none');
+                    } else {
+                        // User was a member at page load — create avail row dynamically
+                        var list = document.getElementById('availUserList');
+                        if (list) {
+                            var newRow = document.createElement('div');
+                            newRow.className = 'd-flex align-items-center gap-2 py-1 px-2 avail-user-row border-bottom';
+                            newRow.dataset.name = d.name;
+                            newRow.dataset.eid = d.eid || '';
+                            newRow.dataset.pinyin = d.pinyin || '';
+                            newRow.dataset.group = d.group || '未分组';
+                            newRow.dataset.uid = d.user_id;
+                            newRow.innerHTML = '<button class="btn btn-sm p-0 border-0 bg-transparent btn-add-member" title="添加" data-name="' + d.name + '"><i class="bi bi-plus-circle text-primary"></i></button>'
+                                + '<span>' + d.name + '</span>'
+                                + '<span class="text-muted">' + (d.eid || '') + (d.group ? ' · ' + d.group : '') + '</span>';
+                            newRow.querySelector('.btn-add-member').addEventListener('click', function() {
+                                ajaxAddMember(d.name, '', this);
+                            });
+                            list.appendChild(newRow);
+                        }
+                    }
                 }
                 filterAvailUsers();
                 showToast(d.name + ' 已移除', 'info');

@@ -614,7 +614,7 @@
     <script>
     (function() {
         var MGR_KEY = 'mgr_view', MGR_TS_KEY = 'mgr_view_ts', MGR_PWD_KEY = 'mgr_pwd';
-        var EXPIRE_MS = 6 * 3600 * 1000;
+        var EXPIRE_MS = 2 * 3600 * 1000;
 
         // Page load: check with 6h expiry
         function isOpenOnLoad() {
@@ -642,7 +642,7 @@
             if (icon) icon.className = open ? 'bi bi-eye' : 'bi bi-eye-slash';
             if (btn) { btn.className = 'btn btn-sm border-0'; btn.style.fontSize = '.85em'; btn.style.opacity = open ? '1' : '.4'; btn.style.color = open ? '#ffc107' : '#fff'; }
             // Sync to cookie so server can filter hidden projects
-            document.cookie = 'mgr_view=' + (open ? '1' : '0') + ';path=/;max-age=86400;SameSite=Lax';
+            document.cookie = 'mgr_view=' + (open ? '1' : '0') + ';path=/;max-age=7200;SameSite=Lax';
         }
 
         function getSavedPwd() { return localStorage.getItem(MGR_PWD_KEY) || ''; }
@@ -651,7 +651,7 @@
             if (isCurrentlyOpen()) {
                 localStorage.removeItem(MGR_KEY);
                 localStorage.removeItem(MGR_TS_KEY);
-                document.cookie = 'mgr_view=0;path=/;max-age=86400';
+                document.cookie = 'mgr_view=0;path=/;max-age=7200';
                 location.reload();
                 return;
             }
@@ -695,7 +695,7 @@
             }
             localStorage.setItem(MGR_KEY, '1');
             localStorage.setItem(MGR_TS_KEY, String(Date.now()));
-            document.cookie = 'mgr_view=1;path=/;max-age=86400';
+            document.cookie = 'mgr_view=1;path=/;max-age=7200';
             location.reload();
         };
 

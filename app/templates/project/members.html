@@ -60,14 +60,9 @@
             {% endif %}
         </td>
         <td>
-            <form method="POST" class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="action" value="toggle_key">
-                <input type="hidden" name="member_id" value="{{ m.id }}">
-                <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent">
-                    <i class="bi bi-{{ 'star-fill text-warning' if m.is_key else 'star text-muted' }}"></i>
-                </button>
-            </form>
+            <button class="btn btn-sm p-0 border-0 bg-transparent btn-toggle-key" data-mid="{{ m.id }}" style="cursor:pointer;font-size:1.1em;">
+                <i class="bi bi-{{ 'star-fill text-warning' if m.is_key else 'star text-muted' }}"></i>
+            </button>
         </td>
         {% if can_edit %}
         <td>
@@ -86,4 +81,20 @@
 {% else %}
 <div class="text-muted small">暂无成员</div>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.btn-toggle-key');
+    if (!btn) return;
+    var mid = parseInt(btn.dataset.mid);
+    apiPost('{{ url_for("project.member_ajax", project_id=project.id) }}', {action: 'toggle_key', member_id: mid}).then(function(d) {
+        if (d.ok) {
+            var icon = btn.querySelector('i');
+            icon.className = 'bi bi-' + (d.is_key ? 'star-fill text-warning' : 'star text-muted');
+        }
+    });
+});
+</script>
 {% endblock %}

@@ -31,13 +31,16 @@ def member_list(project_id):
             member_name = request.form.get('member_name', '').strip()
             role = request.form.get('project_role', '').strip()
             if member_name:
+                max_order = db.session.query(db.func.max(ProjectMember.sort_order))\
+                    .filter_by(project_id=project_id).scalar() or 0
                 # Try to find internal user by name
                 user = User.query.filter_by(name=member_name, is_active=True).first()
                 if user:
                     if not role:
                         role = _default_project_role(user)
                     if not ProjectMember.query.filter_by(project_id=project_id, user_id=user.id).first():
-                        db.session.add(ProjectMember(project_id=project_id, user_id=user.id, project_role=role))
+                        db.session.add(ProjectMember(project_id=project_id, user_id=user.id,
+                                                     project_role=role, sort_order=max_order + 1))
                         db.session.commit()
                         flash(f'{user.name} 已添加', 'success')
                     else:
@@ -45,7 +48,8 @@ def member_list(project_id):
                 else:
                     # External member
                     if not ProjectMember.query.filter_by(project_id=project_id, external_name=member_name).first():
-                        db.session.add(ProjectMember(project_id=project_id, external_name=member_name, project_role=role))
+                        db.session.add(ProjectMember(project_id=project_id, external_name=member_name,
+                                                     project_role=role, sort_order=max_order + 1))
                         db.session.commit()
                         flash(f'外部成员 {member_name} 已添加', 'success')
         elif action == 'remove':
@@ -98,13 +102,17 @@ def member_ajax(project_id):
         role = (data.get('project_role') or '').strip()
         if not member_name:
             return jsonify(ok=False, msg='请输入成员名')
+        # New member goes to end
+        max_order = db.session.query(db.func.max(ProjectMember.sort_order))\
+            .filter_by(project_id=project_id).scalar() or 0
         user = User.query.filter_by(name=member_name, is_active=True).first()
         if user:
             if not role:
                 role = _default_project_role(user)
             if ProjectMember.query.filter_by(project_id=project_id, user_id=user.id).first():
                 return jsonify(ok=False, msg=f'{user.name} 已在项目中')
-            m = ProjectMember(project_id=project_id, user_id=user.id, project_role=role)
+            m = ProjectMember(project_id=project_id, user_id=user.id, project_role=role,
+                              sort_order=max_order + 1)
             db.session.add(m)
             db.session.commit()
             return jsonify(ok=True, member={
@@ -114,7 +122,8 @@ def member_ajax(project_id):
         else:
             if ProjectMember.query.filter_by(project_id=project_id, external_name=member_name).first():
                 return jsonify(ok=False, msg=f'{member_name} 已在项目中')
-            m = ProjectMember(project_id=project_id, external_name=member_name, project_role=role)
+            m = ProjectMember(project_id=project_id, external_name=member_name, project_role=role,
+                              sort_order=max_order + 1)
             db.session.add(m)
             db.session.commit()
             return jsonify(ok=True, member={
@@ -127,9 +136,13 @@ def member_ajax(project_id):
         if m and m.project_id == project_id:
             uid = m.user_id
             name = m.display_name
+            user = m.user
+            eid = user.employee_id if user else ''
+            group = user.group if user else ''
+            pinyin = user.pinyin if user else ''
             db.session.delete(m)
             db.session.commit()
-            return jsonify(ok=True, user_id=uid, name=name)
+            return jsonify(ok=True, user_id=uid, name=name, eid=eid, group=group, pinyin=pinyin)
         return jsonify(ok=False, msg='成员不存在')
     elif action == 'role':
         member_id = data.get('member_id')

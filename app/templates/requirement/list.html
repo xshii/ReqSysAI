@@ -56,6 +56,23 @@
             {% else %}
             <input type="hidden" name="project_id" value="{{ cur_project }}">
             {% endif %}
+            {% if cur_project %}
+            <input type="hidden" name="include_sub" value="{{ '1' if include_sub else '0' }}" id="hiddenIncludeSub">
+            <div class="col-auto">
+                <button type="button" class="btn btn-sm {{ 'btn-info' if include_sub else 'btn-outline-info' }}" title="包含子项目需求" onclick="var h=document.getElementById('hiddenIncludeSub');h.value=h.value==='1'?'0':'1';this.closest('form').submit();">
+                    <i class="bi bi-diagram-3"></i> 含子项目
+                </button>
+            </div>
+            {% endif %}
+            <div class="col-auto">
+                <select name="assignee_id" class="form-select form-select-sm">
+                    <option value="">全部负责人</option>
+                    <option value="0" {% if cur_assignee == 0 %}selected{% endif %}>未分配</option>
+                    {% for u in users %}
+                    <option value="{{ u.id }}" {% if cur_assignee == u.id %}selected{% endif %}>{{ u.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <div class="col-auto">
                 <select name="sort" class="form-select form-select-sm">
                     <option value="urgency" {% if cur_sort in ('urgency', 'newest') %}selected{% endif %}>按紧急度</option>
@@ -102,7 +119,7 @@
                 <td><a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}">{{ r.title }}</a></td>
                 <td><span class="text-muted small">{{ r.project.name }}</span></td>
                 <td><span class="badge bg-{{ r.priority_color }}">{{ r.priority_label }}</span></td>
-                <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span> <span class="badge bg-light text-secondary border" style="font-size:.7em;">{{ r.source_label }}</span></td>
+                <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span> <span class="badge bg-light text-secondary border" style="font-size:.7em;">{{ r.source_label }}</span>{% if r.due_date and r.due_date < today and r.status not in ('done','closed') %} <span class="badge bg-danger" style="font-size:.65em;">超期{{ (today - r.due_date).days }}天</span>{% endif %}</td>
                 <td>{{ r.assignee_display }}</td>
                 <td>
                     {% set pct = 100 if r.status in ('done','closed') else (r.completion or 0) %}

@@ -28,6 +28,18 @@ from app.services.statistics import (
 )
 
 
+def _merge_member_roles(members):
+    """Merge roles for same person across projects, deduplicated."""
+    from collections import OrderedDict
+    result = OrderedDict()
+    for m in members:
+        name = m.display_name
+        if name not in result:
+            result[name] = set()
+        result[name].add(m.role_label)
+    return {name: '/'.join(sorted(roles)) for name, roles in result.items()}
+
+
 def _urgency_sort(reqs, limit=None):
     """Sort requirements: overdue → active(urgency desc) → done(ahead days desc)."""
     today_ = date.today()
@@ -275,7 +287,17 @@ def weekly_report():
     offset = request.args.get('week', 0, type=int)
     cur_project_id = request.args.get('project_id', type=int)
     cur_project_id, cur_project = _guard_hidden_project(cur_project_id)
+    # Default: include_sub=1 for parent projects, 0 for child projects
+    has_children = cur_project and cur_project.children
+    is_child = cur_project and cur_project.parent_id
+    default_sub = '1' if has_children and not is_child else '0'
+    include_sub = request.args.get('include_sub', default_sub) == '1'
     monday, sunday = week_range(offset)
+
+    # Build project ID list (current + children if include_sub)
+    sub_project_ids = []
+    if include_sub and cur_project and cur_project.children:
+        sub_project_ids = [c.id for c in cur_project.children]
 
     if request.method == 'POST':
         WR_check = WeeklyReport
@@ -285,13 +307,14 @@ def weekly_report():
             return redirect(url_for('dashboard.weekly_report', week=offset, project_id=cur_project_id))
 
         # 1. Completed todos this week
+        all_pids = [cur_project_id] + sub_project_ids
         done_q = Todo.query.filter(
             Todo.done_date >= monday, Todo.done_date <= sunday,
         ).options(joinedload(Todo.user), joinedload(Todo.requirements))
         if cur_project_id:
             done_q = done_q.join(todo_requirements, Todo.id == todo_requirements.c.todo_id)\
                            .join(Requirement, Requirement.id == todo_requirements.c.requirement_id)\
-                           .filter(Requirement.project_id == cur_project_id)
+                           .filter(Requirement.project_id.in_(all_pids))
         todos_done = done_q.all()
 
         # 2. Still active todos
@@ -301,7 +324,7 @@ def weekly_report():
         if cur_project_id:
             active_q = active_q.join(todo_requirements, Todo.id == todo_requirements.c.todo_id)\
                                .join(Requirement, Requirement.id == todo_requirements.c.requirement_id)\
-                               .filter(Requirement.project_id == cur_project_id)
+                               .filter(Requirement.project_id.in_(all_pids))
         todos_active = active_q.all()
 
         # 3. Requirement changes
@@ -310,7 +333,7 @@ def weekly_report():
             Requirement.updated_at <= sunday + timedelta(days=1),
         )
         if cur_project_id:
-            req_q = req_q.filter_by(project_id=cur_project_id)
+            req_q = req_q.filter(Requirement.project_id.in_(all_pids))
         req_changes = req_q.all()
 
         # 4. Per-requirement investment: count distinct people and todo-days
@@ -332,8 +355,13 @@ def weekly_report():
         # 5. All requirements overview (for project scope)
         req_overview_q = Requirement.query.filter(Requirement.parent_id.is_(None))
         if cur_project_id:
-            req_overview_q = req_overview_q.filter_by(project_id=cur_project_id)
+            all_pids = [cur_project_id] + sub_project_ids
+            req_overview_q = req_overview_q.filter(Requirement.project_id.in_(all_pids))
         all_reqs = _urgency_sort(req_overview_q.all(), limit=50)
+        # When include_sub, group by project: parent project first, then children
+        if sub_project_ids:
+            pid_order = {pid: i for i, pid in enumerate(all_pids)}
+            all_reqs.sort(key=lambda r: pid_order.get(r.project_id, 999))
 
         # 6. Per-person stats this week
         from collections import Counter
@@ -380,7 +408,8 @@ def weekly_report():
                     done_children = sum(1 for c in r.children if c.status in REQ_INACTIVE_STATUSES)
                     children_str = f'，子需求 {done_children}/{len(r.children)} 完成'
                 assignee = r.assignee_display
-                lines.append(f'- [{r.number}] {r.title}（{r.status_label}，{assignee}{days_str}{due_str}{children_str}）{overdue}')
+                proj_tag = f'[{r.project.name}] ' if sub_project_ids and r.project else ''
+                lines.append(f'- {proj_tag}[{r.number}] {r.title}（{r.status_label}，{assignee}{days_str}{due_str}{children_str}）{overdue}')
                 for c in (r.children or []):
                     c_due = f'，预期 {c.due_date.strftime("%m-%d")}' if c.due_date else ''
                     c_days = f'，预估 {c.estimate_days}人天' if c.estimate_days else ''
@@ -404,8 +433,17 @@ def weekly_report():
         # Open risks from DB (needed for both prompt context and template)
         risk_q = Risk.query.filter_by(status='open').filter(Risk.deleted_at.is_(None))
         if cur_project_id:
-            risk_q = risk_q.filter_by(project_id=cur_project_id)
+            all_pids = [cur_project_id] + sub_project_ids
+            risk_q = risk_q.filter(Risk.project_id.in_(all_pids))
         open_risks = risk_q.order_by(Risk.severity, Risk.due_date).all()
+
+        # Recently closed risks (last 14 days)
+        two_weeks_ago = monday - timedelta(days=14)
+        closed_risk_q = Risk.query.filter(Risk.status.in_(['resolved', 'closed']),
+            Risk.updated_at >= two_weeks_ago, Risk.deleted_at.is_(None))
+        if cur_project_id:
+            closed_risk_q = closed_risk_q.filter(Risk.project_id.in_(all_pids))
+        recent_closed_risks = closed_risk_q.order_by(Risk.updated_at.desc()).all()
 
         if open_risks:
             lines.append('\n风险&问题（未解决）：')
@@ -507,11 +545,12 @@ def weekly_report():
                 pass
 
         # Smart requirement list: multi-tier filtering
-        display_reqs = list(all_reqs)
         all_with_children = []
         for r in all_reqs:
             all_with_children.append(r)
             all_with_children.extend(r.children or [])
+        # Full mode: include parents + all children
+        display_reqs = list(all_with_children)
         req_list_mode = 'full'  # full / diff_assignee / parent_only / priority
 
         if len(all_with_children) > 40:
@@ -538,7 +577,8 @@ def weekly_report():
         sub_projects = _build_sub_projects(cur_project, monday)
 
         # Risk stats & domain stats for report
-        all_project_risks = Risk.query.filter_by(project_id=cur_project_id).filter(Risk.deleted_at.is_(None)).all() if cur_project_id else open_risks
+        # Stats scope: open + recently closed (2 weeks)
+        all_project_risks = list(open_risks) + list(recent_closed_risks)
         risk_stats = {
             'total': len(all_project_risks),
             'open': sum(1 for r in all_project_risks if r.status == 'open'),
@@ -559,7 +599,7 @@ def weekly_report():
             domain_stats[domain]['total'] += 1
             if r.status == 'open':
                 domain_stats[domain]['open'] += 1
-        domain_stats = {k: v for k, v in sorted(domain_stats.items(), key=lambda x: (-x[1]['open'], -x[1]['total'])) if v['open'] > 0}
+        domain_stats = {k: v for k, v in sorted(domain_stats.items(), key=lambda x: (-x[1]['open'], -x[1]['total']))}
 
         # Weighted completion progress
         _active = [r for r in all_reqs if r.status != 'closed']
@@ -585,11 +625,12 @@ def weekly_report():
             'todos_done': todos_done,
             'todos_active': todos_active,
             'open_risks': open_risks,
+            'recent_closed_risks': recent_closed_risks,
             'risk_stats': risk_stats,
             'domain_stats': domain_stats,
             'people_map': people_map,
             'people_map_reqs': people_map_reqs,
-            'people_roles': {m.display_name: m.role_label for m in ProjectMember.query.filter_by(project_id=cur_project_id).all()},
+            'people_roles': _merge_member_roles(ProjectMember.query.filter(ProjectMember.project_id.in_([cur_project_id] + sub_project_ids)).all()),
             'ai': ai_analysis,
             'sub_projects': sub_projects,
             'timeline_img': timeline_img,
@@ -619,6 +660,7 @@ def weekly_report():
             report_data=report_data, saved_report=saved,
             monday=monday, sunday=sunday, offset=offset,
             cur_project=cur_project, cur_project_id=cur_project_id or 0,
+            include_sub=include_sub,
             default_to=_def_to, default_cc=_def_cc,
         )
 
@@ -638,8 +680,12 @@ def weekly_report():
         # Requirements
         req_overview_q = Requirement.query.filter(Requirement.parent_id.is_(None))
         if cur_project_id:
-            req_overview_q = req_overview_q.filter_by(project_id=cur_project_id)
+            all_pids = [cur_project_id] + sub_project_ids
+            req_overview_q = req_overview_q.filter(Requirement.project_id.in_(all_pids))
         all_reqs = _urgency_sort(req_overview_q.all(), limit=50)
+        if sub_project_ids:
+            pid_order = {pid: i for i, pid in enumerate(all_pids)}
+            all_reqs.sort(key=lambda r: pid_order.get(r.project_id, 999))
 
         # Todos
         done_q = Todo.query.filter(Todo.done_date >= monday, Todo.done_date <= sunday)\
@@ -669,8 +715,17 @@ def weekly_report():
 
         risk_q = Risk.query.filter_by(status='open').filter(Risk.deleted_at.is_(None))
         if cur_project_id:
-            risk_q = risk_q.filter_by(project_id=cur_project_id)
+            all_pids = [cur_project_id] + sub_project_ids
+            risk_q = risk_q.filter(Risk.project_id.in_(all_pids))
         open_risks = risk_q.order_by(Risk.severity, Risk.due_date).all()
+
+        # Recently closed risks (last 14 days)
+        two_weeks_ago = monday - timedelta(days=14)
+        closed_risk_q = Risk.query.filter(Risk.status.in_(['resolved', 'closed']),
+            Risk.updated_at >= two_weeks_ago, Risk.deleted_at.is_(None))
+        if cur_project_id:
+            closed_risk_q = closed_risk_q.filter(Risk.project_id.in_(all_pids))
+        recent_closed_risks = closed_risk_q.order_by(Risk.updated_at.desc()).all()
 
         # Reviewer: PL of current user's group; if user is PL, then XM; fallback to manager
         reviewer = ''
@@ -720,8 +775,8 @@ def weekly_report():
                     'summary': child_saved.summary if child_saved and child_saved.summary else None,
                 })
 
-        # Risk stats & domain stats for saved report
-        all_project_risks2 = Risk.query.filter_by(project_id=cur_project_id).filter(Risk.deleted_at.is_(None)).all() if cur_project_id else open_risks
+        # Risk stats & domain stats for saved report (open + recently closed)
+        all_project_risks2 = list(open_risks) + list(recent_closed_risks)
         risk_stats2 = {
             'total': len(all_project_risks2),
             'open': sum(1 for r in all_project_risks2 if r.status == 'open'),
@@ -759,7 +814,10 @@ def weekly_report():
             'sunday': sunday,
             'reviewer': reviewer,
             'milestones': milestones,
-            'all_reqs': all_reqs, 'display_reqs': all_reqs, 'req_list_mode': 'full', 'req_total_with_children': 0,
+            'all_reqs': all_reqs,
+            'display_reqs': [item for r in all_reqs for item in [r] + (r.children or [])],
+            'req_list_mode': 'full',
+            'req_total_with_children': sum(1 + len(r.children or []) for r in all_reqs),
             'req_investment': req_investment,
             'completion_weighted': completion_weighted2,
             'person_done': dict(person_done),
@@ -768,11 +826,12 @@ def weekly_report():
             'todos_done': todos_done,
             'todos_active': todos_active,
             'open_risks': open_risks,
+            'recent_closed_risks': recent_closed_risks,
             'risk_stats': risk_stats2,
             'domain_stats': domain_stats2,
             'people_map': people_map,
             'people_map_reqs': people_map_reqs,
-            'people_roles': {m.display_name: m.role_label for m in ProjectMember.query.filter_by(project_id=cur_project_id).all()},
+            'people_roles': _merge_member_roles(ProjectMember.query.filter(ProjectMember.project_id.in_([cur_project_id] + sub_project_ids)).all()),
             'ai': ai_analysis,
             'sub_projects': sub_projects,
         }
@@ -793,6 +852,7 @@ def weekly_report():
             report_data=report_data, saved_report=saved,
             monday=monday, sunday=sunday, offset=offset,
             cur_project=cur_project, cur_project_id=cur_project_id or 0,
+            include_sub=include_sub,
             default_to=_def_to, default_cc=_def_cc,
         )
 
@@ -801,6 +861,7 @@ def weekly_report():
         report_data=None, saved_report=None,
         monday=monday, sunday=sunday, offset=offset,
         cur_project=cur_project, cur_project_id=cur_project_id or 0,
+        include_sub=include_sub,
         default_to=_def_to, default_cc=_def_cc,
     )
 
@@ -1014,7 +1075,7 @@ def weekly_report_export():
     # Requirements
     if all_reqs:
         write_section('需求进展')
-        write_table_header(['编号', '标题', '状态', '负责人', '预估(人天)', '预期完成', '本周投入'])
+        write_table_header(['标题', '状态', '负责人', '预估(人天)', '预期开始', '预期完成', '本周投入'])
         for r in all_reqs:
             inv = req_investment.get(r.number)
             invest_str = f'{len(inv["people"])}人·{inv["days"]}天' if inv else '-'
@@ -1024,11 +1085,11 @@ def weekly_report_export():
                 children_str = f' ({dc}/{len(r.children)})'
             overdue = ' [超期]' if (r.due_date and r.due_date < date.today() and r.status not in REQ_INACTIVE_STATUSES) else ''
             write_table_row([
-                r.number,
                 r.title + children_str,
                 r.status_label + overdue,
                 r.assignee_display,
                 r.estimate_days or '-',
+                r.start_date.strftime('%m-%d') if r.start_date else '-',
                 r.due_date.strftime('%m-%d') if r.due_date else '-',
                 invest_str,
             ])

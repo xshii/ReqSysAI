@@ -47,6 +47,7 @@ def requirement_list():
     status = request.args.get('status')
     priority = request.args.get('priority')
     project_id = request.args.get('project_id', type=int)
+    include_sub = request.args.get('include_sub', '1') == '1'
     assignee_id = request.args.get('assignee_id', type=int)
     search = request.args.get('q', '').strip()
     sort = request.args.get('sort', 'newest')
@@ -56,8 +57,14 @@ def requirement_list():
     if priority:
         query = query.filter_by(priority=priority)
     if project_id:
-        query = query.filter_by(project_id=project_id)
-    if assignee_id:
+        if include_sub:
+            child_ids = [c.id for c in Project.query.filter_by(parent_id=project_id).all()]
+            query = query.filter(Requirement.project_id.in_([project_id] + child_ids))
+        else:
+            query = query.filter_by(project_id=project_id)
+    if assignee_id is not None and assignee_id == 0:
+        query = query.filter(Requirement.assignee_id.is_(None), Requirement.assignee_name.is_(None))
+    elif assignee_id:
         query = query.filter_by(assignee_id=assignee_id)
     if search:
         query = query.filter(
@@ -134,15 +141,30 @@ def requirement_list():
             except Exception:
                 pass
 
+    # Assignee filter: project members if project selected, else all users
+    if project_id:
+        from app.models.project_member import ProjectMember
+        if include_sub:
+            child_ids = [c.id for c in Project.query.filter_by(parent_id=project_id).all()]
+            member_uids = list({m.user_id for m in ProjectMember.query.filter(
+                ProjectMember.project_id.in_([project_id] + child_ids)).all() if m.user_id})
+        else:
+            member_uids = [m.user_id for m in ProjectMember.query.filter_by(project_id=project_id).all() if m.user_id]
+        filter_users = User.query.filter(User.id.in_(member_uids)).order_by(User.name).all() if member_uids else []
+    else:
+        filter_users = User.query.filter_by(is_active=True).order_by(User.name).all()
+
     return render_template('requirement/list.html',
         pagination=pagination, requirements=pagination.items,
         projects=[p for p in Project.query.all() if not p.is_hidden or current_user.is_team_manager],
-        users=User.query.filter_by(is_active=True).all(),
+        users=filter_users,
         statuses=Requirement.STATUS_LABELS, priorities=Requirement.PRIORITY_LABELS,
         cur_status=status, cur_priority=priority, cur_project=project_id,
         cur_assignee=assignee_id, cur_search=search, cur_sort=sort,
+        include_sub=include_sub,
         todo_counts=todo_counts, ai_ratio_weighted=ai_ratio_weighted,
         completion_weighted=completion_weighted, saved_diag=saved_diag,
+        today=today_,
     )
 
 
@@ -703,12 +725,20 @@ def requirement_board():
     for col_reqs in board.values():
         col_reqs.sort(key=lambda r: r.completion or 0)
 
+    # Assignee filter: project members if project selected, else all users
+    if project_id:
+        from app.models.project_member import ProjectMember as PM_
+        member_uids = [m.user_id for m in PM_.query.filter_by(project_id=project_id).all() if m.user_id]
+        board_users = User.query.filter(User.id.in_(member_uids)).order_by(User.name).all() if member_uids else []
+    else:
+        board_users = User.query.filter_by(is_active=True).order_by(User.name).all()
+
     return render_template('requirement/board.html',
         board=board, columns=columns, show_sub=show_sub,
         status_meta=Requirement._STATUS_META,
         projects=[p for p in Project.query.filter_by(status='active').all()
                   if not p.is_hidden or current_user.is_team_manager],
-        users=User.query.filter_by(is_active=True).order_by(User.name).all(),
+        users=board_users,
         cur_project=project_id, cur_assignee=assignee_id, swimlane=swimlane,
         today=date.today(),
     )
@@ -914,9 +944,10 @@ def ai_quality_check():
 
 
 def _build_requirement_form(obj=None):
+    from app.project.routes import _mgr_view_open
     form = RequirementForm(obj=obj)
     projects = Project.query.filter_by(status='active')
-    if not current_user.is_team_manager:
+    if not _mgr_view_open():
         projects = projects.filter_by(is_hidden=False)
     form.project_id.choices = [(p.id, p.name) for p in projects.all()]
     form.assignee_id.choices = [(0, '-- 未分配 --')] + [

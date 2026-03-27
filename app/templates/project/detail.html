@@ -117,6 +117,389 @@
     </div>
 </div>
 
+<!-- Gantt Chart -->
+{% if gantt %}
+<div class="card mb-3">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span class="small fw-bold"><i class="bi bi-bar-chart-steps"></i> 需求甘特图</span>
+        <div class="d-flex gap-1 align-items-center flex-wrap">
+            <input type="date" id="ganttStart" class="form-control form-control-sm py-0" style="width:115px;font-size:.72em;" value="{{ gantt.start.strftime('%Y-%m-%d') }}" onchange="debouncedFilterGantt()">
+            <span class="text-muted" style="font-size:.7em;">~</span>
+            <input type="date" id="ganttEnd" class="form-control form-control-sm py-0" style="width:115px;font-size:.72em;" value="{{ gantt.end.strftime('%Y-%m-%d') }}" onchange="debouncedFilterGantt()">
+            <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-secondary py-0 gantt-scale-btn active" style="font-size:.72em;" data-scale="day" onclick="setGanttScale('day',this)">日</button>
+                <button class="btn btn-outline-secondary py-0 gantt-scale-btn" style="font-size:.72em;" data-scale="week" onclick="setGanttScale('week',this)">周</button>
+            </div>
+            <select class="form-select form-select-sm py-0" style="width:80px;font-size:.72em;" id="ganttShow" onchange="filterGanttRows()">
+                <option value="all">全部</option>
+                <option value="parent">父需求</option>
+                <option value="child">子需求</option>
+            </select>
+            <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.72em;" onclick="toggleGanttFullscreen()" title="全屏"><i class="bi bi-fullscreen"></i></button>
+            <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.72em;" onclick="resetGantt()">重置</button>
+        </div>
+    </div>
+    <div class="card-body p-0" id="ganttBody" style="overflow-x:auto;padding-bottom:12px !important;">
+        {% set g_start = gantt.start %}
+        {% set g_days = gantt.days %}
+        {% set col_w = 24 %}
+        {% set bar_h = 20 %}
+        <table class="table table-sm table-bordered mb-0" style="min-width:{{ 80 + g_days * col_w }}px;table-layout:fixed;font-size:.7em;">
+            <thead class="table-light">
+                <tr>
+                    <th id="ganttNameCol" style="width:50px;position:sticky;left:0;z-index:2;background:#f8f9fa;cursor:col-resize;" title="拖拽调整列宽">负责人</th>
+                    {% for i in range(g_days) %}
+                    {% set d = g_start + timedelta(days=i) %}
+                    <th class="gantt-col" data-date="{{ d.strftime('%Y-%m-%d') }}" style="width:{{ col_w }}px;padding:1px;text-align:center;font-size:1em;{{ 'background:#fff3cd;' if d == gantt.today else ('background:#f0f0f0;' if d.weekday() >= 5 else '') }}">
+                        {% if d.day == 1 or i == 0 %}<span style="font-size:1.1em;font-weight:600;">{{ d.strftime('%m') }}月</span><br>{% endif %}<span style="font-size:.85em;">{{ d.strftime('%d') }}</span>
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for person, person_info in gantt.persons.items() %}
+                {% set reqs_g = person_info[0] %}
+                {% set lane_count = person_info[1] %}
+                {% set row_h = lane_count * (bar_h + 2) + 4 %}
+                <tr>
+                    <td class="text-nowrap fw-bold align-middle" style="position:sticky;left:0;z-index:1;background:#fff;height:{{ row_h }}px;">{{ person }}</td>
+                    {% for i in range(g_days) %}
+                    {% set d = g_start + timedelta(days=i) %}
+                    <td class="gantt-col" data-date="{{ d.strftime('%Y-%m-%d') }}" style="padding:0;position:relative;height:{{ row_h }}px;{{ 'background:#fff3cd;' if d == gantt.today else ('background:#f8f8f8;' if d.weekday() >= 5 else '') }}">
+                        {% if d == gantt.today %}<div style="position:absolute;top:0;bottom:0;left:50%;width:2px;background:#dc3545;z-index:10;opacity:.6;"></div>{% endif %}
+                        {% for r in reqs_g %}
+                        {% if r.start_date == d %}
+                        {% set bar_days = (r.due_date - r.start_date).days + 1 %}
+                        {% set bar_w = bar_days * col_w - 2 %}
+                        {% set lane = r._gantt_lane %}
+                        {% set bar_top = lane * (bar_h + 2) + 2 %}
+                        {% set pct = 100 if r.status in ('done','closed') else (r.completion or 0) %}
+                        {% set is_overdue = r.due_date < gantt.today and r.status not in ('done','closed') %}
+                        {% set bar_color = '#198754' if pct >= 100 else ('#dc3545' if is_overdue else '#0d6efd') %}
+                        <div class="gantt-bar" data-type="{{ 'child' if r.parent_id else 'parent' }}" data-start-date="{{ r.start_date.strftime('%Y-%m-%d') }}" data-end-date="{{ r.due_date.strftime('%Y-%m-%d') }}" data-bar-days="{{ bar_days }}" data-href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" style="cursor:pointer;position:absolute;top:{{ bar_top }}px;left:1px;width:{{ bar_w }}px;height:{{ bar_h }}px;background:linear-gradient(to right, {{ bar_color }}30 {{ pct }}%, #f0f0f0 {{ pct }}%);border:1px solid {{ bar_color }}80;border-radius:3px;z-index:1;overflow:hidden;"
+                             data-bs-toggle="tooltip" title="{{ r.number }} {{ r.title }} | {{ r.status_label }} {{ pct }}% | {{ r.source_label }}{{ ' ↳子需求' if r.parent_id else '' }}"
+                     onclick="window.location=this.dataset.href">
+                            <span style="position:absolute;inset:0;padding:0 2px;font-size:.8em;line-height:{{ bar_h }}px;color:{{ bar_color }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                                {{ r.title[:6] }}{% if r.title|length > 6 %}…{% endif %} {{ pct }}%
+                            </span>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<script>
+var _ganttCard = document.querySelector('.card:has(#ganttBody)') || document.getElementById('ganttBody').closest('.card');
+var _ganttScale = 'day';
+
+/* Recalculate bar widths based on actual rendered column positions */
+function recalcGanttBars() {
+    if (_ganttScale !== 'day') return;
+    var headerRow = document.querySelector('#ganttBody thead tr');
+    if (!headerRow) return;
+    // Build a map: date string → actual rendered left offset & width from header cells
+    var dateCells = {};
+    headerRow.querySelectorAll('th.gantt-col').forEach(function(th) {
+        if (th.style.display === 'none') return;
+        var d = th.dataset.date;
+        if (d) dateCells[d] = { left: th.offsetLeft, width: th.offsetWidth };
+    });
+    document.querySelectorAll('.gantt-bar').forEach(function(bar) {
+        var startDate = bar.dataset.startDate;
+        var endDate = bar.dataset.endDate;
+        if (!startDate || !endDate) return;
+        // If bar starts before visible range, move it to first visible column
+        var startCell = dateCells[startDate];
+        if (!startCell) {
+            var sortedDates = Object.keys(dateCells).sort();
+            if (sortedDates.length === 0) return;
+            var firstVisDate = sortedDates[0];
+            if (startDate > sortedDates[sortedDates.length - 1]) return;
+            startCell = dateCells[firstVisDate];
+            // Move bar to first visible td in its row
+            var tr = bar.closest('tr');
+            var firstTd = tr.querySelector('td.gantt-col[data-date="' + firstVisDate + '"]');
+            if (firstTd && bar.parentElement !== firstTd) firstTd.appendChild(bar);
+            bar.style.left = '1px';
+        }
+        var endCell = dateCells[endDate];
+        if (!endCell) {
+            // End date outside visible range: extend to last visible cell
+            var lastDate = Object.keys(dateCells).sort().pop();
+            endCell = dateCells[lastDate];
+        }
+        var barW = endCell.left + endCell.width - startCell.left - 2;
+        if (barW < 4) barW = 4;
+        bar.style.width = barW + 'px';
+        bar.dataset.origWidth = barW;
+    });
+}
+recalcGanttBars();
+var _recalcTimer = null;
+window.addEventListener('resize', function() {
+    clearTimeout(_recalcTimer);
+    _recalcTimer = setTimeout(recalcGanttBars, 100);
+});
+
+var _filterGanttTimer = null;
+function debouncedFilterGantt() {
+    clearTimeout(_filterGanttTimer);
+    _filterGanttTimer = setTimeout(filterGantt, 600);
+}
+function filterGantt() {
+    var start = document.getElementById('ganttStart').value;
+    var end = document.getElementById('ganttEnd').value;
+    if (!start && !end) return;
+    document.querySelectorAll('.gantt-col').forEach(function(td) {
+        var d = td.dataset.date;
+        if (!d) return;
+        var show = (!start || d >= start) && (!end || d <= end);
+        td.style.display = show ? '' : 'none';
+    });
+    setTimeout(recalcGanttBars, 0);
+    _saveGanttState();
+}
+
+function setGanttScale(scale, btn) {
+    _ganttScale = scale;
+    document.querySelectorAll('.gantt-scale-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    var isWeek = scale === 'week';
+    var weekColW = 80;  // width per week when merged
+    var dayColW = 24;
+
+    function _localDateStr(d) {
+        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+    function _getMondayStr(dateStr) {
+        var d = new Date(dateStr + 'T00:00:00');
+        var dow = d.getDay() || 7; // Sun=7
+        d.setDate(d.getDate() - (dow - 1));
+        return _localDateStr(d);
+    }
+
+    if (isWeek) {
+        // Hide non-Monday columns, widen Monday columns
+        var _lastWeekMonth = 0;
+        // Build map of Monday th positions for bar width calculation
+        var _mondayThs = {};
+        document.querySelectorAll('.gantt-col').forEach(function(td) {
+            if (!td.dataset.date) return;
+            var d = new Date(td.dataset.date + 'T00:00:00');
+            var isMonday = d.getDay() === 1;
+            if (isMonday) {
+                td.style.display = '';
+                td.style.width = weekColW + 'px';
+                if (td.tagName === 'TH') {
+                    if (!td.dataset.origHtml) td.dataset.origHtml = td.innerHTML;
+                    var m = d.getMonth() + 1;
+                    var weekNum = Math.ceil(d.getDate() / 7);
+                    var label = (m !== _lastWeekMonth) ? (m + '月第' + weekNum + '周') : ('第' + weekNum + '周');
+                    _lastWeekMonth = m;
+                    td.innerHTML = '<span style="white-space:nowrap;">' + label + '</span>';
+                    _mondayThs[td.dataset.date] = td;
+                }
+            } else {
+                td.style.display = 'none';
+            }
+        });
+        // Sorted Monday dates for lookup
+        var _mondayDates = Object.keys(_mondayThs).sort();
+
+        // Process bars: use data-bar-days and actual Monday positions
+        document.querySelectorAll('.gantt-bar').forEach(function(bar) {
+            if (!bar.dataset.origWidth) bar.dataset.origWidth = parseFloat(bar.style.width);
+            if (!bar.dataset.origLeft) bar.dataset.origLeft = bar.style.left;
+            var startDate = bar.dataset.startDate;
+            var endDate = bar.dataset.endDate;
+            if (!startDate || !endDate) return;
+
+            // Find Monday of start and end dates
+            var startMon = _getMondayStr(startDate);
+            var sd = new Date(startDate + 'T00:00:00');
+            var ed = new Date(endDate + 'T00:00:00');
+            // End Monday = Monday of the week containing end date
+            var endMon = _getMondayStr(endDate);
+
+            // Calculate width: from start position to end of end-week
+            var startTh = _mondayThs[startMon];
+            var endTh = _mondayThs[endMon];
+            if (!startTh) {
+                // Start before range: use first Monday
+                startTh = _mondayThs[_mondayDates[0]];
+                startMon = _mondayDates[0];
+            }
+            if (!endTh) {
+                // End after visible range: use last Monday
+                endTh = _mondayThs[_mondayDates[_mondayDates.length - 1]];
+                endMon = _mondayDates[_mondayDates.length - 1];
+            }
+
+            // Offset within start week (days from Monday)
+            var offsetDays = (sd.getDay() || 7) - 1;
+            var startPx = Math.round(offsetDays / 7 * weekColW);
+            // End position: offset within end week
+            var endDow = (ed.getDay() || 7) - 1;
+            var endPx = endTh.offsetLeft + Math.round((endDow + 1) / 7 * weekColW);
+            var barStartPx = startTh.offsetLeft + startPx;
+            var weekWidth = Math.max(endPx - barStartPx, 6);
+
+            bar.style.width = weekWidth + 'px';
+            bar.style.left = startPx + 'px';
+            var span = bar.querySelector('span');
+            if (span) span.style.display = weekWidth < 40 ? 'none' : '';
+
+            // Move bar to start Monday's td cell
+            var tr = bar.closest('tr');
+            var mondayTd = tr.querySelector('td.gantt-col[data-date="' + startMon + '"]');
+            if (!mondayTd) {
+                var allTds = tr.querySelectorAll('td.gantt-col');
+                for (var _i = 0; _i < allTds.length; _i++) {
+                    if (allTds[_i].style.display !== 'none') { mondayTd = allTds[_i]; break; }
+                }
+            }
+            if (mondayTd && bar.parentElement !== mondayTd) mondayTd.appendChild(bar);
+        });
+    } else {
+        // Day mode: restore all columns
+        document.querySelectorAll('.gantt-col').forEach(function(td) {
+            td.style.display = '';
+            td.style.width = dayColW + 'px';
+            if (td.tagName === 'TH' && td.dataset.origHtml) {
+                td.innerHTML = td.dataset.origHtml;
+            }
+        });
+        // Restore bar positions, then recalc widths from actual column sizes
+        document.querySelectorAll('.gantt-bar').forEach(function(bar) {
+            bar.style.left = bar.dataset.origLeft || '1px';
+            var span = bar.querySelector('span');
+            if (span) span.style.display = '';
+            var origDate = bar.dataset.startDate;
+            if (origDate) {
+                var origTd = bar.closest('tr').querySelector('td.gantt-col[data-date="' + origDate + '"]');
+                if (origTd && origTd !== bar.parentElement) origTd.appendChild(bar);
+            }
+        });
+        setTimeout(recalcGanttBars, 0);
+    }
+    _saveGanttState();
+}
+
+function filterGanttRows() {
+    var show = document.getElementById('ganttShow').value;
+    document.querySelectorAll('.gantt-bar').forEach(function(bar) {
+        if (show === 'all') bar.style.display = '';
+        else if (show === 'parent') bar.style.display = bar.dataset.type === 'parent' ? '' : 'none';
+        else bar.style.display = bar.dataset.type === 'child' ? '' : 'none';
+    });
+    _saveGanttState();
+}
+
+function toggleGanttFullscreen() {
+    if (!document.fullscreenElement) {
+        _ganttCard.requestFullscreen().catch(function(){});
+        _ganttCard.style.background = '#fff';
+    } else {
+        document.exitFullscreen();
+    }
+}
+
+function resetGantt() {
+    document.getElementById('ganttStart').value = '{{ gantt.start.strftime('%Y-%m-%d') }}';
+    document.getElementById('ganttEnd').value = '{{ gantt.end.strftime('%Y-%m-%d') }}';
+    document.getElementById('ganttShow').value = 'all';
+    _ganttScale = 'day';
+    document.querySelectorAll('.gantt-scale-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.scale === 'day'); });
+    document.querySelectorAll('.gantt-col').forEach(function(td) { td.style.display = ''; td.style.width = '24px'; if (td.tagName === 'TH' && td.dataset.origHtml) td.innerHTML = td.dataset.origHtml; });
+    document.querySelectorAll('.gantt-bar').forEach(function(b) {
+        b.style.display = '';
+        if (b.dataset.origWidth) b.style.width = b.dataset.origWidth + 'px';
+        b.style.left = b.dataset.origLeft || '1px';
+        var span = b.querySelector('span'); if (span) span.style.display = '';
+        var origDate = b.dataset.startDate;
+        if (origDate) { var origTd = b.closest('tr').querySelector('td.gantt-col[data-date="' + origDate + '"]'); if (origTd && origTd !== b.parentElement) origTd.appendChild(b); }
+    });
+    _saveGanttState();
+}
+
+// Persist state to server via SiteSetting (shared across all users)
+function _saveGanttState() {
+    var state = {
+        gs: document.getElementById('ganttStart').value,
+        ge: document.getElementById('ganttEnd').value,
+        scale: _ganttScale,
+        show: document.getElementById('ganttShow').value,
+    };
+    fetch('/api/site-setting', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({key: 'gantt_{{ project.id }}', value: JSON.stringify(state)})
+    });
+}
+
+// Restore saved state
+(function() {
+    var saved = {{ gantt_state | tojson if gantt_state else 'null' }};
+    if (!saved) return;
+    try {
+        var s = typeof saved === 'string' ? JSON.parse(saved) : saved;
+        if (s.gs) document.getElementById('ganttStart').value = s.gs;
+        if (s.ge) document.getElementById('ganttEnd').value = s.ge;
+        if (s.show && s.show !== 'all') { document.getElementById('ganttShow').value = s.show; filterGanttRows(); }
+        if (s.scale === 'week') {
+            var btn = document.querySelector('.gantt-scale-btn[data-scale="week"]');
+            if (btn) setGanttScale('week', btn);
+        }
+        if (s.gs && s.ge) filterGantt();
+    } catch(e) {}
+})();
+
+// Drag-resize name column (mousedown on th right edge)
+(function() {
+    var th = document.getElementById('ganttNameCol');
+    if (!th) return;
+    var startX, startW, dragging = false;
+    th.addEventListener('mousedown', function(e) {
+        // Only start drag if clicking near the right edge (last 10px)
+        var rect = th.getBoundingClientRect();
+        if (e.clientX < rect.right - 10) return;
+        e.preventDefault();
+        dragging = true;
+        startX = e.pageX;
+        startW = th.offsetWidth;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
+    function onMove(e) {
+        if (!dragging) return;
+        var w = Math.max(40, startW + e.pageX - startX);
+        th.style.width = w + 'px';
+        document.querySelectorAll('td[style*="sticky"]').forEach(function(t) { t.style.width = w + 'px'; });
+        // Update table min-width
+        var colW = _ganttScale === 'week' ? 4 : 24;
+        var colCount = document.querySelectorAll('thead .gantt-col').length;
+        var table = document.querySelector('#ganttBody table');
+        if (table) table.style.minWidth = (w + colCount * colW) + 'px';
+    }
+    function onUp() {
+        dragging = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+    }
+})();
+</script>
+{% endif %}
+
+
 <div class="row g-3">
     <!-- Left Column -->
     <div class="col-md-8">
@@ -174,7 +557,7 @@
         {% endif %}
 
         <!-- Gantt Chart -->
-        {% if gantt %}
+        {% if false %}
         <div class="card mb-3">
             <div class="card-header py-2 d-flex justify-content-between align-items-center">
                 <span class="small fw-bold"><i class="bi bi-bar-chart-steps"></i> 需求甘特图</span>

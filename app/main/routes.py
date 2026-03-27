@@ -643,17 +643,27 @@ def api_personnel_options():
     hidden = current_app.config.get('HIDDEN_ROLES', [])
     roles = Role.query.filter(Role.name.notin_(hidden)).order_by(Role.name).all()
     groups = Group.query.filter_by(is_hidden=False).order_by(Group.name).all()
-    DEFAULT_DOMAINS = ['芯片验证', '业务开发', '技术开发', '编译器', '算法', '芯片', '产品', '功能仿真', '性能仿真', '产品测试']
+    DEFAULT_DOMAINS = ['芯片验证', '业务开发', '技术开发', '编译器', '算法', '芯片设计', '产品设计', '功能仿真', '性能仿真', '产品测试']
     db_domains = set(u.domain for u in User.query.filter(User.domain.isnot(None), User.domain != '').all())
     all_domains = sorted(db_domains | set(DEFAULT_DOMAINS))
 
     role_cfg = {r['name']: r.get('desc', '') for r in current_app.config.get('ROLES', [])}
-    active_users = User.query.filter_by(is_active=True).order_by(User.name).all()
+    # Manager candidates: users with management roles OR referenced as someone's manager
+    mgr_eids = set()
+    for row in db.session.query(User.manager).filter(User.manager.isnot(None), User.manager != '').all():
+        val = row[0].strip()
+        if ' ' in val:
+            mgr_eids.add(val.split()[-1])
+    mgr_users = User.query.filter_by(is_active=True).filter(
+        db.or_(
+            User.id.in_(db.session.query(User.id).join(User.roles).filter(Role.name.in_(User.TEAM_MANAGER_ROLES))),
+            User.employee_id.in_(mgr_eids) if mgr_eids else db.false()
+        )).order_by(User.name).all()
     return jsonify(
         roles=[{'id': r.id, 'name': r.name, 'desc': role_cfg.get(r.name, r.description or '')} for r in roles],
         groups=[g.name for g in groups],
         domains=all_domains,
-        users=[{'id': u.id, 'name': u.name, 'eid': u.employee_id, 'pinyin': u.pinyin or '', 'group': u.group or ''} for u in active_users],
+        users=[{'id': u.id, 'name': u.name, 'eid': u.employee_id, 'pinyin': u.pinyin or '', 'group': u.group or ''} for u in mgr_users],
     )
 
 

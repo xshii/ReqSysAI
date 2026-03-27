@@ -24,6 +24,20 @@ from app.services.prompts import get_all_prompts, save_all_prompts
 from app.utils.pinyin import to_pinyin
 
 
+def _get_manager_candidates():
+    """Users with management roles OR referenced as someone's manager."""
+    mgr_eids = set()
+    for row in db.session.query(User.manager).filter(User.manager.isnot(None), User.manager != '').all():
+        val = row[0].strip()
+        if ' ' in val:
+            mgr_eids.add(val.split()[-1])
+    return User.query.filter_by(is_active=True).filter(
+        db.or_(
+            User.id.in_(db.session.query(User.id).join(User.roles).filter(Role.name.in_(User.TEAM_MANAGER_ROLES))),
+            User.employee_id.in_(mgr_eids) if mgr_eids else db.false()
+        )).order_by(User.name).all()
+
+
 @admin_bp.route('/users')
 @admin_required
 def user_list():
@@ -51,13 +65,14 @@ def user_list():
     ip_requests = IPChangeRequest.query.filter_by(status='pending')\
         .order_by(IPChangeRequest.created_at.desc()).all()
 
-    DEFAULT_DOMAINS = ['芯片验证', '业务开发', '技术开发', '编译器', '算法', '芯片', '产品', '功能仿真', '性能仿真', '产品测试']
+    DEFAULT_DOMAINS = ['芯片验证', '业务开发', '技术开发', '编译器', '算法', '芯片设计', '产品设计', '功能仿真', '性能仿真', '产品测试']
     db_domains = set(u.domain for u in User.query.filter(User.domain.isnot(None), User.domain != '').all())
     all_domains = sorted(db_domains | set(DEFAULT_DOMAINS))
+    mgr_options = [f'{u.name} {u.employee_id}' for u in _get_manager_candidates()]
     return render_template('admin/users.html', users=users, visible_roles=visible_roles,
                            all_groups=all_groups, all_group_objs=all_group_objs,
                            group_counts=group_counts, all_domains=all_domains,
-                           hidden_groups=hidden_groups,
+                           hidden_groups=hidden_groups, mgr_options=mgr_options,
                            filter_group=filter_group, ip_requests=ip_requests)
 
 
@@ -84,7 +99,7 @@ def user_create():
                 form.employee_id.data = (prefix + parts[1].strip()) if prefix else parts[1].strip()
             else:
                 flash('请输入 姓名 工号，如 张三 a00123456', 'danger')
-                return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title='创建用户')
+                return render_template('admin/user_form.html', form=form, users=_get_manager_candidates(), title='创建用户')
         else:
             form.name.data = ''
             form.employee_id.data = ''
@@ -92,7 +107,7 @@ def user_create():
     if form.validate_on_submit():
         if form.ip_address.data and User.query.filter_by(ip_address=form.ip_address.data).first():
             flash('该 IP 已被绑定', 'danger')
-            return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title='创建用户')
+            return render_template('admin/user_form.html', form=form, users=_get_manager_candidates(), title='创建用户')
 
         selected_roles = Role.query.filter(Role.id.in_(form.role_ids.data)).all()
         # Normalize manager
@@ -102,7 +117,7 @@ def user_create():
             mgr_val, mgr_err = normalize_manager(form.manager.data)
             if mgr_err:
                 flash(mgr_err, 'danger')
-                return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title='创建用户')
+                return render_template('admin/user_form.html', form=form, users=_get_manager_candidates(), title='创建用户')
         user = User(
             employee_id=form.employee_id.data,
             name=form.name.data,
@@ -118,7 +133,7 @@ def user_create():
         flash(f'用户 {user.name} 创建成功', 'success')
         return redirect(url_for('admin.user_list'))
 
-    return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title='创建用户')
+    return render_template('admin/user_form.html', form=form, users=_get_manager_candidates(), title='创建用户')
 
 
 @admin_bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
@@ -147,7 +162,7 @@ def user_edit(user_id):
                 form.employee_id.data = (prefix + parts[1].strip()) if prefix else parts[1].strip()
             else:
                 flash('请输入 姓名 工号，如 张三 a00123456', 'danger')
-                return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title=f'编辑用户 - {user.name}', user=user)
+                return render_template('admin/user_form.html', form=form, users=_get_manager_candidates(), title=f'编辑用户 - {user.name}', user=user)
 
     if form.validate_on_submit():
         existing = User.query.filter(
@@ -155,7 +170,7 @@ def user_edit(user_id):
         ).first() if form.ip_address.data else None
         if existing:
             flash(f'该 IP 已被 {existing.name} 绑定', 'danger')
-            return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title=f'编辑用户 - {user.name}', user=user)
+            return render_template('admin/user_form.html', form=form, users=_get_manager_candidates(), title=f'编辑用户 - {user.name}', user=user)
 
         user.employee_id = form.employee_id.data
         user.name = form.name.data
@@ -167,7 +182,7 @@ def user_edit(user_id):
             mgr_val, mgr_err = normalize_manager(form.manager.data)
             if mgr_err:
                 flash(mgr_err, 'danger')
-                return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title=f'编辑用户 - {user.name}', user=user)
+                return render_template('admin/user_form.html', form=form, users=_get_manager_candidates(), title=f'编辑用户 - {user.name}', user=user)
             user.manager = mgr_val
         else:
             user.manager = None
@@ -178,7 +193,7 @@ def user_edit(user_id):
         flash(f'用户 {user.name} 更新成功', 'success')
         return redirect(url_for('admin.user_list'))
 
-    return render_template('admin/user_form.html', form=form, users=User.query.filter_by(is_active=True).order_by(User.name).all(), title=f'编辑用户 - {user.name}', user=user)
+    return render_template('admin/user_form.html', form=form, users=_get_manager_candidates(), title=f'编辑用户 - {user.name}', user=user)
 
 
 @admin_bp.route('/users/<int:user_id>/delete', methods=['POST'])

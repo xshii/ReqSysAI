@@ -83,7 +83,7 @@
                     <div class="row mb-2 align-items-center">
                         <label class="col-3 col-form-label small">邮箱</label>
                         <div class="col-9">
-                            <input type="email" class="form-control form-control-sm" name="email" value="{{ current_user.email or '' }}" placeholder="yourname@company.com">
+                            <input type="email" class="form-control form-control-sm" name="email" value="{{ current_user.email or '' }}" placeholder="{{ current_user.employee_id or 'yourname' }}@{{ config.MAIL_DOMAIN or 'company.com' }}">
                             {% if config.MAIL_DOMAIN %}<div class="form-text" style="font-size:.7em;">须以 @{{ config.MAIL_DOMAIN }} 结尾</div>{% endif %}
                         </div>
                     </div>

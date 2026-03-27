@@ -29,6 +29,7 @@ def _resolve_db_url():
 
 class Config:
     # App
+    
     SECRET_KEY = os.getenv('SECRET_KEY', _yml.get('app', {}).get('secret_key', 'dev-only-key'))
     SQLALCHEMY_DATABASE_URI = _resolve_db_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False

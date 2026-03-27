@@ -13,6 +13,20 @@ from app.utils.pinyin import to_pinyin
 logger = logging.getLogger(__name__)
 
 
+def _get_manager_candidates():
+    """Return users who have management roles OR are referenced as someone's manager."""
+    mgr_eids = set()
+    for row in db.session.query(User.manager).filter(User.manager.isnot(None), User.manager != '').all():
+        val = row[0].strip()
+        if ' ' in val:
+            mgr_eids.add(val.split()[-1])
+    return User.query.filter_by(is_active=True).filter(
+        db.or_(
+            User.id.in_(db.session.query(User.id).join(User.roles).filter(Role.name.in_(User.TEAM_MANAGER_ROLES))),
+            User.employee_id.in_(mgr_eids) if mgr_eids else db.false()
+        )).order_by(User.name).all()
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
@@ -209,8 +223,7 @@ def profile():
             new_manager, mgr_err = normalize_manager(new_manager)
             if mgr_err:
                 flash(mgr_err, 'danger')
-                users = User.query.filter_by(is_active=True).order_by(User.name).all()
-                return render_template('auth/profile.html', form=form, users=users)
+                return render_template('auth/profile.html', form=form, users=_get_manager_candidates())
         current_user.manager = new_manager or None
         current_user.domain = request.form.get('domain', '').strip() or None
         new_email = request.form.get('email', '').strip()
@@ -219,8 +232,7 @@ def profile():
             allowed_suffix = SiteSetting.get('mail_domain', current_app.config.get('MAIL_DOMAIN', ''))
             if allowed_suffix and not new_email.endswith('@' + allowed_suffix):
                 flash(f'邮箱必须以 @{allowed_suffix} 结尾', 'danger')
-                users = User.query.filter_by(is_active=True).order_by(User.name).all()
-                return render_template('auth/profile.html', form=form, users=users)
+                return render_template('auth/profile.html', form=form, users=_get_manager_candidates())
         current_user.email = new_email or None
         current_user.pomodoro_minutes = request.form.get('pomodoro_minutes', type=int) or 45
         # Handle avatar upload
@@ -238,8 +250,7 @@ def profile():
         flash('个人信息已更新', 'success')
         return redirect(url_for('auth.profile'))
 
-    users = User.query.filter_by(is_active=True).order_by(User.name).all()
-    return render_template('auth/profile.html', form=form, users=users)
+    return render_template('auth/profile.html', form=form, users=_get_manager_candidates())
 
 
 @auth_bp.route('/profile/toggle-my-group', methods=['POST'])

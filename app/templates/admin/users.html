@@ -106,6 +106,9 @@
     <datalist id="domainOptions">
         {% for d in all_domains %}<option value="{{ d }}">{% endfor %}
     </datalist>
+    <datalist id="mgrOptions">
+        {% for m in mgr_options %}<option value="{{ m }}">{% endfor %}
+    </datalist>
     <div class="col-md-9">
         <div class="card">
             <div class="table-responsive">
@@ -145,7 +148,7 @@
                             <td>
                                 <form method="POST" action="{{ url_for('admin.user_update_manager', user_id=user.id) }}" class="d-inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <input type="text" name="manager" class="form-control form-control-sm py-0 border-0 bg-transparent text-muted" style="width:auto;font-size:.85em;" value="{{ user.manager or '' }}" placeholder="-" onchange="this.form.submit()">
+                                    <input type="text" name="manager" class="form-control form-control-sm py-0 border-0 bg-transparent text-muted" style="width:auto;font-size:.85em;" value="{{ user.manager or '' }}" placeholder="-" list="mgrOptions" onchange="this.form.submit()">
                                 </form>
                             </td>
                             <td>

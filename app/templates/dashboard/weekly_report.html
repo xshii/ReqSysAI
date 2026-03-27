@@ -57,16 +57,23 @@
     {% if offset != 0 %}
     <a href="?week=0&project_id={{ cur_project_id }}" class="btn btn-sm btn-outline-primary">本周</a>
     {% endif %}
-    <form method="POST" action="?week={{ offset }}&project_id={{ cur_project_id }}" class="d-inline ms-2">
+    <form method="POST" action="?week={{ offset }}&project_id={{ cur_project_id }}&include_sub={{ '1' if include_sub else '0' }}" class="d-inline ms-2">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-sm {{ 'btn-outline-secondary' if report_data else 'btn-primary' }}" id="btn-gen-top">
             <i class="bi bi-robot"></i> {{ '重新生成' if report_data else '生成周报' }}
         </button>
     </form>
+    {% if cur_project %}
+    <a href="?week={{ offset }}&project_id={{ cur_project_id }}&include_sub={{ '0' if include_sub else '1' }}" class="btn btn-sm {{ 'btn-info' if include_sub else 'btn-outline-info' }}" title="包含子项目需求">
+        <i class="bi bi-diagram-3"></i> 含子项目
+    </a>
+    {% endif %}
 </div>
 
 {% if report_data %}
 {% set ai = report_data.ai %}
+{% set ns = namespace(n=0) %}
+{% set CN = ['一','二','三','四','五','六','七','八','九','十','十一','十二'] %}
 <div id="report-content">
 
 <!-- Row 1: Title -->
@@ -77,18 +84,20 @@
     发布人：{{ current_user.name }}　｜　审核人：{{ report_data.reviewer }}
 </div>
 
-<!-- Section 1: Project Goal -->
+<!-- Section: Project Goal -->
 {% if report_data.get('project_goal') %}
+{% set ns.n = ns.n + 1 %}
 <div class="report-section">
-    <h6>一、项目目标</h6>
+    <h6>{{ CN[ns.n-1] }}、项目目标</h6>
     <div class="report-summary" style="white-space:pre-line;">{{ report_data.project_goal }}</div>
 </div>
 {% endif %}
 
-<!-- Milestones -->
+<!-- Section: Milestones -->
 {% if report_data.milestones %}
+{% set ns.n = ns.n + 1 %}
 <div class="report-section mt-3">
-    <h6>二、里程碑</h6>
+    <h6>{{ CN[ns.n-1] }}、里程碑</h6>
     {% if report_data.timeline_img %}
     <div class="text-center">
         <img src="data:image/png;base64,{{ report_data.timeline_img }}" class="timeline-img" style="width:100%;" alt="里程碑时间轴">
@@ -99,29 +108,31 @@
 </div>
 {% endif %}
 
-<!-- Section 3: Summary + Highlights + Next Week Plan (merged) -->
+<!-- Section: Summary + Highlights + Next Week Plan -->
+{% set ns.n = ns.n + 1 %}
 <div class="report-section">
-    <h6>三、整体进展与下周计划</h6>
+    <h6>{{ CN[ns.n-1] }}、整体进展与下周计划</h6>
     <div class="report-summary">{{ ai.summary }}</div>
     {% set high_risks = report_data.open_risks | selectattr('severity', 'equalto', 'high') | list %}
     {% if high_risks %}
-    <div style="padding:4px 8px;font-size:.84rem;margin-top:4px;">
+    <div data-eml="high-risk" style="padding:4px 8px;font-size:.84rem;margin-top:4px;background:#fef2f2;border-left:3px solid #dc3545;">
         <strong>高风险通报：</strong>
-        {% for r in high_risks %}{{ r.title }}{% if not loop.last %}；{% endif %}{% endfor %}
+        {% for r in high_risks %}<div style="margin-top:2px;">{{ r.title }}（{{ r.owner or '未分配' }}{% if r.domain_display %}/{{ r.domain_display }}{% endif %}，{{ r.due_date.strftime('%m-%d') if r.due_date else '无期限' }}{% if r.is_overdue %} <span style="color:#dc3545;font-weight:600;">超期{{ (report_data.today - r.due_date).days }}天</span>{% endif %}）{% if r.description %}<span style="color:#64748b;">— {{ r.description[:60] }}{% if r.description|length > 60 %}…{% endif %}</span>{% endif %}</div>{% endfor %}
     </div>
     {% endif %}
     {% if ai.plan %}
-    <div style="margin-top:2px;font-size:.84rem;"><strong>下周计划：</strong></div>
+    <div data-eml="sub-header" style="margin-top:2px;font-size:.84rem;"><strong>下周计划：</strong></div>
     <ul class="ps-3 mb-0">
     {% for p in ai.plan %}<li>{{ p }}</li>{% endfor %}
     </ul>
     {% endif %}
 </div>
 
-<!-- Section 4: Sub-project progress -->
+<!-- Section: Sub-project progress -->
 {% if report_data.sub_projects %}
+{% set ns.n = ns.n + 1 %}
 <div class="report-section">
-    <h6>四、专题进展</h6>
+    <h6>{{ CN[ns.n-1] }}、专题进展</h6>
     <table class="report-table">
         <thead><tr><th>专题</th><th>负责人</th><th>一句话进展</th></tr></thead>
         <tbody>
@@ -137,9 +148,10 @@
 </div>
 {% endif %}
 
-<!-- Section 5: Risks & Issues -->
+<!-- Section: Risks & Issues -->
+{% set ns.n = ns.n + 1 %}
 <div class="report-section">
-    <h6 class="risk-title">五、风险 & 问题</h6>
+    <h6 class="risk-title">{{ CN[ns.n-1] }}、风险 & 问题</h6>
     {% set rs = report_data.risk_stats %}
     {% if rs and rs.total > 0 %}
     <div class="risk-stats-bar d-flex gap-3 mb-2 ps-2 flex-wrap" style="font-size:.8rem;">
@@ -157,33 +169,31 @@
     {% if ds %}
     <div class="risk-domain-bar ps-2 mb-2" style="font-size:.75rem;">
         {% for domain, dv in ds.items() %}<span class="badge bg-light text-dark border me-1">{{ domain }} <strong class="text-danger">{{ dv.open }}</strong>/{{ dv.total }}</span>{% endfor %}
+        <span class="text-muted" style="font-size:.9em;margin-left:4px;">（未闭环/近两周总数）</span>
     </div>
     {% endif %}
     {% endif %}
-    {% if report_data.open_risks %}
+    {% set all_risks = (report_data.open_risks or []) + (report_data.get('recent_closed_risks') or []) %}
+    {% if all_risks %}
     <table class="report-table">
-        <thead><tr><th>风险</th><th>严重程度</th><th>责任人</th><th>业务领域</th><th>跟踪人</th><th>预计闭环</th></tr></thead>
+        <thead><tr>{% if include_sub %}<th>专题</th>{% endif %}<th>风险</th><th>LV</th><th>责任人</th><th>业务领域</th><th>最新进展</th><th>预计闭环</th></tr></thead>
         <tbody>
-        {% for r in report_data.open_risks %}
-        <tr class="{{ 'row-risk' if r.is_overdue else '' }}">
-            <td>{{ r.title }}{% if r.is_overdue %} <span class="fw-bold">(超期)</span>{% endif %}</td>
+        {% for r in all_risks %}
+        {% set is_closed = r.status in ('resolved', 'closed') %}
+        <tr class="{{ 'row-risk' if r.is_overdue else '' }}" {% if is_closed %}style="color:#6c757d;"{% endif %}>
+            {% if include_sub %}<td class="small text-muted">{% if r.project %}{% set pname = r.project.name %}{{ pname.split('-', 1)[-1] if '-' in pname else pname.split(' ', 1)[-1] if ' ' in pname else pname }}{% else %}-{% endif %}</td>{% endif %}
+            <td>{{ r.title }}</td>
             <td>{{ r.severity_label }}</td>
             <td>{{ r.owner or '-' }}{% if r.owner_user %} {{ r.owner_user.employee_id }}{% endif %}</td>
             <td>{{ r.domain_display or '-' }}</td>
-            <td>{{ r.tracker_display or '-' }}{% if r.tracker %} {{ r.tracker.employee_id }}{% endif %}</td>
-            <td class="{{ 'text-danger fw-bold' if r.is_overdue else '' }}">{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
+            <td class="small">{% if r.comments %}{% for c in r.comments[:2] %}{% if not loop.first %}<br>{% endif %}{{ c.created_at.strftime('%m-%d') }}：{{ c.content[:40] }}{% if c.content|length > 40 %}…{% endif %}{% endfor %}{% else %}-{% endif %}</td>
+            <td class="{{ 'text-danger fw-bold' if r.is_overdue and not is_closed else '' }}">{% if is_closed %}<span class="badge bg-success">{{ '已解决' if r.status == 'resolved' else '已关闭' }}</span>{% if r.due_date and r.updated_at %}{% set delta = (r.due_date - r.updated_at.date()).days %}{% if delta > 0 %}(提前{{ delta }}天){% elif delta < 0 %}(延期{{ -delta }}天){% else %}(按时){% endif %}{% endif %}{% elif r.due_date %}{{ r.due_date.strftime('%m-%d') }}{% if r.is_overdue %} <span class="text-danger fw-bold">超期{{ (report_data.today - r.due_date).days }}天</span>{% endif %}{% else %}-{% endif %}</td>
         </tr>
         {% endfor %}
         </tbody>
     </table>
     {% else %}
-    <p class="ps-2 text-muted mb-0">暂无未解决的风险</p>
-    {% endif %}
-    {% if ai.risks %}
-    <div class="mt-2 ps-2 small text-muted">
-        <strong>风险研判：</strong>
-        {% for r in ai.risks %}<div style="white-space:pre-line;margin-top:4px;">{{ r }}</div>{% endfor %}
-    </div>
+    <p class="ps-2 text-muted mb-0">暂无风险记录</p>
     {% endif %}
 </div>
 
@@ -191,23 +201,26 @@
 {% set _roles = report_data.get('people_roles', {}) %}
 {% set _pmap = report_data.get('people_map', {}) %}
 {% if _roles or _pmap %}
+{% set ns.n = ns.n + 1 %}
 <div class="report-section">
-    <h6>六、人力地图</h6>
+    <h6>{{ CN[ns.n-1] }}、人力地图</h6>
     {% set _items = _roles.items()|list if _roles else [] %}
     {% if not _items and _pmap %}{% set _items = [] %}{% for n in _pmap.keys() %}{% if _items.append((n, '')) %}{% endif %}{% endfor %}{% endif %}
     <table class="report-table">
-        <thead><tr><th>姓名</th><th>角色</th><th>姓名</th><th>角色</th></tr></thead>
+        <thead><tr><th>姓名</th><th>角色</th><th>姓名</th><th>角色</th><th>姓名</th><th>角色</th></tr></thead>
         <tbody>
-        {% for i in range(0, _items|length, 2) %}
+        {% for i in range(0, _items|length, 3) %}
         <tr>
             <td>{{ _items[i][0] }}</td>
             <td class="text-muted">{{ _items[i][1] }}</td>
             {% if i + 1 < _items|length %}
             <td>{{ _items[i+1][0] }}</td>
             <td class="text-muted">{{ _items[i+1][1] }}</td>
-            {% else %}
-            <td></td><td></td>
-            {% endif %}
+            {% else %}<td></td><td></td>{% endif %}
+            {% if i + 2 < _items|length %}
+            <td>{{ _items[i+2][0] }}</td>
+            <td class="text-muted">{{ _items[i+2][1] }}</td>
+            {% else %}<td></td><td></td>{% endif %}
         </tr>
         {% endfor %}
         </tbody>
@@ -229,8 +242,9 @@
 {% set _ai_weighted_sum = [] %}{% set _ai_days_sum = [] %}
 {% for r in report_data.all_reqs %}{% if r.ai_ratio is not none and r.estimate_days %}{% if _ai_weighted_sum.append(r.ai_ratio * r.estimate_days) %}{% endif %}{% if _ai_days_sum.append(r.estimate_days) %}{% endif %}{% endif %}{% endfor %}
 {% set _ai_pct = ((_ai_weighted_sum | sum) / (_ai_days_sum | sum) + 0.5) | int if _ai_days_sum else 0 %}
+{% set ns.n = ns.n + 1 %}
 <div class="report-section">
-    <h6>七、需求统计</h6>
+    <h6>{{ CN[ns.n-1] }}、需求统计</h6>
     <div class="report-stats mb-2">
         <div class="report-stat"><div class="num">{{ _total }}</div><div class="label">总需求</div></div>
         <div class="report-stat"><div class="num text-success">{{ _done }}</div><div class="label">已完成</div></div>
@@ -250,21 +264,23 @@
 </div>
 
 {% set _mode_labels = {'full': '', 'diff_assignee': '仅显示父需求+责任人不同的子需求', 'parent_only': '仅显示父需求', 'priority': '按截止日期排序，优先显示延期项（前40条）'} %}
+{% set ns.n = ns.n + 1 %}
 <div class="report-section">
-    <h6>八、需求列表{% if report_data.req_list_mode != 'full' %} <span style="font-weight:400;font-size:.75em;color:#64748b;">（{{ _mode_labels[report_data.req_list_mode] }}，共{{ report_data.req_total_with_children }}条）</span>{% endif %}</h6>
+    <h6>{{ CN[ns.n-1] }}、需求列表{% if report_data.req_list_mode != 'full' %} <span style="font-weight:400;font-size:.75em;color:#64748b;">（{{ _mode_labels[report_data.req_list_mode] }}，共{{ report_data.req_total_with_children }}条）</span>{% endif %}</h6>
     <table class="report-table">
-        <thead><tr><th>编号</th><th>标题</th><th>状态</th><th>完成率</th><th>负责人</th><th>工作量</th><th>AI%</th><th>预期完成</th></tr></thead>
+        <thead><tr>{% if include_sub %}<th>专题</th>{% endif %}<th>标题</th><th>状态</th><th>完成率</th><th>负责人</th><th>工作量</th><th>AI%</th><th>预期开始</th><th>预期完成</th></tr></thead>
         <tbody>
         {% for r in report_data.display_reqs %}
         <tr>
-            <td>{{ r.number }}</td>
-            <td>{{ r.title }}{% if r.parent_id %} <span class="text-muted" style="font-size:.8em;">↳子</span>{% endif %}{% if r.children and report_data.req_list_mode != 'full' %} <span class="text-muted small">({{ r.children | selectattr('status', 'in', ['done','closed']) | list | length }}/{{ r.children | length }})</span>{% endif %}</td>
+            {% if include_sub %}<td class="small text-muted">{% if r.project %}{% set pname = r.project.name %}{{ pname.split('-', 1)[-1] if '-' in pname else pname.split(' ', 1)[-1] if ' ' in pname else pname }}{% else %}-{% endif %}</td>{% endif %}
+            <td>{% if r.parent_id %}　↳ {% endif %}{{ r.title }}{% if r.children and report_data.req_list_mode != 'full' %} <span class="text-muted small">({{ r.children | selectattr('status', 'in', ['done','closed']) | list | length }}/{{ r.children | length }})</span>{% endif %}</td>
             <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
-                {% if r.due_date and r.due_date < report_data.today and r.status not in ('done','closed') %}<span class="badge bg-danger">超期</span>{% endif %}</td>
+                {% if r.due_date and r.due_date < report_data.today and r.status not in ('done','closed') %}<span class="badge bg-danger">超期{{ (report_data.today - r.due_date).days }}天</span>{% endif %}</td>
             <td>{% if r.status in ('done','closed') %}100%{% else %}{{ r.completion or 0 }}%{% endif %}</td>
             <td>{{ r.assignee_display }}</td>
             <td>{% if r.source == 'testing' %}{{ r.test_cases|int if r.test_cases else '-' }}用例{% elif r.source == 'coding' %}{{ '%g'|format((r.code_lines or 0) / 1000) if r.code_lines else '-' }}kloc{% else %}{{ r.estimate_days|int if r.estimate_days else '-' }}天{% endif %}</td>
             <td>{% if r.ai_ratio is not none %}<span style="color:#7c3aed;">{{ r.ai_ratio }}%</span>{% else %}-{% endif %}</td>
+            <td>{{ r.start_date.strftime('%m-%d') if r.start_date else '-' }}</td>
             <td>{{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}</td>
         </tr>
         {% endfor %}
@@ -541,13 +557,13 @@ function exportEml() {
             body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;"><tr><td style="padding:4px 8px;font-size:13px;">' + d.innerHTML + '</td></tr></table>';
         });
 
-        // High risk box (red)
-        sec.querySelectorAll('div[style*="fef2f2"]').forEach(function(d) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;"><tr><td style="background:#fef2f2;padding:8px 0;font-size:13px;">' + _inlineStyles(d.innerHTML) + '</td></tr></table>';
+        // High risk box (red) — match by data-eml or style
+        sec.querySelectorAll('[data-eml="high-risk"], div[style*="fef2f2"]').forEach(function(d) {
+            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;"><tr><td style="background:#fef2f2;border-left:3px solid #dc3545;padding:4px 8px;font-size:13px;">' + d.innerHTML + '</td></tr></table>';
         });
 
-        // Sub-headers (e.g., "下周计划：")
-        sec.querySelectorAll('div[style*="margin-top:8px"]').forEach(function(d) {
+        // Sub-headers (e.g., "下周计划：") — match by data-eml or style
+        sec.querySelectorAll('[data-eml="sub-header"], div[style*="margin-top:8px"]').forEach(function(d) {
             if (d.querySelector('strong')) body += '<div style="font-size:13px;font-weight:700;margin-top:4px;margin-bottom:2px;">' + d.innerHTML + '</div>';
         });
 
@@ -555,6 +571,26 @@ function exportEml() {
         var msImg = sec.querySelector('.timeline-img');
         if (msImg && msImg.src) {
             body += '<img src="' + msImg.src + '" width="100%" style="width:100%;" alt="里程碑时间轴">';
+        }
+
+        // Risk stats bar + domain bar (before tables, centered)
+        var statsBar = sec.querySelector('.risk-stats-bar');
+        if (statsBar) {
+            var statsHtml = '<table width="100%" cellpadding="0" cellspacing="0" style="font-size:12px;margin-bottom:2px;"><tr>';
+            statsBar.querySelectorAll('span:not(.border-start)').forEach(function(s) {
+                var color = s.classList.contains('text-danger') ? '#dc3545' : s.classList.contains('text-success') ? '#198754' : s.classList.contains('text-muted') ? '#6c757d' : '#1e3a5f';
+                statsHtml += '<td style="padding:4px 10px;text-align:center;color:' + color + ';">' + s.innerHTML + '</td>';
+            });
+            statsHtml += '</tr></table>';
+            body += statsHtml;
+        }
+        var domainBar = sec.querySelector('.risk-domain-bar');
+        if (domainBar) {
+            var dHtml = '';
+            domainBar.querySelectorAll('.badge').forEach(function(b) {
+                dHtml += '<span style="display:inline-block;padding:2px 8px;margin:2px;font-size:11px;border:1px solid #718096;border-radius:4px;">' + b.innerHTML + '</span>';
+            });
+            if (dHtml) body += '<div style="text-align:center;margin-bottom:2px;">' + dHtml + '</div>';
         }
 
         // Data tables
@@ -575,31 +611,6 @@ function exportEml() {
         // Plain text paragraphs
         sec.querySelectorAll('p').forEach(function(p) {
             if (!p.closest('.report-summary') && !p.closest('table')) body += '<p style="font-size:13px;color:#64748b;margin:4px 0;">' + p.innerHTML + '</p>';
-        });
-
-        // Risk stats bar
-        var statsBar = sec.querySelector('.risk-stats-bar');
-        if (statsBar) {
-            var statsHtml = '<table cellpadding="0" cellspacing="0" style="font-size:12px;margin-bottom:2px;"><tr>';
-            statsBar.querySelectorAll('span:not(.border-start)').forEach(function(s) {
-                var color = s.classList.contains('text-danger') ? '#dc3545' : s.classList.contains('text-success') ? '#198754' : s.classList.contains('text-muted') ? '#6c757d' : '#1e3a5f';
-                statsHtml += '<td style="padding:4px 10px;color:' + color + ';">' + s.innerHTML + '</td>';
-            });
-            statsHtml += '</tr></table>';
-            body += statsHtml;
-        }
-        var domainBar = sec.querySelector('.risk-domain-bar');
-        if (domainBar) {
-            var dHtml = '';
-            domainBar.querySelectorAll('.badge').forEach(function(b) {
-                dHtml += '<span style="display:inline-block;padding:2px 8px;margin:2px;font-size:11px;border:1px solid #718096;border-radius:4px;">' + b.innerHTML + '</span>';
-            });
-            if (dHtml) body += '<div style="margin-bottom:2px;">' + dHtml + '</div>';
-        }
-
-        // AI risk analysis
-        sec.querySelectorAll('.mt-2.ps-2').forEach(function(d) {
-            body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:2px;"><tr><td style="padding:4px 8px;font-size:12px;color:#64748b;border-left:3px solid #94a3b8;">' + d.innerHTML + '</td></tr></table>';
         });
 
         rows += _emlSection(title, body, isRisk ? '#c53030' : '#4a5568');
