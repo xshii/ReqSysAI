@@ -41,7 +41,7 @@ def _get_manager_candidates():
 @admin_bp.route('/users')
 @admin_required
 def user_list():
-    filter_group = request.args.get('group', '')
+    filter_group = request.args.get('group', '_visible')
     all_group_objs = Group.query.order_by(Group.name).all()
     all_groups = [g.name for g in all_group_objs]
     hidden_groups = {g.name for g in all_group_objs if g.is_hidden}
