@@ -539,7 +539,7 @@ checkHelpAlert();
             <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#incentiveBody" style="cursor:pointer;">
                 <i class="bi bi-chevron-right text-muted me-1" style="font-size:.6em;"></i><i class="bi bi-star-fill text-warning"></i> 激励之星 <span class="badge bg-secondary">{{ approved_incentives | length }}</span>
             </div>
-            <div class="collapse" id="incentiveBody">
+            <div class="collapse show" id="incentiveBody">
             <div class="card-body py-2">
                 {% if approved_incentives %}
                 {% for inc in approved_incentives %}
@@ -562,9 +562,9 @@ checkHelpAlert();
                             </button>
                             <strong>{{ inc.all_nominee_names | join('、') }}</strong>
                             <span class="badge bg-{{ inc.category_color }}" style="font-size:.6em;">{{ inc.category_label }}</span>
+                            <span class="text-muted">{{ inc.title }}</span>
                         </div>
-                        <div class="text-muted text-truncate" title="{{ inc.title }}">{{ inc.title }}</div>
-                        {% if inc.description and inc.description != inc.title %}<div class="text-truncate" style="font-size:.85em;" title="{{ inc.description }}">{{ inc.description[:100] }}</div>{% endif %}
+                        {% if inc.description and inc.description != inc.title %}<div style="font-size:.85em;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;" title="{{ inc.description }}">{{ inc.description }}</div>{% endif %}
                     </div>
                 </div>
                 {% endfor %}

@@ -263,6 +263,23 @@ def toggle_public(inc_id):
     return jsonify(ok=True, is_public=inc.is_public)
 
 
+@incentive_bp.route('/batch-public', methods=['POST'])
+@login_required
+def batch_public():
+    """Batch set is_public for approved incentives."""
+    if not (current_user.has_role('PL', 'XM', 'HR', 'LM') or current_user.is_admin):
+        return jsonify(ok=False, msg='无权限')
+    data = request.get_json() or {}
+    ids = data.get('ids', [])
+    public = data.get('public', True)
+    if not ids:
+        return jsonify(ok=False, msg='未选择')
+    Incentive.query.filter(Incentive.id.in_(ids), Incentive.status == 'approved').update(
+        {Incentive.is_public: public}, synchronize_session=False)
+    db.session.commit()
+    return jsonify(ok=True, count=len(ids))
+
+
 @incentive_bp.route('/export-csv')
 @login_required
 def export_csv():

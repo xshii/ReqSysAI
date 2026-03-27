@@ -100,11 +100,23 @@
 </div>
 
 {% if items %}
+{% if is_reviewer and status_filter == 'approved' %}
+<div class="d-flex align-items-center gap-2 mb-2">
+    <label class="btn btn-sm btn-outline-secondary mb-0"><input type="checkbox" id="selectAll" onchange="document.querySelectorAll('.inc-check').forEach(function(c){c.checked=this.checked}.bind(this))"> 全选</label>
+    <button class="btn btn-sm btn-outline-success" onclick="batchTogglePublic(true)"><i class="bi bi-eye"></i> 批量设为可见</button>
+    <button class="btn btn-sm btn-outline-secondary" onclick="batchTogglePublic(false)"><i class="bi bi-eye-slash"></i> 批量隐藏</button>
+</div>
+{% endif %}
 {% for inc in items %}
 <div class="card mb-3">
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-start">
             <div class="d-flex gap-3">
+                {% if is_reviewer and status_filter == 'approved' %}
+                <div class="flex-shrink-0 d-flex align-items-center">
+                    <input type="checkbox" class="form-check-input inc-check" value="{{ inc.id }}">
+                </div>
+                {% endif %}
                 <div class="flex-shrink-0 position-relative">
                     {% if inc.photo %}
                     <img src="{{ url_for('static', filename=inc.photo) }}" class="rounded img-lightbox" style="width:80px;height:80px;object-fit:cover;cursor:pointer;" data-src="{{ url_for('static', filename=inc.photo) }}">
@@ -160,12 +172,23 @@
                         data-nominee-ids="{{ inc.nominees|map(attribute='id')|list|join(',') }}"
                         data-public="{{ '1' if inc.is_public else '0' }}">评审</button>
                 {% endif %}
-                {% if (current_user.id == inc.submitted_by or current_user.is_admin) and inc.status in ('submitted', 'pending', 'approved') %}
+                {% if (current_user.id == inc.submitted_by or current_user.is_admin) and inc.status in ('submitted', 'pending') %}
                 <button class="btn btn-sm btn-outline-secondary mt-1 btn-edit-inc"
                         data-bs-toggle="modal" data-bs-target="#editModal"
                         data-inc-id="{{ inc.id }}" data-category="{{ inc.category }}"
                         data-title="{{ inc.title }}" data-desc="{{ inc.description }}"
                         data-nominee-ids="{{ inc.nominees|map(attribute='id')|list|join(',') }}"><i class="bi bi-pencil"></i> 编辑</button>
+                {% endif %}
+                {% if is_reviewer and inc.status == 'approved' %}
+                <button class="btn btn-sm btn-outline-secondary mt-1 btn-review-inc mgr-only"
+                        data-bs-toggle="modal" data-bs-target="#reviewModal"
+                        data-inc-id="{{ inc.id }}" data-title="{{ inc.title }}"
+                        data-comment="{{ inc.review_comment or '' }}"
+                        data-desc="{{ inc.description }}"
+                        data-amount="{{ inc.amount or '' }}"
+                        data-source="{{ inc.source or 'instant' }}"
+                        data-nominee-ids="{{ inc.nominees|map(attribute='id')|list|join(',') }}"
+                        data-public="{{ '1' if inc.is_public else '0' }}"><i class="bi bi-pencil"></i> 编辑</button>
                 {% endif %}
                 {% if is_reviewer and inc.status == 'approved' %}
                 <button class="btn btn-sm mt-1 mgr-only {{ 'btn-outline-success' if inc.is_public else 'btn-outline-secondary' }}"
@@ -259,11 +282,12 @@
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">描述</label>
                         <div class="col-9">
-                            <textarea name="description" id="reviewDesc" class="form-control form-control-sm" rows="3"></textarea>
+                            <textarea name="description" id="reviewDesc" class="form-control form-control-sm" rows="3" oninput="updateCharCount(this,'reviewDescCount')"></textarea>
                             <div class="d-flex gap-2 mt-1">
                                 <button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="aiPolish('reviewDesc','reviewDescHint')"><i class="bi bi-robot"></i> AI润色</button>
                                 <button type="button" class="btn btn-sm btn-outline-success py-0" onclick="aiDescribe('generate','reviewDesc','reviewDescHint')"><i class="bi bi-robot"></i> AI生成</button>
                                 <span class="small text-muted align-self-center" id="reviewDescHint"></span>
+                                <span class="small text-muted align-self-center ms-auto" id="reviewDescCount">0字</span>
                             </div>
                         </div>
                     </div>
@@ -351,11 +375,12 @@
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">描述 *</label>
                         <div class="col-9">
-                            <textarea name="description" id="editDesc" class="form-control form-control-sm" rows="3" required></textarea>
+                            <textarea name="description" id="editDesc" class="form-control form-control-sm" rows="3" required oninput="updateCharCount(this,'editDescCount')"></textarea>
                             <div class="d-flex gap-2 mt-1">
                                 <button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="aiDescribe('polish','editDesc','editDescHint','#editModal select[name=category]')"><i class="bi bi-robot"></i> AI润色</button>
                                 <button type="button" class="btn btn-sm btn-outline-success py-0" onclick="aiDescribe('generate','editDesc','editDescHint','#editModal select[name=category]')"><i class="bi bi-robot"></i> AI生成</button>
                                 <span class="small text-muted align-self-center" id="editDescHint"></span>
+                                <span class="small text-muted align-self-center ms-auto" id="editDescCount">0字</span>
                             </div>
                         </div>
                     </div>
@@ -488,6 +513,23 @@
 
 {% block extra_js %}
 <script>
+/* Batch toggle public */
+function batchTogglePublic(pub) {
+    var ids = [];
+    document.querySelectorAll('.inc-check:checked').forEach(function(c) { ids.push(parseInt(c.value)); });
+    if (!ids.length) { showToast('请先勾选', 'warning'); return; }
+    apiPost('/incentive/batch-public', {ids: ids, public: pub}).then(function(d) {
+        if (d && d.ok) location.reload();
+        else showToast(d.msg || '操作失败', 'danger');
+    });
+}
+
+/* Char count for textarea */
+function updateCharCount(textarea, countId) {
+    var el = document.getElementById(countId);
+    if (el) el.textContent = textarea.value.length + '字';
+}
+
 /* Photo preview in modals */
 function previewIncPhoto(input) {
     var preview = input.parentElement.querySelector('.inc-photo-preview');
@@ -730,6 +772,7 @@ document.querySelectorAll('.btn-edit-inc').forEach(function(btn) {
         document.getElementById('editCategory').value = btn.dataset.category;
         document.getElementById('editTitleInput').value = btn.dataset.title;
         document.getElementById('editDesc').value = btn.dataset.desc;
+        updateCharCount(document.getElementById('editDesc'), 'editDescCount');
         _fillNomineeIds('editNomineeIds', btn.dataset.nomineeIds);
     });
 });
@@ -739,6 +782,7 @@ document.querySelectorAll('.btn-review-inc').forEach(function(btn) {
         document.getElementById('reviewForm').action = '{{ url_for("incentive.review", inc_id=0) }}'.replace('/0/', '/' + btn.dataset.incId + '/');
         document.getElementById('reviewTitle').textContent = '评审：' + btn.dataset.title;
         document.getElementById('reviewDesc').value = btn.dataset.desc || '';
+        updateCharCount(document.getElementById('reviewDesc'), 'reviewDescCount');
         document.getElementById('reviewComment').value = btn.dataset.comment || '';
         _fillNomineeIds('reviewNomineeIds', btn.dataset.nomineeIds);
         var amountInput = document.querySelector('#reviewModal input[name="amount"]');
