@@ -488,6 +488,13 @@ checkHelpAlert();
                     {% set ns.d = ns.d + timedelta(days=1) %}
                 {% endfor %}
                 </div>
+                <div class="d-flex align-items-center gap-1 mt-1 small text-muted">
+                    <span>少</span>
+                    {% for c in ['#ebedf0','#9be9a8','#40c463','#30a14e','#216e39'] %}
+                    <div style="width:11px;height:11px;background:{{ c }};border-radius:2px;"></div>
+                    {% endfor %}
+                    <span>多</span>
+                </div>
             </div>
             </div>
         </div>

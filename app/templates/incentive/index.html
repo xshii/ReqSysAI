@@ -168,7 +168,7 @@
                         data-category="{{ inc.category }}"
                         data-comment="{{ inc.review_comment or '' }}"
                         data-desc="{{ inc.description }}"
-                        data-amount="{{ inc.amount_detail or inc.amount or '' }}"
+                        data-amount="{{ inc.amount or '' }}"
                         data-source="{{ inc.source or 'instant' }}"
                         data-nominee-ids="{{ inc.nominees|map(attribute='id')|list|join(',') }}"
                         data-public="{{ '1' if inc.is_public else '0' }}">评审</button>
@@ -187,7 +187,7 @@
                         data-category="{{ inc.category }}"
                         data-comment="{{ inc.review_comment or '' }}"
                         data-desc="{{ inc.description }}"
-                        data-amount="{{ inc.amount_detail or inc.amount or '' }}"
+                        data-amount="{{ inc.amount or '' }}"
                         data-source="{{ inc.source or 'instant' }}"
                         data-nominee-ids="{{ inc.nominees|map(attribute='id')|list|join(',') }}"
                         data-public="{{ '1' if inc.is_public else '0' }}"><i class="bi bi-pencil"></i> 编辑</button>
@@ -281,10 +281,6 @@
                 <div class="modal-header py-2"><h6 class="modal-title" id="reviewTitle">评审激励</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
                     <div class="row mb-2">
-                        <label class="col-3 col-form-label col-form-label-sm">标题 *</label>
-                        <div class="col-9"><input type="text" name="title" id="reviewTitleInput" class="form-control form-control-sm" required></div>
-                    </div>
-                    <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">导向</label>
                         <div class="col-9">
                             <select name="category" id="reviewCategory" class="form-select form-select-sm">
@@ -327,10 +323,7 @@
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">金额（元）</label>
-                        <div class="col-9">
-                            <input type="text" name="amount" id="reviewAmount" class="form-control form-control-sm" placeholder="单人填数字，多人用;隔开如500;300;800" oninput="updateAmountHint()">
-                            <div class="small text-muted mt-1" id="reviewAmountHint"></div>
-                        </div>
+                        <div class="col-9"><input type="number" name="amount" class="form-control form-control-sm" step="50" min="0" placeholder="可选"></div>
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">激励来源</label>
@@ -610,39 +603,6 @@ function aiSummarizeComment() {
     }).catch(function() { loading.stop(); });
 }
 
-/* Amount hint: show per-person mapping */
-function updateAmountHint() {
-    var input = document.getElementById('reviewAmount');
-    var hint = document.getElementById('reviewAmountHint');
-    if (!input || !hint) return;
-    var val = input.value.trim();
-    if (!val) { hint.textContent = ''; return; }
-    var amounts = val.split(/[;,；，]/).map(function(s) { return s.trim(); }).filter(Boolean);
-    var names = [];
-    document.querySelectorAll('#reviewNomineeIds input[name="nominee_ids"]').forEach(function(el) {
-        var u = _allUsers.find(function(u) { return u.id == el.value; });
-        names.push(u ? u.name : '?');
-    });
-    if (amounts.length <= 1) {
-        var total = parseFloat(amounts[0]) || 0;
-        hint.textContent = total ? '总计 ¥' + total : '';
-        return;
-    }
-    // Validate: amount count must match nominee count
-    if (names.length > 1 && amounts.length !== names.length) {
-        hint.innerHTML = '<span class="text-danger">金额个数(' + amounts.length + ')与人数(' + names.length + ')不匹配，需用;隔开' + names.length + '个金额</span>';
-        return;
-    }
-    var parts = [], total = 0;
-    for (var i = 0; i < Math.max(names.length, amounts.length); i++) {
-        var n = names[i] || '?';
-        var a = parseFloat(amounts[i]) || 0;
-        total += a;
-        parts.push(n + ' ¥' + a);
-    }
-    hint.innerHTML = parts.join('　') + '　<strong>总计 ¥' + total + '</strong>';
-}
-
 /* Char count for textarea */
 function updateCharCount(textarea, countId) {
     var el = document.getElementById(countId);
@@ -916,8 +876,7 @@ function _refreshNomineeDisplay() {
 document.querySelectorAll('.btn-review-inc').forEach(function(btn) {
     btn.addEventListener('click', function() {
         document.getElementById('reviewForm').action = '{{ url_for("incentive.review", inc_id=0) }}'.replace('/0/', '/' + btn.dataset.incId + '/');
-        document.getElementById('reviewTitle').textContent = '评审激励';
-        document.getElementById('reviewTitleInput').value = btn.dataset.title || '';
+        document.getElementById('reviewTitle').textContent = '评审：' + btn.dataset.title;
         var catSel = document.getElementById('reviewCategory');
         if (catSel && btn.dataset.category) catSel.value = btn.dataset.category;
         document.getElementById('reviewDesc').value = btn.dataset.desc || '';
@@ -926,8 +885,7 @@ document.querySelectorAll('.btn-review-inc').forEach(function(btn) {
         _fillNomineeIds('reviewNomineeIds', btn.dataset.nomineeIds);
         _refreshNomineeDisplay();
         var amountInput = document.querySelector('#reviewModal input[name="amount"]');
-        var reviewAmountEl = document.getElementById('reviewAmount');
-        if (reviewAmountEl) { reviewAmountEl.value = btn.dataset.amount || ''; updateAmountHint(); }
+        if (amountInput) amountInput.value = btn.dataset.amount || '';
         var sourceSelect = document.querySelector('#reviewModal select[name="source"]');
         if (sourceSelect) {
             sourceSelect.value = btn.dataset.source || 'instant';
@@ -1035,19 +993,13 @@ function aiDescribe(mode, targetId, hintId, categorySelector) {
             target.value = d.text;
             hint.textContent = '';
             // Update char count
-            if (targetId && typeof updateCharCount === 'function') {
-                var countId = targetId.replace('Desc', 'DescCount').replace('Input', 'Count');
-                updateCharCount(target, countId);
-            }
-            // Fill suggested category — always override
-            var aiCat = d.suggested_category || d.category || '';
-            if (aiCat) {
-                var catMap = {'专业': 'professional', '专业能力': 'professional', '积极': 'proactive', '积极主动': 'proactive', '超越期望': 'beyond', '代码Clean': 'clean'};
-                var catVal = catMap[aiCat] || aiCat;
-                // Find catEl in the current modal
-                var curModal = target.closest('.modal');
-                var selectors = [catEl, curModal ? curModal.querySelector('select[name="category"]') : null, document.querySelector('#submitModal select[name="category"]')];
-                selectors.forEach(function(el) { if (el) el.value = catVal; });
+            var countId = targetId.replace('Desc', 'DescCount').replace('Input', 'Count');
+            if (typeof updateCharCount === 'function') updateCharCount(target, countId);
+            // Fill suggested category if returned
+            if (d.suggested_category && catEl) {
+                var catMap = {'专业': 'professional', '积极': 'proactive', '超越期望': 'beyond', '代码Clean': 'clean'};
+                var catVal = catMap[d.suggested_category] || d.suggested_category;
+                catEl.value = catVal;
             }
             // Fill comment if returned (review modal)
             if (d.comment) {

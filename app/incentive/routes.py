@@ -216,17 +216,7 @@ def review(inc_id):
     inc = db.get_or_404(Incentive, inc_id)
     action = request.form.get('action')
     description = request.form.get('description', '').strip()
-    amount_raw = request.form.get('amount', '').strip()
-    # Support "500;300;800" format — store total as amount, raw as amount_detail
-    if ';' in amount_raw or ',' in amount_raw or '；' in amount_raw or '，' in amount_raw:
-        import re
-        parts = re.split(r'[;,；，]', amount_raw)
-        amount = sum(float(p.strip()) for p in parts if p.strip())
-    else:
-        try:
-            amount = float(amount_raw) if amount_raw else None
-        except ValueError:
-            amount = None
+    amount = request.form.get('amount', type=float)
 
     source = request.form.get('source', 'instant')
     action_labels = {'approve': '通过', 'reject': '拒绝', 'pending': '退回修改'}
@@ -234,7 +224,6 @@ def review(inc_id):
     if action == 'approve':
         inc.status = 'approved'
         inc.amount = amount
-        inc.amount_detail = amount_raw if (';' in amount_raw or ',' in amount_raw or '；' in amount_raw or '，' in amount_raw) else None
         inc.source = source
         inc.fund_id = fund_id
         inc.is_public = 'is_public' in request.form
@@ -242,9 +231,6 @@ def review(inc_id):
         inc.status = 'rejected'
     elif action == 'pending':
         inc.status = 'pending'
-    new_title = request.form.get('title', '').strip()
-    if new_title:
-        inc.title = new_title
     if description:
         inc.description = description
     # Update category if provided
@@ -721,7 +707,6 @@ def ai_describe():
         suggested_cat = (d.get('category') or d.get('建议导向') or '').strip()
         if suggested_cat:
             result['suggested_category'] = suggested_cat
-            result['category'] = suggested_cat
         comment = (d.get('comment') or d.get('评语') or '').strip()[:150]
         if comment:
             import re
@@ -854,15 +839,11 @@ def _build_incentive_stats(since=None):
     total_amount = sum(i.amount or 0 for i in approved)
     total_count = len(approved)
 
-    # Per-group distribution (exclude hidden groups)
-    from app.models.user import Group
-    hidden_groups = {g.name for g in Group.query.filter_by(is_hidden=True).all()}
+    # Per-group distribution
     group_data = {}  # group → {count, amount, people}
     for inc in approved:
         for u in inc.nominees:
             g = u.group or '未分组'
-            if g in hidden_groups:
-                continue
             d = group_data.setdefault(g, {'count': 0, 'amount': 0, 'people': set()})
             d['count'] += 1
             d['amount'] += (inc.amount or 0) / max(len(inc.nominees), 1)
@@ -888,14 +869,10 @@ def _build_incentive_stats(since=None):
         d['count'] += 1
         d['amount'] += inc.amount or 0
 
-    # Monthly trend (based on since parameter)
+    # Monthly trend (last 6 months)
     today = date.today()
-    if since:
-        num_months = max((today.year - since.year) * 12 + today.month - since.month + 1, 1)
-    else:
-        num_months = 12
     monthly = {}
-    for i in range(num_months):
+    for i in range(6):
         m = today.month - i
         y = today.year
         if m <= 0:
@@ -925,12 +902,11 @@ def _build_incentive_stats(since=None):
     for inc in all_incs:
         status_counts[inc.status_label] = status_counts.get(inc.status_label, 0) + 1
 
-    # ---- People stability analysis (exclude hidden groups) ----
-    all_active_users = [u for u in User.query.filter_by(is_active=True).all()
-                        if (u.group or '未分组') not in hidden_groups]
+    # ---- People stability analysis ----
+    all_active_users = User.query.filter_by(is_active=True).all()
     awarded_names = set(nominee_data.keys())
 
-    # Per-group coverage: awarded vs total (exclude hidden groups)
+    # Per-group coverage: awarded vs total
     group_coverage = {}
     for u in all_active_users:
         g = u.group or '未分组'

@@ -68,7 +68,7 @@
     </div>
     <div class="col-6 col-md-2">
         <div class="card border-0 shadow-sm text-center py-2">
-            {% set avg = (s.total_amount / s.total_count)|int if s.total_count else 0 %}
+            {% set avg = (s.total_amount / s.awarded_people)|int if s.awarded_people else 0 %}
             <div class="fw-bold text-warning" style="font-size:1.3em;">¥{{ avg }}</div>
             <div class="text-muted" style="font-size:.65em;">人均金额</div>
         </div>
@@ -156,7 +156,7 @@
         {# Person-month heatmap #}
         {% if s.person_monthly %}
         <div class="card border-0 shadow-sm mb-3">
-            <div class="card-header bg-white py-2 border-bottom"><span class="fw-bold small"><i class="bi bi-grid-3x3 text-info"></i> 个人获奖热力图（{{ s.month_keys|length }}个月）</span></div>
+            <div class="card-header bg-white py-2 border-bottom"><span class="fw-bold small"><i class="bi bi-grid-3x3 text-info"></i> 个人获奖热力图（近6月）</span></div>
             <div class="card-body py-1" style="overflow-x:auto;">
                 <table class="table table-sm mb-0" style="font-size:.65em;">
                     <thead><tr><th>姓名</th>{% for mk in s.month_keys %}<th class="text-center">{{ mk[5:] }}月</th>{% endfor %}<th class="text-center">合计</th></tr></thead>
