@@ -561,17 +561,22 @@ def ai_polish():
 
     if target == 'comment':
         # Generate comment from description text
-        _, raw = call_ollama(get_prompt('incentive_polish_comment') + f'\n{text}')
-        return jsonify(ok=True, text=raw.strip()[:150] if raw else text)
+        parsed, raw = call_ollama(get_prompt('incentive_polish_comment') + f'\n{text}')
+        comment = raw.strip()[:150] if raw else text
+        if isinstance(parsed, dict):
+            comment = (parsed.get('comment') or parsed.get('评语') or raw).strip()[:150]
+        return jsonify(ok=True, text=comment)
     else:
-        # Polish description
-        _, raw = call_ollama(get_prompt('incentive_polish_desc') + f'\n{text}')
-        result = {'ok': True, 'text': raw.strip()[:500] if raw else text}
-        # In review scene, also generate comment
-        if scene == 'review':
-            desc_polished = result['text']
-            _, comment_raw = call_ollama(get_prompt('incentive_polish_comment') + f'\n{desc_polished}')
-            result['comment'] = comment_raw.strip()[:150] if comment_raw else ''
+        # Polish description (returns JSON with description + comment)
+        parsed, raw = call_ollama(get_prompt('incentive_polish_desc') + f'\n{text}')
+        desc_out = raw.strip()[:500] if raw else text
+        comment_out = ''
+        if isinstance(parsed, dict):
+            desc_out = (parsed.get('description') or parsed.get('事迹') or raw).strip()[:500]
+            comment_out = (parsed.get('comment') or parsed.get('评语') or '').strip()[:150]
+        result = {'ok': True, 'text': desc_out}
+        if scene == 'review' and comment_out:
+            result['comment'] = comment_out
         return jsonify(**result)
 
 
@@ -638,10 +643,22 @@ def ai_describe():
     if existing_desc:
         prompt += f'\n\n参考已有描述进行润色：{existing_desc}'
 
-    _, raw = call_ollama(prompt)
-    if raw:
-        return jsonify(ok=True, text=raw.strip()[:500])
-    return jsonify(ok=False, msg='AI 服务不可用')
+    parsed, raw = call_ollama(prompt)
+    if not raw:
+        return jsonify(ok=False, msg='AI 服务不可用')
+    # Parse JSON response
+    text_out = raw.strip()[:500]
+    result = {'ok': True, 'text': text_out}
+    if isinstance(parsed, dict):
+        text_out = (parsed.get('description') or parsed.get('事迹') or raw).strip()[:500]
+        result['text'] = text_out
+        suggested_cat = (parsed.get('category') or parsed.get('建议导向') or '').strip()
+        if suggested_cat:
+            result['suggested_category'] = suggested_cat
+        comment = (parsed.get('comment') or parsed.get('评语') or '').strip()[:150]
+        if comment:
+            result['comment'] = comment
+    return jsonify(**result)
 
 
 @incentive_bp.route('/ai-recommend-candidates', methods=['POST'])

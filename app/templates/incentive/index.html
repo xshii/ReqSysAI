@@ -906,7 +906,28 @@ function aiDescribe(mode, targetId, hintId, categorySelector) {
         });
     }).then(function(r) { return r.json(); }).then(function(d) {
         loading.stop();
-        if (d.ok) { target.value = d.text; hint.textContent = ''; }
+        if (d.ok) {
+            target.value = d.text;
+            hint.textContent = '';
+            // Update char count
+            var countId = targetId.replace('Desc', 'DescCount').replace('Input', 'Count');
+            if (typeof updateCharCount === 'function') updateCharCount(target, countId);
+            // Fill suggested category if returned
+            if (d.suggested_category && catEl) {
+                var catMap = {'专业': 'professional', '积极': 'proactive', '超越期望': 'beyond', '代码Clean': 'clean'};
+                var catVal = catMap[d.suggested_category] || d.suggested_category;
+                catEl.value = catVal;
+            }
+            // Fill comment if returned (review modal)
+            if (d.comment) {
+                var commentEl = target.closest('.modal') ? target.closest('.modal').querySelector('[name="review_comment"]') : null;
+                if (commentEl) {
+                    commentEl.value = d.comment;
+                    var charEl = document.getElementById('charCount');
+                    if (charEl) charEl.textContent = d.comment.length + '/150';
+                }
+            }
+        }
         else { hint.textContent = d.msg || 'AI 服务不可用'; }
     }).catch(function(e) { loading.stop(); hint.textContent = e.message || 'AI 请求失败'; });
 }
