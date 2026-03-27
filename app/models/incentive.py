@@ -42,7 +42,8 @@ class Incentive(db.Model):
     # 评审
     status = db.Column(db.String(20), default='submitted')  # submitted / pending / approved / rejected
     review_comment = db.Column(db.String(150), nullable=True)  # 评语，上限150字
-    amount = db.Column(db.Float, nullable=True)  # 激励金额
+    amount = db.Column(db.Float, nullable=True)  # 激励金额（总额）
+    amount_detail = db.Column(db.String(200), nullable=True)  # 多人金额明细，如"500;300;800"
     fund_id = db.Column(db.Integer, db.ForeignKey('incentive_funds.id'), nullable=True)  # 关联资金条目
     reviewed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     reviewed_at = db.Column(db.DateTime, nullable=True)

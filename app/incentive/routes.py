@@ -216,7 +216,17 @@ def review(inc_id):
     inc = db.get_or_404(Incentive, inc_id)
     action = request.form.get('action')
     description = request.form.get('description', '').strip()
-    amount = request.form.get('amount', type=float)
+    amount_raw = request.form.get('amount', '').strip()
+    # Support "500;300;800" format — store total as amount, raw as amount_detail
+    if ';' in amount_raw or ',' in amount_raw or '；' in amount_raw or '，' in amount_raw:
+        import re
+        parts = re.split(r'[;,；，]', amount_raw)
+        amount = sum(float(p.strip()) for p in parts if p.strip())
+    else:
+        try:
+            amount = float(amount_raw) if amount_raw else None
+        except ValueError:
+            amount = None
 
     source = request.form.get('source', 'instant')
     action_labels = {'approve': '通过', 'reject': '拒绝', 'pending': '退回修改'}
@@ -224,6 +234,7 @@ def review(inc_id):
     if action == 'approve':
         inc.status = 'approved'
         inc.amount = amount
+        inc.amount_detail = amount_raw if (';' in amount_raw or ',' in amount_raw or '；' in amount_raw or '，' in amount_raw) else None
         inc.source = source
         inc.fund_id = fund_id
         inc.is_public = 'is_public' in request.form
@@ -231,8 +242,21 @@ def review(inc_id):
         inc.status = 'rejected'
     elif action == 'pending':
         inc.status = 'pending'
+    new_title = request.form.get('title', '').strip()
+    if new_title:
+        inc.title = new_title
     if description:
         inc.description = description
+    # Update category if provided
+    new_category = request.form.get('category', '').strip()
+    if new_category:
+        inc.category = new_category
+    # Update nominees if provided
+    new_nominee_ids = request.form.getlist('nominee_ids')
+    if new_nominee_ids:
+        nominee_users = User.query.filter(User.id.in_([int(i) for i in new_nominee_ids if i])).all()
+        if nominee_users:
+            inc.nominees = nominee_users
     comment = request.form.get('review_comment', '').strip()[:MAX_COMMENT_LENGTH]
     inc.review_comment = comment or inc.review_comment
     inc.reviewed_by = current_user.id
@@ -545,10 +569,8 @@ def update_photo(inc_id):
 @incentive_bp.route('/ai-polish', methods=['POST'])
 @login_required
 def ai_polish():
-    """AI polish description and/or generate comment.
-    scene=submit: polish desc only (no comment)
-    scene=review: polish desc + generate comment from desc
-    """
+    """AI polish description and/or generate comment."""
+    import json as json_lib
     from app.services.ai import call_ollama
     from app.services.prompts import get_prompt
     data = request.get_json() or {}
@@ -559,22 +581,43 @@ def ai_polish():
     if not text:
         return jsonify(ok=False, msg='请输入内容')
 
+    def _parse_ai(parsed, raw):
+        """Ensure we get a dict from AI response."""
+        if isinstance(parsed, dict):
+            return parsed
+        # Fallback: try to extract JSON from raw text
+        if raw and '{' in raw:
+            try:
+                idx = raw.index('{')
+                ridx = raw.rindex('}')
+                return json_lib.loads(raw[idx:ridx + 1])
+            except (ValueError, json_lib.JSONDecodeError):
+                pass
+        return None
+
+    def _fix_comment_newlines(c):
+        """Ensure * bullet points start on new lines."""
+        import re
+        # Replace "  * " or " * " (not at line start) with "\n* "
+        c = re.sub(r'(?<!\n)\s*\*\s+', '\n* ', c)
+        return c.strip()
+
     if target == 'comment':
-        # Generate comment from description text
-        parsed, raw = call_ollama(get_prompt('incentive_polish_comment') + f'\n{text}')
-        comment = raw.strip()[:150] if raw else text
-        if isinstance(parsed, dict):
-            comment = (parsed.get('comment') or parsed.get('评语') or raw).strip()[:150]
-        return jsonify(ok=True, text=comment)
-    else:
-        # Polish description (returns JSON with description + comment)
+        # Reuse polish_desc prompt, extract comment only
         parsed, raw = call_ollama(get_prompt('incentive_polish_desc') + f'\n{text}')
-        desc_out = raw.strip()[:500] if raw else text
-        comment_out = ''
-        if isinstance(parsed, dict):
-            desc_out = (parsed.get('description') or parsed.get('事迹') or raw).strip()[:500]
-            comment_out = (parsed.get('comment') or parsed.get('评语') or '').strip()[:150]
-        result = {'ok': True, 'text': desc_out}
+        d = _parse_ai(parsed, raw)
+        comment = (d.get('comment') or d.get('评语') or '').strip()[:150] if d else (raw.strip()[:150] if raw else text)
+        return jsonify(ok=True, text=_fix_comment_newlines(comment))
+    else:
+        parsed, raw = call_ollama(get_prompt('incentive_polish_desc') + f'\n{text}')
+        d = _parse_ai(parsed, raw)
+        if d:
+            desc_out = (d.get('description') or d.get('事迹') or '').strip()[:500]
+            comment_out = _fix_comment_newlines((d.get('comment') or d.get('评语') or '').strip()[:150])
+        else:
+            desc_out = raw.strip()[:500] if raw else text
+            comment_out = ''
+        result = {'ok': True, 'text': desc_out or text}
         if scene == 'review' and comment_out:
             result['comment'] = comment_out
         return jsonify(**result)
@@ -591,13 +634,29 @@ def ai_describe():
     existing_desc = (data.get('description') or '').strip()
     category = data.get('category', '')
 
-    # If just polishing existing text
+    # If just polishing existing text (no nominee_ids for data lookup)
     if existing_desc and not nominee_ids:
+        import json as json_lib
         from app.services.prompts import get_prompt
-        _, raw = call_ollama(get_prompt('incentive_polish_desc') + f'\n{existing_desc}')
-        if raw:
-            return jsonify(ok=True, text=raw.strip()[:500])
-        return jsonify(ok=False, msg='AI 服务不可用')
+        # Try to get nominee names from the form's hidden nominee_ids
+        form_nominee_ids = data.get('form_nominee_ids', [])
+        context_prefix = ''
+        if form_nominee_ids:
+            names = [u.name for u in User.query.filter(User.id.in_([int(i) for i in form_nominee_ids if i])).all()]
+            if names:
+                context_prefix = f'推荐人员：{"、".join(names)}\n'
+        parsed, raw = call_ollama(get_prompt('incentive_polish_desc') + f'\n{context_prefix}{existing_desc}')
+        if not raw:
+            return jsonify(ok=False, msg='AI 服务不可用')
+        d = parsed if isinstance(parsed, dict) else None
+        if not d and '{' in raw:
+            try:
+                d = json_lib.loads(raw[raw.index('{'):raw.rindex('}') + 1])
+            except (ValueError, json_lib.JSONDecodeError):
+                pass
+        if d:
+            return jsonify(ok=True, text=(d.get('description') or d.get('事迹') or raw).strip()[:500])
+        return jsonify(ok=True, text=raw.strip()[:500])
 
     if not nominee_ids:
         return jsonify(ok=False, msg='请先选择推荐人物')
@@ -647,17 +706,29 @@ def ai_describe():
     if not raw:
         return jsonify(ok=False, msg='AI 服务不可用')
     # Parse JSON response
-    text_out = raw.strip()[:500]
-    result = {'ok': True, 'text': text_out}
-    if isinstance(parsed, dict):
-        text_out = (parsed.get('description') or parsed.get('事迹') or raw).strip()[:500]
-        result['text'] = text_out
-        suggested_cat = (parsed.get('category') or parsed.get('建议导向') or '').strip()
+    import json as json_lib
+    d = parsed if isinstance(parsed, dict) else None
+    if not d and raw and '{' in raw:
+        try:
+            idx = raw.index('{')
+            ridx = raw.rindex('}')
+            d = json_lib.loads(raw[idx:ridx + 1])
+        except (ValueError, json_lib.JSONDecodeError):
+            pass
+    result = {'ok': True}
+    if d:
+        result['text'] = (d.get('description') or d.get('事迹') or raw).strip()[:500]
+        suggested_cat = (d.get('category') or d.get('建议导向') or '').strip()
         if suggested_cat:
             result['suggested_category'] = suggested_cat
-        comment = (parsed.get('comment') or parsed.get('评语') or '').strip()[:150]
+            result['category'] = suggested_cat
+        comment = (d.get('comment') or d.get('评语') or '').strip()[:150]
         if comment:
+            import re
+            comment = re.sub(r'(?<!\n)\s*\*\s+', '\n* ', comment).strip()
             result['comment'] = comment
+    else:
+        result['text'] = raw.strip()[:500]
     return jsonify(**result)
 
 
@@ -783,11 +854,15 @@ def _build_incentive_stats(since=None):
     total_amount = sum(i.amount or 0 for i in approved)
     total_count = len(approved)
 
-    # Per-group distribution
+    # Per-group distribution (exclude hidden groups)
+    from app.models.user import Group
+    hidden_groups = {g.name for g in Group.query.filter_by(is_hidden=True).all()}
     group_data = {}  # group → {count, amount, people}
     for inc in approved:
         for u in inc.nominees:
             g = u.group or '未分组'
+            if g in hidden_groups:
+                continue
             d = group_data.setdefault(g, {'count': 0, 'amount': 0, 'people': set()})
             d['count'] += 1
             d['amount'] += (inc.amount or 0) / max(len(inc.nominees), 1)
@@ -813,10 +888,14 @@ def _build_incentive_stats(since=None):
         d['count'] += 1
         d['amount'] += inc.amount or 0
 
-    # Monthly trend (last 6 months)
+    # Monthly trend (based on since parameter)
     today = date.today()
+    if since:
+        num_months = max((today.year - since.year) * 12 + today.month - since.month + 1, 1)
+    else:
+        num_months = 12
     monthly = {}
-    for i in range(6):
+    for i in range(num_months):
         m = today.month - i
         y = today.year
         if m <= 0:
@@ -846,11 +925,12 @@ def _build_incentive_stats(since=None):
     for inc in all_incs:
         status_counts[inc.status_label] = status_counts.get(inc.status_label, 0) + 1
 
-    # ---- People stability analysis ----
-    all_active_users = User.query.filter_by(is_active=True).all()
+    # ---- People stability analysis (exclude hidden groups) ----
+    all_active_users = [u for u in User.query.filter_by(is_active=True).all()
+                        if (u.group or '未分组') not in hidden_groups]
     awarded_names = set(nominee_data.keys())
 
-    # Per-group coverage: awarded vs total
+    # Per-group coverage: awarded vs total (exclude hidden groups)
     group_coverage = {}
     for u in all_active_users:
         g = u.group or '未分组'

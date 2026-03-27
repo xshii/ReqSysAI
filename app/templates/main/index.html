@@ -488,13 +488,6 @@ checkHelpAlert();
                     {% set ns.d = ns.d + timedelta(days=1) %}
                 {% endfor %}
                 </div>
-                <div class="d-flex align-items-center gap-1 mt-1 small text-muted">
-                    <span>少</span>
-                    {% for c in ['#ebedf0','#9be9a8','#40c463','#30a14e','#216e39'] %}
-                    <div style="width:11px;height:11px;background:{{ c }};border-radius:2px;"></div>
-                    {% endfor %}
-                    <span>多</span>
-                </div>
             </div>
             </div>
         </div>
@@ -564,7 +557,7 @@ checkHelpAlert();
                             <span class="badge bg-{{ inc.category_color }}" style="font-size:.6em;">{{ inc.category_label }}</span>
                             <span class="text-muted">{{ inc.title }}</span>
                         </div>
-                        {% if inc.description and inc.description != inc.title %}<div style="font-size:.85em;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;" title="{{ inc.description }}">{{ inc.description }}</div>{% endif %}
+                        {% if inc.review_comment %}<div style="font-size:.85em;white-space:pre-line;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;" data-bs-toggle="tooltip" data-bs-placement="top" title="{{ inc.description or '' }}">{{ inc.review_comment }}</div>{% elif inc.description and inc.description != inc.title %}<div style="font-size:.85em;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;" title="{{ inc.description }}">{{ inc.description }}</div>{% endif %}
                     </div>
                 </div>
                 {% endfor %}

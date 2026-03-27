@@ -3,6 +3,7 @@ body {
 }
 /* Manager-only elements hidden by default, JS adds .mgr-visible to show */
 .mgr-only:not(.mgr-visible) { display: none !important; }
+.tooltip-inner { max-width: 360px; text-align: left; }
 ::placeholder { color: #bbb !important; opacity: 1; }
 ::-webkit-input-placeholder { color: #bbb !important; }
 #navSearchInput::placeholder { color: rgba(255,255,255,.5) !important; }
