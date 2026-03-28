@@ -15,6 +15,7 @@ class RequirementForm(FlaskForm):
     source = SelectField('需求类型',
                          choices=list(Requirement.SOURCE_LABELS.items()),
                          default='coding', validators=[DataRequired(message='请选择需求类型')])
+    category = StringField('需求分类', validators=[Optional(), Length(max=100)])
     assignee_id = SelectField('负责人', coerce=int, validators=[Optional()])
     start_date = DateField('启动时间', validators=[Optional()])
     due_date = DateField('预期完成时间', validators=[DataRequired(message='请选择预期完成时间')])

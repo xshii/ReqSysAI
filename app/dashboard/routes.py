@@ -40,6 +40,64 @@ def _merge_member_roles(members):
     return {name: '/'.join(sorted(roles)) for name, roles in result.items()}
 
 
+def _build_people_tree(project_id, sub_project_ids):
+    """Build tree: project → project_role(去括号聚类) → [{name, note}].
+
+    project_role 中的括号内容提取为人员的独有职责(note)。
+    """
+    import re
+    from collections import OrderedDict
+    all_pids = [project_id] + sub_project_ids
+    members = ProjectMember.query.filter(
+        ProjectMember.project_id.in_(all_pids)
+    ).options(
+        db.joinedload(ProjectMember.project),
+        db.joinedload(ProjectMember.user),
+    ).order_by(ProjectMember.sort_order).all()
+
+    seen_names = set()
+    tree = OrderedDict()  # project_name → {role_group → [person]}
+    for m in members:
+        proj_name = m.project.name if m.project else '未分配'
+        name = m.display_name
+
+        # Parse project_role: strip parentheses for grouping, extract note
+        raw_role = (m.project_role or '').strip()
+        match = re.match(r'^([^(（]+?)(?:\s*[(（](.+?)[)）])?\s*$', raw_role)
+        if match:
+            role_group = match.group(1).strip() or 'DEV'
+            note = (match.group(2) or '').strip()
+        else:
+            role_group = raw_role or 'DEV'
+            note = ''
+
+        seen_names.add(name)
+
+        if proj_name not in tree:
+            tree[proj_name] = OrderedDict()
+        if role_group not in tree[proj_name]:
+            tree[proj_name][role_group] = []
+        if not any(p['name'] == name for p in tree[proj_name][role_group]):
+            tree[proj_name][role_group].append({'name': name, 'note': note})
+
+    unique_count = len(seen_names)
+    tree._unique_count = unique_count
+    return tree
+
+
+def _gen_people_tree_img(project_id, sub_project_ids, project_name=''):
+    """Generate people tree chart image (base64 PNG)."""
+    try:
+        from app.services.people_tree import generate_people_tree_image
+        tree = _build_people_tree(project_id, sub_project_ids)
+        if tree:
+            return generate_people_tree_image(tree, project_name=project_name)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning('People tree image failed: %s', e)
+    return None
+
+
 def _urgency_sort(reqs, limit=None):
     """Sort requirements: overdue → active(urgency desc) → done(ahead days desc)."""
     today_ = date.today()
@@ -546,10 +604,26 @@ def weekly_report():
                 pass
 
         # Smart requirement list: multi-tier filtering
+        # Filter children by project scope; also find orphan children
+        all_pids_set = set(all_pids) if cur_project_id else None
         all_with_children = []
+        seen_ids = set()
         for r in all_reqs:
             all_with_children.append(r)
-            all_with_children.extend(r.children or [])
+            seen_ids.add(r.id)
+            for c in (r.children or []):
+                if all_pids_set and c.project_id not in all_pids_set:
+                    continue  # child in different project, skip
+                all_with_children.append(c)
+                seen_ids.add(c.id)
+        # Orphan children: in this project but parent is in another project
+        if cur_project_id:
+            orphans = Requirement.query.filter(
+                Requirement.parent_id.isnot(None),
+                Requirement.project_id.in_(all_pids),
+                Requirement.id.notin_(seen_ids) if seen_ids else True,
+            ).all()
+            all_with_children.extend(orphans)
         # Full mode: include parents + all children
         display_reqs = list(all_with_children)
         req_list_mode = 'full'  # full / diff_assignee / parent_only / priority
@@ -632,6 +706,8 @@ def weekly_report():
             'people_map': people_map,
             'people_map_reqs': people_map_reqs,
             'people_roles': _merge_member_roles(ProjectMember.query.filter(ProjectMember.project_id.in_([cur_project_id] + sub_project_ids)).all()),
+            'people_tree': _build_people_tree(cur_project_id, sub_project_ids),
+            'people_tree_img': _gen_people_tree_img(cur_project_id, sub_project_ids, project_name),
             'ai': ai_analysis,
             'sub_projects': sub_projects,
             'timeline_img': timeline_img,
@@ -683,6 +759,7 @@ def weekly_report():
         if cur_project_id:
             all_pids = [cur_project_id] + sub_project_ids
             req_overview_q = req_overview_q.filter(Requirement.project_id.in_(all_pids))
+        all_pids_set = set(all_pids) if cur_project_id else None
         all_reqs = _urgency_sort(req_overview_q.all(), limit=50)
         if sub_project_ids:
             pid_order = {pid: i for i, pid in enumerate(all_pids)}
@@ -816,9 +893,9 @@ def weekly_report():
             'reviewer': reviewer,
             'milestones': milestones,
             'all_reqs': all_reqs,
-            'display_reqs': [item for r in all_reqs for item in [r] + (r.children or [])],
+            'display_reqs': [item for r in all_reqs for item in [r] + [c for c in (r.children or []) if not all_pids_set or c.project_id in all_pids_set]],
             'req_list_mode': 'full',
-            'req_total_with_children': sum(1 + len(r.children or []) for r in all_reqs),
+            'req_total_with_children': sum(1 + sum(1 for c in (r.children or []) if not all_pids_set or c.project_id in all_pids_set) for r in all_reqs),
             'req_investment': req_investment,
             'completion_weighted': completion_weighted2,
             'person_done': dict(person_done),
@@ -833,6 +910,8 @@ def weekly_report():
             'people_map': people_map,
             'people_map_reqs': people_map_reqs,
             'people_roles': _merge_member_roles(ProjectMember.query.filter(ProjectMember.project_id.in_([cur_project_id] + sub_project_ids)).all()),
+            'people_tree': _build_people_tree(cur_project_id, sub_project_ids),
+            'people_tree_img': _gen_people_tree_img(cur_project_id, sub_project_ids, project_name),
             'ai': ai_analysis,
             'sub_projects': sub_projects,
         }

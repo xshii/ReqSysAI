@@ -2,55 +2,241 @@
 {% block title %}{{ req.number }} {{ req.title }} - {{ site_name }}{% endblock %}
 
 {% block content %}
-<div class="mb-3">
-    <a href="{{ url_for('requirement.requirement_list') }}" class="text-decoration-none small">
-        <i class="bi bi-arrow-left"></i> 需求列表
-    </a>
+{% set pct = 100 if req.status in ('done','closed') else (req.completion or 0) %}
+
+{# ── Header: title left, status transition right ── #}
+<div class="d-flex justify-content-between align-items-start mb-2">
+    <div>
+        <nav class="small mb-1">
+            <a href="{{ url_for('project.project_detail', project_id=req.project.id) }}" class="text-decoration-none text-muted">{{ req.project.name }}</a>
+            <span class="text-muted mx-1">/</span>
+            <a href="{{ url_for('requirement.requirement_list', project_id=req.project_id) }}" class="text-decoration-none text-muted">需求列表</a>
+            <span class="text-muted mx-1">/</span>
+            <span class="text-muted">{{ req.number }}</span>
+        </nav>
+        <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge bg-{{ 'info text-dark' if req.category else 'light text-muted border' }}" id="catBadge" style="cursor:pointer;min-width:3.5em;" onclick="this.classList.add('d-none');document.getElementById('catInput').classList.remove('d-none');document.getElementById('catInput').focus();">{{ req.category_label or '分类' }}</span>
+            <input type="text" id="catInput" class="form-control form-control-sm d-none" style="width:100px;font-size:.85rem;" list="catList" placeholder="输入分类" value="{{ req.category or '' }}" onblur="saveCategory(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
+            <datalist id="catList">{% for c in req.CATEGORY_CHOICES %}<option value="{{ c[1] }}">{% endfor %}</datalist>
+            <h4 class="mb-0">
+                <span id="titleDisplay" style="cursor:pointer;" onclick="this.classList.add('d-none');document.getElementById('titleInput').classList.remove('d-none');document.getElementById('titleInput').focus();">{{ req.title }}</span>
+                <input type="text" id="titleInput" class="form-control form-control-sm d-none" style="font-size:1.2rem;font-weight:600;" value="{{ req.title }}" onblur="saveField('title',this.value,this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
+            </h4>
+        </div>
+        <div class="d-flex flex-wrap gap-1 align-items-center">
+            {% if req.parent %}<a href="{{ url_for('requirement.requirement_detail', req_id=req.parent.id) }}" class="badge bg-light text-primary border text-decoration-none">↳ {{ req.parent.number }}</a>{% endif %}
+            {% if req.due_date and req.due_date < today and req.status not in ('done','closed') %}<span class="badge bg-danger">超期{{ (today - req.due_date).days }}天</span>{% endif %}
+        </div>
+    </div>
+    <div class="d-flex align-items-center gap-1 flex-shrink-0">
+        <a href="{{ url_for('requirement.requirement_edit', req_id=req.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i></a>
+        <form method="POST" action="{{ url_for('requirement.requirement_delete', req_id=req.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('删除需求 {{ req.number }}{% if req.children %} 及其 {{ req.children|length }} 个子需求{% endif %}？此操作不可恢复。')"><i class="bi bi-trash"></i></button>
+        </form>
+    </div>
+</div>
+
+{# ── Progress + status transition, aligned with left column ── #}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="d-flex align-items-center gap-2">
+            {% set nexts = req.allowed_next_statuses %}
+            {% set forward = nexts[0] if nexts|length > 0 else none %}
+            {% set backward = nexts[1] if nexts|length > 1 else none %}
+            <form method="POST" action="{{ url_for('requirement.requirement_status', req_id=req.id) }}" class="d-inline-flex gap-1 align-items-center flex-shrink-0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {% if backward %}
+                <button type="submit" name="status" value="{{ backward }}" class="btn btn-sm py-0 px-1 btn-outline-{{ req.STATUS_COLORS[backward].split()[0] }}" style="font-size:.78em;">← {{ req.STATUS_LABELS[backward] }}</button>
+                {% endif %}
+                <span class="badge bg-{{ req.status_color }}">{{ req.status_label }}</span>
+                {% if forward %}
+                <button type="submit" name="status" value="{{ forward }}" class="btn btn-sm py-0 px-1 btn-outline-{{ req.STATUS_COLORS[forward].split()[0] }}" style="font-size:.78em;">{{ req.STATUS_LABELS[forward] }} →</button>
+                {% endif %}
+            </form>
+            <div class="progress flex-grow-1" style="height:8px;cursor:pointer;" onclick="var s=this.parentNode.querySelector('select');s.classList.toggle('d-none');s.focus();">
+                <div class="progress-bar bg-{{ 'success' if pct >= 90 else ('primary' if pct >= 30 else 'secondary') }}" id="detailBar" style="width:{{ pct }}%"></div>
+            </div>
+            <select class="form-select form-select-sm d-none" style="width:70px;font-size:.8rem;padding:0 .3rem;" id="detailPctSel" data-status="{{ req.status }}" onchange="updateCompletion({{ req.id }}, this)" onblur="this.classList.add('d-none')">
+                {% for v in range(0, 110, 10) %}
+                <option value="{{ v }}" {% if v == pct %}selected{% endif %}>{{ v }}%</option>
+                {% endfor %}
+            </select>
+            <span class="small fw-bold pct-label" style="cursor:pointer;" onclick="var s=this.parentNode.querySelector('select');s.classList.toggle('d-none');s.focus();">{{ pct }}%</span>
+            <span class="small text-muted" title="按需求类型({{ req.source_label }})在各阶段的权重计算">加权 <strong class="{% if req.weighted_completion >= 90 %}text-success{% elif req.weighted_completion >= 50 %}text-primary{% else %}text-secondary{% endif %}">{{ req.weighted_completion }}%</strong></span>
+        </div>
+    </div>
 </div>
 
 <div class="row">
-    <div class="col-md-8">
-        <!-- Title & description -->
+    {# ── Left: metadata ── #}
+    <div class="col-md-6">
+        {# Basic info — all fields inline-editable #}
         <div class="card mb-3">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <span class="text-muted">{{ req.number }}</span>
-                        <h4 class="mt-1">{{ req.title }}</h4>
-                    </div>
-                    <div class="d-flex gap-1">
-                        <a href="{{ url_for('requirement.requirement_edit', req_id=req.id) }}" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-pencil"></i> 编辑
-                        </a>
-                        <form method="POST" action="{{ url_for('requirement.requirement_delete', req_id=req.id) }}" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('删除需求 {{ req.number }}{% if req.children %} 及其 {{ req.children|length }} 个子需求{% endif %}？此操作不可恢复。')">
-                                <i class="bi bi-trash"></i> 删除
-                            </button>
-                        </form>
-                    </div>
-                </div>
-                <div class="mt-3">{{ req.description or '暂无描述' }}</div>
+            <div class="card-body py-2">
+                <table class="table table-sm table-borderless mb-0 small" id="metaTable">
+                    <tr>
+                        <td class="text-muted" style="width:60px;">负责人</td>
+                        <td class="editable-field" data-field="assignee_name" data-type="text">
+                            <span class="field-display fw-bold">{{ req.assignee_display }}</span>
+                            <input type="text" class="form-control form-control-sm field-input d-none" list="userList" value="{{ req.assignee_display if req.assignee_display != '未分配' else '' }}" placeholder="搜索姓名/工号" autocomplete="off">
+                            <datalist id="userList">{% for u in users %}<option value="{{ u.name }}" label="{{ u.employee_id }}{% if u.group %} · {{ u.group }}{% endif %}">{% endfor %}</datalist>
+                        </td>
+                    </tr>
+                    <tr><td class="text-muted">项目</td><td><a href="{{ url_for('project.project_detail', project_id=req.project.id) }}">{{ req.project.name }}</a></td></tr>
+                    <tr>
+                        <td class="text-muted">优先级</td>
+                        <td class="editable-field" data-field="priority" data-type="select">
+                            <span class="field-display"><span class="badge bg-{{ req.priority_color }}">{{ req.priority_label }}</span></span>
+                            <select class="form-select form-select-sm field-input d-none">
+                                {% for k, v in req.PRIORITY_LABELS.items() %}<option value="{{ k }}" {% if k == req.priority %}selected{% endif %}>{{ v }}</option>{% endfor %}
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">类型</td>
+                        <td class="editable-field" data-field="source" data-type="select">
+                            <span class="field-display"><span class="badge bg-light text-secondary border">{{ req.source_label }}</span></span>
+                            <select class="form-select form-select-sm field-input d-none">
+                                {% for k, v in req.SOURCE_LABELS.items() %}<option value="{{ k }}" {% if k == req.source %}selected{% endif %}>{{ v }}</option>{% endfor %}
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">预估</td>
+                        <td class="editable-field" data-field="estimate_days" data-type="number" data-suffix=" 人天">
+                            <span class="field-display">{{ req.estimate_days or '-' }} 人天</span>
+                            <input type="number" class="form-control form-control-sm field-input d-none" value="{{ req.estimate_days or '' }}" step="0.5" min="0" placeholder="人天">
+                        </td>
+                    </tr>
+                    <tr class="workload-row" data-show="coding">
+                        <td class="text-muted">代码量</td>
+                        <td class="editable-field" data-field="code_lines" data-type="number" data-suffix=" 行">
+                            <span class="field-display">{{ req.code_lines or '-' }} 行</span>
+                            <input type="number" class="form-control form-control-sm field-input d-none" value="{{ req.code_lines or '' }}" min="0" placeholder="行数">
+                        </td>
+                    </tr>
+                    <tr class="workload-row" data-show="testing">
+                        <td class="text-muted">测试用例</td>
+                        <td class="editable-field" data-field="test_cases" data-type="number" data-suffix=" 个">
+                            <span class="field-display">{{ req.test_cases or '-' }} 个</span>
+                            <input type="number" class="form-control form-control-sm field-input d-none" value="{{ req.test_cases or '' }}" min="0" placeholder="用例数">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">AI辅助</td>
+                        <td class="editable-field" data-field="ai_ratio" data-type="number" data-suffix="%">
+                            <span class="field-display">{% if req.ai_ratio is not none %}<span style="color:#7c3aed;font-weight:600;">{{ req.ai_ratio }}%</span>{% else %}-{% endif %}</span>
+                            <input type="number" class="form-control form-control-sm field-input d-none" value="{{ req.ai_ratio if req.ai_ratio is not none else '' }}" min="0" max="100" placeholder="0~100">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">开始</td>
+                        <td class="editable-field" data-field="start_date" data-type="date">
+                            <span class="field-display">{{ req.start_date.strftime('%Y-%m-%d') if req.start_date else '-' }}</span>
+                            <input type="date" class="form-control form-control-sm field-input d-none" value="{{ req.start_date.strftime('%Y-%m-%d') if req.start_date else '' }}" max="2099-12-31">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">截止</td>
+                        <td class="editable-field" data-field="due_date" data-type="date">
+                            <span class="field-display {% if req.due_date and req.due_date < today and req.status not in ('done','closed') %}text-danger fw-bold{% endif %}">{{ req.due_date.strftime('%Y-%m-%d') if req.due_date else '-' }}</span>
+                            <input type="date" class="form-control form-control-sm field-input d-none" value="{{ req.due_date.strftime('%Y-%m-%d') if req.due_date else '' }}" max="2099-12-31">
+                        </td>
+                    </tr>
+                    <tr><td class="text-muted">创建者</td><td>{{ req.creator.name }}</td></tr>
+                    <tr><td class="text-muted">创建</td><td>{{ req.created_at.strftime('%Y-%m-%d') }}</td></tr>
+                </table>
             </div>
         </div>
 
-        <!-- Sub-requirements -->
+        {# Dependencies #}
+        {% if req.dependencies or req.dependents %}
+        <div class="card mb-3">
+            <div class="card-header py-1"><span class="small fw-bold">依赖关系</span></div>
+            <div class="card-body py-2">
+                {% if req.dependencies %}
+                <div class="mb-1"><span class="small text-muted">前置依赖</span></div>
+                {% for d in req.dependencies %}
+                <div class="d-flex align-items-center gap-1 mb-1">
+                    <span class="badge bg-{{ d.status_color }}" style="font-size:.65em;">{{ d.status_label }}</span>
+                    <a href="{{ url_for('requirement.requirement_detail', req_id=d.id) }}" class="small text-truncate">{{ d.number }} {{ d.title }}</a>
+                </div>
+                {% endfor %}
+                {% endif %}
+                {% if req.dependents %}
+                <div class="mb-1 {% if req.dependencies %}mt-2{% endif %}"><span class="small text-muted">被依赖</span></div>
+                {% for d in req.dependents %}
+                <div class="d-flex align-items-center gap-1 mb-1">
+                    <span class="badge bg-{{ d.status_color }}" style="font-size:.65em;">{{ d.status_label }}</span>
+                    <a href="{{ url_for('requirement.requirement_detail', req_id=d.id) }}" class="small text-truncate">{{ d.number }} {{ d.title }}</a>
+                </div>
+                {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {# Activity log #}
+        {% if req.activities %}
+        <div class="card">
+            <div class="card-header py-1"><span class="small fw-bold">操作记录</span></div>
+            <ul class="list-group list-group-flush" style="font-size:.78em;">
+                {% for a in req.activities %}
+                <li class="list-group-item py-1">
+                    <span class="text-muted">{{ a.created_at.strftime('%m-%d %H:%M') }}</span>
+                    <strong>{{ a.user.name }}</strong>
+                    {% if a.action == 'created' %}创建了需求
+                    {% elif a.action == 'status_changed' %}{{ a.detail }}
+                    {% elif a.action == 'edited' %}编辑: {{ a.detail }}
+                    {% elif a.action == 'commented' %}发表了评论
+                    {% elif a.action == 'task_added' %}{{ a.detail }}
+                    {% else %}{{ a.detail }}
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+
+    {# ── Right: content ── #}
+    <div class="col-md-6">
+        {# Description — click to edit #}
+        <div class="card mb-3">
+            <div class="card-header py-1"><span class="small fw-bold">需求描述</span></div>
+            <div class="card-body py-2">
+                <div id="descDisplay" style="white-space:pre-wrap;cursor:pointer;min-height:2em;" onclick="this.classList.add('d-none');var ta=document.getElementById('descInput');ta.classList.remove('d-none');ta.focus();">{{ req.description or '点击添加描述...' }}</div>
+                <textarea id="descInput" class="form-control form-control-sm d-none" rows="4" onblur="saveField('description',this.value,this)">{{ req.description or '' }}</textarea>
+            </div>
+        </div>
+
+        {# Sub-requirements #}
         {% if req.children %}
         <div class="card mb-3">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h6 class="mb-0">子需求 ({{ req.children | selectattr('status', 'in', ['done','closed']) | list | length }}/{{ req.children | length }})</h6>
+            <div class="card-header py-1 d-flex justify-content-between align-items-center">
+                <span class="small fw-bold">子需求</span>
+                {% set done_count = req.children | selectattr('status', 'in', ['done','closed']) | list | length %}
+                <span class="small text-muted">{{ done_count }}/{{ req.children | length }} 完成</span>
             </div>
             <div class="card-body p-0">
                 <table class="table table-hover small mb-0">
-                    <thead class="table-light"><tr><th>编号</th><th>标题</th><th>状态</th><th>负责人</th><th>AI%</th><th>操作</th></tr></thead>
+                    <thead class="table-light"><tr><th>编号</th><th>标题</th><th>类型</th><th>状态</th><th>负责人</th><th>进度</th><th>操作</th></tr></thead>
                     <tbody>
                     {% for c in req.children %}
+                    {% set cpct = 100 if c.status in ('done','closed') else (c.completion or 0) %}
                     <tr>
                         <td><a href="{{ url_for('requirement.requirement_detail', req_id=c.id) }}">{{ c.number }}</a></td>
                         <td>{{ c.title }}</td>
+                        <td><span class="badge bg-light text-secondary border" style="font-size:.7em;">{{ c.source_label }}</span></td>
                         <td><span class="badge bg-{{ c.status_color }}">{{ c.status_label }}</span></td>
                         <td>{{ c.assignee_display }}</td>
-                        <td>{% if c.ai_ratio is not none %}<span style="color:#7c3aed;">{{ c.ai_ratio }}%</span>{% else %}-{% endif %}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-1" style="min-width:60px;">
+                                <div class="progress flex-grow-1" style="height:5px;"><div class="progress-bar bg-{{ 'success' if cpct >= 90 else ('primary' if cpct >= 30 else 'secondary') }}" style="width:{{ cpct }}%"></div></div>
+                                <span class="text-muted" style="font-size:.75em;">{{ cpct }}%</span>
+                            </div>
+                        </td>
                         <td class="sub-req-actions" data-req-id="{{ c.id }}">
                             {% for s in c.allowed_next_statuses %}
                             <form method="POST" action="{{ url_for('requirement.requirement_status', req_id=c.id) }}" class="d-inline sub-status-form">
@@ -67,164 +253,193 @@
         </div>
         {% endif %}
 
-        <!-- Dependencies (read-only) -->
-        {% if req.dependencies or req.dependents %}
+        {# Comments #}
         <div class="card mb-3">
-            <div class="card-header"><h6 class="mb-0">依赖关系</h6></div>
-            <div class="card-body">
-                {% if req.dependencies %}
-                <div class="mb-2">
-                    <span class="small text-muted">前置依赖</span>
-                    {% for d in req.dependencies %}
-                    <div class="d-flex align-items-center gap-2 mb-1">
-                        <span class="badge bg-{{ d.status_color }}" style="font-size:.7em;">{{ d.status_label }}</span>
-                        <a href="{{ url_for('requirement.requirement_detail', req_id=d.id) }}" class="small">{{ d.number }} {{ d.title }}</a>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-                {% if req.dependents %}
-                <div>
-                    <span class="small text-muted">被依赖</span>
-                    {% for d in req.dependents %}
-                    <div class="d-flex align-items-center gap-2 mb-1">
-                        <span class="badge bg-{{ d.status_color }}" style="font-size:.7em;">{{ d.status_label }}</span>
-                        <a href="{{ url_for('requirement.requirement_detail', req_id=d.id) }}" class="small">{{ d.number }} {{ d.title }}</a>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Comments -->
-        <div class="card mb-3">
-            <div class="card-header"><h6 class="mb-0">评论 ({{ req.comments | length }})</h6></div>
+            <div class="card-header py-1"><span class="small fw-bold">评论 ({{ req.comments | length }})</span></div>
             {% for c in req.comments %}
-            <div class="card-body border-bottom">
+            <div class="card-body py-2 border-bottom">
                 <div class="d-flex justify-content-between">
                     <strong class="small">{{ c.user.name }}</strong>
                     <div class="d-flex align-items-center gap-2">
                         <span class="text-muted small">{{ c.created_at.strftime('%m-%d %H:%M') }}</span>
                         <form method="POST" action="{{ url_for('requirement.delete_comment', req_id=req.id, comment_id=c.id) }}" class="d-inline" onsubmit="return confirm('删除该评论？')">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-link btn-sm text-muted p-0" style="font-size:.75em;" title="删除"><i class="bi bi-x-lg"></i></button>
+                            <button type="submit" class="btn btn-link btn-sm text-muted p-0" style="font-size:.75em;"><i class="bi bi-x-lg"></i></button>
                         </form>
                     </div>
                 </div>
-                <div class="mt-1">{{ c.content }}</div>
+                <div class="mt-1 small">{{ c.content }}</div>
             </div>
             {% endfor %}
-            <div class="card-footer">
+            <div class="card-footer py-2">
                 <form method="POST" action="{{ url_for('requirement.add_comment', req_id=req.id) }}">
                     {{ comment_form.hidden_tag() }}
-                    {{ comment_form.content(class="form-control form-control-sm mb-2", rows=2, placeholder="写评论...") }}
+                    {{ comment_form.content(class="form-control form-control-sm mb-1", rows=2, placeholder="写评论...") }}
                     <button type="submit" class="btn btn-sm btn-primary">发表</button>
                 </form>
             </div>
         </div>
-
-        <!-- Activity log -->
-        {% if req.activities %}
-        <div class="card">
-            <div class="card-header"><h6 class="mb-0">操作记录</h6></div>
-            <ul class="list-group list-group-flush">
-                {% for a in req.activities %}
-                <li class="list-group-item py-2">
-                    <span class="text-muted small">{{ a.created_at.strftime('%m-%d %H:%M') }}</span>
-                    <strong class="small">{{ a.user.name }}</strong>
-                    <span class="small">
-                        {% if a.action == 'created' %}创建了需求
-                        {% elif a.action == 'status_changed' %}变更状态: {{ a.detail }}
-                        {% elif a.action == 'edited' %}编辑了: {{ a.detail }}
-                        {% elif a.action == 'commented' %}发表了评论
-                        {% elif a.action == 'task_added' %}{{ a.detail }}
-                        {% else %}{{ a.detail }}
-                        {% endif %}
-                    </span>
-                </li>
-                {% endfor %}
-            </ul>
-        </div>
-        {% endif %}
-    </div>
-
-    <!-- Sidebar -->
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-body">
-                <table class="table table-sm table-borderless mb-0">
-                    <tr><td class="text-muted">状态</td><td><span class="badge bg-{{ req.status_color }}">{{ req.status_label }}</span></td></tr>
-                    <tr><td class="text-muted">优先级</td><td><span class="badge bg-{{ req.priority_color }}">{{ req.priority_label }}</span></td></tr>
-                    <tr><td class="text-muted">项目</td><td><a href="{{ url_for('project.project_detail', project_id=req.project.id) }}">{{ req.project.name }}</a></td></tr>
-                    <tr><td class="text-muted">负责人</td><td>{{ req.assignee_display }}</td></tr>
-                    <tr><td class="text-muted">预估</td><td>{{ req.estimate_days or '-' }} 人天</td></tr>
-                    <tr><td class="text-muted">代码量</td><td>{{ req.code_lines or '-' }} 行</td></tr>
-                    <tr><td class="text-muted">测试用例</td><td>{{ req.test_cases or '-' }} 个</td></tr>
-                    {% if req.ai_ratio is not none %}<tr><td class="text-muted">AI辅助</td><td><span style="color:#7c3aed;font-weight:600;">{{ req.ai_ratio }}%</span></td></tr>{% endif %}
-                    <tr><td class="text-muted">创建者</td><td>{{ req.creator.name }}</td></tr>
-                    <tr><td class="text-muted">创建日期</td><td>{{ req.created_at.strftime('%Y-%m-%d') }}</td></tr>
-                </table>
-            </div>
-        </div>
-
-        <!-- Status transition -->
-        {% if req.allowed_next_statuses %}
-        <div class="card mt-3">
-            <div class="card-header"><h6 class="mb-0">状态流转</h6></div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('requirement.requirement_status', req_id=req.id) }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <div class="d-grid gap-1">
-                        {% for s in req.allowed_next_statuses %}
-                        <button type="submit" name="status" value="{{ s }}" class="btn btn-sm btn-outline-{{ req.STATUS_COLORS[s].split()[0] }}">
-                            → {{ req.STATUS_LABELS[s] }}
-                        </button>
-                        {% endfor %}
-                    </div>
-                </form>
-            </div>
-        </div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+// ── Generic field save ──
+var _reqId = {{ req.id }};
+function saveField(field, value, inputEl) {
+    function _restore() {
+        if (field === 'title') {
+            document.getElementById('titleDisplay').classList.remove('d-none');
+            inputEl.classList.add('d-none');
+        } else if (field === 'description') {
+            document.getElementById('descDisplay').classList.remove('d-none');
+            inputEl.classList.add('d-none');
+        }
+    }
+    fetch('/requirements/' + _reqId + '/field-api', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({field: field, value: value})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (!d.ok) { showToast(d.msg || '保存失败', 'danger'); _restore(); return; }
+        if (field === 'title') {
+            document.getElementById('titleDisplay').textContent = value;
+        } else if (field === 'description') {
+            document.getElementById('descDisplay').textContent = value || '点击添加描述...';
+        } else if (field === 'source') {
+            document.querySelectorAll('.workload-row').forEach(function(tr) {
+                tr.style.display = tr.dataset.show === value ? '' : 'none';
+            });
+        }
+        _restore();
+    }).catch(function() { showToast('网络错误', 'danger'); _restore(); });
+}
+
+function saveCategory(inp) {
+    var val = inp.value.trim();
+    var badge = document.getElementById('catBadge');
+    inp.classList.add('d-none');
+    fetch('/requirements/' + _reqId + '/field-api', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({field: 'category', value: val})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (!d.ok) { showToast(d.msg || '保存失败', 'danger'); }
+        else { badge.textContent = d.label || '分类'; badge.className = 'badge ' + (d.value ? 'bg-info text-dark' : 'bg-light text-muted border'); }
+        badge.classList.remove('d-none');
+    }).catch(function() { showToast('网络错误', 'danger'); badge.classList.remove('d-none'); });
+}
+
+// ── Inline editable fields in metadata table ──
+document.querySelectorAll('.editable-field').forEach(function(td) {
+    var display = td.querySelector('.field-display');
+    var input = td.querySelector('.field-input');
+    if (!display || !input) return;
+    display.style.cursor = 'pointer';
+    display.addEventListener('click', function() {
+        display.classList.add('d-none');
+        input.classList.remove('d-none');
+        input.focus();
+    });
+    function save() {
+        var field = td.dataset.field;
+        var val = input.value;
+        input.classList.add('d-none');
+        display.classList.remove('d-none');
+        fetch('/requirements/' + _reqId + '/field-api', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({field: field, value: val})
+        }).then(function(r) { return r.json(); }).then(function(d) {
+            if (!d.ok) { showToast(d.msg || '保存失败', 'danger'); return; }
+            var suffix = td.dataset.suffix || '';
+            if (field === 'priority') {
+                display.innerHTML = '<span class="badge bg-' + d.color + '">' + d.label + '</span>';
+            } else if (field === 'source') {
+                display.innerHTML = '<span class="badge bg-light text-secondary border">' + d.label + '</span>';
+                document.querySelectorAll('.workload-row').forEach(function(tr) { tr.style.display = tr.dataset.show === val ? '' : 'none'; });
+            } else if (field === 'ai_ratio') {
+                display.innerHTML = val ? '<span style="color:#7c3aed;font-weight:600;">' + val + '%</span>' : '-';
+            } else if (field === 'assignee_name') {
+                display.textContent = d.display || '未分配';
+            } else {
+                display.textContent = (val || '-') + (val ? suffix : '');
+            }
+        });
+    }
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
+    if (input.tagName === 'SELECT') { input.addEventListener('change', function() { input.blur(); }); }
+});
+
+// Show/hide workload rows based on current source type
 (function() {
-    // Status meta for rebuilding buttons after AJAX update
+    var src = '{{ req.source }}';
+    document.querySelectorAll('.workload-row').forEach(function(tr) {
+        tr.style.display = tr.dataset.show === src ? '' : 'none';
+    });
+})();
+
+var _nextStatusMap = {"pending_review":"pending_dev","pending_dev":"in_dev","in_dev":"in_test","in_test":"done"};
+function updateCompletion(reqId, sel) {
+    var pct = parseInt(sel.value);
+    var curStatus = sel.dataset.status;
+    var bar = document.getElementById('detailBar');
+    bar.style.width = pct + '%';
+    bar.className = 'progress-bar bg-' + (pct >= 90 ? 'success' : (pct >= 30 ? 'primary' : 'secondary'));
+    document.querySelector('.pct-label').textContent = pct + '%';
+    fetch('/requirements/' + reqId + '/completion-api', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({completion: pct})
+    });
+    if (pct === 100) {
+        var next = _nextStatusMap[curStatus];
+        if (next) {
+            fetch('/requirements/' + reqId + '/status-api', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({status: next})
+            }).then(function(r) { return r.json(); }).then(function(d) {
+                if (d && d.ok) {
+                    if (d.status !== 'done') {
+                        fetch('/requirements/' + reqId + '/completion-api', {
+                            method: 'POST', headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({completion: 0})
+                        });
+                        sel.value = '0';
+                        bar.style.width = '0%';
+                        bar.className = 'progress-bar bg-secondary';
+                        document.querySelector('.pct-label').textContent = '0%';
+                    }
+                    sel.dataset.status = d.status;
+                    showToast('状态已变更为「' + d.label + '」', 'success');
+                    setTimeout(function() { location.reload(); }, 600);
+                }
+            });
+        }
+    }
+    sel.classList.add('d-none');
+}
+
+(function() {
     var STATUS_LABELS = {{ req.STATUS_LABELS | tojson }};
     var STATUS_COLORS = {{ req.STATUS_COLORS | tojson }};
     var TRANSITIONS  = {{ req.ALLOWED_TRANSITIONS | tojson }};
-
     document.addEventListener('click', function(e) {
         var btn = e.target.closest('.sub-status-form button[name="status"]');
         if (!btn) return;
         e.preventDefault();
-        var form = btn.closest('.sub-status-form');
-        var td   = btn.closest('.sub-req-actions');
+        var td = btn.closest('.sub-req-actions');
         var reqId = td.dataset.reqId;
-        var newStatus = btn.value;
         btn.disabled = true;
-
-        apiPost('/requirements/' + reqId + '/status-api', {status: newStatus})
+        apiPost('/requirements/' + reqId + '/status-api', {status: btn.value})
         .then(function(d) {
             if (!d.ok) { showToast(d.msg || '操作失败', 'danger'); btn.disabled = false; return; }
             showToast('已变更为「' + d.label + '」', 'success');
-            // Update badge in status column (3rd td)
             var tr = td.closest('tr');
-            var badgeTd = tr.children[2];
-            var color = STATUS_COLORS[d.status] || 'secondary';
-            badgeTd.innerHTML = '<span class="badge bg-' + color + '">' + d.label + '</span>';
-            // Rebuild action buttons for new allowed transitions
+            tr.querySelector('td:nth-child(4)').innerHTML = '<span class="badge bg-' + (STATUS_COLORS[d.status] || 'secondary') + '">' + d.label + '</span>';
             var nexts = TRANSITIONS[d.status] || [];
             td.innerHTML = '';
             nexts.forEach(function(s) {
                 var f = document.createElement('form');
-                f.method = 'POST';
-                f.action = '/requirements/' + reqId + '/status';
+                f.method = 'POST'; f.action = '/requirements/' + reqId + '/status';
                 f.className = 'd-inline sub-status-form';
                 var csrf = document.querySelector('meta[name="csrf-token"]');
                 f.innerHTML = '<input type="hidden" name="csrf_token" value="' + (csrf ? csrf.content : '') + '">'
@@ -234,7 +449,6 @@
         })
         .catch(function() { showToast('网络错误', 'danger'); btn.disabled = false; });
     });
-
 })();
 </script>
 {% endblock %}

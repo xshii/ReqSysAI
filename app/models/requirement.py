@@ -28,6 +28,7 @@ class Requirement(db.Model):
     due_date = db.Column(db.Date, nullable=True)
     parent_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=True)
     source = db.Column(db.String(50), default='coding')  # 需求类型: analysis/coding/testing
+    category = db.Column(db.String(100), nullable=True)  # 需求分类
     ai_ratio = db.Column(db.Integer, nullable=True)  # AI辅助占比(%)
     completion = db.Column(db.Integer, default=0)  # 完成率(%) 0/30/60/90/100
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -82,9 +83,24 @@ class Requirement(db.Model):
         'testing': '测试',
     }
 
+    CATEGORY_CHOICES = [
+        ('feature', '功能需求'),
+        ('bugfix', '缺陷修复'),
+        ('optimization', '性能优化'),
+        ('refactor', '代码重构'),
+        ('infra', '基础设施'),
+        ('doc', '文档'),
+        ('other', '其他'),
+    ]
+    CATEGORY_LABELS = dict(CATEGORY_CHOICES)
+
     @property
     def source_label(self):
         return self.SOURCE_LABELS.get(self.source, self.source or '')
+
+    @property
+    def category_label(self):
+        return self.CATEGORY_LABELS.get(self.category, self.category or '')
 
     ALLOWED_TRANSITIONS = {
         'pending_review': ['pending_dev'],
@@ -93,6 +109,23 @@ class Requirement(db.Model):
         'in_test': ['done', 'in_dev'],
         'done': ['in_test'],
     }
+
+    @property
+    def weighted_completion(self):
+        from app.constants import REQ_PHASE_ORDER, REQ_PHASE_WEIGHTS
+        if self.status in ('done', 'closed'):
+            return 100
+        weights = REQ_PHASE_WEIGHTS.get(self.source or 'coding', REQ_PHASE_WEIGHTS['coding'])
+        cur_pct = self.completion or 0
+        cur_idx = REQ_PHASE_ORDER.index(self.status) if self.status in REQ_PHASE_ORDER else 0
+        total = 0.0
+        for phase, w in weights.items():
+            phase_idx = REQ_PHASE_ORDER.index(phase)
+            if phase_idx < cur_idx:
+                total += w * 100
+            elif phase_idx == cur_idx:
+                total += w * cur_pct
+        return round(total)
 
     @property
     def status_label(self):

@@ -59,9 +59,10 @@
             <td>
                 {% set pending_apps = item.applications|selectattr('status', 'equalto', 'pending')|list %}
             {% if item.applications %}
-                <a href="#" class="text-decoration-none" onclick="var d=document.getElementById('itemApps{{ item.id }}');d.style.display=d.style.display==='none'?'':'none';return false;">
+                <a href="#" class="text-decoration-none" onclick="var d=document.getElementById('itemApps{{ item.id }}');var open=d.style.display==='none';d.style.display=open?'':'none';this.querySelector('.bi-chevron-right,.bi-chevron-down').className='bi bi-chevron-'+(open?'down':'right');return false;">
                     <span class="badge bg-{{ 'warning text-dark' if pending_apps else 'secondary' }}">{{ pending_apps|length }}</span>
                     {% if item.applications|length != pending_apps|length %}<span class="text-muted" style="font-size:.7em;">/{{ item.applications|length }}</span>{% endif %}
+                    <i class="bi bi-chevron-right" style="font-size:.7em;"></i>
                 </a>
                 <div id="itemApps{{ item.id }}" style="display:none;" class="mt-1">
                     {% for a in item.applications %}
@@ -72,28 +73,24 @@
                         {% else %}
                         <span class="badge bg-{{ 'success' if a.status == 'approved' else ('warning text-dark' if a.status == 'pending' else 'danger') }}" style="font-size:.8em;">{{ a.status_label }}</span>
                         {% endif %}
-                        {% if is_pm %}
-                        <form method="POST" class="d-inline">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="action" value="toggle_freeze_app">
-                            <input type="hidden" name="app_id" value="{{ a.id }}">
-                            <button type="submit" class="btn btn-sm py-0 px-0 {{ 'text-secondary' if a.is_frozen else 'text-muted' }}" style="font-size:.75em;" title="{{ '解冻' if a.is_frozen else '冻结' }}"><i class="bi bi-{{ 'unlock' if a.is_frozen else 'lock' }}"></i></button>
-                        </form>
-                        {% endif %}
                     </div>
                     {% endfor %}
                 </div>
                 {% else %}<span class="badge bg-light text-muted">0</span>{% endif %}
             </td>
-            {% set approved_apps = item.applications|selectattr('status', 'equalto', 'approved')|list %}
             {% set frozen_apps = item.applications|selectattr('is_frozen')|list %}
+            {% set my_apps = item.applications|selectattr('submitted_by', 'equalto', current_user.id)|list %}
+            {% set my_approved = my_apps|selectattr('status', 'equalto', 'approved')|list %}
+            {% set my_pending = my_apps|selectattr('status', 'equalto', 'pending')|list %}
             <td class="text-nowrap">
                 {% if frozen_apps %}
                 <span class="badge bg-secondary" style="font-size:.7em;"><i class="bi bi-lock-fill"></i> 已冻结</span>
-                {% elif approved_apps %}
+                {% elif my_approved %}
                 <span class="badge bg-success" style="font-size:.7em;">已通过</span>
-                {% elif pending_apps %}
+                <button class="btn btn-sm btn-outline-primary py-0 apply-for-btn" data-bs-toggle="modal" data-bs-target="#applyModal" data-item-id="{{ item.id }}" title="为他人申请"><i class="bi bi-people"></i></button>
+                {% elif my_pending %}
                 <span class="badge bg-warning text-dark" style="font-size:.7em;">申请中</span>
+                <button class="btn btn-sm btn-outline-primary py-0 apply-for-btn" data-bs-toggle="modal" data-bs-target="#applyModal" data-item-id="{{ item.id }}" title="为他人申请"><i class="bi bi-people"></i></button>
                 {% else %}
                 <form method="POST" class="d-inline quick-apply-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -173,6 +170,12 @@
             <td class="text-muted">{{ a.created_at.strftime('%m-%d') }}</td>
             <td class="text-muted">{{ a.approved_at.strftime('%m-%d') if a.approved_at else '-' }}</td>
             <td>
+                <form method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="toggle_freeze_app">
+                    <input type="hidden" name="app_id" value="{{ a.id }}">
+                    <button type="submit" class="btn btn-sm py-0 {{ 'btn-secondary' if a.is_frozen else 'btn-outline-secondary' }}"><i class="bi bi-{{ 'unlock' if a.is_frozen else 'lock' }}"></i> {{ '解冻' if a.is_frozen else '冻结' }}</button>
+                </form>
                 {% if a.status == 'pending' and is_pm %}
                 <form method="POST" class="d-inline">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -348,10 +351,11 @@ function appendUserToList(name, pinyin, eid) {
     var pickerInput = document.querySelector('#applyModal .user-picker-input');
     if (pickerInput) pickerInput.value = '';
 }
-// Click or Enter on picker option → append to textarea
-document.addEventListener('click', function(e) {
+// Mousedown on picker option → append to textarea (mousedown fires before blur closes dropdown)
+document.addEventListener('mousedown', function(e) {
     var opt = e.target.closest('#applyModal .user-picker-opt');
     if (opt) {
+        e.preventDefault();
         appendUserToList(opt.dataset.name, '', opt.dataset.eid);
         var wrap = opt.closest('.user-picker-wrap');
         if (wrap) {
@@ -395,15 +399,19 @@ document.addEventListener('click', function(e) {
 })();
 // Copy buttons (with fallback for non-HTTPS)
 function copyText(text) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        return navigator.clipboard.writeText(text);
+    if (navigator.clipboard && window.isSecureContext) {
+        return navigator.clipboard.writeText(text).catch(function() { return _copyFallback(text); });
     }
-    // Fallback: textarea + execCommand
+    return _copyFallback(text);
+}
+function _copyFallback(text) {
     var ta = document.createElement('textarea');
     ta.value = text;
-    ta.style.cssText = 'position:fixed;left:-9999px;';
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:none;outline:none;opacity:0;';
     document.body.appendChild(ta);
-    ta.select();
+    ta.focus();
+    ta.setSelectionRange(0, text.length);
     document.execCommand('copy');
     document.body.removeChild(ta);
     return Promise.resolve();
@@ -460,9 +468,9 @@ document.addEventListener('click', function(e) {
                     }
                     // Replace button with "申请中" badge
                     form.outerHTML = '<span class="badge bg-warning text-dark" style="font-size:.7em;">申请中</span>';
-                } else {
-                    btn.disabled = false;
-                    btn.innerHTML = origHtml;
+                }
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
             });
         } else {
             showToast('操作失败', 'danger');
@@ -492,12 +500,16 @@ function filterAll() {
     });
 }
 
-// Lazy-init Bootstrap tooltips
+// Lazy-init Bootstrap tooltips (auto-dispose on leave to prevent orphans)
 document.addEventListener('mouseover', function(e) {
     var el = e.target.closest('[data-bs-toggle="tooltip"]');
     if (el && !bootstrap.Tooltip.getInstance(el)) {
-        var tip = new bootstrap.Tooltip(el);
+        var tip = new bootstrap.Tooltip(el, {trigger: 'manual'});
         tip.show();
+        el.addEventListener('mouseleave', function handler() {
+            tip.dispose();
+            el.removeEventListener('mouseleave', handler);
+        }, {once: true});
     }
 });
 </script>

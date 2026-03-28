@@ -1022,21 +1022,28 @@ document.querySelectorAll('.quick-todo-form input[name="title"]').forEach(functi
     inp.parentElement.style.position = 'relative';
     inp.parentElement.appendChild(dropdown);
 
+    var _groups = {{ sidebar_groups | tojson }};
     inp.addEventListener('input', function() {
         var val = inp.value;
         var atIdx = val.lastIndexOf('@');
         if (atIdx < 0) { dropdown.style.display = 'none'; return; }
         var query = val.substring(atIdx + 1).toLowerCase();
         loadUsers(function(users) {
-            var matches = users.filter(function(u) {
+            // Match groups first
+            var groupMatches = _groups.filter(function(g) { return g.toLowerCase().includes(query); }).map(function(g) {
+                return '<div class="px-2 py-1 user-ac-item" style="cursor:pointer;" data-name="' + g + '"><i class="bi bi-people-fill text-primary"></i> ' + g + ' <span class="text-muted">小组</span></div>';
+            });
+            // Match users
+            var userMatches = users.filter(function(u) {
                 return u.name.toLowerCase().includes(query)
                     || (u.pinyin && u.pinyin.toLowerCase().includes(query))
                     || (u.employee_id && u.employee_id.toLowerCase().includes(query));
-            }).slice(0, 8);
-            if (!matches.length) { dropdown.style.display = 'none'; return; }
-            dropdown.innerHTML = matches.map(function(u) {
+            }).slice(0, 8).map(function(u) {
                 return '<div class="px-2 py-1 user-ac-item" style="cursor:pointer;" data-name="' + u.name + '">' + u.name + ' <span class="text-muted">' + (u.employee_id || '') + '</span></div>';
-            }).join('');
+            });
+            var all = groupMatches.concat(userMatches);
+            if (!all.length) { dropdown.style.display = 'none'; return; }
+            dropdown.innerHTML = all.join('');
             dropdown.style.display = 'block';
             dropdown.querySelectorAll('.user-ac-item').forEach(function(item) {
                 item.addEventListener('mousedown', function(e) {
@@ -1534,9 +1541,11 @@ document.addEventListener('dragend', function() {
 document.querySelectorAll('form[action$="/quick-todo"]').forEach(function(form) {
     form.addEventListener('submit', function(e) {
         e.preventDefault();
+        if (form._submitting) return;
         var titleInput = form.querySelector('input[name="title"]');
         var title = titleInput ? titleInput.value.trim() : '';
         if (!title) return;
+        form._submitting = true;
         var data = {title: title};
         var reqId = form.querySelector('input[name="req_id"]');
         if (reqId) data.req_id = parseInt(reqId.value);
@@ -1569,6 +1578,7 @@ document.querySelectorAll('form[action$="/quick-todo"]').forEach(function(form) 
                         }
                     }
                     showToast('评论已添加', 'success');
+                    form._submitting = false;
                     return;
                 }
                 var row = createTodoRow(d.todo_id, title, {helper: d.helper || ''});
@@ -1584,12 +1594,14 @@ document.querySelectorAll('form[action$="/quick-todo"]').forEach(function(form) 
                     form.closest('.card-body').querySelector('.todo-list-for-req').appendChild(row);
                 }
                 if (titleInput.type === 'text') titleInput.value = '';
+                form._submitting = false;
                 _todoTotal++; _updateProgress();
                 showToast(d.helper ? '已向 ' + d.helper + ' 发起求助' : title + ' 已添加', 'success');
             } else {
+                form._submitting = false;
                 form.submit();
             }
-        }).catch(function() { form.submit(); });
+        }).catch(function() { form._submitting = false; form.submit(); });
     });
 });
 </script>

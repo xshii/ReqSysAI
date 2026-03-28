@@ -27,15 +27,64 @@ python scripts/init_db.py
 flask db stamp head
 ```
 
-## 更新代码（拷贝覆盖）
+## 更新代码（覆盖代码，保留数据）
 
-1. 备份 `instance/`、`config.local.yml`、`app/static/uploads/`
-2. 拷贝新代码覆盖（上述文件不会被覆盖，已在 .gitignore）
-3. 执行：
+以下文件/目录包含用户数据，**拷贝代码时不要覆盖**：
+- `instance/reqsys.db` — 数据库
+- `config.local.yml` — 本地配置
+- `app/static/uploads/` — 上传文件
+- `venv/` — 虚拟环境
+
+### 标准流程
+
 ```bash
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt  # 安装新依赖
-flask db upgrade  # 数据库迁移
+# 1. 停止服务
+kill $(lsof -ti:5001) 2>/dev/null   # macOS/Linux
+# Windows: 关闭运行中的终端
+
+# 2. 拷贝新代码覆盖旧代码（跳过上述数据文件）
+
+# 3. 激活虚拟环境
+source venv/bin/activate            # macOS/Linux
+# Windows: venv\Scripts\activate
+
+# 4. 安装新依赖（如有）
+pip install -r requirements.txt
+
+# 5. 执行数据库迁移
+export FLASK_APP=app:create_app     # macOS/Linux
+# Windows: set FLASK_APP=app:create_app
+flask db upgrade
+
+# 6. 重启服务
+flask run --host 0.0.0.0 --port 5001
+```
+
+### 迁移失败处理
+
+如果 `flask db upgrade` 报错（常见于跨多版本更新），用以下 SQL 手动补齐字段，然后 `flask db stamp head` 跳过迁移。
+
+### 最新数据库变更记录
+
+将以下内容保存为 `scripts/manual_migrate.py`，执行 `python scripts/manual_migrate.py` 即可补齐所有字段和表：
+
+```bash
+source venv/bin/activate
+python scripts/manual_migrate.py
+```
+
+### 查看迁移状态
+
+```bash
+flask db current    # 当前数据库版本
+flask db history    # 迁移历史
+flask db heads      # 最新迁移版本
+```
+
+### 强制跳过迁移（数据库已手动更新）
+
+```bash
+flask db stamp head   # 标记为最新，跳过所有未执行的迁移
 ```
 
 ## 自定义配置

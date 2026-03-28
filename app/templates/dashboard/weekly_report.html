@@ -197,15 +197,42 @@
     {% endif %}
 </div>
 
-<!-- Section 6: People Map -->
+<!-- Section 6: People Map (Tree) -->
+{% set _tree = report_data.get('people_tree', {}) %}
 {% set _roles = report_data.get('people_roles', {}) %}
-{% set _pmap = report_data.get('people_map', {}) %}
-{% if _roles or _pmap %}
+{% if _tree or _roles %}
 {% set ns.n = ns.n + 1 %}
 <div class="report-section">
     <h6>{{ CN[ns.n-1] }}、人力地图</h6>
-    {% set _items = _roles.items()|list if _roles else [] %}
-    {% if not _items and _pmap %}{% set _items = [] %}{% for n in _pmap.keys() %}{% if _items.append((n, '')) %}{% endif %}{% endfor %}{% endif %}
+    {% set _tree_img = report_data.get('people_tree_img') %}
+    {% if _tree_img %}
+    <div class="text-center">
+        <img src="data:image/png;base64,{{ _tree_img }}" style="width:100%;" alt="人力地图">
+    </div>
+    {% elif _tree %}
+    <div class="people-tree" style="font-size:.82rem;">
+    {% for proj_name, domains in _tree.items() %}
+        <div class="tree-project" style="margin-bottom:4px;">
+            <div style="font-weight:600;color:#2d3748;padding:2px 0;border-bottom:1px solid #e2e8f0;">
+                <i class="bi bi-folder2-open" style="color:#4a6cf7;"></i> {{ proj_name }}
+                <span class="text-muted" style="font-size:.8em;">({{ domains.values()|map('length')|sum }}人)</span>
+            </div>
+            {% for domain, persons in domains.items() %}
+            <div style="margin-left:16px;margin-top:2px;">
+                <span style="color:#64748b;font-size:.82em;"><i class="bi bi-tag" style="font-size:.7em;"></i> {{ domain }}</span>
+                <span style="margin-left:6px;">
+                    {% for p in persons %}
+                    <span style="font-size:.82em;">{{ p.name }}{% if p.note %}<span class="text-muted" style="font-size:.82em;">({{ p.note }})</span>{% endif %}{% if not loop.last %}、{% endif %}</span>
+                    {% endfor %}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+    {% endfor %}
+    </div>
+    {% elif _roles %}
+    {# Fallback: flat table if no tree data #}
+    {% set _items = _roles.items()|list %}
     <table class="report-table">
         <thead><tr><th>姓名</th><th>角色</th><th>姓名</th><th>角色</th><th>姓名</th><th>角色</th></tr></thead>
         <tbody>
@@ -225,6 +252,7 @@
         {% endfor %}
         </tbody>
     </table>
+    {% endif %}
 </div>
 {% endif %}
 
@@ -567,11 +595,10 @@ function exportEml() {
             if (d.querySelector('strong')) body += '<div style="font-size:13px;font-weight:700;margin-top:4px;margin-bottom:2px;">' + d.innerHTML + '</div>';
         });
 
-        // Milestones → use PNG image
-        var msImg = sec.querySelector('.timeline-img');
-        if (msImg && msImg.src) {
-            body += '<img src="' + msImg.src + '" width="100%" style="width:100%;" alt="里程碑时间轴">';
-        }
+        // Inline images (timeline, people tree, etc.) → embed as-is
+        sec.querySelectorAll('img[src]').forEach(function(img) {
+            body += '<img src="' + img.src + '" width="100%" style="width:100%;" alt="' + (img.alt || '') + '">';
+        });
 
         // Risk stats bar + domain bar (before tables, centered)
         var statsBar = sec.querySelector('.risk-stats-bar');

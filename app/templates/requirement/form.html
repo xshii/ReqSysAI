@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="mb-4">
-    <a href="{{ url_for('requirement.requirement_list') }}" class="text-decoration-none">
+    <a href="{{ request.referrer or url_for('requirement.requirement_list', project_id=req.project_id if req else request.args.get('project_id', '')) }}" class="text-decoration-none">
         <i class="bi bi-arrow-left"></i> 返回需求列表
     </a>
 </div>
@@ -14,11 +14,20 @@
             <div class="card-body">
                 <form method="POST" id="reqForm">
                     {{ form.hidden_tag() }}
-                    {# 标题 #}
-                    <div class="mb-2">
-                        <label class="form-label small mb-0">标题 <span class="text-danger">*</span></label>
-                        {{ form.title(class="form-control form-control-sm", id="reqTitle") }}
-                        {% for e in form.title.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+                    {# 分类 + 标题 #}
+                    <div class="row g-2 mb-2">
+                        <div class="col-3">
+                            <label class="form-label small mb-0">分类</label>
+                            {{ form.category(class="form-control form-control-sm", list="categoryList", placeholder="输入或选择分类", autocomplete="off") }}
+                            <datalist id="categoryList">
+                                {% for cat in existing_categories %}<option value="{{ cat }}">{% endfor %}
+                            </datalist>
+                        </div>
+                        <div class="col-9">
+                            <label class="form-label small mb-0">标题 <span class="text-danger">*</span></label>
+                            {{ form.title(class="form-control form-control-sm", id="reqTitle") }}
+                            {% for e in form.title.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+                        </div>
                     </div>
                     {# 描述 #}
                     <div class="mb-2">

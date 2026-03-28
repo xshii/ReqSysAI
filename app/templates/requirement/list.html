@@ -79,6 +79,7 @@
                     <option value="due_date" {% if cur_sort == 'due_date' %}selected{% endif %}>按截止日期</option>
                     <option value="priority" {% if cur_sort == 'priority' %}selected{% endif %}>按优先级</option>
                     <option value="oldest" {% if cur_sort == 'oldest' %}selected{% endif %}>最早创建</option>
+                    <option value="assignee" {% if cur_sort == 'assignee' %}selected{% endif %}>按负责人</option>
                 </select>
             </div>
             <div class="col-auto">
@@ -107,6 +108,7 @@
                 <th>状态</th>
                 <th>负责人</th>
                 <th>进度</th>
+                <th>加权</th>
                 <th>预估</th>
                 <th>AI%</th>
                 <th>开始日期</th>
@@ -129,6 +131,7 @@
                             <div class="progress-bar bg-{{ 'success' if pct >= 90 else ('primary' if pct >= 30 else 'secondary') }}" style="width:{{ pct }}%"></div>
                         </div>
                         <select class="form-select form-select-sm d-none" style="width:70px; font-size:.75rem; padding:0 .3rem;"
+                                data-status="{{ r.status }}"
                                 onchange="updateCompletion({{ r.id }}, this)"
                                 onblur="this.classList.add('d-none')">
                             {% for v in range(0, 110, 10) %}
@@ -138,6 +141,7 @@
                         <span class="small text-muted pct-label" style="cursor:pointer;" onclick="this.parentNode.querySelector('select').classList.toggle('d-none'); this.parentNode.querySelector('select').focus();">{{ pct }}%</span>
                     </div>
                 </td>
+                <td class="small {% if r._weighted_pct >= 90 %}text-success{% elif r._weighted_pct >= 50 %}text-primary{% else %}text-muted{% endif %}">{{ r._weighted_pct }}%</td>
                 <td class="small">{{ r.estimate_days or '-' }}天</td>
                 <td class="small">{% if r.ai_ratio is not none %}<span style="color:#7c3aed;">{{ r.ai_ratio }}%</span>{% else %}-{% endif %}</td>
                 <td class="text-muted small">{{ r.start_date.strftime('%m-%d') if r.start_date else '-' }}</td>
@@ -192,31 +196,53 @@
 
 {% block extra_js %}
 <script>
+var _nextStatusMap = {"pending_review":"pending_dev","pending_dev":"in_dev","in_dev":"in_test","in_test":"done"};
+function _updateBar(sel, pct) {
+    var row = sel.closest('td');
+    var bar = row.querySelector('.progress-bar');
+    bar.style.width = pct + '%';
+    bar.className = 'progress-bar bg-' + (pct >= 90 ? 'success' : (pct >= 30 ? 'primary' : 'secondary'));
+    row.querySelector('.pct-label').textContent = pct + '%';
+}
 function updateCompletion(reqId, sel) {
     var pct = parseInt(sel.value);
+    var curStatus = sel.dataset.status;
+    // 1. Save completion
     fetch('/requirements/' + reqId + '/completion-api', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({completion: pct})
-    }).then(function(r) { return r.json(); })
-    .then(function(d) {
-        if (d.ok) {
-            var row = sel.closest('td');
-            var bar = row.querySelector('.progress-bar');
-            bar.style.width = pct + '%';
-            bar.className = 'progress-bar bg-' + (pct >= 90 ? 'success' : (pct >= 30 ? 'primary' : 'secondary'));
-            row.querySelector('.pct-label').textContent = pct + '%';
-            if (d.status_label) {
-                var tr = sel.closest('tr');
-                var statusBadge = tr.querySelectorAll('td')[4].querySelector('.badge');
-                statusBadge.textContent = d.status_label;
-                statusBadge.className = 'badge bg-' + d.status_color;
-            }
-        } else {
-            alert(d.msg || '更新失败');
+    }).then(function(r) { return r.json(); });
+    _updateBar(sel, pct);
+    // 2. Auto-advance on 100%
+    if (pct === 100) {
+        var next = _nextStatusMap[curStatus];
+        if (next) {
+            fetch('/requirements/' + reqId + '/status-api', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({status: next})
+            }).then(function(r) { return r.json(); }).then(function(d) {
+                if (d && d.ok) {
+                    // 3. Reset completion for non-done
+                    if (d.status !== 'done') {
+                        fetch('/requirements/' + reqId + '/completion-api', {
+                            method: 'POST', headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({completion: 0})
+                        });
+                        sel.value = '0';
+                        _updateBar(sel, 0);
+                    }
+                    sel.dataset.status = d.status;
+                    var tr = sel.closest('tr');
+                    var statusBadge = tr.querySelectorAll('td')[4].querySelector('.badge');
+                    if (statusBadge) {
+                        statusBadge.textContent = d.label;
+                        statusBadge.className = 'badge bg-' + d.color;
+                    }
+                }
+            });
         }
-        sel.classList.add('d-none');
-    }).catch(function() { alert('网络错误'); sel.classList.add('d-none'); });
+    }
+    sel.classList.add('d-none');
 }
 function runDiagnose() {
     var btn = document.getElementById('btnDiagnose');

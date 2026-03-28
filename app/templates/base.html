@@ -87,7 +87,7 @@
                     </li>
                     {% endfor %}
                     <li class="nav-header">项目</li>
-                    {% set _cur_pid = request.args.get('project_id', '')|int %}
+                    {% set _cur_pid = request.args.get('project_id', '')|int or (req.project_id if req is defined and req.project_id else 0) %}
                     {% set _in_pm = request.endpoint and ('project.' in request.endpoint or 'requirement.' in request.endpoint or request.endpoint == 'dashboard.requirement_progress' or 'ai.' in request.endpoint or (request.endpoint in ('dashboard.stats', 'dashboard.weekly_report') and _cur_pid)) %}
                     {% set _in_pm = _in_pm or (request.endpoint and ('project.risk' in request.endpoint or 'project.meeting' in request.endpoint)) %}
                     <li class="nav-item d-flex align-items-center">

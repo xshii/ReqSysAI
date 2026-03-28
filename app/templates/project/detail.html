@@ -261,7 +261,13 @@ function filterGantt() {
         var show = (!start || d >= start) && (!end || d <= end);
         td.style.display = show ? '' : 'none';
     });
-    setTimeout(recalcGanttBars, 0);
+    if (_ganttScale === 'week') {
+        // Re-apply week scale after date filter to reposition bars
+        var btn = document.querySelector('.gantt-scale-btn[data-scale="week"]');
+        if (btn) setGanttScale('week', btn);
+    } else {
+        setTimeout(recalcGanttBars, 0);
+    }
     _saveGanttState();
 }
 
@@ -286,10 +292,15 @@ function setGanttScale(scale, btn) {
     if (isWeek) {
         // Hide non-Monday columns, widen Monday columns
         var _lastWeekMonth = 0;
+        var _filterStart = document.getElementById('ganttStart').value;
+        var _filterEnd = document.getElementById('ganttEnd').value;
         // Build map of Monday th positions for bar width calculation
         var _mondayThs = {};
         document.querySelectorAll('.gantt-col').forEach(function(td) {
             if (!td.dataset.date) return;
+            // Respect date filter: hide columns outside range
+            if (_filterStart && td.dataset.date < _filterStart) { td.style.display = 'none'; return; }
+            if (_filterEnd && td.dataset.date > _filterEnd) { td.style.display = 'none'; return; }
             var d = new Date(td.dataset.date + 'T00:00:00');
             var isMonday = d.getDay() === 1;
             if (isMonday) {
@@ -366,7 +377,7 @@ function setGanttScale(scale, btn) {
             if (mondayTd && bar.parentElement !== mondayTd) mondayTd.appendChild(bar);
         });
     } else {
-        // Day mode: restore all columns
+        // Day mode: restore all columns first
         document.querySelectorAll('.gantt-col').forEach(function(td) {
             td.style.display = '';
             td.style.width = dayColW + 'px';
@@ -374,7 +385,7 @@ function setGanttScale(scale, btn) {
                 td.innerHTML = td.dataset.origHtml;
             }
         });
-        // Restore bar positions, then recalc widths from actual column sizes
+        // Restore bar positions to original dates
         document.querySelectorAll('.gantt-bar').forEach(function(bar) {
             bar.style.left = bar.dataset.origLeft || '1px';
             var span = bar.querySelector('span');
@@ -385,6 +396,16 @@ function setGanttScale(scale, btn) {
                 if (origTd && origTd !== bar.parentElement) origTd.appendChild(bar);
             }
         });
+        // Re-apply date filter then recalc bars
+        var _fs = document.getElementById('ganttStart').value;
+        var _fe = document.getElementById('ganttEnd').value;
+        if (_fs || _fe) {
+            document.querySelectorAll('.gantt-col').forEach(function(td) {
+                var d = td.dataset.date;
+                if (!d) return;
+                td.style.display = (!_fs || d >= _fs) && (!_fe || d <= _fe) ? '' : 'none';
+            });
+        }
         setTimeout(recalcGanttBars, 0);
     }
     _saveGanttState();
@@ -392,10 +413,36 @@ function setGanttScale(scale, btn) {
 
 function filterGanttRows() {
     var show = document.getElementById('ganttShow').value;
+    var barH = 20;
     document.querySelectorAll('.gantt-bar').forEach(function(bar) {
         if (show === 'all') bar.style.display = '';
         else if (show === 'parent') bar.style.display = bar.dataset.type === 'parent' ? '' : 'none';
         else bar.style.display = bar.dataset.type === 'child' ? '' : 'none';
+    });
+    document.querySelectorAll('#ganttBody tbody tr').forEach(function(tr) {
+        var bars = tr.querySelectorAll('.gantt-bar');
+        if (bars.length === 0) { tr.style.display = ''; return; }
+        // Collect visible bars and re-layout lanes
+        var visible = [];
+        bars.forEach(function(b) { if (b.style.display !== 'none') visible.push(b); });
+        if (visible.length === 0) { tr.style.display = 'none'; return; }
+        tr.style.display = '';
+        if (show === 'all') {
+            // Restore original positions
+            bars.forEach(function(b) { if (b.dataset.origTop) b.style.top = b.dataset.origTop; });
+            var origH = tr.querySelector('td').dataset.origHeight;
+            if (origH) tr.querySelectorAll('td').forEach(function(td) { td.style.height = origH + 'px'; });
+        } else {
+            // Save original top on first filter
+            bars.forEach(function(b) { if (!b.dataset.origTop) b.dataset.origTop = b.style.top; });
+            var firstTd = tr.querySelector('td');
+            if (firstTd && !firstTd.dataset.origHeight) firstTd.dataset.origHeight = firstTd.style.height.replace('px','');
+            // Re-assign compact lane indices
+            var lane = 0;
+            visible.forEach(function(b) { b.style.top = (lane * (barH + 2) + 2) + 'px'; lane++; });
+            var newH = lane * (barH + 2) + 4;
+            tr.querySelectorAll('td').forEach(function(td) { td.style.height = newH + 'px'; });
+        }
     });
     _saveGanttState();
 }
@@ -424,6 +471,8 @@ function resetGantt() {
         var origDate = b.dataset.startDate;
         if (origDate) { var origTd = b.closest('tr').querySelector('td.gantt-col[data-date="' + origDate + '"]'); if (origTd && origTd !== b.parentElement) origTd.appendChild(b); }
     });
+    // Restore all rows visibility
+    document.querySelectorAll('#ganttBody tbody tr').forEach(function(tr) { tr.style.display = ''; });
     _saveGanttState();
 }
 

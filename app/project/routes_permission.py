@@ -1,5 +1,5 @@
 """Permission management routes for the project blueprint."""
-from datetime import datetime, timezone
+from datetime import datetime
 
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -45,7 +45,7 @@ def permission_list(project_id):
                 item.description = request.form.get('description', '').strip() or None
                 db.session.commit()
                 flash('已更新', 'success')
-        elif action == 'toggle_freeze_app' and is_pm:
+        elif action == 'toggle_freeze_app':
             app_record = db.session.get(PermissionApplication, request.form.get('app_id', type=int))
             if app_record and app_record.item.project_id == project_id:
                 app_record.is_frozen = not app_record.is_frozen

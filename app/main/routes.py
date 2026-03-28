@@ -322,6 +322,12 @@ def quick_todo():
         # Check if @target is a group name
         group = Group.query.filter_by(name=at_target).first()
         if group:
+            # Prevent duplicate broadcast (same title, same day, same sender)
+            already = Todo.query.filter_by(user_id=todo_user_id, title=title, due_date=today, category=category).first()
+            if already:
+                result = {'ok': True, 'title': title, 'todo_id': already.id,
+                          'helper': f'{at_target}(已广播)', 'is_help': False}
+                return jsonify(**result) if is_ajax else redirect(next_url or url_for('main.index'))
             # Group broadcast: create todo for all active members in group
             members = User.query.filter_by(group=at_target, is_active=True)\
                 .filter(User.id != current_user.id).all()
@@ -636,8 +642,8 @@ def api_users():
 @login_required
 def api_personnel_options():
     """Return roles, groups, domains for add-personnel modal."""
-    import re
     from flask import current_app
+
     from app.models.user import Group, Role
 
     hidden = current_app.config.get('HIDDEN_ROLES', [])
@@ -686,12 +692,13 @@ def api_pinyin_initial():
 def api_add_personnel():
     """Add a new personnel record (external user)."""
     import re
+
     from flask import current_app
-    from app.models.user import Role
-    from app.utils.pinyin import to_pinyin
-    from app.services.audit import log_audit
 
     from app.constants import EID_FULL_RE, EID_NUM_RE
+    from app.models.user import Role
+    from app.services.audit import log_audit
+    from app.utils.pinyin import to_pinyin
     data = request.get_json() or {}
     eid = (data.get('employee_id') or '').strip()
     name = (data.get('name') or '').strip()

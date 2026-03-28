@@ -13,6 +13,7 @@ from app.extensions import db
 from app.models.incentive import Incentive
 from app.models.meeting import Meeting
 from app.models.project import Milestone, Project
+from app.models.project_member import ProjectMember
 from app.models.requirement import Requirement
 from app.models.risk import Risk
 from app.models.todo import Todo, TodoItem
@@ -29,6 +30,22 @@ TEST_USERS = [
     {'eid': 't00000003', 'name': '王五', 'group': '测试组', 'roles': ['DE'], 'ip': '10.0.0.103', 'manager': '赵六 t00000004', 'domain': '产品测试'},
     {'eid': 't00000004', 'name': '赵六', 'group': '后端组', 'roles': ['DE', 'PL'], 'ip': '10.0.0.104', 'manager': '陈总 c00990001', 'domain': '芯片验证'},
     {'eid': 't00000005', 'name': '孙七', 'group': '前端组', 'roles': ['DE'], 'ip': '10.0.0.105', 'manager': '赵六 t00000004', 'domain': '功能仿真'},
+    # 扩充用户
+    {'eid': 't00000006', 'name': '周杰', 'group': '后端组', 'roles': ['DE'], 'ip': '10.0.0.106', 'manager': '赵六 t00000004', 'domain': '后端开发'},
+    {'eid': 't00000007', 'name': '吴磊', 'group': '后端组', 'roles': ['DE'], 'ip': '10.0.0.107', 'manager': '赵六 t00000004', 'domain': '后端开发'},
+    {'eid': 't00000008', 'name': '郑涛', 'group': '前端组', 'roles': ['DE'], 'ip': '10.0.0.108', 'manager': '赵六 t00000004', 'domain': '前端开发'},
+    {'eid': 't00000009', 'name': '冯刚', 'group': '前端组', 'roles': ['DE'], 'ip': '10.0.0.109', 'manager': '赵六 t00000004', 'domain': '前端开发'},
+    {'eid': 't00000010', 'name': '陈静', 'group': '测试组', 'roles': ['DE'], 'ip': '10.0.0.110', 'manager': '赵六 t00000004', 'domain': '测试'},
+    {'eid': 't00000011', 'name': '褚亮', 'group': '测试组', 'roles': ['DE'], 'ip': '10.0.0.111', 'manager': '赵六 t00000004', 'domain': '测试'},
+    {'eid': 't00000012', 'name': '卫敏', 'group': '后端组', 'roles': ['DE'], 'ip': '10.0.0.112', 'manager': '赵六 t00000004', 'domain': '架构设计'},
+    {'eid': 't00000013', 'name': '蒋华', 'group': '后端组', 'roles': ['DE'], 'ip': '10.0.0.113', 'manager': '赵六 t00000004', 'domain': '后端开发'},
+    {'eid': 't00000014', 'name': '沈洁', 'group': '前端组', 'roles': ['DE'], 'ip': '10.0.0.114', 'manager': '赵六 t00000004', 'domain': '前端开发'},
+    {'eid': 't00000015', 'name': '韩鹏', 'group': '测试组', 'roles': ['DE'], 'ip': '10.0.0.115', 'manager': '赵六 t00000004', 'domain': '测试'},
+    {'eid': 't00000016', 'name': '杨帆', 'group': '后端组', 'roles': ['DE'], 'ip': '10.0.0.116', 'manager': '赵六 t00000004', 'domain': '后端开发'},
+    {'eid': 't00000017', 'name': '朱颖', 'group': '前端组', 'roles': ['DE'], 'ip': '10.0.0.117', 'manager': '赵六 t00000004', 'domain': '前端开发'},
+    {'eid': 't00000018', 'name': '秦峰', 'group': '后端组', 'roles': ['DE'], 'ip': '10.0.0.118', 'manager': '赵六 t00000004', 'domain': '后端开发'},
+    {'eid': 't00000019', 'name': '尤丽', 'group': '测试组', 'roles': ['DE'], 'ip': '10.0.0.119', 'manager': '赵六 t00000004', 'domain': '质量管理'},
+    {'eid': 't00000020', 'name': '许强', 'group': '后端组', 'roles': ['DE', 'PL'], 'ip': '10.0.0.120', 'manager': '陈总 c00990001', 'domain': '技术管理'},
 ]
 
 TEST_PROJECTS = [
@@ -85,6 +102,41 @@ TEST_TODOS = [
     ('t00000005', '整理技术债清单', 'personal', 'todo', None),
 ]
 
+TEST_PROJECT_MEMBERS = [
+    # 商城后台系统(idx=0): 5种角色, 3:1:1:1:2 比例, 共20人
+    # DEV(后端开发) - 8人 (3份)
+    (0, 't00000001', 'DEV(订单模块)', True),
+    (0, 't00000006', 'DEV(支付网关)', True),
+    (0, 't00000007', 'DEV(用户中心)', True),
+    (0, 't00000013', 'DEV(商品搜索)', True),
+    (0, 't00000016', 'DEV(库存系统)', True),
+    (0, 't00000018', 'DEV(数据同步)', True),
+    (0, 't00000012', 'DEV(缓存架构)', True),
+    (0, 't00000004', 'DEV(API网关)', True),
+    # DEV(前端开发) - 5人 (2份)
+    (0, 't00000002', 'DEV(商品页面)', True),
+    (0, 't00000008', 'DEV(订单流程)', True),
+    (0, 't00000009', 'DEV(营销活动)', True),
+    (0, 't00000014', 'DEV(管理后台)', True),
+    (0, 't00000017', 'DEV(数据看板)', True),
+    # PL(技术负责人) - 2人 (1份)
+    (0, 't00000004', 'PL', True),
+    (0, 't00000020', 'PL', True),
+    # TE(测试) - 2人 (1份)
+    (0, 't00000003', 'TE(接口自动化)', True),
+    (0, 't00000010', 'TE(性能压测)', True),
+    # QA(质量管理) - 3人 (1份)
+    (0, 't00000011', 'QA(发布验收)', True),
+    (0, 't00000015', 'QA(回归测试)', True),
+    (0, 't00000019', 'QA(流程审计)', True),
+    # 移动端APP(idx=1)
+    (1, 't00000004', 'PM', True),
+    (1, 't00000002', 'DEV(iOS)', True),
+    (1, 't00000005', 'DEV(Android)', True),
+    (1, 't00000003', 'TE(模型A)', False),
+    (1, 't00000005', 'DEV(推送模块)', True),
+]
+
 TEST_INCENTIVES = [
     # (submitter_eid, nominee_eid, title, desc, category, status)
     ('t00000004', 't00000001', '紧急修复线上bug', '凌晨2点紧急修复订单系统异常，保障了次日促销活动', 'beyond', 'submitted'),
@@ -114,6 +166,7 @@ def clean_test_data():
     test_projects = Project.query.filter(Project.created_by.in_(test_uids)).all()
     test_pids = {p.id for p in test_projects}
     if test_pids:
+        ProjectMember.query.filter(ProjectMember.project_id.in_(test_pids)).delete(synchronize_session=False)
         Risk.query.filter(Risk.project_id.in_(test_pids)).delete(synchronize_session=False)
         Meeting.query.filter(Meeting.project_id.in_(test_pids)).delete(synchronize_session=False)
         Requirement.query.filter(Requirement.project_id.in_(test_pids)).delete(synchronize_session=False)
@@ -258,8 +311,29 @@ def seed():
         db.session.commit()
         print(f'风险: {risk_count}')
 
+        # ── Project Members ──
+        member_count = 0
+        for pidx, u_eid, prole, is_key in TEST_PROJECT_MEMBERS:
+            user = users[u_eid]
+            proj = projects[pidx]
+            existing = ProjectMember.query.filter_by(
+                project_id=proj.id, user_id=user.id, project_role=prole
+            ).first()
+            if existing:
+                member_count += 1
+                continue
+            pm = ProjectMember(
+                project_id=proj.id, user_id=user.id,
+                project_role=prole, is_key=is_key,
+            )
+            db.session.add(pm)
+            member_count += 1
+        db.session.commit()
+        print(f'项目成员: {member_count}')
+
         # ── Todos ──
         todo_count = 0
+        db.session.expire_all()  # clear dirty state from loaded req_objects
         for u_eid, title, cat, status, req_idx in TEST_TODOS:
             user = users[u_eid]
             existing = Todo.query.filter_by(user_id=user.id, title=title).first()
@@ -271,17 +345,22 @@ def seed():
                 status=status, due_date=today,
                 done_date=today if status == 'done' else None,
             )
+            db.session.add(t)
+            db.session.flush()
             if req_idx is not None and req_idx < len(req_objects):
-                t.requirements.append(req_objects[req_idx])
+                db.session.execute(
+                    db.text('INSERT OR IGNORE INTO todo_requirements (todo_id, requirement_id) VALUES (:tid, :rid)'),
+                    {'tid': t.id, 'rid': req_objects[req_idx].id}
+                )
             t.items.append(TodoItem(title=title, sort_order=0,
                                     is_done=(status == 'done')))
-            db.session.add(t)
             todo_count += 1
         db.session.commit()
         print(f'Todo: {todo_count}')
 
         # ── Incentives ──
         inc_count = 0
+        db.session.expire_all()
         for sub_eid, nom_eid, title, desc, cat, st in TEST_INCENTIVES:
             submitter = users[sub_eid]
             nominee = users[nom_eid]
@@ -292,9 +371,13 @@ def seed():
             inc = Incentive(
                 title=title, description=desc, category=cat,
                 status=st, submitted_by=submitter.id,
-                nominees=[nominee],
             )
             db.session.add(inc)
+            db.session.flush()
+            db.session.execute(
+                db.text('INSERT OR IGNORE INTO incentive_nominees (incentive_id, user_id) VALUES (:iid, :uid)'),
+                {'iid': inc.id, 'uid': nominee.id}
+            )
             inc_count += 1
         db.session.commit()
         print(f'激励: {inc_count}')

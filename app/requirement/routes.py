@@ -92,12 +92,17 @@ def requirement_list():
         ahead_days = db.func.julianday(Requirement.due_date) - db.func.julianday(Requirement.updated_at)
         query = query.order_by(sort_group, urgency.desc(), ahead_days.desc(), Requirement.due_date.asc().nullslast())
     else:
-        order = {
-            'oldest': Requirement.created_at.asc(),
-            'priority': db.case({'high': 0, 'medium': 1, 'low': 2}, value=Requirement.priority),
-            'due_date': Requirement.due_date.asc().nullslast(),
-        }.get(sort, Requirement.created_at.desc())
-        query = query.order_by(order)
+        if sort == 'assignee':
+            # Sort by assignee pinyin (join User table)
+            query = query.outerjoin(User, Requirement.assignee_id == User.id)\
+                         .order_by(db.func.coalesce(User.pinyin, User.name, Requirement.assignee_name, 'zzz').asc())
+        else:
+            order = {
+                'oldest': Requirement.created_at.asc(),
+                'priority': db.case({'high': 0, 'medium': 1, 'low': 2}, value=Requirement.priority),
+                'due_date': Requirement.due_date.asc().nullslast(),
+            }.get(sort, Requirement.created_at.desc())
+            query = query.order_by(order)
 
     page = request.args.get('page', 1, type=int)
     pagination = query.paginate(page=page, per_page=PER_PAGE, error_out=False)
@@ -116,6 +121,10 @@ def requirement_list():
         for rid, total, done in rows:
             todo_counts[rid] = TodoProgress(total=total, done=int(done or 0))
 
+    # Per-requirement weighted completion (uses model property)
+    for r in pagination.items:
+        r._weighted_pct = r.weighted_completion
+
     # Weighted AI ratio for current filter
     ai_weighted_sum = sum(r.ai_ratio * r.estimate_days for r in pagination.items if r.ai_ratio and r.estimate_days)
     ai_days_sum = sum(r.estimate_days for r in pagination.items if r.ai_ratio is not None and r.estimate_days)
@@ -133,6 +142,7 @@ def requirement_list():
     saved_diag = []
     if project_id:
         import json
+
         from app.models.site_setting import SiteSetting
         raw = SiteSetting.get(f'diag_issues_{project_id}', '')
         if raw:
@@ -195,6 +205,7 @@ def requirement_create():
             test_cases=form.test_cases.data,
             ai_ratio=form.ai_ratio.data,
             source=form.source.data or 'coding',
+            category=form.category.data or None,
             created_by=current_user.id,
         )
         db.session.add(req)
@@ -271,19 +282,24 @@ def requirement_create():
     if request.method == 'POST':
         flash('请检查必填项（标题、截止日期）', 'danger')
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
-    return render_template('requirement/form.html', form=form, title='创建需求', users=users)
+    existing_categories = sorted(set(
+        r.category for r in db.session.query(Requirement.category).filter(Requirement.category.isnot(None)).distinct()
+    ))
+    return render_template('requirement/form.html', form=form, title='创建需求', users=users, existing_categories=existing_categories)
 
 
 @requirement_bp.route('/<int:req_id>')
 @login_required
 def requirement_detail(req_id):
+    from datetime import date as d_date
     req = db.get_or_404(Requirement, req_id)
     if req.project and req.project.is_hidden and not current_user.is_team_manager:
         flash('无权访问该需求', 'danger')
         return redirect(url_for('requirement.requirement_list'))
     comment_form = CommentForm()
+    users = User.query.filter_by(is_active=True).order_by(User.name).all()
     return render_template('requirement/detail.html', req=req,
-                           comment_form=comment_form)
+                           comment_form=comment_form, today=d_date.today(), users=users)
 
 
 @requirement_bp.route('/<int:req_id>/edit', methods=['GET', 'POST'])
@@ -306,6 +322,7 @@ def requirement_edit(req_id):
         req.test_cases = form.test_cases.data
         req.ai_ratio = form.ai_ratio.data
         req.source = form.source.data or 'coding'
+        req.category = form.category.data or None
         # Handle new sub-requirements (same as create)
         sub_titles = request.form.getlist('sub_title')
         sub_types = request.form.getlist('sub_type')
@@ -357,7 +374,10 @@ def requirement_edit(req_id):
     if request.method == 'POST':
         flash('请检查必填项（标题、截止日期）', 'danger')
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
-    return render_template('requirement/form.html', form=form, title=f'编辑需求 - {req.number}', users=users, req=req)
+    existing_categories = sorted(set(
+        r.category for r in db.session.query(Requirement.category).filter(Requirement.category.isnot(None)).distinct()
+    ))
+    return render_template('requirement/form.html', form=form, title=f'编辑需求 - {req.number}', users=users, req=req, existing_categories=existing_categories)
 
 
 @requirement_bp.route('/<int:req_id>/status', methods=['POST'])
@@ -371,6 +391,10 @@ def requirement_status(req_id):
         old_status = req.status
         old_label = req.status_label
         req.status = new_status
+        if new_status != 'done':
+            req.completion = 0
+        else:
+            req.completion = 100
         _log_activity(req, 'status_changed', f'{old_label} → {req.status_label}')
         db.session.commit()
         from app.services.events import fire, requirement_status_changed
@@ -428,6 +452,11 @@ def requirement_status_api(req_id):
     old_status = req.status
     old_label = req.status_label
     req.status = new_status
+    # Reset completion on manual status transition (except done)
+    if new_status != 'done':
+        req.completion = 0
+    else:
+        req.completion = 100
     _log_activity(req, 'status_changed', f'{old_label} → {req.status_label}')
     db.session.commit()
     from app.services.events import fire, requirement_status_changed
@@ -445,26 +474,110 @@ def requirement_completion_api(req_id):
     if pct < 0 or pct > 100 or pct % 10 != 0:
         return jsonify(ok=False, msg='完成率须为0-100的10的倍数')
     req.completion = pct
-    new_status = None
-    if pct == 100 and req.status not in ('done', 'closed'):
-        allowed = req.allowed_next_statuses
-        # Pick the forward (higher-index) transition
-        _FORWARD = ['pending_review', 'pending_dev', 'in_dev', 'in_test', 'done']
-        cur_idx = _FORWARD.index(req.status) if req.status in _FORWARD else -1
-        for target in _FORWARD[cur_idx + 1:]:
-            if target in allowed:
-                old_status = req.status
-                req.status = target
-                new_status = target
-                _log_activity(req, 'status', f'{old_status} → {target}（完成率100%自动推进）')
-                from app.services.events import fire, requirement_status_changed
-                fire(requirement_status_changed, requirement=req, old_status=old_status, new_status=target)
-                break
     db.session.commit()
-    resp = dict(ok=True, completion=pct)
-    if new_status:
-        resp.update(status=new_status, status_label=req.status_label, status_color=req.status_color)
-    return jsonify(resp)
+    return jsonify(ok=True, completion=pct)
+
+
+@requirement_bp.route('/<int:req_id>/field-api', methods=['POST'])
+@login_required
+def requirement_field_api(req_id):
+    """JSON API for inline field editing on detail page."""
+    req = db.get_or_404(Requirement, req_id)
+    data = request.get_json() or {}
+    field = data.get('field', '')
+    value = data.get('value')
+
+    ALLOWED = {
+        'title': str, 'description': str, 'category': str,
+        'priority': str, 'source': str,
+        'estimate_days': float, 'code_lines': int, 'test_cases': int,
+        'ai_ratio': int, 'start_date': str, 'due_date': str,
+        'assignee_name': str,
+    }
+    if field not in ALLOWED:
+        return jsonify(ok=False, msg=f'不支持编辑字段: {field}')
+
+    # Type conversion
+    if field in ('start_date', 'due_date'):
+        from datetime import date as d_date
+        try:
+            value = d_date.fromisoformat(value) if value else None
+        except ValueError:
+            return jsonify(ok=False, msg='日期格式错误')
+    elif field == 'assignee_name':
+        old_display = req.assignee_display
+        a_id, a_name = _resolve_assignee(value or '')
+        req.assignee_id = a_id
+        req.assignee_name = a_name
+        # Compute new display directly (relationship cache is stale)
+        if a_id:
+            new_user = db.session.get(User, a_id)
+            new_display = new_user.name if new_user else a_name or '未分配'
+        else:
+            new_display = a_name or '未分配'
+        if old_display != new_display:
+            _log_activity(req, 'edited', f'负责人: {old_display} → {new_display}')
+        db.session.commit()
+        return jsonify(ok=True, display=new_display)
+    elif ALLOWED[field] in (int, float):
+        try:
+            value = ALLOWED[field](value) if value not in (None, '') else None
+        except (ValueError, TypeError):
+            return jsonify(ok=False, msg='数值格式错误')
+    else:
+        value = str(value).strip() if value else None
+
+    # Validate required fields
+    if field == 'title' and not value:
+        return jsonify(ok=False, msg='标题不能为空')
+
+    old_val = getattr(req, field)
+    if old_val == value:
+        # No change, skip
+        resp = {'ok': True, 'value': value}
+        if field == 'priority':
+            resp['label'] = req.priority_label
+            resp['color'] = req.priority_color
+        elif field == 'source':
+            resp['label'] = req.source_label
+        elif field == 'category':
+            resp['label'] = req.category_label
+        return jsonify(**resp)
+    setattr(req, field, value)
+
+    # Build response with labels
+    resp = {'ok': True, 'value': value}
+    FIELD_NAMES = {
+        'title': '标题', 'description': '描述', 'category': '分类',
+        'priority': '优先级', 'source': '类型',
+        'estimate_days': '预估工期', 'code_lines': '代码量',
+        'test_cases': '测试用例', 'ai_ratio': 'AI辅助',
+        'start_date': '开始日期', 'due_date': '截止日期',
+    }
+    old_label_map = {
+        'priority': Requirement.PRIORITY_LABELS.get(old_val, old_val or '-'),
+        'source': Requirement.SOURCE_LABELS.get(old_val, old_val or '-'),
+        'category': Requirement.CATEGORY_LABELS.get(old_val, old_val or '未分类'),
+    }
+    if field == 'priority':
+        resp['label'] = req.priority_label
+        resp['color'] = req.priority_color
+        detail = f'优先级: {old_label_map["priority"]} → {req.priority_label}'
+    elif field == 'source':
+        resp['label'] = req.source_label
+        detail = f'类型: {old_label_map["source"]} → {req.source_label}'
+    elif field == 'category':
+        resp['label'] = req.category_label
+        detail = f'分类: {old_label_map["category"]} → {req.category_label or "未分类"}'
+    else:
+        fn = FIELD_NAMES.get(field, field)
+        old_str = str(old_val) if old_val is not None else '-'
+        new_str = str(value) if value is not None else '-'
+        detail = f'{fn}: {old_str} → {new_str}'
+
+    _log_activity(req, 'edited', detail)
+    db.session.commit()
+    return jsonify(**resp)
 
 
 def _load_project_reqs(project_id):
@@ -726,6 +839,21 @@ def requirement_board():
     if show_sub:
         for r in reqs:
             for c in r.children:
+                if project_id and c.project_id != project_id:
+                    continue
+                sub_reqs.append(c)
+
+    # Also find orphan sub-reqs: children in this project whose parent is in another project
+    if show_sub and project_id:
+        orphan_subs = Requirement.query.filter(
+            Requirement.parent_id.isnot(None),
+            Requirement.project_id == project_id,
+        ).options(
+            joinedload(Requirement.project), joinedload(Requirement.assignee),
+        ).all()
+        existing_ids = {r.id for r in reqs} | {c.id for c in sub_reqs}
+        for c in orphan_subs:
+            if c.id not in existing_ids:
                 sub_reqs.append(c)
 
     # Group by status for columns

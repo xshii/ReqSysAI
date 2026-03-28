@@ -499,32 +499,33 @@ document.querySelectorAll('.edit-tpl-drag').forEach(function(row) {
 })();
 
 // Member drag-sort
+var _memberDragRow = null;
+function _initMemberDrag(row, tbody) {
+    var handle = row.querySelector('.member-drag-handle');
+    if (handle) {
+        handle.addEventListener('dragstart', function(e) {
+            _memberDragRow = row;
+            row.classList.add('opacity-50');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        handle.addEventListener('dragend', function() {
+            row.classList.remove('opacity-50');
+            _memberDragRow = null;
+        });
+    }
+    row.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        if (!_memberDragRow || _memberDragRow === row) return;
+        var rect = row.getBoundingClientRect();
+        if (e.clientY < rect.top + rect.height / 2) tbody.insertBefore(_memberDragRow, row);
+        else tbody.insertBefore(_memberDragRow, row.nextSibling);
+    });
+}
 (function() {
     var table = document.getElementById('memberTable');
     if (!table) return;
     var tbody = table.querySelector('tbody');
-    var dragRow = null;
-    tbody.querySelectorAll('tr[data-mid]').forEach(function(row) {
-        var handle = row.querySelector('.member-drag-handle');
-        if (handle) {
-            handle.addEventListener('dragstart', function(e) {
-                dragRow = row;
-                row.classList.add('opacity-50');
-                e.dataTransfer.effectAllowed = 'move';
-            });
-            handle.addEventListener('dragend', function() {
-                row.classList.remove('opacity-50');
-                dragRow = null;
-            });
-        }
-        row.addEventListener('dragover', function(e) {
-            e.preventDefault();
-            if (!dragRow || dragRow === row) return;
-            var rect = row.getBoundingClientRect();
-            if (e.clientY < rect.top + rect.height / 2) tbody.insertBefore(dragRow, row);
-            else tbody.insertBefore(dragRow, row.nextSibling);
-        });
-    });
+    tbody.querySelectorAll('tr[data-mid]').forEach(function(row) { _initMemberDrag(row, tbody); });
     tbody.addEventListener('dragend', function() {
         var ids = [];
         tbody.querySelectorAll('tr[data-mid]').forEach(function(r) { ids.push(r.dataset.mid); });
@@ -587,8 +588,11 @@ function ajaxAddMember(name, role, btn) {
                 tbl.className = 'table table-sm mb-0';
                 tbl.id = 'memberTable';
                 tbl.innerHTML = '<thead><tr><th style="width:20px;"></th><th>成员</th><th>角色</th><th>关键</th><th></th></tr></thead><tbody></tbody>';
-                var container = document.querySelector('#tabMembers .col-md-7 form:first-of-type');
-                if (container) container.parentElement.appendChild(tbl);
+                // Insert after the add-member form (2nd form in col-md-7)
+                var col = document.querySelector('#tabMembers .col-md-7');
+                var addForm = col.querySelectorAll('form')[1];
+                if (addForm && addForm.nextSibling) col.insertBefore(tbl, addForm.nextSibling);
+                else if (col) col.appendChild(tbl);
                 tbody = tbl.querySelector('tbody');
             }
             var m = d.member;
@@ -601,6 +605,7 @@ function ajaxAddMember(name, role, btn) {
                 + '<td><button class="btn btn-sm p-0 border-0 bg-transparent btn-toggle-key" data-mid="' + m.id + '"><i class="bi bi-' + (m.is_key ? 'star-fill text-warning' : 'star text-muted') + '"></i></button></td>'
                 + '<td><button class="btn btn-sm btn-outline-danger py-0 btn-remove-member" data-mid="' + m.id + '" data-uid="' + (m.user_id || '') + '"><i class="bi bi-x"></i></button></td>';
             tbody.appendChild(tr);
+            _initMemberDrag(tr, tbody);
             // Update member count
             var countLabel = document.querySelector('#tabMembers .fw-bold.small');
             if (countLabel) {
