@@ -6,6 +6,17 @@ from app.models.risk import Risk
 from app.models.user import User
 
 
+def _extract_eid(manager_str):
+    """Extract employee_id from manager field ('姓名 工号' format).
+
+    Uses rsplit to handle names with spaces correctly.
+    """
+    if not manager_str or not manager_str.strip():
+        return ''
+    parts = manager_str.strip().rsplit(' ', 1)
+    return parts[-1] if len(parts) == 2 else ''
+
+
 def compute_default_recipients(cur_project_id):
     """Compute default To (member + risk tracker/owner employee_ids) and Cc (their managers).
 
@@ -170,29 +181,32 @@ def compute_meeting_recipients(project_id, meeting):
 
     default_to = ';'.join(sorted(to_set))
 
-    # Include current user's manager
+    # Cc: current user's manager + PM + PM's manager (not all members' managers)
     from flask_login import current_user as _cu2
-    if _cu2.is_authenticated:
-        all_user_ids.add(_cu2.id)
-    # Current user's manager first
-    my_mgr_eid2 = ''
-    if _cu2.is_authenticated and _cu2.manager:
-        parts = _cu2.manager.strip().split()
-        my_mgr_eid2 = parts[-1] if len(parts) > 1 else parts[0]
-    # Cc: all above people's managers
     cc_eids = set()
-    for uid in all_user_ids:
-        u = db.session.get(User, uid)
-        if u and u.manager:
-            parts = u.manager.strip().split()
-            mgr_eid = parts[-1] if len(parts) > 1 else parts[0]
-            if mgr_eid:
-                cc_eids.add(mgr_eid)
+
+    # Current user's manager
+    my_mgr_eid = ''
+    if _cu2.is_authenticated and _cu2.manager:
+        my_mgr_eid = _extract_eid(_cu2.manager)
+
+    # PM (project owner) + PM's manager
+    from app.models.project import Project
+    project = db.session.get(Project, project_id)
+    if project and project.owner_id:
+        pm_user = db.session.get(User, project.owner_id)
+        if pm_user and pm_user.employee_id:
+            if pm_user.employee_id not in to_set:
+                cc_eids.add(pm_user.employee_id)
+            pm_mgr_eid = _extract_eid(pm_user.manager)
+            if pm_mgr_eid:
+                cc_eids.add(pm_mgr_eid)
+
     cc_eids -= to_set
     cc_list = []
-    if my_mgr_eid2 and my_mgr_eid2 not in to_set:
-        cc_list.append(my_mgr_eid2)
-        cc_eids.discard(my_mgr_eid2)
+    if my_mgr_eid and my_mgr_eid not in to_set:
+        cc_list.append(my_mgr_eid)
+        cc_eids.discard(my_mgr_eid)
     cc_list.extend(sorted(cc_eids))
     default_cc = ';'.join(cc_list)
     return default_to, default_cc
@@ -211,8 +225,7 @@ def compute_personal_recipients(user):
 
     # Add manager
     if user.manager:
-        parts = user.manager.strip().split()
-        mgr_eid = parts[-1] if len(parts) > 1 else parts[0]
+        mgr_eid = _extract_eid(user.manager)
         if mgr_eid and mgr_eid != to_eid:
             cc_set.add(mgr_eid)
 
