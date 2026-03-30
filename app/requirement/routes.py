@@ -46,6 +46,7 @@ def requirement_list():
     # Filters
     status = request.args.get('status')
     priority = request.args.get('priority')
+    category = request.args.get('category', '').strip()
     project_id = request.args.get('project_id', type=int)
     include_sub = request.args.get('include_sub', '1') == '1'
     assignee_id = request.args.get('assignee_id', type=int)
@@ -56,6 +57,12 @@ def requirement_list():
         query = query.filter_by(status=status)
     if priority:
         query = query.filter_by(priority=priority)
+    if category:
+        # Match category_l1 (prefix before '-') or exact category
+        query = query.filter(
+            db.or_(Requirement.category == category,
+                   Requirement.category.like(category + '-%'))
+        )
     if project_id:
         if include_sub:
             child_ids = [c.id for c in Project.query.filter_by(parent_id=project_id).all()]
@@ -165,11 +172,22 @@ def requirement_list():
     else:
         filter_users = User.query.filter_by(is_active=True).order_by(User.name).all()
 
+    # Build category L1 options for filter dropdown
+    cat_rows = db.session.query(Requirement.category).filter(
+        Requirement.category.isnot(None), Requirement.category != ''
+    )
+    if g.hidden_pids:
+        cat_rows = cat_rows.filter(Requirement.project_id.notin_(g.hidden_pids))
+    category_l1s = sorted({
+        c.split('-', 1)[0] for (c,) in cat_rows.distinct() if c
+    })
+
     return render_template('requirement/list.html',
         pagination=pagination, requirements=pagination.items,
         projects=[p for p in Project.query.all() if p.id not in g.hidden_pids],
         users=filter_users,
         statuses=Requirement.STATUS_LABELS, priorities=Requirement.PRIORITY_LABELS,
+        category_l1s=category_l1s, cur_category=category,
         cur_status=status, cur_priority=priority, cur_project=project_id,
         cur_assignee=assignee_id, cur_search=search, cur_sort=sort,
         include_sub=include_sub,
