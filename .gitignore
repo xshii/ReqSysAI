@@ -41,7 +41,6 @@ app/static/uploads/
 
 # Local config override (deploy uses config.local.yml)
 config.local.yml
-prompts.yml
 
 # Temp
 cookies.txt
