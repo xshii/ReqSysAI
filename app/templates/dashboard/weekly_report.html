@@ -199,7 +199,7 @@
             <td>{{ r.severity_label }}</td>
             <td>{{ r.owner or '-' }}</td>
             <td>{{ r.domain_display or '-' }}</td>
-            <td class="small">{% if r.comments %}{% for c in r.comments[:2] %}{% if not loop.first %}<br>{% endif %}{{ c.created_at.strftime('%m-%d') }}：{{ c.content[:40] }}{% if c.content|length > 40 %}…{% endif %}{% endfor %}{% else %}-{% endif %}</td>
+            <td class="small">{% if r.resolution %}<span style="color:#198754;">解决方案：</span>{{ r.resolution[:50] }}{% if r.resolution|length > 50 %}…{% endif %}{% endif %}{% if r.comments %}{% if r.resolution %}<br>{% endif %}{% for c in r.comments[:2] %}{% if not loop.first %}<br>{% endif %}{{ c.created_at.strftime('%m-%d') }}：{{ c.content[:40] }}{% if c.content|length > 40 %}…{% endif %}{% endfor %}{% endif %}{% if not r.resolution and not r.comments %}-{% endif %}</td>
             <td class="{{ 'text-danger fw-bold' if r.is_overdue and not is_closed else '' }}">{% if is_closed %}<span class="badge bg-success">{{ '已解决' if r.status == 'resolved' else '已关闭' }}</span>{% if r.due_date and r.updated_at %}{% set delta = (r.due_date - r.updated_at.date()).days %}{% if delta > 0 %}<br><span style="font-size:.85em;">(提前{{ delta }}天)</span>{% elif delta < 0 %}<br><span style="font-size:.85em;">(延期{{ -delta }}天)</span>{% else %}<br><span style="font-size:.85em;">(按时)</span>{% endif %}{% endif %}{% elif r.due_date %}{{ r.due_date.strftime('%m-%d') }}{% if r.is_overdue %}<br><span class="text-danger fw-bold" style="font-size:.85em;">超期{{ (report_data.today - r.due_date).days }}天</span>{% endif %}{% else %}-{% endif %}</td>
         </tr>
         {% endfor %}
@@ -331,11 +331,11 @@
             <tr>
                 <th rowspan="2" style="min-width:60px;text-align:center;">分类</th>
                 {% for l2 in pivot_l2s %}
-                <th colspan="{{ pivot_sources|length }}" style="text-align:center;border-bottom:0;">{{ l2 }}{% if pivot_l2_start.get(l2) or pivot_l2_due.get(l2) %}<div style="font-weight:400;font-size:.75em;color:#999;">{% if pivot_l2_start.get(l2) %}{{ pivot_l2_start[l2].strftime('%m-%d') }}{% endif %}{% if pivot_l2_due.get(l2) %}~{{ pivot_l2_due[l2].strftime('%m-%d') }}{% endif %}</div>{% endif %}</th>
+                <th colspan="{{ pivot_l2_sources[l2]|length }}" style="text-align:center;border-bottom:0;">{{ l2 }}{% if pivot_l2_start.get(l2) or pivot_l2_due.get(l2) %}<div style="font-weight:400;font-size:.75em;color:#999;">{% if pivot_l2_start.get(l2) %}{{ pivot_l2_start[l2].strftime('%m-%d') }}{% endif %}{% if pivot_l2_due.get(l2) %}~{{ pivot_l2_due[l2].strftime('%m-%d') }}{% endif %}</div>{% endif %}</th>
                 {% endfor %}
             </tr>
             <tr>
-                {% for l2 in pivot_l2s %}{% for s in pivot_sources %}
+                {% for l2 in pivot_l2s %}{% for s in pivot_l2_sources[l2] %}
                 <th style="text-align:center;font-size:.8em;">{{ _src_short.get(s, s) }}</th>
                 {% endfor %}{% endfor %}
             </tr>
@@ -344,7 +344,7 @@
             {% for l1 in pivot_l1s %}
             <tr>
                 <td style="font-weight:bold;text-align:center;">{{ l1 }}</td>
-                {% for l2 in pivot_l2s %}{% for s in pivot_sources %}
+                {% for l2 in pivot_l2s %}{% for s in pivot_l2_sources[l2] %}
                 {% set c = pivot_src_cells.get((l1, l2, s)) %}
                 <td style="text-align:center;padding:2px;background:{{ _light_bg.get(c.light, '') if c else '' }};">
                     {% if c and c.total > 0 %}

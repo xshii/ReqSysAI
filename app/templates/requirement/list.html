@@ -47,9 +47,27 @@
             <div class="col-auto">
                 <select name="category" class="form-select form-select-sm">
                     <option value="">全部分类</option>
-                    {% for c in category_l1s %}
-                    <option value="{{ c }}" {% if cur_category == c %}selected{% endif %}>{{ c }}</option>
+                    {% if category_l2s %}
+                    <optgroup label="按二级分类">
+                    {% for l2 in category_l2s %}
+                    <option value="l2:{{ l2 }}" {% if cur_category == 'l2:' ~ l2 %}selected{% endif %}>{{ l2 }}</option>
                     {% endfor %}
+                    </optgroup>
+                    {% endif %}
+                    {% if category_tree %}
+                    {% if category_l2s %}<optgroup label="按一级分类">{% endif %}
+                    {% for l1, l2s in category_tree.items() %}
+                    {% if l2s %}
+                    <option value="{{ l1 }}" {% if cur_category == l1 %}selected{% endif %}>{{ l1 }}（全部）</option>
+                    {% for c in l2s %}
+                    <option value="{{ c }}" {% if cur_category == c %}selected{% endif %}>&nbsp;&nbsp;└ {{ c.split('-', 1)[1] }}</option>
+                    {% endfor %}
+                    {% else %}
+                    <option value="{{ l1 }}" {% if cur_category == l1 %}selected{% endif %}>{{ l1 }}</option>
+                    {% endif %}
+                    {% endfor %}
+                    {% if category_l2s %}</optgroup>{% endif %}
+                    {% endif %}
                 </select>
             </div>
             {% if not cur_project %}

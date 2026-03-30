@@ -46,6 +46,7 @@ def requirement_list():
     # Filters
     status = request.args.get('status')
     priority = request.args.get('priority')
+    category = request.args.get('category', '').strip()
     project_id = request.args.get('project_id', type=int)
     include_sub = request.args.get('include_sub', '1') == '1'
     assignee_id = request.args.get('assignee_id', type=int)
@@ -56,6 +57,17 @@ def requirement_list():
         query = query.filter_by(status=status)
     if priority:
         query = query.filter_by(priority=priority)
+    if category:
+        if category.startswith('l2:'):
+            # L2-only filter: match suffix after '-'
+            l2_val = category[3:]
+            query = query.filter(Requirement.category.like('%-' + l2_val))
+        else:
+            # Match category_l1 (prefix before '-') or exact category
+            query = query.filter(
+                db.or_(Requirement.category == category,
+                       Requirement.category.like(category + '-%'))
+            )
     if project_id:
         if include_sub:
             child_ids = [c.id for c in Project.query.filter_by(parent_id=project_id).all()]
@@ -165,11 +177,38 @@ def requirement_list():
     else:
         filter_users = User.query.filter_by(is_active=True).order_by(User.name).all()
 
+    # Build category options for filter dropdown (L1 groups with L2 items)
+    # Scope to current project if selected, so dropdown shows relevant categories
+    cat_rows = db.session.query(Requirement.category).filter(
+        Requirement.category.isnot(None), Requirement.category != '',
+    )
+    if project_id:
+        _cat_pids = [project_id]
+        if include_sub:
+            _cat_pids += [c.id for c in Project.query.filter_by(parent_id=project_id).all()]
+        cat_rows = cat_rows.filter(Requirement.project_id.in_(_cat_pids))
+    if g.hidden_pids:
+        cat_rows = cat_rows.filter(Requirement.project_id.notin_(g.hidden_pids))
+    all_cats = sorted({c for (c,) in cat_rows.distinct() if c and c.strip()})
+    # Build {l1: [l2_full_category, ...]} and unique L2 list
+    from collections import OrderedDict
+    category_tree = OrderedDict()
+    category_l2s = sorted({c.split('-', 1)[1] for c in all_cats if '-' in c})
+    for c in all_cats:
+        if '-' in c:
+            l1 = c.split('-', 1)[0]
+        else:
+            l1 = c
+        category_tree.setdefault(l1, [])
+        if c != l1:
+            category_tree[l1].append(c)
+
     return render_template('requirement/list.html',
         pagination=pagination, requirements=pagination.items,
         projects=[p for p in Project.query.all() if p.id not in g.hidden_pids],
         users=filter_users,
         statuses=Requirement.STATUS_LABELS, priorities=Requirement.PRIORITY_LABELS,
+        category_tree=category_tree, category_l2s=category_l2s, cur_category=category,
         cur_status=status, cur_priority=priority, cur_project=project_id,
         cur_assignee=assignee_id, cur_search=search, cur_sort=sort,
         include_sub=include_sub,

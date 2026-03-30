@@ -53,11 +53,11 @@
                     <tr>
                         <th rowspan="2" class="text-center align-middle px-1" style="min-width:60px;">分类</th>
                         {% for l2 in pivot_l2s %}
-                        <th colspan="{{ pivot_sources|length }}" class="text-center border-bottom-0 px-0 py-1" style="line-height:1.1;">{{ l2 }}{% if pivot_l2_start.get(l2) or pivot_l2_due.get(l2) %}<div class="fw-normal text-muted" style="font-size:.78em;line-height:1;">{% if pivot_l2_start.get(l2) %}{{ pivot_l2_start[l2].strftime('%m-%d') }}{% endif %}{% if pivot_l2_due.get(l2) %}~{{ pivot_l2_due[l2].strftime('%m-%d') }}{% endif %}</div>{% endif %}</th>
+                        <th colspan="{{ pivot_l2_sources[l2]|length }}" class="text-center border-bottom-0 px-0 py-1" style="line-height:1.1;">{{ l2 }}{% if pivot_l2_start.get(l2) or pivot_l2_due.get(l2) %}<div class="fw-normal text-muted" style="font-size:.78em;line-height:1;">{% if pivot_l2_start.get(l2) %}{{ pivot_l2_start[l2].strftime('%m-%d') }}{% endif %}{% if pivot_l2_due.get(l2) %}~{{ pivot_l2_due[l2].strftime('%m-%d') }}{% endif %}</div>{% endif %}</th>
                         {% endfor %}
                     </tr>
                     <tr>
-                        {% for l2 in pivot_l2s %}{% for s in pivot_sources %}
+                        {% for l2 in pivot_l2s %}{% for s in pivot_l2_sources[l2] %}
                         <th class="text-center px-1" style="font-size:.78em;min-width:48px;">{{ _src_short.get(s, s) }}</th>
                         {% endfor %}{% endfor %}
                     </tr>
@@ -66,7 +66,7 @@
                     {% for l1 in pivot_l1s %}
                     <tr>
                         <td class="fw-bold align-middle text-center px-1">{{ l1 }}</td>
-                        {% for l2 in pivot_l2s %}{% for s in pivot_sources %}
+                        {% for l2 in pivot_l2s %}{% for s in pivot_l2_sources[l2] %}
                         {% set c = pivot_src_cells.get((l1, l2, s)) %}
                         <td class="text-center px-0 py-0" style="background:{{ _light_bg.get(c.light, '') if c else '' }};">{{ src_cell(c, s == 'testing') }}</td>
                         {% endfor %}{% endfor %}
