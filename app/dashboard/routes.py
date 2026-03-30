@@ -84,6 +84,17 @@ def _build_people_tree(project_id, sub_project_ids):
             _seen_entries.add(_key)
             tree[proj_name][role_group].append({'name': name, 'note': note})
 
+    # Ensure parent project appears first in the tree
+    parent_proj = Project.query.get(project_id)
+    parent_name = parent_proj.name if parent_proj else None
+    if parent_name and parent_name in tree:
+        reordered = OrderedDict()
+        reordered[parent_name] = tree[parent_name]
+        for k, v in tree.items():
+            if k != parent_name:
+                reordered[k] = v
+        tree = reordered
+
     unique_count = len(seen_names)
     tree._unique_count = unique_count
     return tree
