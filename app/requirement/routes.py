@@ -1109,13 +1109,13 @@ def export_csv():
     buf.write('\ufeff')  # BOM for Excel
     writer = csv.writer(buf)
     writer.writerow([
-        'ID', '需求编号', '层级', '需求类型', '标题', '项目', '优先级', '状态',
+        'ID', '需求编号', '层级', '需求类型', '业务分类', '标题', '项目', '优先级', '状态',
         '负责人', '工号', '预估工期(天)', '代码行数', '用例数', 'AI辅助(%)', '完成率(%)',
         '开始日期', '截止日期', '父需求编号', '依赖需求', '描述', '评论',
     ])
     # Demo row (id=0)
     writer.writerow([
-        0, 'REQ-000(选填)', '(自动)', '编码(选填)', '示例需求标题', '项目名称', '高(选填)',
+        0, 'REQ-000(选填)', '(自动)', '编码(选填)', '模型-软件(选填)', '示例需求标题', '项目名称', '高(选填)',
         '待评估(选填)', '张三(选填)', '(自动)', '5(选填)', '1000(选填)', '20(选填)',
         '30(选填)', '60(选填)',
         '2026-01-01(选填)', '2026-03-31(选填)', '(选填)', 'REQ-001,REQ-002(选填)',
@@ -1129,6 +1129,7 @@ def export_csv():
             r.number,
             level,
             r.source_label,
+            r.category or '',
             r.title,
             r.project.name if r.project else '',
             r.priority_label,
@@ -1238,6 +1239,9 @@ def import_csv():
             src = source_rev.get((row.get('需求类型') or '').strip())
             if src:
                 existing.source = src
+            cat = (row.get('业务分类') or '').strip()
+            if cat:
+                existing.category = cat
             existing.assignee_id = assignee_id or existing.assignee_id
             existing.assignee_name = assignee_name or existing.assignee_name
             est = (row.get('预估工期(天)') or '').strip()
@@ -1296,6 +1300,7 @@ def import_csv():
             priority=priority_rev.get((row.get('优先级') or '').strip(), 'medium'),
             status=status_rev.get((row.get('状态') or '').strip(), 'pending_review'),
             source=source_rev.get((row.get('需求类型') or '').strip(), 'coding'),
+            category=(row.get('业务分类') or '').strip() or None,
             assignee_id=assignee_id,
             assignee_name=assignee_name,
             description=(row.get('描述') or '').strip() or None,
