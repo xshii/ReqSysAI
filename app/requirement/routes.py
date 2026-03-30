@@ -557,7 +557,7 @@ def requirement_field_api(req_id):
     old_label_map = {
         'priority': Requirement.PRIORITY_LABELS.get(old_val, old_val or '-'),
         'source': Requirement.SOURCE_LABELS.get(old_val, old_val or '-'),
-        'category': Requirement.CATEGORY_LABELS.get(old_val, old_val or '未分类'),
+        'category': old_val or '未分类',
     }
     if field == 'priority':
         resp['label'] = req.priority_label
