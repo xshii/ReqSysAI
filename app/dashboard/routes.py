@@ -470,6 +470,12 @@ def _build_pivot_data(project_id, include_sub=True):
     _used_sources = set(r.source or 'coding' for r in pivot_reqs)
     _sources = [s for s in _all_sources if s in _used_sources]
 
+    # Per-L2 active sources: only keep sources that have data under each L2
+    _l2_used = defaultdict(set)
+    for r in pivot_reqs:
+        _l2_used[r.category_l2].add(r.source or 'coding')
+    _l2_sources = {l2: [s for s in _sources if s in _l2_used.get(l2, set())] for l2 in pivot_l2s}
+
     def _merge_cells(cells_list):
         merged = _empty_cell()
         for c in cells_list:
@@ -513,7 +519,7 @@ def _build_pivot_data(project_id, include_sub=True):
         'pivot_grand': pivot_grand,
         'pivot_src_row_totals': pivot_src_row_totals, 'pivot_src_col_totals': pivot_src_col_totals,
         'pivot_src_grand': pivot_src_grand,
-        'pivot_sources': _sources, 'pivot_src_labels': _src_labels,
+        'pivot_sources': _sources, 'pivot_l2_sources': _l2_sources, 'pivot_src_labels': _src_labels,
         'pivot_l1_start': _l1_min_start, 'pivot_l2_start': _l2_min_start,
         'pivot_l1_due': _l1_max_due, 'pivot_l2_due': _l2_max_due,
     }
