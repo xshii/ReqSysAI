@@ -47,8 +47,15 @@
             <div class="col-auto">
                 <select name="category" class="form-select form-select-sm">
                     <option value="">全部分类</option>
-                    {% for c in category_l1s %}
-                    <option value="{{ c }}" {% if cur_category == c %}selected{% endif %}>{{ c }}</option>
+                    {% for l1, l2s in category_tree.items() %}
+                    {% if l2s %}
+                    <option value="{{ l1 }}" {% if cur_category == l1 %}selected{% endif %}>{{ l1 }}（全部）</option>
+                    {% for c in l2s %}
+                    <option value="{{ c }}" {% if cur_category == c %}selected{% endif %}>&nbsp;&nbsp;└ {{ c.split('-', 1)[1] }}</option>
+                    {% endfor %}
+                    {% else %}
+                    <option value="{{ l1 }}" {% if cur_category == l1 %}selected{% endif %}>{{ l1 }}</option>
+                    {% endif %}
                     {% endfor %}
                 </select>
             </div>

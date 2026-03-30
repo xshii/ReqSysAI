@@ -172,22 +172,31 @@ def requirement_list():
     else:
         filter_users = User.query.filter_by(is_active=True).order_by(User.name).all()
 
-    # Build category L1 options for filter dropdown
+    # Build category options for filter dropdown (L1 groups with L2 items)
     cat_rows = db.session.query(Requirement.category).filter(
         Requirement.category.isnot(None), Requirement.category != ''
     )
     if g.hidden_pids:
         cat_rows = cat_rows.filter(Requirement.project_id.notin_(g.hidden_pids))
-    category_l1s = sorted({
-        c.split('-', 1)[0] for (c,) in cat_rows.distinct() if c
-    })
+    all_cats = sorted({c for (c,) in cat_rows.distinct() if c})
+    # Build {l1: [l2_full_category, ...]} structure
+    from collections import OrderedDict
+    category_tree = OrderedDict()
+    for c in all_cats:
+        if '-' in c:
+            l1 = c.split('-', 1)[0]
+        else:
+            l1 = c
+        category_tree.setdefault(l1, [])
+        if c != l1:
+            category_tree[l1].append(c)
 
     return render_template('requirement/list.html',
         pagination=pagination, requirements=pagination.items,
         projects=[p for p in Project.query.all() if p.id not in g.hidden_pids],
         users=filter_users,
         statuses=Requirement.STATUS_LABELS, priorities=Requirement.PRIORITY_LABELS,
-        category_l1s=category_l1s, cur_category=category,
+        category_tree=category_tree, cur_category=category,
         cur_status=status, cur_priority=priority, cur_project=project_id,
         cur_assignee=assignee_id, cur_search=search, cur_sort=sort,
         include_sub=include_sub,
