@@ -14,6 +14,27 @@ from app.project import project_bp
 from app.project.routes import _check_project_access, _resolve_owner_id
 from app.utils.api import api_ok, api_err
 
+
+def _default_meeting_prompt():
+    return (
+        '你是一个会议纪要分析助手。请对会议内容进行润色并提取结构化信息。\n'
+        '严格返回如下 JSON 格式（不要输出其他内容）：\n'
+        '{\n'
+        '  "polished": "润色后的会议纪要正文（保留原意，优化表达，修正语法）",\n'
+        '  "decisions": [{"content": "决议内容", "owner": "责任人"}],\n'
+        '  "todos": [{"title": "遗留问题/待办事项", "assignee": "责任人", "deadline": "截止日期"}],\n'
+        '  "requirements": [{"title": "需求标题", "description": "需求描述", "priority": "high/medium/low"}],\n'
+        '  "risks": [{"title": "风险描述", "severity": "high/medium/low", "deadline": "截止日期"}]\n'
+        '}\n'
+        '注意：\n'
+        '- 如果某个字段没有对应内容，返回空数组 []\n'
+        '- 责任人和截止日期从上下文推断，无法推断时留空字符串\n'
+        '- decisions: 会议明确达成的决议\n'
+        '- todos: 会议提到的遗留问题、待办事项、行动项\n'
+        '- risks: 明确提到的风险、隐患\n'
+        '- requirements: 会议中提出的新需求'
+    )
+
 # ---- Meeting minutes ----
 
 @project_bp.route('/<int:project_id>/meetings')
@@ -77,7 +98,7 @@ def meeting_create(project_id):
             # Run AI extract immediately during creation
             from app.services.ai import call_ollama
             from app.services.prompts import get_prompt
-            system_prompt = get_prompt('meeting_extract')
+            system_prompt = get_prompt('meeting_extract') or _default_meeting_prompt()
             parsed, raw = call_ollama(meeting.content, system_prompt=system_prompt)
             if parsed:
                 meeting.ai_result = json.dumps(parsed, ensure_ascii=False)
@@ -163,7 +184,7 @@ def meeting_extract(project_id, meeting_id):
     from app.services.ai import call_ollama
     from app.services.prompts import get_prompt
 
-    system_prompt = get_prompt('meeting_extract')
+    system_prompt = get_prompt('meeting_extract') or _default_meeting_prompt()
     # Build full context with meeting metadata
     context_lines = [
         f'会议标题：{meeting.title}',
@@ -179,7 +200,14 @@ def meeting_extract(project_id, meeting_id):
     parsed, raw = call_ollama(full_text, system_prompt=system_prompt)
 
     if parsed is None:
-        flash('AI服务暂不可用，正在紧急修复' + (f' ({raw})' if raw else ''), 'danger')
+        import logging
+        logging.getLogger(__name__).warning('Meeting AI extract failed, raw output: %s', (raw or '')[:500])
+        msg = 'AI 返回内容无法解析为JSON'
+        if raw:
+            msg += f'（原始返回前200字：{raw[:200]}）'
+        else:
+            msg = 'AI服务暂不可用'
+        flash(msg, 'danger')
         return redirect(url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id))
 
     # Save AI result (polished content saved only when user accepts)
