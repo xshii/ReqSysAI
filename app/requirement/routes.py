@@ -178,12 +178,18 @@ def requirement_list():
         filter_users = User.query.filter_by(is_active=True).order_by(User.name).all()
 
     # Build category options for filter dropdown (L1 groups with L2 items)
+    # Scope to current project if selected, so dropdown shows relevant categories
     cat_rows = db.session.query(Requirement.category).filter(
-        Requirement.category.isnot(None), Requirement.category != ''
+        Requirement.category.isnot(None), Requirement.category != '',
     )
+    if project_id:
+        _cat_pids = [project_id]
+        if include_sub:
+            _cat_pids += [c.id for c in Project.query.filter_by(parent_id=project_id).all()]
+        cat_rows = cat_rows.filter(Requirement.project_id.in_(_cat_pids))
     if g.hidden_pids:
         cat_rows = cat_rows.filter(Requirement.project_id.notin_(g.hidden_pids))
-    all_cats = sorted({c for (c,) in cat_rows.distinct() if c})
+    all_cats = sorted({c for (c,) in cat_rows.distinct() if c and c.strip()})
     # Build {l1: [l2_full_category, ...]} and unique L2 list
     from collections import OrderedDict
     category_tree = OrderedDict()
