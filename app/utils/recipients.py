@@ -202,6 +202,16 @@ def compute_meeting_recipients(project_id, meeting):
             if pm_mgr_eid:
                 cc_eids.add(pm_mgr_eid)
 
+    # Risk owner's managers (linked risks + open project risks)
+    all_risks = list(linked_risks) + list(open_risks)
+    for r in all_risks:
+        if r.owner_id:
+            owner_user = db.session.get(User, r.owner_id)
+            if owner_user and owner_user.manager:
+                owner_mgr_eid = _extract_eid(owner_user.manager)
+                if owner_mgr_eid:
+                    cc_eids.add(owner_mgr_eid)
+
     cc_eids -= to_set
     cc_list = []
     if my_mgr_eid and my_mgr_eid not in to_set:
