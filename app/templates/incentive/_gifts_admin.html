@@ -1,0 +1,87 @@
+{# Gift admin: per-person records management #}
+{% if gift_pending or gift_selected or gift_purchased %}
+<div class="card mb-3">
+    <div class="card-header py-2"><i class="bi bi-truck"></i> 礼物发放管理</div>
+    <div class="card-body py-2">
+        {% if gift_pending %}
+        <h6 class="small fw-bold mb-2" style="color:#b45309;">待选择（{{ gift_pending|length }}）</h6>
+        {% for rec in gift_pending %}
+        <div class="d-flex align-items-center gap-2 py-1 {% if not loop.last %}border-bottom{% endif %}" style="font-size:.85em;">
+            <span class="flex-grow-1">
+                <span class="fw-bold">{{ rec.user.name }}</span>
+                <span class="text-muted">— {{ rec.incentive.title }}</span>
+            </span>
+            <span class="text-muted" style="font-size:.85em;">截止 {{ rec.expires_at.strftime('%m-%d') if rec.expires_at else '-' }}</span>
+            {% if rec.expires_at and today > rec.expires_at.date() %}
+            <span class="badge bg-secondary" style="font-size:.75em;">已过期</span>
+            <a href="#" style="font-size:.82em;color:#b45309;" onclick="event.preventDefault();apiPost('{{ url_for('incentive.gift_retrigger', inc_id=rec.incentive_id) }}',{}).then(function(d){if(d&&d.ok){showToast('已重新触发','success');location.reload();}});">重新触发</a>
+            {% else %}
+            <span class="badge" style="font-size:.75em;background:#fef3c7;color:#92400e;">等待中</span>
+            {% endif %}
+        </div>
+        {% endfor %}
+        <div class="mb-3"></div>
+        {% endif %}
+
+        {% if gift_selected %}
+        <h6 class="small fw-bold text-primary mb-2">待采购（{{ gift_selected|length }}）</h6>
+        {% set _grouped = {} %}
+        {% for rec in gift_selected %}
+            {% set gname = rec.gift_item.name if rec.gift_item else '未选择' %}
+            {% if _grouped.update({gname: (_grouped.get(gname, []) + [rec])}) %}{% endif %}
+        {% endfor %}
+        {% for gname, recs in _grouped.items() %}
+        <div class="d-flex align-items-start gap-2 py-2 {% if not loop.last %}border-bottom{% endif %}" style="font-size:.85em;">
+            <div class="flex-grow-1">
+                <div class="fw-bold mb-1">
+                    <i class="bi bi-gift" style="color:#667eea;"></i> {{ gname }}
+                    <span style="font-size:.85em;color:#667eea;font-weight:400;">x{{ recs|length }}</span>
+                    {% if recs[0].gift_item and recs[0].gift_item.link %}
+                    <a href="{{ recs[0].gift_item.link }}" target="_blank" style="font-size:.82em;color:#667eea;font-weight:400;margin-left:4px;">查看详情 →</a>
+                    {% endif %}
+                </div>
+                <div class="d-flex flex-wrap gap-1">
+                    {% for rec in recs %}
+                    <span style="font-size:.82em;padding:1px 8px;background:#f0f4ff;border-radius:10px;color:#444;">{{ rec.user.name }} <span style="color:#aaa;">{{ rec.selected_at.strftime('%m-%d') if rec.selected_at else '' }}</span></span>
+                    {% endfor %}
+                </div>
+            </div>
+            <a href="#" style="font-size:.82em;color:#16a34a;white-space:nowrap;" onclick="event.preventDefault();if(!confirm('确认「{{ gname }}」x{{ recs|length }} 已全部采购？'))return;var ids=[{% for r in recs %}{{ r.id }}{% if not loop.last %},{% endif %}{% endfor %}];var done=0;ids.forEach(function(id){apiPost('/incentive/gifts/record/'+id+'/mark-purchased',{}).then(function(d){done++;if(done===ids.length){showToast('已标记','success');location.reload();}});});">已采购 ✓</a>
+        </div>
+        {% endfor %}
+        <div class="mb-3"></div>
+        {% endif %}
+
+        {% if gift_purchased %}
+        <h6 class="small fw-bold mb-2" style="color:#16a34a;">已采购（{{ gift_purchased|length }}）</h6>
+        <div id="purchasedList">
+        {% for rec in gift_purchased %}
+        <div class="d-flex align-items-center gap-2 py-1 border-bottom purchased-row" style="font-size:.82em;color:#999;{% if loop.index > 10 %}display:none;{% endif %}">
+            <span>{{ rec.user.name }}</span>
+            <span>{{ rec.gift_item.name if rec.gift_item else '-' }}{% if rec.gift_item and rec.gift_item.link %} <a href="{{ rec.gift_item.link }}" target="_blank" style="color:#667eea;">详情 →</a>{% endif %}</span>
+            <span class="ms-auto">{{ rec.purchased_at.strftime('%m-%d') if rec.purchased_at else '-' }}</span>
+        </div>
+        {% endfor %}
+        </div>
+        {% if gift_purchased|length > 10 %}
+        <div class="text-center mt-2" id="purchasedPager">
+            <span class="text-muted small" id="purchasedInfo">1-10 / {{ gift_purchased|length }}</span>
+            <a href="#" class="small ms-2" id="purchasedPrev" style="display:none;" onclick="event.preventDefault();purchasedPage(-1);">上一页</a>
+            <a href="#" class="small ms-2" id="purchasedNext" onclick="event.preventDefault();purchasedPage(1);">下一页</a>
+        </div>
+        <script>
+        var _pPage = 0, _pSize = 10, _pRows = document.querySelectorAll('.purchased-row'), _pTotal = _pRows.length;
+        function purchasedPage(dir) {
+            _pPage += dir;
+            var start = _pPage * _pSize, end = start + _pSize;
+            _pRows.forEach(function(r, i) { r.style.display = (i >= start && i < end) ? '' : 'none'; });
+            document.getElementById('purchasedInfo').textContent = (start+1) + '-' + Math.min(end, _pTotal) + ' / ' + _pTotal;
+            document.getElementById('purchasedPrev').style.display = _pPage > 0 ? '' : 'none';
+            document.getElementById('purchasedNext').style.display = end < _pTotal ? '' : 'none';
+        }
+        </script>
+        {% endif %}
+        {% endif %}
+    </div>
+</div>
+{% endif %}

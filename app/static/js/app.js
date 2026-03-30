@@ -181,6 +181,8 @@ document.addEventListener('keydown', function(e) {
 })();
 
 // ---- AI button loading state with timer ----
+// Submits the form via fetch so the page stays alive and the timer keeps ticking.
+// On success the page reloads to show results; on error the button resets.
 function aiLoading(btn, loadingText) {
     var origHtml = btn.innerHTML;
     var startTime = Date.now();
@@ -198,6 +200,54 @@ function aiLoading(btn, loadingText) {
             btn.innerHTML = origHtml;
         }
     };
+}
+
+// Bind AI generate forms: submit via fetch to keep timer alive, then navigate.
+function aiBindForm(form, btn, loadingText) {
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var ctrl = aiLoading(btn, loadingText);
+        var action = form.action || window.location.href;
+        fetch(action, {
+            method: 'POST',
+            body: new FormData(form),
+            redirect: 'follow',
+        }).then(function(resp) {
+            // Navigate to final URL (handles both redirect and same-page reload)
+            window.location.href = resp.url;
+        }).catch(function() {
+            ctrl.stop();
+        });
+    });
+}
+
+// ---- Clipboard copy with visual feedback ----
+function copyWithFeedback(text, btn, richHtml) {
+    function onSuccess() {
+        if (btn) {
+            var icon = btn.querySelector('i');
+            if (icon) { var orig = icon.className; icon.className = 'bi bi-check-lg text-success'; setTimeout(function() { icon.className = orig; }, 1500); }
+        }
+        showToast('已复制', 'success');
+    }
+    function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        onSuccess();
+    }
+    if (richHtml && navigator.clipboard && navigator.clipboard.write) {
+        navigator.clipboard.write([new ClipboardItem({
+            'text/html': new Blob([richHtml], {type: 'text/html'}),
+            'text/plain': new Blob([text], {type: 'text/plain'})
+        })]).then(onSuccess).catch(fallback);
+    } else if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(onSuccess).catch(fallback);
+    } else {
+        fallback();
+    }
 }
 
 // ---- AJAX helper for JSON POST ----

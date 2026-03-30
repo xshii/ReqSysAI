@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 
-from flask import current_app, flash, jsonify, redirect, render_template, request, url_for
+from flask import current_app, flash, g, jsonify, redirect, render_template, request, url_for
+from app.utils.api import api_ok, api_err
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
@@ -55,7 +56,7 @@ def edit(todo_id):
     todo = db.get_or_404(Todo, todo_id)
     data = request.get_json()
     if not data:
-        return jsonify(ok=False), 400
+        return api_err(status=400)
     # Accept help request: due_date change without title means acceptance
     if 'due_date' in data and 'title' not in data:
         todo.due_date = date.fromisoformat(data['due_date']) if data['due_date'] else None
@@ -69,7 +70,7 @@ def edit(todo_id):
                 notify(parent.user_id, 'help',
                        f'{current_user.name} 接纳了你的求助「{todo.title}」，预计{when}完成', '')
         db.session.commit()
-        return jsonify(ok=True)
+        return api_ok()
 
     title = (data.get('title') or '').strip()
     comment = (data.get('comment') or '').strip()
@@ -87,7 +88,7 @@ def edit(todo_id):
                        f'{current_user.name} 暂缓了你的求助「{todo.title}」：{comment}',
                        '')
             db.session.commit()
-            return jsonify(ok=True, rejected=True)
+            return api_ok(rejected=True)
         # Normal delete: recursively delete all descendants
         def _delete_descendants(parent_id):
             children = Todo.query.filter_by(parent_id=parent_id).all()
@@ -99,14 +100,14 @@ def edit(todo_id):
         log_audit('delete', 'todo', todo.id, todo.title)
         db.session.delete(todo)
         db.session.commit()
-        return jsonify(ok=True, deleted=True)
+        return api_ok(deleted=True)
     todo.title = title
     if 'due_date' in data:
         todo.due_date = date.fromisoformat(data['due_date']) if data['due_date'] else None
     if 'category' in data:
         todo.category = data['category']
     db.session.commit()
-    return jsonify(ok=True)
+    return api_ok()
 
 
 @todo_bp.route('/<int:todo_id>/confirm', methods=['POST'])
@@ -126,7 +127,7 @@ def confirm(todo_id):
     # Fire domain event for auto-transitions
     from app.services.events import fire, todo_completed
     fire(todo_completed, todo=todo)
-    return jsonify(ok=True)
+    return api_ok()
 
 
 @todo_bp.route('/<int:todo_id>/reopen', methods=['POST'])
@@ -138,7 +139,7 @@ def reopen(todo_id):
     todo.done_date = None
     todo.started_at = None
     db.session.commit()
-    return jsonify(ok=True)
+    return api_ok()
 
 
 # ---- Timer ----
@@ -159,12 +160,12 @@ def timer(todo_id):
         todo.actual_minutes = (todo.actual_minutes or 0) + elapsed_min
         todo.started_at = None
         db.session.commit()
-        return jsonify(ok=True, running=False, minutes=elapsed_min,
-                       completed=completed, total_minutes=todo.actual_minutes)
+        return api_ok(running=False, minutes=elapsed_min,
+                      completed=completed, total_minutes=todo.actual_minutes)
     else:
         todo.started_at = datetime.now()
         db.session.commit()
-        return jsonify(ok=True, running=True, minutes=0)
+        return api_ok(running=True, minutes=0)
 
 
 # ---- Help / Comments ----
@@ -206,7 +207,7 @@ def toggle_block(todo_id):
                     help_todo.items.append(TodoItem(title=f'协助：{todo.title}', sort_order=0))
                     db.session.add(help_todo)
     db.session.commit()
-    return jsonify(ok=True, blocked=todo.need_help, reason=todo.blocked_reason)
+    return api_ok(blocked=todo.need_help, reason=todo.blocked_reason)
 
 
 
@@ -222,7 +223,7 @@ def add_item(todo_id):
     data = request.get_json()
     title = (data.get('title') or '').strip() if data else ''
     if not title:
-        return jsonify(ok=False), 400
+        return api_err(status=400)
     item = TodoItem(todo_id=todo.id, title=title, sort_order=len(todo.items))
     db.session.add(item)
     # Reopen if todo was done (new sub-item means not finished yet)
@@ -230,7 +231,7 @@ def add_item(todo_id):
         todo.status = TODO_STATUS_TODO
         todo.done_date = None
     db.session.commit()
-    return jsonify(ok=True, id=item.id, reopened=todo.status == TODO_STATUS_TODO)
+    return api_ok(id=item.id, reopened=todo.status == TODO_STATUS_TODO)
 
 
 @todo_bp.route('/items/<int:item_id>/toggle', methods=['POST'])
@@ -263,8 +264,8 @@ def toggle_item(item_id):
                     pi.is_done = True
                 db.session.commit()
     done, total = todo.items_progress
-    return jsonify(ok=True, is_done=item.is_done, todo_done=todo.status == TODO_STATUS_DONE,
-                   progress=f'{done}/{total}')
+    return api_ok(is_done=item.is_done, todo_done=todo.status == TODO_STATUS_DONE,
+                  progress=f'{done}/{total}')
 
 
 @todo_bp.route('/items/<int:item_id>/delete', methods=['POST'])
@@ -274,7 +275,7 @@ def delete_item(item_id):
     item = db.get_or_404(TodoItem, item_id)
     db.session.delete(item)
     db.session.commit()
-    return jsonify(ok=True)
+    return api_ok()
 
 
 # ---- Help request ----
@@ -289,7 +290,7 @@ def ask_help(todo_id):
     help_title = (data.get('title') or '').strip() or f'协助: {todo.title}'
     helper = db.session.get(User, helper_id) if helper_id else None
     if not helper:
-        return jsonify(ok=False, msg='请选择协助人'), 400
+        return api_err(msg='请选择协助人', status=400)
     help_due_str = data.get('due_date') or ''
     help_due = date.fromisoformat(help_due_str) if help_due_str else None
     child = Todo(
@@ -306,7 +307,7 @@ def ask_help(todo_id):
             child.items.append(TodoItem(title=t.strip(), sort_order=i))
     db.session.add(child)
     db.session.commit()
-    return jsonify(ok=True, helper_name=helper.name)
+    return api_ok(helper_name=helper.name)
 
 
 # ---- Drag sort ----
@@ -316,10 +317,10 @@ def ask_help(todo_id):
 def drag():
     data = request.get_json()
     if not data:
-        return jsonify(ok=False), 400
+        return api_err(status=400)
     todo = db.session.get(Todo, data.get('id'))
     if not todo:
-        return jsonify(ok=False), 404
+        return api_err(status=404)
     new_status = data.get('status')
     if new_status and new_status in Todo.STATUS_LABELS:
         todo.status = new_status
@@ -333,7 +334,7 @@ def drag():
             if tid in my_todos:
                 my_todos[tid].sort_order = i
     db.session.commit()
-    return jsonify(ok=True)
+    return api_ok()
 
 
 # ---- AI Recommend ----
@@ -392,7 +393,7 @@ def ai_recommend():
 
     result, _ = call_ollama(prompt)
     if not result:
-        flash('AI 推荐失败，请重试', 'danger')
+        flash('AI服务暂不可用，正在紧急修复', 'danger')
         return redirect(url_for('todo.team'))
     if isinstance(result, dict):
         result = [result]
@@ -440,9 +441,7 @@ def team():
     week_ago = today - timedelta(days=keep_days)
 
     # Hidden project filtering (privacy mode)
-    from app.models.project import Project
-    from app.project.routes import _mgr_view_open
-    _hidden_pids = set() if _mgr_view_open() else {p.id for p in Project.query.filter_by(is_hidden=True).all()}
+    _hidden_pids = set(g.hidden_pids)
 
     groups = [g.name for g in Group.query.order_by(Group.name).all()]
 

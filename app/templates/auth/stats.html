@@ -149,22 +149,19 @@
 <script>
 function aiEfficiency() {
     var btn = document.getElementById('btnAiEfficiency');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 分析中...';
+    var loading = aiLoading(btn, '分析中');
     fetch('{{ url_for("auth.ai_efficiency") }}', {method: 'POST'})
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(d) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-robot"></i> AI 分析';
+        loading.stop();
         if (d.ok) {
             document.getElementById('aiEffContent').innerHTML = d.html;
             document.getElementById('aiEffPanel').classList.remove('d-none');
         } else {
-            alert(d.error || '分析失败');
+            alert(d.error || 'AI服务暂不可用，正在紧急修复');
         }
     }).catch(function(err) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-robot"></i> AI 分析';
+        loading.stop();
         alert('请求失败：' + err.message);
     });
 }

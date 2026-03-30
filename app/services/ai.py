@@ -71,7 +71,7 @@ def check_ollama_status():
     return _ensure_ssh_tunnel()
 
 
-def _call_openai(messages, input_text):
+def _call_openai(messages, input_text, skip_json=False):
     """Call OpenAI-compatible API. Returns (parsed_json, raw_text)."""
     base_url = current_app.config['OPENAI_BASE_URL'].rstrip('/')
     api_key = current_app.config['OPENAI_API_KEY']
@@ -82,11 +82,13 @@ def _call_openai(messages, input_text):
             headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
             json={'model': model, 'messages': messages, 'temperature': 0.7},
             timeout=current_app.config.get('AI_TIMEOUT', 120),
+            proxies={'http': '', 'https': ''},
         )
         resp.raise_for_status()
         raw = resp.json()['choices'][0]['message']['content']
         _log_ai_call(input_text, raw)
-        return _extract_json(raw), raw
+        parsed = None if skip_json else _extract_json(raw)
+        return parsed, raw
     except requests.RequestException:
         logger.exception('OpenAI API error')
         return None, None
@@ -95,7 +97,7 @@ def _call_openai(messages, input_text):
         return None, None
 
 
-def _call_ollama_api(messages, input_text):
+def _call_ollama_api(messages, input_text, skip_json=False):
     """Call Ollama /api/chat. Returns (parsed_json, raw_text)."""
     ok, err_msg = _ensure_ssh_tunnel()
     if not ok:
@@ -113,7 +115,8 @@ def _call_ollama_api(messages, input_text):
         resp.raise_for_status()
         raw = resp.json().get('message', {}).get('content', '')
         _log_ai_call(input_text, raw)
-        return _extract_json(raw), raw
+        parsed = None if skip_json else _extract_json(raw)
+        return parsed, raw
     except requests.RequestException:
         logger.exception('Ollama API error')
         return None, None
@@ -142,8 +145,12 @@ def _check_rate_limit():
     return True
 
 
-def call_ollama(prompt, system_prompt=None, messages=None):
-    """Call AI service (Ollama or OpenAI). Returns (parsed_json, raw_text) or (None, None)."""
+def call_ollama(prompt, system_prompt=None, messages=None, response_format=None):
+    """Call AI service (Ollama or OpenAI). Returns (parsed_json, raw_text) or (None, None).
+
+    Args:
+        response_format: If 'text', skip JSON extraction and return (None, raw_text).
+    """
     if not _check_rate_limit():
         logger.warning('AI rate limit exceeded')
         return None, 'AI 调用过于频繁，请稍后再试'
@@ -163,9 +170,10 @@ def call_ollama(prompt, system_prompt=None, messages=None):
         input_text = ' '.join(m.get('content', '') for m in messages if m.get('role') == 'user')
 
     provider = current_app.config.get('AI_PROVIDER', 'ollama')
+    skip_json = (response_format == 'text')
     if provider == 'openai':
-        return _call_openai(messages, input_text)
-    return _call_ollama_api(messages, input_text)
+        return _call_openai(messages, input_text, skip_json=skip_json)
+    return _call_ollama_api(messages, input_text, skip_json=skip_json)
 
 
 def _log_ai_call(raw_input, ai_output):

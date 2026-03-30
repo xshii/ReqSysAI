@@ -15,12 +15,10 @@
     0%, 100% { box-shadow: 0 0 0 3px rgba(13,202,240,.35); }
     50% { box-shadow: 0 0 0 6px rgba(13,202,240,.15); }
 }
-.todo-list-for-req { contain: layout style; }
-.todo-list-for-req.collapsing { transition: none !important; }
 </style>
 {% endblock %}
 
-{% from "_todo_macros.html" import pomodoro_icons, todo_row, block_popover_html, todo_row_js with context %}
+{% from "_todo_macros.html" import pomodoro_icons, todo_row, block_popover_html, todo_row_js, req_section, req_section_js, check_section_done_js, create_todo_row_js, at_autocomplete_js, quick_todo_form_js with context %}
 
 {% block content %}
 {% set danger_alerts = alerts|selectattr('level', 'equalto', 'danger')|list %}
@@ -55,10 +53,15 @@
     </div>
     {% for n in notifications %}
     <div class="d-flex align-items-center gap-2 py-1 notif-row {% if not loop.last %}border-bottom border-info border-opacity-25{% endif %}" data-nid="{{ n.id }}">
+        {% if n.type == 'gift' %}
+        <a href="{{ n.link or '#' }}" class="btn btn-sm btn-primary py-0 px-2 flex-shrink-0" style="font-size:.75em;"><i class="bi bi-gift"></i> 选择礼物</a>
+        <span class="small flex-grow-1">{{ n.title }}</span>
+        {% else %}
         <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:.7em;" onclick="apiPost('/api/notifications/read',{id:{{ n.id }}});this.closest('.notif-row').remove();var a=document.getElementById('notifAlert');if(!a.querySelector('.notif-row'))a.remove();">已读</button>
         <a href="{{ n.link or '#' }}" class="small flex-grow-1 text-decoration-none" onclick="apiPost('/api/notifications/read',{id:{{ n.id }}})">
             <i class="bi bi-{{ n.type_icon }} text-muted me-1" style="font-size:.8em;"></i><span class="text-muted" style="font-size:.8em;">[{{ n.type_label }}]</span> {{ n.title }}
         </a>
+        {% endif %}
         <span class="text-muted" style="font-size:.7em;">{{ n.created_at.strftime('%m-%d %H:%M') }}</span>
     </div>
     {% endfor %}
@@ -262,52 +265,12 @@ checkHelpAlert();
         </div>
 
         {# Each requirement with its todos — collapsible, auto-collapse when all done #}
+        {% set three_days_ago = today - timedelta(days=3) %}
         {% for r in display_reqs %}
         {% set r_todos = req_todos.get(r.id, []) %}
-        {% set r_all_done = r_todos|length > 0 and r_todos|rejectattr('status', 'equalto', 'done')|list|length == 0 %}
-        <div class="card mb-2 {% if r_all_done %}border-success border-opacity-25{% endif %}">
-            <div class="card-body py-2">
-                <div class="d-flex align-items-center gap-2 mb-1">
-                    <div class="d-flex align-items-center gap-1 flex-shrink-1" style="min-width:0;overflow:hidden;">
-                        <i class="bi bi-chevron-{{ 'right' if r_all_done else 'down' }} text-muted" style="font-size:.6em;cursor:pointer;" role="button" data-bs-toggle="collapse" data-bs-target="#reqTodos{{ r.id }}"></i>
-                        <span class="badge bg-{{ r.status_color }}" style="font-size:.65em;flex-shrink:0;cursor:pointer;" role="button" data-bs-toggle="collapse" data-bs-target="#reqTodos{{ r.id }}">{{ r.status_label }}</span>
-                        {% if r_todos %}<span class="badge bg-{{ 'success' if r_all_done else 'secondary' }} bg-opacity-{{ '75' if r_all_done else '50' }}" style="font-size:.55em;flex-shrink:0;">{{ r_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ r_todos|length }}</span>{% endif %}
-                        {% if r.due_date and r.due_date < today %}<span class="badge bg-danger" style="font-size:.65em;flex-shrink:0;">超期</span>{% endif %}
-                        <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="small fw-bold text-primary text-nowrap text-decoration-none" style="overflow:hidden;text-overflow:ellipsis;" title="{{ r.number }} {{ r.title }}">{{ r.number }} {{ r.title }}</a>
-                    </div>
-                    {% if r.status not in ('done', 'closed') %}
-                    <select class="form-select form-select-sm py-0 flex-shrink-0 req-pct-select" data-req-id="{{ r.id }}" data-status="{{ r.status }}"
-                            style="width:62px;font-size:.7em;padding-right:18px;" onchange="updateReqPct(this)">
-                        {% set cur_pct = r.completion or 0 %}
-                        {% for p in range(0, 110, 10) %}
-                        <option value="{{ p }}" {{ 'selected' if cur_pct == p }}>{{ p }}%</option>
-                        {% endfor %}
-                    </select>
-                    {% endif %}
-                    <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-grow-1 quick-todo-form">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="req_id" value="{{ r.id }}">
-                        <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加Todo / @人名 求助 / #总结" required style="font-size:.8em;">
-                    </form>
-                </div>
-                {# Requirement-level comments — recent 2 days #}
-                {% set two_days_ago = today - timedelta(days=2) %}
-                {% set recent_comments = r.comments|selectattr('created_at')|list %}
-                {% set recent_comments = [] %}
-                {% for c in r.comments %}{% if c.created_at.date() >= two_days_ago %}{% set _ = recent_comments.append(c) %}{% endif %}{% endfor %}
-                <div class="collapse {% if not r_all_done %}show{% endif %} todo-list-for-req" data-req-id="{{ r.id }}" id="reqTodos{{ r.id }}" style="min-height:24px;">
-                {% if recent_comments %}
-                <div class="ps-2 mb-1 req-comments" data-req-id="{{ r.id }}">
-                    {% for c in recent_comments %}
-                    <div class="text-muted" style="font-size:.7em;"><i class="bi bi-chat-left-text"></i> <strong>{{ c.user.name }}</strong> {{ c.created_at.strftime('%m-%d %H:%M') }}：{{ c.content }}</div>
-                    {% endfor %}
-                    {% if r.comments|length > recent_comments|length %}<a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="text-muted ps-2" style="font-size:.6em;">查看全部 {{ r.comments|length }} 条评论</a>{% endif %}
-                </div>
-                {% endif %}
-                {% for t in r_todos %}{{ todo_row(t) }}{% endfor %}
-                </div>
-            </div>
-        </div>
+        {% set rc = [] %}
+        {% for c in r.comments %}{% if c.created_at.date() >= three_days_ago %}{% set _ = rc.append(c) %}{% endif %}{% endfor %}
+        {{ req_section(r, r_todos, today, recent_comments=rc) }}
         {% endfor %}
 
         {# Team affairs - collapsible, grouped by source person #}
@@ -500,9 +463,10 @@ checkHelpAlert();
         </div>
 
         <!-- My Risks -->
+        {% if my_risks %}
         <div class="card mb-3 border-0 shadow-sm">
             <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#riskBody" style="cursor:pointer;">
-                <i class="bi bi-chevron-down text-muted me-1" style="font-size:.6em;"></i><i class="bi bi-exclamation-triangle text-danger"></i> 我的风险 <span class="badge bg-{{ 'danger' if my_risks else 'secondary' }}">{{ my_risks | length }}</span>
+                <i class="bi bi-chevron-down text-muted me-1" style="font-size:.6em;"></i><i class="bi bi-exclamation-triangle text-danger"></i> 我的风险 <span class="badge bg-danger">{{ my_risks | length }}</span>
             </div>
             <div class="collapse show" id="riskBody">
             <div class="card-body py-2">
@@ -511,7 +475,7 @@ checkHelpAlert();
                     {% if r.title in risk_todo_titles %}
                     <span class="text-muted flex-shrink-0" style="font-size:.65em;width:3.2em;text-align:center;">已加</span>
                     {% else %}
-                    <button class="btn btn-outline-danger btn-sm py-0 btn-risk-todo flex-shrink-0" data-title="{{ r.title }}" data-role="{% if r.owner_id == current_user.id %}责任人{% elif r.tracker_id == current_user.id %}跟踪人{% endif %}" style="font-size:.7em;width:3.2em;text-align:center;" data-tip="添加到今日风险&突发 Todo">+Todo</button>
+                    <button class="btn btn-outline-danger btn-sm py-0 btn-risk-todo flex-shrink-0" data-title="{{ r.title }}" data-role="{% if r.owner_id == current_user.id %}责任人{% elif r.tracker_id == current_user.id %}跟踪人{% endif %}" style="font-size:.7em;width:1.8em;text-align:center;" title="添加到今日风险&突发 Todo"><i class="bi bi-arrow-left"></i></button>
                     {% endif %}
                     <a href="{{ url_for('project.risk_list', project_id=r.project_id) }}" class="text-decoration-none text-dark flex-grow-1 text-truncate">{{ r.title }}</a>
                     <span class="flex-shrink-0 d-flex align-items-center gap-1">
@@ -527,12 +491,11 @@ checkHelpAlert();
                         <span class="text-muted">{{ r.due_date.strftime('%m-%d') if r.due_date else '' }}</span>
                     </span>
                 </div>
-            {% else %}
-                <p class="text-muted small mb-0">暂无待处理的风险</p>
             {% endfor %}
             </div>
             </div>
         </div>
+        {% endif %}
 
         <!-- Incentive Stars -->
         <div class="card mb-3 border-0 shadow-sm">
@@ -757,44 +720,8 @@ function _saveActivity() {
     apiPost('/api/activity', {activity: a.key, label: _actLabels[a.key] || a.key, date: ds, time: ts, minutes: min});
 }
 
-// Requirement completion % selector
-function updateReqPct(sel) {
-    var reqId = sel.dataset.reqId;
-    var pct = parseInt(sel.value);
-    var curStatus = sel.dataset.status;
-    // Save completion
-    apiPost('/requirements/' + reqId + '/completion-api', {completion: pct}).then(function(d) {
-        if (!d || !d.ok) { showToast('更新失败', 'danger'); return; }
-    });
-    // Auto-advance status when hitting 100%
-    if (pct === 100) {
-        var nextMap = {"pending_review":"pending_dev","pending_dev":"in_dev","in_dev":"in_test","in_test":"done"};
-        var next = nextMap[curStatus];
-        if (next) {
-            apiPost('/requirements/' + reqId + '/status-api', {status: next}).then(function(d) {
-                if (d && d.ok) {
-                    // Reset completion to 0 for new stage
-                    apiPost('/requirements/' + reqId + '/completion-api', {completion: 0});
-                    showToast('已完成 → ' + d.label, 'success');
-                    if (d.status === 'done') {
-                        // Hide selector for done status
-                        sel.style.display = 'none';
-                    } else {
-                        sel.dataset.status = d.status;
-                        sel.value = '0';
-                    }
-                    // Update badge text + color
-                    var card = sel.closest('.card');
-                    var badge = card.querySelector('.badge');
-                    if (badge) {
-                        badge.textContent = d.label;
-                        badge.className = 'badge bg-' + (d.color || 'secondary');
-                    }
-                }
-            });
-        }
-    }
-}
+// Requirement completion % selector (shared macro)
+{{ req_section_js() }}
 
 // Sync chevron icon on all Bootstrap collapse toggles
 document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function(trigger) {
@@ -877,13 +804,13 @@ document.getElementById('btnDailyProgress').addEventListener('click', function()
             document.getElementById('dailyProgressText').textContent = d.text;
             document.getElementById('dailyProgressPanel').classList.remove('d-none');
         } else {
-            showToast('生成失败', 'danger');
+            showToast('AI服务暂不可用，正在紧急修复', 'danger');
         }
     }).catch(function() { loading.stop(); });
 });
 function copyProgress() {
     var text = document.getElementById('dailyProgressText').textContent;
-    navigator.clipboard.writeText(text).then(function() { showToast('已复制', 'success'); });
+    copyWithFeedback(text, document.querySelector('#dailyProgressPanel .btn-outline-secondary'));
 }
 
 // AI Recommend
@@ -894,7 +821,7 @@ if (_aiBtn) _aiBtn.addEventListener('click', function() {
     apiPost('{{ url_for("main.ai_recommend_todos") }}', {}).then(function(d) {
         loading.stop();
         if (!d || !d.ok) {
-            showToast(d && d.msg ? d.msg : 'AI 推荐失败', 'danger');
+            showToast(d && d.msg ? d.msg : 'AI服务暂不可用，正在紧急修复', 'danger');
             return;
         }
         if (d.todos && d.todos.length) {
@@ -908,7 +835,7 @@ if (_aiBtn) _aiBtn.addEventListener('click', function() {
                     + t.title
                     + (t.reason ? ' <span class="text-muted" style="font-size:.75em;">(' + t.reason + ')</span>' : '')
                     + '</span>'
-                    + '<button class="btn btn-sm py-0 px-1 btn-success ai-adopt" data-title="' + t.title.replace(/"/g, '&quot;') + '" data-reason="' + (t.reason || '').replace(/"/g, '&quot;') + '" data-req-id="' + (t.req_id || 0) + '" title="采纳">采纳</button>'
+                    + '<button class="btn btn-sm py-0 px-1 btn-success ai-adopt" data-title="' + t.title.replace(/"/g, '&quot;') + '" data-reason="' + (t.reason || '').replace(/"/g, '&quot;') + '" data-req-id="' + (t.req_id || 0) + '" data-category="' + (t.category || 'work') + '" title="采纳">采纳</button>'
                     + '<button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="this.closest(\'.ai-rec-item\').remove()" title="忽略"><i class="bi bi-x"></i></button>'
                     + '</div>';
             });
@@ -919,13 +846,16 @@ if (_aiBtn) _aiBtn.addEventListener('click', function() {
                 ab.addEventListener('click', function() {
                     var reason = ab.dataset.reason || '';
                     var fullTitle = reason ? ab.dataset.title + '（' + reason + '）' : ab.dataset.title;
-                    var data = {title: fullTitle, category: 'work'};
+                    var cat = ab.dataset.category || 'work';
+                    var data = {title: fullTitle, category: cat};
                     var reqId = parseInt(ab.dataset.reqId);
                     if (reqId) data.req_id = reqId;
                     apiPost('{{ url_for("main.quick_todo") }}', data).then(function(r) {
                         if (r && r.ok) {
                             ab.closest('.ai-rec-item').remove();
-                            var listEl = document.querySelector('.todo-list-for-req[data-req-id="' + reqId + '"]');
+                            var listEl = cat === 'risk'
+                                ? document.querySelector('.todo-list-for-req[data-req-id="risk"]')
+                                : document.querySelector('.todo-list-for-req[data-req-id="' + reqId + '"]');
                             if (listEl) listEl.appendChild(createTodoRow(r.todo_id, fullTitle, {source: 'ai'}));
                             _todoTotal++; _updateProgress();
                             showToast(ab.dataset.title + ' 已采纳', 'success');
@@ -969,9 +899,11 @@ document.getElementById('btnAdoptAll').addEventListener('click', function() {
     btn.textContent = '采纳中...';
     apiPost('{{ url_for("main.batch_adopt") }}', {todos: todos}).then(function(d) {
         if (d && d.ok) {
-            // Insert all into matching requirement sections
+            // Insert all into matching sections (risk → risk area, work → requirement area)
             (d.items || []).forEach(function(item) {
-                var listEl = document.querySelector('.todo-list-for-req[data-req-id="' + (item.req_id || '') + '"]');
+                var listEl = item.category === 'risk'
+                    ? document.querySelector('.todo-list-for-req[data-req-id="risk"]')
+                    : document.querySelector('.todo-list-for-req[data-req-id="' + (item.req_id || '') + '"]');
                 if (listEl) listEl.appendChild(createTodoRow(item.todo_id, item.title, {source: 'ai'}));
             });
             document.getElementById('aiRecommendArea').classList.add('d-none');
@@ -1005,60 +937,8 @@ document.querySelectorAll('.btn-risk-todo').forEach(function(btn) {
     });
 });
 
-// @autocomplete for todo input
-var _userCache = null;
-function loadUsers(cb) {
-    if (_userCache) return cb(_userCache);
-    fetch('/api/users').then(function(r) { return r.json(); }).then(function(users) {
-        _userCache = users;
-        cb(users);
-    });
-}
-
-document.querySelectorAll('.quick-todo-form input[name="title"]').forEach(function(inp) {
-    var dropdown = document.createElement('div');
-    dropdown.className = 'position-absolute bg-white border rounded shadow-sm small';
-    dropdown.style.cssText = 'z-index:1000;display:none;max-height:150px;overflow-y:auto;width:200px;';
-    inp.parentElement.style.position = 'relative';
-    inp.parentElement.appendChild(dropdown);
-
-    var _groups = {{ sidebar_groups | tojson }};
-    inp.addEventListener('input', function() {
-        var val = inp.value;
-        var atIdx = val.lastIndexOf('@');
-        if (atIdx < 0) { dropdown.style.display = 'none'; return; }
-        var query = val.substring(atIdx + 1).toLowerCase();
-        loadUsers(function(users) {
-            // Match groups first
-            var groupMatches = _groups.filter(function(g) { return g.toLowerCase().includes(query); }).map(function(g) {
-                return '<div class="px-2 py-1 user-ac-item" style="cursor:pointer;" data-name="' + g + '"><i class="bi bi-people-fill text-primary"></i> ' + g + ' <span class="text-muted">小组</span></div>';
-            });
-            // Match users
-            var userMatches = users.filter(function(u) {
-                return u.name.toLowerCase().includes(query)
-                    || (u.pinyin && u.pinyin.toLowerCase().includes(query))
-                    || (u.employee_id && u.employee_id.toLowerCase().includes(query));
-            }).slice(0, 8).map(function(u) {
-                return '<div class="px-2 py-1 user-ac-item" style="cursor:pointer;" data-name="' + u.name + '">' + u.name + ' <span class="text-muted">' + (u.employee_id || '') + '</span></div>';
-            });
-            var all = groupMatches.concat(userMatches);
-            if (!all.length) { dropdown.style.display = 'none'; return; }
-            dropdown.innerHTML = all.join('');
-            dropdown.style.display = 'block';
-            dropdown.querySelectorAll('.user-ac-item').forEach(function(item) {
-                item.addEventListener('mousedown', function(e) {
-                    e.preventDefault();
-                    var v = inp.value;
-                    var ai = v.lastIndexOf('@');
-                    inp.value = v.substring(0, ai) + '@' + item.dataset.name + ' ';
-                    dropdown.style.display = 'none';
-                    inp.focus();
-                });
-            });
-        });
-    });
-    inp.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; }, 200); });
-});
+// @autocomplete for todo input (shared macro — users + groups)
+{{ at_autocomplete_js() }}
 
 // Incentive like (AJAX)
 document.querySelectorAll('.inc-like').forEach(function(btn) {
@@ -1127,124 +1007,11 @@ document.querySelectorAll('.rant-del').forEach(function(btn) {
     });
 });
 
-// ---- Shared: create a todo row DOM element ----
-function createTodoRow(todoId, title, opts) {
-    opts = opts || {};
-    // Outer wrapper (matches macro structure)
-    var wrapper = document.createElement('div');
-    wrapper.className = 'mb-1 ps-2';
-    var row = document.createElement('div');
-    row.className = 'd-flex align-items-center gap-1 todo-drag-item';
-    row.draggable = true;
-    row.style.cursor = 'grab';
-    row.dataset.todoId = todoId;
-    var badge = '';
-    var isHelp = !!opts.helper;
-    if (opts.source === 'ai') badge += ' <span class="badge bg-info" style="font-size:.55em;">AI</span>';
-    if (isHelp) badge += ' <span class="badge bg-warning text-dark" style="font-size:.55em;">@' + opts.helper + ' 待响应</span>';
-    var icon = isHelp
-        ? '<i class="bi bi-hourglass-split text-warning" style="font-size:.9em;"></i>'
-        : '<i class="bi bi-circle text-secondary btn-toggle-r" style="cursor:pointer;"></i>';
-    row.innerHTML = icon
-        + ' <span class="small">' + title + '</span>' + badge
-        + ' <button class="btn btn-sm py-0 px-0 btn-outline-secondary btn-timer-r todo-action-btn" data-id="' + todoId + '" style="font-size:.7em;line-height:1;" data-tip="启动番茄钟" data-tip-pos="bottom"><i class="bi bi-clock"></i></button>'
-        + ' <button class="btn btn-sm py-0 px-0 text-muted btn-block-r todo-action-btn" data-id="' + todoId + '" style="font-size:.7em;line-height:1;" data-tip="标记阻塞" data-tip-pos="bottom"><i class="bi bi-pause-circle"></i></button>'
-        + ' <button class="btn btn-sm py-0 px-0 text-muted btn-del-r" data-id="' + todoId + '" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>';
-    wrapper.appendChild(row);
-    // Bind toggle done
-    row.querySelector('.btn-toggle-r').addEventListener('click', function() {
-        var icon = this;
-        apiPost('/todo/' + todoId + '/toggle', {}).then(function(d) {
-            if (d && d.ok) {
-                if (d.done) {
-                    row.classList.add('text-muted', 'text-decoration-line-through');
-                    icon.className = 'bi bi-check-circle-fill text-success btn-toggle-r';
-                    icon.style.cursor = 'pointer';
-                    _todoDone++;
-                    row.querySelectorAll('.todo-action-btn').forEach(function(b) { b.style.display = 'none'; });
-                } else {
-                    row.classList.remove('text-muted', 'text-decoration-line-through');
-                    icon.className = 'bi bi-circle text-secondary btn-toggle-r';
-                    icon.style.cursor = 'pointer';
-                    _todoDone--;
-                    row.querySelectorAll('.todo-action-btn').forEach(function(b) { b.style.display = ''; });
-                }
-                _updateProgress();
-                _checkSectionDone(row);
-            }
-        });
-    });
-    // Bind timer
-    row.querySelector('.btn-timer-r').addEventListener('click', function() {
-        var b = this;
-        // If already in focus mode for this todo, exit
-        if (focusTodoId == todoId && focusOverlay && focusOverlay.style.display !== 'none') {
-            exitFocusMode();
-            return;
-        }
-        apiPost('/todos/' + todoId + '/timer', {}).then(function(x) {
-            if (x && x.ok) {
-                if (x.running) {
-                    b.className = b.className.replace('btn-outline-secondary', 'btn-success');
-                    b.querySelector('i').className = 'bi bi-clock-fill';
-                    enterFocusMode(todoId, title);
-                } else {
-                    b.className = b.className.replace('btn-success', 'btn-outline-secondary');
-                    b.querySelector('i').className = 'bi bi-clock';
-                    addTomatoIcon(b, x.minutes || 0);
-                    showToast('◐ 打断，' + (x.minutes || 0) + '分钟', 'info');
-                }
-            }
-        });
-    });
-    // Bind blocker
-    row.querySelector('.btn-block-r').addEventListener('click', function() {
-        showBlockPopover(this, todoId);
-    });
-    // Bind delete
-    row.querySelector('.btn-del-r').addEventListener('click', function() {
-        apiPost('/todos/' + todoId + '/edit', {title: ''}).then(function(x) {
-            if (x && x.ok) {
-                wrapper.remove();
-                _todoTotal--;
-                _updateProgress();
-                _checkSectionDone(row);
-            }
-        });
-    });
-    return wrapper;
-}
+// ---- Shared: _checkSectionDone (auto-collapse/expand + badge sync) ----
+{{ check_section_done_js() }}
 
-// Check if a section is all-done after toggle, auto-collapse/expand
-function _checkSectionDone(row) {
-    var container = row.closest('.todo-list-for-req');
-    if (!container) return;
-    var items = container.querySelectorAll('.todo-drag-item');
-    if (!items.length) return;
-    var allDone = Array.from(items).every(function(el) { return el.classList.contains('text-decoration-line-through'); });
-    var card = container.closest('.card');
-    var collapseId = container.id;
-    var chevron = card ? card.querySelector('[data-bs-target="#' + collapseId + '"]') : null;
-    // Update card border
-    if (card) {
-        if (allDone) { card.classList.add('border-success', 'border-opacity-25'); card.classList.remove('border-danger'); }
-        else { card.classList.remove('border-success', 'border-opacity-25'); }
-    }
-    // Auto-collapse when all done, auto-expand when undone
-    var bsCollapse = bootstrap.Collapse.getInstance(container) || new bootstrap.Collapse(container, {toggle: false});
-    if (allDone) { bsCollapse.hide(); }
-    else { bsCollapse.show(); }
-    // Update section progress badge
-    var doneCount = Array.from(items).filter(function(el) { return el.classList.contains('text-decoration-line-through'); }).length;
-    var sectionBadges = card ? card.querySelectorAll('.badge') : [];
-    sectionBadges.forEach(function(b) {
-        if (b.textContent.match(/^\d+\/\d+$/)) {
-            b.textContent = doneCount + '/' + items.length;
-            b.className = 'badge bg-' + (allDone ? 'success' : 'secondary') + ' bg-opacity-' + (allDone ? '75' : '50');
-            b.style.fontSize = '.55em';
-        }
-    });
-}
+// ---- Shared: createTodoRow (fully interactive dynamic todo row) ----
+{{ create_todo_row_js() }}
 
 // Homepage progress bar
 var _todoDone = {{ todo_done }}, _todoTotal = {{ todo_total }};
@@ -1537,72 +1304,7 @@ document.addEventListener('dragend', function() {
     });
 })();
 
-// AJAX quick-todo for ALL forms (text input + quick buttons)
-document.querySelectorAll('form[action$="/quick-todo"]').forEach(function(form) {
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        if (form._submitting) return;
-        var titleInput = form.querySelector('input[name="title"]');
-        var title = titleInput ? titleInput.value.trim() : '';
-        if (!title) return;
-        form._submitting = true;
-        var data = {title: title};
-        var reqId = form.querySelector('input[name="req_id"]');
-        if (reqId) data.req_id = parseInt(reqId.value);
-        var cat = form.querySelector('input[name="category"]');
-        if (cat) data.category = cat.value;
-        apiPost('{{ url_for("main.quick_todo") }}', data).then(function(d) {
-            if (d && d.ok) {
-                // #comment: insert into requirement comment area
-                if (d.action === 'comment') {
-                    if (titleInput.type === 'text') titleInput.value = '';
-                    var reqId = d.req_id;
-                    if (reqId) {
-                        var commentArea = document.querySelector('.req-comments[data-req-id="' + reqId + '"]');
-                        var now = new Date();
-                        var timeStr = String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0')
-                            + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-                        var commentHtml = '<div class="text-muted" style="font-size:.7em;"><i class="bi bi-chat-left-text"></i> <strong>' + (d.user || '') + '</strong> ' + timeStr + '：' + d.title + '</div>';
-                        if (commentArea) {
-                            commentArea.insertAdjacentHTML('afterbegin', commentHtml);
-                        } else {
-                            // Create comment area before todo list
-                            var todoList = document.getElementById('reqTodos' + reqId);
-                            if (todoList) {
-                                var div = document.createElement('div');
-                                div.className = 'ps-2 mb-1 req-comments';
-                                div.dataset.reqId = reqId;
-                                div.innerHTML = commentHtml;
-                                todoList.parentElement.insertBefore(div, todoList);
-                            }
-                        }
-                    }
-                    showToast('评论已添加', 'success');
-                    form._submitting = false;
-                    return;
-                }
-                var row = createTodoRow(d.todo_id, title, {helper: d.helper || ''});
-                var reqIdInput = form.querySelector('input[name="req_id"]');
-                var rid = reqIdInput ? reqIdInput.value : '';
-                var catInput = form.querySelector('input[name="category"]');
-                var catVal = catInput ? catInput.value : '';
-                var listContainer = rid ? document.querySelector('.todo-list-for-req[data-req-id="' + rid + '"]')
-                    : (catVal ? document.querySelector('.todo-list-for-req[data-req-id="' + catVal + '"]') : null);
-                if (listContainer) {
-                    listContainer.appendChild(row);
-                } else {
-                    form.closest('.card-body').querySelector('.todo-list-for-req').appendChild(row);
-                }
-                if (titleInput.type === 'text') titleInput.value = '';
-                form._submitting = false;
-                _todoTotal++; _updateProgress();
-                showToast(d.helper ? '已向 ' + d.helper + ' 发起求助' : title + ' 已添加', 'success');
-            } else {
-                form._submitting = false;
-                form.submit();
-            }
-        }).catch(function() { form._submitting = false; form.submit(); });
-    });
-});
+// AJAX quick-todo for ALL forms (shared macro)
+{{ quick_todo_form_js() }}
 </script>
 {% endblock %}

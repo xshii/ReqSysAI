@@ -33,6 +33,25 @@
     <a href="{{ url_for('dashboard.resource_map_export', period=period, week=offset, mode=mode) }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出</a>
 </div>
 
+{# Group + Project filters #}
+<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+    <span class="text-muted small">小组：</span>
+    <a href="?period={{ period }}&week={{ offset }}&mode={{ mode }}&group=&project={{ cur_project_filter or '' }}" class="badge {{ 'bg-primary' if not cur_group else 'bg-light text-dark border' }}" style="cursor:pointer;font-size:.75em;text-decoration:none;">全部</a>
+    {% for g in groups %}
+    <a href="?period={{ period }}&week={{ offset }}&mode={{ mode }}&group={{ g }}&project={{ cur_project_filter or '' }}" class="badge {{ 'bg-primary' if cur_group == g else 'bg-light text-dark border' }}" style="cursor:pointer;font-size:.75em;text-decoration:none;">{{ g }}</a>
+    {% endfor %}
+    {% if project_ids %}
+    <span class="border-start ms-1 ps-2"></span>
+    <span class="text-muted small">项目：</span>
+    <select class="form-select form-select-sm" style="width:auto;font-size:.8em;" onchange="var url=new URL(location);url.searchParams.set('project',this.value);location=url;">
+        <option value="">全部项目</option>
+        {% for pid in project_ids %}{% set p = projects.get(pid) %}{% if p %}
+        <option value="{{ pid }}" {% if cur_project_filter == pid %}selected{% endif %}>{{ p.name }}</option>
+        {% endif %}{% endfor %}
+    </select>
+    {% endif %}
+</div>
+
 {% if mode == 'by_person' %}
 <!-- ===== Mode 1: flat rows (person × project) ===== -->
 {% if flat_rows %}

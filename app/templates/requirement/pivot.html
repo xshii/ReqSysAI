@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}业务专题进展 - {{ site_name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>业务专题进展</h4>
+</div>
+
+<!-- Filters -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-auto">
+                <select name="project_id" class="form-select form-select-sm">
+                    <option value="">全部项目</option>
+                    {% for p in projects %}
+                    <option value="{{ p.id }}" {% if cur_project == p.id %}selected{% endif %}>{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">全部状态</option>
+                    {% for k, v in statuses.items() %}
+                    <option value="{{ k }}" {% if cur_status == k %}selected{% endif %}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-outline-primary">筛选</button>
+                <a href="{{ url_for('requirement.pivot_table') }}" class="btn btn-sm btn-outline-secondary">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if l1_list %}
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover mb-0" style="font-size:.88em;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="text-center" style="min-width:120px;">分类 \ 平台</th>
+                        {% for l2 in l2_list %}
+                        <th class="text-center" style="min-width:140px;">{{ l2 }}</th>
+                        {% endfor %}
+                        <th class="text-center table-warning" style="min-width:140px;">合计</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l1 in l1_list %}
+                    <tr>
+                        <td class="fw-bold">{{ l1 }}</td>
+                        {% for l2 in l2_list %}
+                        {% set c = cells.get((l1, l2)) %}
+                        <td class="text-center">
+                            {% if c and c.total > 0 %}
+                            {% set avg_pct = (c.pct_sum / c.total)|round|int %}
+                            <div>
+                                <span class="fw-bold">{{ c.done }}/{{ c.total }}</span>
+                                <span class="text-muted small">条</span>
+                            </div>
+                            <div class="progress mx-auto mt-1" style="height:5px;width:80%;">
+                                <div class="progress-bar bg-{{ 'success' if avg_pct >= 90 else ('primary' if avg_pct >= 50 else 'secondary') }}" style="width:{{ avg_pct }}%"></div>
+                            </div>
+                            <div class="small {% if avg_pct >= 90 %}text-success{% elif avg_pct >= 50 %}text-primary{% else %}text-muted{% endif %}">{{ avg_pct }}%</div>
+                            {% if c.days %}<div class="text-muted" style="font-size:.75em;">{{ c.days }}天</div>{% endif %}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        {# Row total #}
+                        {% set rt = row_totals[l1] %}
+                        <td class="text-center table-warning">
+                            {% if rt.total > 0 %}
+                            {% set avg_pct = (rt.pct_sum / rt.total)|round|int %}
+                            <div><span class="fw-bold">{{ rt.done }}/{{ rt.total }}</span></div>
+                            <div class="progress mx-auto mt-1" style="height:5px;width:80%;">
+                                <div class="progress-bar bg-{{ 'success' if avg_pct >= 90 else ('primary' if avg_pct >= 50 else 'secondary') }}" style="width:{{ avg_pct }}%"></div>
+                            </div>
+                            <div class="small {% if avg_pct >= 90 %}text-success{% elif avg_pct >= 50 %}text-primary{% else %}text-muted{% endif %}">{{ avg_pct }}%</div>
+                            {% if rt.days %}<div class="text-muted" style="font-size:.75em;">{{ rt.days }}天</div>{% endif %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr class="fw-bold">
+                        <td class="text-center">合计</td>
+                        {% for l2 in l2_list %}
+                        {% set ct = col_totals[l2] %}
+                        <td class="text-center">
+                            {% if ct.total > 0 %}
+                            {% set avg_pct = (ct.pct_sum / ct.total)|round|int %}
+                            <div>{{ ct.done }}/{{ ct.total }}</div>
+                            <div class="small {% if avg_pct >= 90 %}text-success{% elif avg_pct >= 50 %}text-primary{% else %}text-muted{% endif %}">{{ avg_pct }}%</div>
+                            {% if ct.days %}<div class="text-muted" style="font-size:.75em;">{{ ct.days }}天</div>{% endif %}
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td class="text-center table-warning">
+                            {% if grand.total > 0 %}
+                            {% set avg_pct = (grand.pct_sum / grand.total)|round|int %}
+                            <div>{{ grand.done }}/{{ grand.total }}</div>
+                            <div class="small {% if avg_pct >= 90 %}text-success{% elif avg_pct >= 50 %}text-primary{% else %}text-muted{% endif %}">{{ avg_pct }}%</div>
+                            {% if grand.days %}<div class="text-muted" style="font-size:.75em;">{{ grand.days }}天</div>{% endif %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="mt-2 small text-muted">
+    <i class="bi bi-info-circle"></i> 仅统计有二级分类的需求（格式：模型名-类型）。单元格显示：已完成/总数、平均进度、预估工期。
+</div>
+
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-table" style="font-size: 2rem;"></i>
+    <p class="mt-2">暂无带二级分类的需求数据</p>
+    <p class="small">在需求的分类字段中使用 "模型名-类型" 格式（如 "ModelA-软件"）即可生成透视表</p>
+</div>
+{% endif %}
+{% endblock %}

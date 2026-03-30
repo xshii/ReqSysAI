@@ -1,7 +1,7 @@
 from collections import namedtuple
 from datetime import date
 
-from flask import flash, jsonify, redirect, render_template, request, url_for
+from flask import abort, flash, g, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
@@ -70,10 +70,11 @@ def requirement_list():
         query = query.filter(
             db.or_(Requirement.title.contains(search), Requirement.description.contains(search))
         )
-    if not current_user.is_team_manager:
-        hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
-        if hidden_pids:
-            query = query.filter(Requirement.project_id.notin_(hidden_pids))
+    # 隐藏项目：直接URL指定project_id时拦截，否则从查询中排除
+    if project_id and project_id in g.hidden_pids:
+        abort(403)
+    if g.hidden_pids:
+        query = query.filter(Requirement.project_id.notin_(g.hidden_pids))
 
     # Sort
     today_ = date.today()
@@ -166,7 +167,7 @@ def requirement_list():
 
     return render_template('requirement/list.html',
         pagination=pagination, requirements=pagination.items,
-        projects=[p for p in Project.query.all() if not p.is_hidden or current_user.is_team_manager],
+        projects=[p for p in Project.query.all() if p.id not in g.hidden_pids],
         users=filter_users,
         statuses=Requirement.STATUS_LABELS, priorities=Requirement.PRIORITY_LABELS,
         cur_status=status, cur_priority=priority, cur_project=project_id,
@@ -293,9 +294,8 @@ def requirement_create():
 def requirement_detail(req_id):
     from datetime import date as d_date
     req = db.get_or_404(Requirement, req_id)
-    if req.project and req.project.is_hidden and not current_user.is_team_manager:
-        flash('无权访问该需求', 'danger')
-        return redirect(url_for('requirement.requirement_list'))
+    if req.project_id and req.project_id in g.hidden_pids:
+        abort(403)
     comment_form = CommentForm()
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
     return render_template('requirement/detail.html', req=req,
@@ -755,14 +755,12 @@ def diagnose_api():
                 data_text = _build_req_data_text(all_reqs, today_)
                 code_summary = '\n'.join(f'[{i["tag"]}] {i["text"]}' for i in issues[:10])
                 user_msg = f'今天日期：{today_}\n\n已知问题（代码预分析）：\n{code_summary}\n\n完整需求数据：\n{data_text}'
-                ai_result = call_ollama(prompt, user_msg)
-                if ai_result:
-                    ai_issues = json.loads(ai_result)
-                    if isinstance(ai_issues, list) and ai_issues:
-                        for idx, issue in enumerate(ai_issues):
-                            issue['id'] = hashlib.md5(f'ai:{issue.get("tag","")}:{idx}'.encode()).hexdigest()[:8]
-                        issues = ai_issues
-                        ai_source = True
+                ai_result, _ = call_ollama(user_msg, system_prompt=prompt)
+                if ai_result and isinstance(ai_result, list) and ai_result:
+                    for idx, issue in enumerate(ai_result):
+                        issue['id'] = hashlib.md5(f'ai:{issue.get("tag","")}:{idx}'.encode()).hexdigest()[:8]
+                    issues = ai_result
+                    ai_source = True
     except Exception:
         pass  # Fallback to code issues
 
@@ -812,10 +810,18 @@ def diagnose_resolve():
 @requirement_bp.route('/board')
 @login_required
 def requirement_board():
-    """Kanban board view for requirements."""
+    """Kanban board view for requirements — must specify project_id."""
     project_id = request.args.get('project_id', type=int)
     assignee_id = request.args.get('assignee_id', type=int)
-    swimlane = request.args.get('swimlane', '')  # '' or 'assignee'
+    swimlane = request.args.get('swimlane', '')
+
+    # 必须指定项目，不允许无项目筛选的全局看板
+    if not project_id:
+        abort(404)
+
+    # 隐藏项目权限控制
+    if project_id in g.hidden_pids:
+        abort(403)
 
     show_sub = request.args.get('show_sub', '1') == '1'
 
@@ -823,37 +829,19 @@ def requirement_board():
         joinedload(Requirement.project), joinedload(Requirement.assignee),
         joinedload(Requirement.children),
     )
-    if project_id:
-        query = query.filter_by(project_id=project_id)
+    query = query.filter_by(project_id=project_id)
     if assignee_id:
         query = query.filter_by(assignee_id=assignee_id)
-    if not current_user.is_team_manager:
-        hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
-        if hidden_pids:
-            query = query.filter(Requirement.project_id.notin_(hidden_pids))
 
     reqs = query.order_by(Requirement.priority, Requirement.updated_at.desc()).all()
 
-    # Collect child requirements as independent cards
+    # Collect child requirements as independent cards (may be in other projects)
     sub_reqs = []
     if show_sub:
         for r in reqs:
             for c in r.children:
-                if project_id and c.project_id != project_id:
+                if g.hidden_pids and c.project_id in g.hidden_pids:
                     continue
-                sub_reqs.append(c)
-
-    # Also find orphan sub-reqs: children in this project whose parent is in another project
-    if show_sub and project_id:
-        orphan_subs = Requirement.query.filter(
-            Requirement.parent_id.isnot(None),
-            Requirement.project_id == project_id,
-        ).options(
-            joinedload(Requirement.project), joinedload(Requirement.assignee),
-        ).all()
-        existing_ids = {r.id for r in reqs} | {c.id for c in sub_reqs}
-        for c in orphan_subs:
-            if c.id not in existing_ids:
                 sub_reqs.append(c)
 
     # Group by status for columns
@@ -862,7 +850,6 @@ def requirement_board():
     for r in reqs:
         if r.status in board:
             board[r.status].append(r)
-    # Sub-reqs as independent cards in their own status columns
     for c in sub_reqs:
         if c.status in board:
             board[c.status].append(c)
@@ -871,19 +858,14 @@ def requirement_board():
     for col_reqs in board.values():
         col_reqs.sort(key=lambda r: r.completion or 0)
 
-    # Assignee filter: project members if project selected, else all users
-    if project_id:
-        from app.models.project_member import ProjectMember as PM_
-        member_uids = [m.user_id for m in PM_.query.filter_by(project_id=project_id).all() if m.user_id]
-        board_users = User.query.filter(User.id.in_(member_uids)).order_by(User.name).all() if member_uids else []
-    else:
-        board_users = User.query.filter_by(is_active=True).order_by(User.name).all()
+    # Assignee filter: project members
+    from app.models.project_member import ProjectMember as PM_
+    member_uids = [m.user_id for m in PM_.query.filter_by(project_id=project_id).all() if m.user_id]
+    board_users = User.query.filter(User.id.in_(member_uids)).order_by(User.name).all() if member_uids else []
 
     return render_template('requirement/board.html',
         board=board, columns=columns, show_sub=show_sub,
         status_meta=Requirement._STATUS_META,
-        projects=[p for p in Project.query.filter_by(status='active').all()
-                  if not p.is_hidden or current_user.is_team_manager],
         users=board_users,
         cur_project=project_id, cur_assignee=assignee_id, swimlane=swimlane,
         today=date.today(),
@@ -1057,7 +1039,7 @@ def ai_smart_assign(req_id):
 
     if isinstance(result, dict) and result.get('recommended'):
         return jsonify(ok=True, **result)
-    return jsonify(ok=False, raw=raw or '生成失败')
+    return jsonify(ok=False, raw=raw or 'AI服务暂不可用，正在紧急修复')
 
 
 # ---- AI: Requirement Quality Check ----
@@ -1086,7 +1068,7 @@ def ai_quality_check():
 
     if isinstance(result, dict) and 'score' in result:
         return jsonify(ok=True, **result)
-    return jsonify(ok=False, raw=raw or '生成失败')
+    return jsonify(ok=False, raw=raw or 'AI服务暂不可用，正在紧急修复')
 
 
 def _build_requirement_form(obj=None):

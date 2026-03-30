@@ -2,6 +2,7 @@
 from datetime import date, timedelta
 
 from flask import current_app, flash, jsonify, redirect, render_template, request, url_for
+from app.utils.api import api_ok, api_err
 from flask_login import current_user, login_required
 
 from app.extensions import db
@@ -153,7 +154,7 @@ def aar_ai_issues(project_id):
     action = data.get('action', '').strip()
 
     if not (goal or result or analysis):
-        return jsonify(ok=False, msg='请先填写目标/结果/差异分析')
+        return api_err(msg='请先填写目标/结果/差异分析')
 
     from app.services.ai import call_ollama
     from app.services.prompts import get_prompt
@@ -182,10 +183,10 @@ def aar_ai_issues(project_id):
     if isinstance(result_data, dict):
         issues = _validate_issues(result_data.get('issues', []))
         ai_action = result_data.get('action', '')
-        return jsonify(ok=True, issues=issues, action=ai_action)
+        return api_ok(issues=issues, action=ai_action)
     if isinstance(result_data, list):
-        return jsonify(ok=True, issues=_validate_issues(result_data), action='')
-    return jsonify(ok=False, msg='AI 提取失败')
+        return api_ok(issues=_validate_issues(result_data), action='')
+    return api_err(msg='AI服务暂不可用，正在紧急修复')
 
 
 @project_bp.route('/<int:project_id>/aar/<int:aar_id>/save-action', methods=['POST'])
@@ -206,8 +207,8 @@ def aar_save_action(project_id, aar_id):
         if action_text and not aar.action:
             aar.action = action_text
             db.session.commit()
-            return jsonify(ok=True)
-    return jsonify(ok=False)
+            return api_ok()
+    return api_err()
 
 
 @project_bp.route('/<int:project_id>/aar/adopt-risks', methods=['POST'])
@@ -219,7 +220,7 @@ def aar_adopt_risks(project_id):
     issues = data.get('issues', [])
     aar_id = data.get('aar_id')
     if not issues:
-        return jsonify(ok=False, msg='无遗留问题')
+        return api_err(msg='无遗留问题')
     created = 0
     for item in issues:
         title = (item.get('title') or '').strip()
@@ -247,4 +248,4 @@ def aar_adopt_risks(project_id):
         db.session.add(risk)
         created += 1
     db.session.commit()
-    return jsonify(ok=True, created=created)
+    return api_ok(created=created)

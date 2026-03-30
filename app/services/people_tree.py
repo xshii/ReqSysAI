@@ -306,20 +306,26 @@ def generate_people_tree_image(tree, project_name='', width=None):
     topic_heights = [t['total_h'] for t in topics]
     topic_grid_cols = _best_cols(topic_widths, topic_heights, GAP, max_width=MAX_W)
 
-    # Build columns from topic grid — all columns use uniform width
-    topic_grid_rows = math.ceil(len(topics) / topic_grid_cols)
-    uniform_w = max(t['w'] for t in topics) if topics else 0
+    # Greedy column packing: assign each topic to best column
+    # When heights are similar (within 15%), prefer column with more topics (reinforce stacking)
+    col_data = [{'topics': [], 'h': 0} for _ in range(topic_grid_cols)]
+    for t in topics:
+        # Find column with min height
+        min_h = min(c['h'] for c in col_data)
+        threshold = max(min_h * 0.15, LVL_GAP * 2)  # 15% or at least 2 gaps
+        candidates = [i for i, c in enumerate(col_data) if c['h'] <= min_h + threshold]
+        # Among candidates, prefer the one with most topics (reinforce stacking)
+        best = max(candidates, key=lambda i: len(col_data[i]['topics']))
+        col_data[best]['topics'].append(t)
+        col_data[best]['h'] += t['total_h'] + LVL_GAP
+
     columns = []
-    for col in range(topic_grid_cols):
-        col_topics = []
-        for r in range(topic_grid_rows):
-            idx = r * topic_grid_cols + col
-            if idx < len(topics):
-                col_topics.append(topics[idx])
-        if col_topics:
+    for cd in col_data:
+        if cd['topics']:
+            col_w = max(t['w'] for t in cd['topics'])
             columns.append({
-                'topics': col_topics,
-                'w': uniform_w,
+                'topics': cd['topics'],
+                'w': col_w,
             })
 
     if not columns:
@@ -518,8 +524,9 @@ def generate_people_tree_image(tree, project_name='', width=None):
                 p_col_gap = rc.get('col_gap', 4 * S)
                 p_widths = rc.get('p_widths', [])
 
-                # Compute person column x-offsets
+                # Compute person column x-offsets and widths
                 p_col_xs = []
+                p_col_widths = []
                 p_rows = math.ceil(len(rc['persons']) / p_cols) if p_cols else 0
                 pcx = cx_card + NPX
                 for pc in range(p_cols):
@@ -529,23 +536,31 @@ def generate_people_tree_image(tree, project_name='', width=None):
                         pidx = pr * p_cols + pc
                         if pidx < len(p_widths):
                             col_max_w = max(col_max_w, p_widths[pidx])
+                    p_col_widths.append(col_max_w)
                     pcx += col_max_w + p_col_gap
 
                 for idx, p in enumerate(rc['persons']):
                     pc_i = idx % p_cols
                     pr_i = idx // p_cols
-                    px = p_col_xs[pc_i] if pc_i < len(p_col_xs) else cx_card + NPX
+                    col_x = p_col_xs[pc_i] if pc_i < len(p_col_xs) else cx_card + NPX
+                    col_w = p_col_widths[pc_i] if pc_i < len(p_col_widths) else rc['w']
                     py = cy_card + ROLE_HDR_H + 1 * S + pr_i * PERSON_H
 
                     name = p['name']
                     is_cross = name in cross_people
                     nc = C_CROSS if is_cross else C_TEXT
+
+                    # Calculate total text width for centering
+                    name_w = _tw(name, F_PERSON)
+                    note_text = f'({p["note"]})' if p.get('note') else ''
+                    note_w = (_tw(note_text, F_NOTE) + 2 * S) if note_text else 0
+                    total_text_w = name_w + note_w
+                    px = col_x + (col_w - total_text_w) // 2
+
                     draw.text((px, py), name, fill=nc, font=F_PERSON)
 
-                    if p.get('note'):
-                        note_text = f'({p["note"]})'
-                        nw = _tw(name, F_PERSON)
-                        draw.text((px + nw + 2 * S, py + 2 * S),
+                    if note_text:
+                        draw.text((px + name_w + 2 * S, py + 2 * S),
                                   note_text, fill=C_MUTED, font=F_NOTE)
 
     # ── Crop & export ──

@@ -53,18 +53,26 @@
 <div class="report-header">{{ current_user.name }} 个人周报（{{ monday.strftime('%m-%d') }} ~ {{ sunday.strftime('%m-%d') }}）</div>
 <div class="report-meta">{{ current_user.name }}（{{ current_user.group or '' }}）　·　审核人：{{ reviewer }}</div>
 
+{% if ai_report %}
+<div class="report-section mt-3">
+    <h6>一句话总结</h6>
+    <div class="report-summary" id="ai-content">{{ ai_report|safe }}</div>
+</div>
+{% endif %}
+
 <!-- Stats -->
 <div class="report-section mt-3">
     <h6>本周概览</h6>
+    {% macro delta(val) %}{% if val is not none %}{% if val > 0 %}<span style="font-size:.45em;font-weight:400;color:#27ae60;margin-left:2px;">↑{{ val }}</span>{% elif val < 0 %}<span style="font-size:.45em;font-weight:400;color:#c0392b;margin-left:2px;">↓{{ -val }}</span>{% else %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">→0</span>{% endif %}{% endif %}{% endmacro %}
+    {% macro delta_inv(val) %}{% if val is not none %}{% if val > 0 %}<span style="font-size:.45em;font-weight:400;color:#c0392b;margin-left:2px;">↑{{ val }}</span>{% elif val < 0 %}<span style="font-size:.45em;font-weight:400;color:#27ae60;margin-left:2px;">↓{{ -val }}</span>{% else %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">→0</span>{% endif %}{% endif %}{% endmacro %}
     <div class="report-stats">
-        <div class="report-stat"><div class="num">{{ my_done|length }}</div><div class="label">已完成</div></div>
-        <div class="report-stat"><div class="num">{{ my_active|length }}</div><div class="label">进行中</div></div>
-        <div class="report-stat"><div class="num {% if overdue_todos %}highlight{% endif %}">{{ overdue_todos|length }}</div><div class="label">延期</div></div>
+        <div class="report-stat"><div class="num">{{ my_done|length }}{{ delta(deltas.done) }}</div><div class="label">已完成</div></div>
+        <div class="report-stat"><div class="num">{{ my_active|length }}{{ delta(deltas.active) }}</div><div class="label">进行中</div></div>
+        <div class="report-stat"><div class="num {% if overdue_todos %}highlight{% endif %}">{{ overdue_todos|length }}{{ delta_inv(deltas.overdue) }}</div><div class="label">延期</div></div>
         <div class="report-stat"><div class="num {% if blocked_todos %}highlight{% endif %}">{{ blocked_todos|length }}</div><div class="label">阻塞</div></div>
         <div class="report-stat"><div class="num">{{ my_reqs|length }}</div><div class="label">参与需求</div></div>
-        <div class="report-stat"><div class="num {% if my_open_reqs %}highlight{% endif %}">{{ my_open_reqs|length }}</div><div class="label">未闭环需求</div></div>
         <div class="report-stat"><div class="num {% if my_open_risks %}highlight{% endif %}">{{ my_open_risks|length }}</div><div class="label">未闭环风险</div></div>
-        <div class="report-stat"><div class="num">{{ total_focus_min }}</div><div class="label">专注(min)</div></div>
+        <div class="report-stat"><div class="num">{{ total_focus_min }}{{ delta(deltas.focus) }}</div><div class="label">专注(min)</div></div>
     </div>
 </div>
 
@@ -122,15 +130,44 @@
 </div>
 {% endif %}
 
-{% if my_reqs %}
+{% if risks_by_project %}
+<div class="report-section">
+    <h6 class="risk-title">风险 & 问题</h6>
+    <table class="report-table">
+        <thead><tr><th style="width:55px;">项目</th><th>风险</th><th style="width:40px;">LV</th><th style="width:55px;">责任人</th><th>最新进展</th><th style="width:85px;">预计闭环</th></tr></thead>
+        <tbody>
+        {% for pname, risks in risks_by_project %}
+        {% for r in risks %}
+        {% set is_overdue = r.due_date and r.due_date < today %}
+        <tr class="{{ 'row-risk' if is_overdue else '' }}">
+            {% if loop.first %}<td class="text-muted small" rowspan="{{ risks|length }}" style="vertical-align:middle;">{{ pname }}</td>{% endif %}
+            <td>{{ r.title }}</td>
+            <td><span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span></td>
+            <td>{{ r.owner or '-' }}</td>
+            <td class="small">{% if r.comments %}{% for c in r.comments[:2] %}{% if not loop.first %}<br>{% endif %}{{ c.created_at.strftime('%m-%d') }}：{{ c.content[:40] }}{% if c.content|length > 40 %}…{% endif %}{% endfor %}{% else %}-{% endif %}</td>
+            <td>
+                {{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}
+                {% if is_overdue %}<span class="fw-bold text-danger"><br>超期{{ (today - r.due_date).days }}天</span>{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if reqs_by_project %}
 <div class="report-section">
     <h6>参与需求状态</h6>
     <table class="report-table">
-        <thead><tr><th>需求</th><th style="width:55px;">状态</th><th style="width:55px;">完成</th><th style="width:35px;">AI%</th><th style="width:50px;">工作量</th><th style="width:40px;">投入</th><th style="width:70px;">开始</th><th style="width:85px;">截止</th></tr></thead>
+        <thead><tr><th style="width:55px;">项目</th><th>需求</th><th style="width:55px;">状态</th><th style="width:55px;">完成</th><th style="width:35px;">AI%</th><th style="width:50px;">工作量</th><th style="width:40px;">投入</th><th style="width:70px;">开始</th><th style="width:85px;">截止</th></tr></thead>
         <tbody>
-        {% for r in my_reqs %}
+        {% for pname, reqs in reqs_by_project %}
+        {% for r in reqs %}
         {% set is_overdue = r.due_date and r.due_date < today and r.status not in ('done','closed') %}
         <tr class="{{ 'row-risk' if is_overdue else '' }}">
+            {% if loop.first %}<td class="text-muted small" rowspan="{{ reqs|length }}" style="vertical-align:middle;">{{ pname }}</td>{% endif %}
             <td>{{ r.title }}{% if r.parent_id %} <span class="text-muted" style="font-size:.8em;">↳子</span>{% endif %}</td>
             <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span></td>
             <td class="text-center">{% if r.status in ('done','closed') %}100%{% else %}{{ r.completion or 0 }}%{% endif %}</td>
@@ -144,66 +181,13 @@
             </td>
         </tr>
         {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
-
-{% if my_open_reqs %}
-<div class="report-section">
-    <h6>名下未闭环需求</h6>
-    <table class="report-table">
-        <thead><tr><th>需求</th><th style="width:55px;">优先级</th><th style="width:55px;">状态</th><th style="width:55px;">完成</th><th style="width:35px;">AI%</th><th style="width:70px;">开始</th><th style="width:85px;">截止</th></tr></thead>
-        <tbody>
-        {% for r in my_open_reqs %}
-        {% set is_overdue = r.due_date and r.due_date < today %}
-        <tr class="{{ 'row-risk' if is_overdue else '' }}">
-            <td>{{ r.title }}{% if r.parent_id %} <span class="text-muted" style="font-size:.8em;">↳子</span>{% endif %}</td>
-            <td><span class="badge bg-{{ r.priority_color }}">{{ r.priority_label }}</span></td>
-            <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span></td>
-            <td class="text-center">{{ r.completion or 0 }}%</td>
-            <td class="text-center">{% if r.ai_ratio is not none %}<span style="color:#7c3aed;">{{ r.ai_ratio }}</span>{% else %}-{% endif %}</td>
-            <td class="text-muted">{{ r.start_date.strftime('%m-%d') if r.start_date else '-' }}</td>
-            <td>
-                {{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}
-                {% if is_overdue %}<span class="fw-bold text-danger"> (+{{ (today - r.due_date).days }}天)</span>{% endif %}
-            </td>
-        </tr>
         {% endfor %}
         </tbody>
     </table>
 </div>
 {% endif %}
 
-{% if my_open_risks %}
-<div class="report-section">
-    <h6 class="risk-title">名下未闭环风险</h6>
-    <table class="report-table">
-        <thead><tr><th>风险</th><th style="width:55px;">严重度</th><th style="width:65px;">项目</th><th style="width:85px;">截止</th></tr></thead>
-        <tbody>
-        {% for r in my_open_risks %}
-        {% set is_overdue = r.due_date and r.due_date < today %}
-        <tr class="{{ 'row-risk' if is_overdue else '' }}">
-            <td>{{ r.title }}</td>
-            <td><span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span></td>
-            <td class="text-muted small">{{ r.project.name[:6] }}</td>
-            <td>
-                {{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}
-                {% if is_overdue %}<span class="fw-bold text-danger"> (+{{ (today - r.due_date).days }}天)</span>{% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endif %}
 
-{% if ai_report %}
-<div class="report-section">
-    <h6>总结与建议</h6>
-    <div class="report-summary" id="ai-content">{{ ai_report|safe }}</div>
-</div>
-{% endif %}
 
 </div>
 
@@ -217,21 +201,17 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/eml-utils.js') }}?v={{ range(10000,99999)|random }}"></script>
 <script>
 var genBtn = document.getElementById('btn-gen');
 if (genBtn) {
-    genBtn.closest('form').addEventListener('submit', function() {
-        genBtn.disabled = true;
-        genBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 生成中...';
-    });
+    aiBindForm(genBtn.closest('form'), genBtn, '生成中');
 }
 function copyRichText() {
     var el = document.getElementById('report-content');
     if (!el) return;
-    navigator.clipboard.write([new ClipboardItem({
-        'text/html': new Blob([el.innerHTML], {type: 'text/html'}),
-        'text/plain': new Blob([el.innerText], {type: 'text/plain'})
-    })]).then(function() { alert('已复制'); });
+    var btn = document.querySelector('[onclick="copyRichText()"]');
+    copyWithFeedback(el.innerText, btn, el.innerHTML);
 }
 function onSaveEmailSettings() {
     saveEmailSettings('personal_weekly', {{ current_user.id }},
@@ -249,52 +229,6 @@ function onSaveEmailSettings() {
             document.getElementById('emlCc').value = d.cc || '';
         });
 })();
-function encodeHeader(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
-
-/* ── EML helpers (inline styles for Outlook) ── */
-var _badgeMap = {
-    'bg-success':'background:#198754;color:#fff;','bg-primary':'background:#0d6efd;color:#fff;',
-    'bg-warning':'background:#ffc107;color:#333;','bg-secondary':'background:#6c757d;color:#fff;',
-    'bg-danger':'background:#dc3545;color:#fff;','bg-info':'background:#0dcaf0;color:#333;',
-    'bg-dark':'background:#212529;color:#fff;'
-};
-var _textMap = {
-    'text-success':'color:#198754;','text-primary':'color:#0d6efd;','text-warning':'color:#ffc107;',
-    'text-danger':'color:#dc3545;','text-secondary':'color:#6c757d;','text-muted':'color:#6c757d;',
-    'text-info':'color:#0dcaf0;','fw-bold':'font-weight:700;'
-};
-function _inlineStyles(html) {
-    html = html.replace(/<span\s+class="badge\s+([^"]+)"/g, function(m, cls) {
-        var s = 'display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;';
-        cls.split(/\s+/).forEach(function(c) { if (_badgeMap[c]) s += _badgeMap[c]; });
-        return '<span style="' + s + '"';
-    });
-    html = html.replace(/<span\s+class="([^"]*(?:text-|fw-)[^"]*)"/g, function(m, cls) {
-        var s = '';
-        cls.split(/\s+/).forEach(function(c) { if (_textMap[c]) s += _textMap[c]; });
-        return s ? '<span style="' + s + '"' : m;
-    });
-    return html;
-}
-function _emlSection(title, body, titleColor) {
-    var c = titleColor || '#4a5568';
-    return '<tr><td style="background:' + c + ';color:#fff;padding:7px 16px;font-size:13px;font-weight:600;">' + title + '</td></tr>'
-        + '<tr><td style="padding:4px 12px 4px;font-size:13px;color:#4a5568;">' + body + '</td></tr>';
-}
-function _emlTable(tableEl) {
-    if (!tableEl) return '';
-    var h = '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">';
-    tableEl.querySelectorAll('tr').forEach(function(tr, ri) {
-        h += '<tr' + (tr.classList.contains('row-risk') ? ' style="background:#fef2f2;"' : (ri > 0 && ri % 2 === 0 ? ' style="background:#fafbfc;"' : '')) + '>';
-        tr.querySelectorAll('th,td').forEach(function(cell) {
-            var tag = cell.tagName.toLowerCase();
-            var bg = tag === 'th' ? 'background:#f7fafc;font-weight:600;color:#4a5568;' : '';
-            h += '<' + tag + ' style="border:1px solid #718096;padding:4px 8px;' + bg + '">' + _inlineStyles(cell.innerHTML) + '</' + tag + '>';
-        });
-        h += '</tr>';
-    });
-    return h + '</table>';
-}
 
 function exportEml() {
     var el = document.getElementById('report-content');
@@ -332,15 +266,16 @@ function exportEml() {
                 var lbl = st.querySelector('.label');
                 var numStyle = 'font-size:20px;font-weight:700;color:#4a5568;';
                 if (num && num.classList.contains('highlight')) numStyle = 'font-size:20px;font-weight:700;color:#c53030;';
+                var numHtml = num ? num.innerHTML : '';
                 body += '<td style="text-align:center;padding:6px 4px;border-right:1px solid #718096;">'
-                    + '<div style="' + numStyle + '">' + (num ? num.textContent : '') + '</div>'
+                    + '<div style="' + numStyle + '">' + numHtml + '</div>'
                     + '<div style="font-size:11px;color:#94a3b8;">' + (lbl ? lbl.textContent : '') + '</div></td>';
             });
             body += '</tr></table>';
         }
 
         // Data tables
-        sec.querySelectorAll('.report-table').forEach(function(t) { body += _emlTable(t); });
+        sec.querySelectorAll('.report-table').forEach(function(t) { body += emlTable(t); });
 
         // AI summary
         var summary = sec.querySelector('.report-summary');
@@ -348,37 +283,16 @@ function exportEml() {
             body += '<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:2px;"><tr><td style="padding:6px 10px;font-size:13px;line-height:1.6;">' + summary.innerHTML + '</td></tr></table>';
         }
 
-        rows += _emlSection(title, body, isRisk ? '#c53030' : '#4a5568');
+        rows += emlSection(title, body, isRisk ? '#c53030' : '#4a5568');
     });
 
     // Footer
     rows += '<tr><td style="background:#f0f4f8;text-align:center;padding:10px 20px;font-size:11px;color:#94a3b8;">'
         + '{{ current_user.name }} · 个人周报 · {{ monday.strftime("%Y-%m-%d") }} ~ {{ sunday.strftime("%Y-%m-%d") }}</td></tr>';
 
-    // To/Cc as plain text
-    var recipientBlock = '';
-    if (to || cc) {
-        recipientBlock = '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:2px;font-size:12px;color:#64748b;">';
-        if (to) recipientBlock += '<tr><td style="padding:2px 16px;"><b>To:</b> ' + to + '</td></tr>';
-        if (cc) recipientBlock += '<tr><td style="padding:2px 16px;"><b>Cc:</b> ' + cc + '</td></tr>';
-        recipientBlock += '</table>';
-    }
-
-    var html = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,Segoe UI,sans-serif;margin:0;padding:0;background:#ffffff;">'
-        + '<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:20px;">'
-        + recipientBlock
-        + '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:800px;margin:0 auto;background:#fff;">'
-        + rows + '</table></td></tr></table></body></html>';
-
-    var boundary = 'b_' + Date.now();
-    var eml = ['Subject: ' + encodeHeader(subject), 'MIME-Version: 1.0',
-        'Content-Type: multipart/alternative; boundary="' + boundary + '"', 'X-Unsent: 1',
-        '', '--' + boundary, 'Content-Type: text/html; charset=UTF-8',
-        'Content-Transfer-Encoding: base64', '', btoa(unescape(encodeURIComponent(html))).match(/.{1,76}/g).join('\n'),
-        '', '--' + boundary + '--'].join('\r\n');
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([eml], {type: 'message/rfc822'}));
-    a.download = subject + '.eml'; a.click();
+    var html = emlWrapHtml(rows, {to: to, cc: cc});
+    var eml = emlBuildFile(subject, html);
+    emlDownload(subject + '.eml', eml);
 }
 </script>
 {% endblock %}

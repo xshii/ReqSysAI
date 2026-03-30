@@ -56,11 +56,8 @@
 {% block extra_js %}
 <script>
 document.querySelectorAll('form').forEach(function(form) {
-    form.addEventListener('submit', function() {
-        var btn = form.querySelector('button[type=submit]');
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> AI 解析中，请稍候...';
-    });
+    var btn = form.querySelector('button[type=submit]');
+    aiBindForm(form, btn, 'AI 解析中');
 });
 </script>
 {% endblock %}

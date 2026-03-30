@@ -397,33 +397,11 @@ document.addEventListener('mousedown', function(e) {
         selIdx = -1;
     });
 })();
-// Copy buttons (with fallback for non-HTTPS)
-function copyText(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-        return navigator.clipboard.writeText(text).catch(function() { return _copyFallback(text); });
-    }
-    return _copyFallback(text);
-}
-function _copyFallback(text) {
-    var ta = document.createElement('textarea');
-    ta.value = text;
-    ta.setAttribute('readonly', '');
-    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:none;outline:none;opacity:0;';
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.setSelectionRange(0, text.length);
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    return Promise.resolve();
-}
+// Copy buttons
 document.addEventListener('click', function(e) {
     var btn = e.target.closest('.copy-btn');
     if (!btn) return;
-    copyText(btn.dataset.copy).then(function() {
-        var icon = btn.querySelector('i');
-        icon.className = 'bi bi-check text-success';
-        setTimeout(function() { icon.className = 'bi bi-clipboard'; }, 800);
-    });
+    copyWithFeedback(btn.dataset.copy, btn);
 });
 
 // Quick-apply via AJAX

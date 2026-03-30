@@ -219,14 +219,23 @@ def seed():
         creator = users.get('t00000004') or User.query.first()
 
         # ── Projects ──
+        # Build a lookup: project_idx → PM eid from TEST_PROJECT_MEMBERS
+        _pm_by_pidx = {}
+        for pidx, eid, role, *_ in TEST_PROJECT_MEMBERS:
+            if role == 'PM' and pidx not in _pm_by_pidx:
+                _pm_by_pidx[pidx] = eid
+
         projects = []
-        for p in TEST_PROJECTS:
+        for pi, p in enumerate(TEST_PROJECTS):
             existing = Project.query.filter_by(name=p['name']).first()
             if existing:
                 projects.append(existing)
                 continue
+            # owner = PM member if defined, otherwise None
+            pm_user = users.get(_pm_by_pidx.get(pi)) if _pm_by_pidx.get(pi) else None
             proj = Project(name=p['name'], description=p['desc'],
-                           created_by=creator.id, owner_id=creator.id)
+                           created_by=creator.id,
+                           owner_id=pm_user.id if pm_user else None)
             db.session.add(proj)
             db.session.flush()
             # Child projects (copy parent milestones if none)
@@ -235,7 +244,7 @@ def seed():
                 if not existing_child:
                     cp = Project(name=child['name'], description=child['desc'],
                                  parent_id=proj.id, created_by=creator.id,
-                                 owner_id=creator.id, status='active')
+                                 status='active')
                     db.session.add(cp)
                     db.session.flush()
                     # Copy parent milestones

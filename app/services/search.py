@@ -1,5 +1,7 @@
 """Global search — direct LIKE queries, no index needed."""
 
+from flask import g
+
 from app.extensions import db
 from app.models.meeting import Meeting
 from app.models.project import Project
@@ -16,10 +18,8 @@ def search(query, limit=20, current_user_id=None, is_manager=False):
     q = f'%{query.strip()}%'
     results = []
 
-    # Hidden project IDs (for non-managers)
-    hidden_pids = set()
-    if not is_manager:
-        hidden_pids = {p.id for p in Project.query.filter_by(is_hidden=True).all()}
+    # Hidden project IDs (pre-computed in before_request)
+    hidden_pids = set(g.hidden_pids)
 
     # Requirements
     req_q = Requirement.query.filter(

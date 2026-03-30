@@ -27,12 +27,17 @@ class EmotionRecord(db.Model):
         return (date.today() - self.scan_date).days
 
     @property
+    def is_ai(self):
+        return bool(self.signals and self.signals.startswith('["__ai__"'))
+
+    @property
     def signals_list(self):
         if not self.signals:
             return []
         import json
         try:
-            return json.loads(self.signals)
+            items = json.loads(self.signals)
+            return [s for s in items if s != '__ai__']
         except (json.JSONDecodeError, TypeError):
             return []
 

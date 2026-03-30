@@ -39,7 +39,7 @@
                        placeholder="工号;工号（项目成员+风险责任人已自动提取）" onchange="onSaveEmailSettings()">
             </div>
             <div class="col-md-4">
-                <label class="form-label mb-0 fw-bold">额外抄送 (Cc) <button type="button" class="btn btn-link btn-sm p-0 ms-1" style="font-size:.75em;" onclick="autoFillManager()">+主管</button></label>
+                <label class="form-label mb-0 fw-bold">额外抄送 (Cc)</label>
                 <input type="text" id="emlCc" class="form-control form-control-sm"
                        placeholder="工号;工号（主管已自动提取）" onchange="onSaveEmailSettings()">
             </div>
@@ -84,6 +84,21 @@
     发布人：{{ current_user.name }}　｜　审核人：{{ report_data.reviewer }}
 </div>
 
+<!-- TOC -->
+<div class="report-meta" style="text-align:center;font-size:.8em;padding:4px 20px;">
+{% set _toc = [] %}
+{% if report_data.get('project_goal') %}{% if _toc.append('项目目标') %}{% endif %}{% endif %}
+{% if report_data.milestones %}{% if _toc.append('里程碑') %}{% endif %}{% endif %}
+{% if _toc.append('整体进展与下周计划') %}{% endif %}
+{% if report_data.sub_projects %}{% if _toc.append('专题进展') %}{% endif %}{% endif %}
+{% if _toc.append('风险 & 问题') %}{% endif %}
+{% if report_data.get('people_tree') or report_data.get('people_roles') %}{% if _toc.append('人力地图') %}{% endif %}{% endif %}
+{% if report_data.all_reqs %}{% if _toc.append('需求统计') %}{% endif %}{% endif %}
+{% if pivot_l1s is defined and pivot_l1s %}{% if _toc.append('业务专题进展') %}{% endif %}{% elif report_data.all_reqs %}{% if _toc.append('需求列表') %}{% endif %}{% endif %}
+{% if pinned_knowledge is defined and pinned_knowledge %}{% if _toc.append('知识管理') %}{% endif %}{% endif %}
+<span style="color:#999;">导航：</span>{% for t in _toc %}<a href="#" onclick="var h=document.querySelectorAll('#report-content .report-section h6')[{{ loop.index0 }}];if(h){var y=h.getBoundingClientRect().top+window.scrollY-70;window.scrollTo({top:y,behavior:'smooth'});}return false;" style="color:#4a5568;text-decoration:none;">{{ t }}</a>{% if not loop.last %}<span style="color:#ccc;margin:0 4px;">·</span>{% endif %}{% endfor %}
+</div>
+
 <!-- Section: Project Goal -->
 {% if report_data.get('project_goal') %}
 {% set ns.n = ns.n + 1 %}
@@ -121,10 +136,7 @@
     </div>
     {% endif %}
     {% if ai.plan %}
-    <div data-eml="sub-header" style="margin-top:2px;font-size:.84rem;"><strong>下周计划：</strong></div>
-    <ul class="ps-3 mb-0">
-    {% for p in ai.plan %}<li>{{ p }}</li>{% endfor %}
-    </ul>
+    <div data-eml="sub-header" style="margin-top:2px;font-size:.84rem;"><strong>下周计划：</strong>{{ ai.plan | join('') }}</div>
     {% endif %}
 </div>
 
@@ -154,40 +166,41 @@
     <h6 class="risk-title">{{ CN[ns.n-1] }}、风险 & 问题</h6>
     {% set rs = report_data.risk_stats %}
     {% if rs and rs.total > 0 %}
-    <div class="risk-stats-bar d-flex gap-3 mb-2 ps-2 flex-wrap" style="font-size:.8rem;">
-        <span>总计 <strong>{{ rs.total }}</strong></span>
-        {% if rs.overdue %}<span class="text-danger">超期 <strong>{{ rs.overdue }}</strong></span>{% endif %}
-        {% if rs.open %}<span class="text-danger">未解决 <strong>{{ rs.open }}</strong></span>{% endif %}
-        {% if rs.resolved %}<span class="text-success">已解决 <strong>{{ rs.resolved }}</strong></span>{% endif %}
-        {% if rs.closed %}<span class="text-muted">已关闭 <strong>{{ rs.closed }}</strong></span>{% endif %}
-        <span class="border-start ps-2"></span>
-        {% if rs.high %}<span class="text-danger">高 <strong>{{ rs.high }}/{{ rs.high_total }}</strong></span>{% endif %}
-        {% if rs.medium %}<span class="text-warning">中 <strong>{{ rs.medium }}/{{ rs.medium_total }}</strong></span>{% endif %}
-        {% if rs.low %}<span class="text-muted">低 <strong>{{ rs.low }}/{{ rs.low_total }}</strong></span>{% endif %}
-    </div>
+    <table class="report-table risk-stats-bar mb-2" style="font-size:.8rem;">
+        <tr>
+            <td style="text-align:center;padding:4px 10px;">总计 <strong>{{ rs.total }}</strong>{% if rs.get('new_delta') %}<span style="font-size:.8em;color:#999;margin-left:2px;">+{{ rs.new_delta }}</span>{% endif %}</td>
+            {% if rs.overdue %}<td style="text-align:center;padding:4px 10px;color:#dc3545;">超期 <strong>{{ rs.overdue }}</strong>{% if rs.get('overdue_delta') %}<span style="font-size:.8em;margin-left:2px;">+{{ rs.overdue_delta }}</span>{% endif %}</td>{% endif %}
+            {% if rs.open %}<td style="text-align:center;padding:4px 10px;color:#dc3545;">未解决 <strong>{{ rs.open }}</strong></td>{% endif %}
+            {% if rs.get('resolved_delta') or rs.resolved %}<td style="text-align:center;padding:4px 10px;">已解决 <strong>{{ rs.resolved or 0 }}</strong>{% if rs.get('resolved_delta') %}<span style="font-size:.8em;color:#999;margin-left:2px;">+{{ rs.resolved_delta }}</span>{% endif %}</td>{% endif %}
+            {% if rs.closed %}<td style="text-align:center;padding:4px 10px;color:#6c757d;">已关闭 <strong>{{ rs.closed }}</strong></td>{% endif %}
+            {% if rs.high %}<td style="text-align:center;padding:4px 10px;color:#dc3545;">高 <strong>{{ rs.high }}/{{ rs.high_total }}</strong>{% if rs.get('high_delta') %}<span style="font-size:.8em;color:#999;margin-left:2px;">+{{ rs.high_delta }}</span>{% endif %}</td>{% endif %}
+            {% if rs.medium %}<td style="text-align:center;padding:4px 10px;color:#e67e22;">中 <strong>{{ rs.medium }}/{{ rs.medium_total }}</strong>{% if rs.get('medium_delta') %}<span style="font-size:.8em;color:#999;margin-left:2px;">+{{ rs.medium_delta }}</span>{% endif %}</td>{% endif %}
+            {% if rs.low %}<td style="text-align:center;padding:4px 10px;color:#6c757d;">低 <strong>{{ rs.low }}/{{ rs.low_total }}</strong>{% if rs.get('low_delta') %}<span style="font-size:.8em;color:#999;margin-left:2px;">+{{ rs.low_delta }}</span>{% endif %}</td>{% endif %}
+        </tr>
+    </table>
     {% set ds = report_data.domain_stats %}
     {% if ds %}
-    <div class="risk-domain-bar ps-2 mb-2" style="font-size:.75rem;">
-        {% for domain, dv in ds.items() %}<span class="badge bg-light text-dark border me-1">{{ domain }} <strong class="text-danger">{{ dv.open }}</strong>/{{ dv.total }}</span>{% endfor %}
-        <span class="text-muted" style="font-size:.9em;margin-left:4px;">（未闭环/近两周总数）</span>
+    <div class="risk-domain-bar mb-2 text-center" style="font-size:.75rem;">
+        {% for domain, dv in ds.items() %}<span style="display:inline-block;padding:2px 8px;margin:2px;font-size:.85em;border:1px solid #dee2e6;border-radius:4px;">{{ domain }} <strong style="color:#dc3545;">{{ dv.open }}</strong>/{{ dv.total }}</span>{% endfor %}
+        <span style="font-size:.85em;color:#999;margin-left:4px;">（未闭环/近两周总数）</span>
     </div>
     {% endif %}
     {% endif %}
     {% set all_risks = (report_data.open_risks or []) + (report_data.get('recent_closed_risks') or []) %}
     {% if all_risks %}
     <table class="report-table">
-        <thead><tr>{% if include_sub %}<th>专题</th>{% endif %}<th>风险</th><th>LV</th><th>责任人</th><th>业务领域</th><th>最新进展</th><th>预计闭环</th></tr></thead>
+        <thead><tr>{% if include_sub %}<th>专题</th>{% endif %}<th>风险 <span style="font-weight:400;font-size:.8em;color:#999;">（点击反馈进展）</span></th><th>LV</th><th>责任人</th><th>业务领域</th><th>最新进展</th><th>预计闭环</th></tr></thead>
         <tbody>
         {% for r in all_risks %}
         {% set is_closed = r.status in ('resolved', 'closed') %}
         <tr class="{{ 'row-risk' if r.is_overdue else '' }}" {% if is_closed %}style="color:#6c757d;"{% endif %}>
             {% if include_sub %}<td class="small text-muted">{% if r.project %}{% set pname = r.project.name %}{{ pname.split('-', 1)[-1] if '-' in pname else pname.split(' ', 1)[-1] if ' ' in pname else pname }}{% else %}-{% endif %}</td>{% endif %}
-            <td>{{ r.title }}</td>
+            <td><a href="{{ url_for('project.risk_list', project_id=r.project_id) }}#risk-{{ r.id }}" class="text-decoration-none" style="color:inherit;">{{ r.title }}</a></td>
             <td>{{ r.severity_label }}</td>
-            <td>{{ r.owner or '-' }}{% if r.owner_user %} {{ r.owner_user.employee_id }}{% endif %}</td>
+            <td>{{ r.owner or '-' }}</td>
             <td>{{ r.domain_display or '-' }}</td>
             <td class="small">{% if r.comments %}{% for c in r.comments[:2] %}{% if not loop.first %}<br>{% endif %}{{ c.created_at.strftime('%m-%d') }}：{{ c.content[:40] }}{% if c.content|length > 40 %}…{% endif %}{% endfor %}{% else %}-{% endif %}</td>
-            <td class="{{ 'text-danger fw-bold' if r.is_overdue and not is_closed else '' }}">{% if is_closed %}<span class="badge bg-success">{{ '已解决' if r.status == 'resolved' else '已关闭' }}</span>{% if r.due_date and r.updated_at %}{% set delta = (r.due_date - r.updated_at.date()).days %}{% if delta > 0 %}(提前{{ delta }}天){% elif delta < 0 %}(延期{{ -delta }}天){% else %}(按时){% endif %}{% endif %}{% elif r.due_date %}{{ r.due_date.strftime('%m-%d') }}{% if r.is_overdue %} <span class="text-danger fw-bold">超期{{ (report_data.today - r.due_date).days }}天</span>{% endif %}{% else %}-{% endif %}</td>
+            <td class="{{ 'text-danger fw-bold' if r.is_overdue and not is_closed else '' }}">{% if is_closed %}<span class="badge bg-success">{{ '已解决' if r.status == 'resolved' else '已关闭' }}</span>{% if r.due_date and r.updated_at %}{% set delta = (r.due_date - r.updated_at.date()).days %}{% if delta > 0 %}<br><span style="font-size:.85em;">(提前{{ delta }}天)</span>{% elif delta < 0 %}<br><span style="font-size:.85em;">(延期{{ -delta }}天)</span>{% else %}<br><span style="font-size:.85em;">(按时)</span>{% endif %}{% endif %}{% elif r.due_date %}{{ r.due_date.strftime('%m-%d') }}{% if r.is_overdue %}<br><span class="text-danger fw-bold" style="font-size:.85em;">超期{{ (report_data.today - r.due_date).days }}天</span>{% endif %}{% else %}-{% endif %}</td>
         </tr>
         {% endfor %}
         </tbody>
@@ -270,27 +283,93 @@
 {% set _ai_weighted_sum = [] %}{% set _ai_days_sum = [] %}
 {% for r in report_data.all_reqs %}{% if r.ai_ratio is not none and r.estimate_days %}{% if _ai_weighted_sum.append(r.ai_ratio * r.estimate_days) %}{% endif %}{% if _ai_days_sum.append(r.estimate_days) %}{% endif %}{% endif %}{% endfor %}
 {% set _ai_pct = ((_ai_weighted_sum | sum) / (_ai_days_sum | sum) + 0.5) | int if _ai_days_sum else 0 %}
+{% set _d = report_data.get('weekly_deltas', {}) %}
 {% set ns.n = ns.n + 1 %}
 <div class="report-section">
     <h6>{{ CN[ns.n-1] }}、需求统计</h6>
     <div class="report-stats mb-2">
-        <div class="report-stat"><div class="num">{{ _total }}</div><div class="label">总需求</div></div>
-        <div class="report-stat"><div class="num text-success">{{ _done }}</div><div class="label">已完成</div></div>
-        <div class="report-stat"><div class="num text-primary">{{ _dev }}</div><div class="label">开发中</div></div>
-        <div class="report-stat"><div class="num text-warning">{{ _test }}</div><div class="label">测试中</div></div>
-        <div class="report-stat"><div class="num text-secondary">{{ _pending }}</div><div class="label">待开发</div></div>
-        <div class="report-stat"><div class="num text-danger">{{ _overdue_count | length }}</div><div class="label">超期</div></div>
-        <div class="report-stat"><div class="num">{{ _est_total | round(1) }}</div><div class="label">总人天</div></div>
-        {% if report_data.completion_weighted is not none %}<div class="report-stat"><div class="num text-success">{{ report_data.completion_weighted }}%</div><div class="label">加权完成</div></div>{% endif %}
-        {% if _ai_days_sum %}<div class="report-stat"><div class="num text-purple" style="color:#7c3aed;">{{ _ai_pct }}%</div><div class="label">AI辅助</div></div>{% endif %}
-    </div>
-    <div class="progress mb-2" style="height:8px;">
-        <div class="progress-bar bg-success" style="width:{{ (_done / _total * 100) if _total else 0 }}%"></div>
-        <div class="progress-bar bg-primary" style="width:{{ (_dev / _total * 100) if _total else 0 }}%"></div>
-        <div class="progress-bar bg-warning" style="width:{{ (_test / _total * 100) if _total else 0 }}%"></div>
+        <div class="report-stat">
+            <div class="num">{{ _total }}{% if _d.get('new_req_delta') %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">+{{ _d.new_req_delta }}</span>{% endif %}</div>
+            <div class="label">需求总数</div>
+        </div>
+        {% if report_data.completion_weighted is not none %}
+        <div class="report-stat">
+            <div class="num">{{ report_data.completion_weighted }}%{% if _d.get('completion_delta', 0) != 0 %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">{{ '+' if _d.completion_delta > 0 }}{{ _d.completion_delta }}%</span>{% endif %}</div>
+            <div class="label">加权完成率</div>
+        </div>
+        {% endif %}
+        <div class="report-stat">
+            <div class="num">{{ _done }}{% if _d.get('done_delta') %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">+{{ _d.done_delta }}</span>{% endif %}</div>
+            <div class="label">需求完成</div>
+        </div>
+        {% if _d.get('tc_total_all') %}
+        <div class="report-stat">
+            <div class="num">{{ _d.tc_done_all }}/{{ _d.tc_total_all }}{% if _d.get('tc_done_delta') %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">+{{ _d.tc_done_delta }}</span>{% endif %}</div>
+            <div class="label">用例个数</div>
+        </div>
+        {% endif %}
+        {% if _d.get('overdue_count') %}
+        <div class="report-stat">
+            <div class="num text-danger">{{ _d.overdue_count }}{% if _d.get('overdue_delta', 0) != 0 %}<span style="font-size:.45em;font-weight:400;margin-left:2px;">{{ '+' if _d.overdue_delta > 0 }}{{ _d.overdue_delta }}</span>{% endif %}</div>
+            <div class="label">超期个数</div>
+        </div>
+        {% endif %}
+        <div class="report-stat"><div class="num">{{ _est_total | round(0) | int }}{% if _d.get('done_days_delta') %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">+{{ _d.done_days_delta | round(0) | int }}</span>{% endif %}</div><div class="label">总人天</div></div>
+        {% if _d.get('ai_days') %}<div class="report-stat"><div class="num">{{ _d.ai_days | round(0) | int }}{% if _d.get('ai_days_delta') %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">+{{ _d.ai_days_delta | round(0) | int }}</span>{% endif %}</div><div class="label">AI辅助人天</div></div>{% endif %}
     </div>
 </div>
 
+{% if pivot_l1s is defined and pivot_l1s %}
+{# 有点灯图数据：显示点灯图代替需求列表 #}
+{% set _light_bg = {'danger': 'rgba(220,53,69,.15)', 'success': 'rgba(25,135,84,.12)', 'secondary': 'rgba(108,117,125,.08)', 'primary': ''} %}
+{% set _src_short = {'analysis': '分析', 'coding': '编码', 'testing': '测试'} %}
+{% set ns.n = ns.n + 1 %}
+<div class="report-section">
+    <h6>{{ CN[ns.n-1] }}、业务专题进展</h6>
+    <table class="report-table" style="font-size:.82em;">
+        <thead>
+            <tr>
+                <th rowspan="2" style="min-width:60px;text-align:center;">分类</th>
+                {% for l2 in pivot_l2s %}
+                <th colspan="{{ pivot_sources|length }}" style="text-align:center;border-bottom:0;">{{ l2 }}{% if pivot_l2_start.get(l2) or pivot_l2_due.get(l2) %}<div style="font-weight:400;font-size:.75em;color:#999;">{% if pivot_l2_start.get(l2) %}{{ pivot_l2_start[l2].strftime('%m-%d') }}{% endif %}{% if pivot_l2_due.get(l2) %}~{{ pivot_l2_due[l2].strftime('%m-%d') }}{% endif %}</div>{% endif %}</th>
+                {% endfor %}
+            </tr>
+            <tr>
+                {% for l2 in pivot_l2s %}{% for s in pivot_sources %}
+                <th style="text-align:center;font-size:.8em;">{{ _src_short.get(s, s) }}</th>
+                {% endfor %}{% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for l1 in pivot_l1s %}
+            <tr>
+                <td style="font-weight:bold;text-align:center;">{{ l1 }}</td>
+                {% for l2 in pivot_l2s %}{% for s in pivot_sources %}
+                {% set c = pivot_src_cells.get((l1, l2, s)) %}
+                <td style="text-align:center;padding:2px;background:{{ _light_bg.get(c.light, '') if c else '' }};">
+                    {% if c and c.total > 0 %}
+                    {% set wpct = (c.wpct_sum / c.total)|round|int %}
+                    <div style="line-height:1.15;">
+                    <span style="font-weight:bold;font-size:.85em;">{{ wpct }}%</span>{% if c.overdue_assignee %} <span style="font-weight:bold;font-size:.7em;color:#dc3545;">{{ c.overdue_assignee }}</span><span style="font-size:.55em;color:#dc3545;"> 延{{ c.overdue_days }}天</span>{% elif c.assignee %} <span style="font-weight:bold;font-size:.7em;color:#444;">{{ c.assignee }}</span>{% endif %}
+                    {% if s == 'testing' and c.tc_total > 0 %}<div style="font-size:.58em;color:#999;">{{ c.tc_done }}/{{ c.tc_total }}例</div>{% endif %}
+                    {% if c.min_start or c.max_due %}<div style="font-size:.55em;color:#aaa;">{% if c.min_start %}{{ c.min_start.strftime('%m-%d') }}{% endif %}{% if c.max_due %}~{{ c.max_due.strftime('%m-%d') }}{% endif %}</div>{% endif %}
+                    </div>
+                    {% else %}<span style="color:#ccc;">-</span>{% endif %}
+                </td>
+                {% endfor %}{% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div style="font-size:.75em;color:#999;margin-top:4px;">
+        <span style="display:inline-block;width:8px;height:8px;background:rgba(220,53,69,.3);border-radius:2px;"></span> 延期
+        <span style="display:inline-block;width:8px;height:8px;background:#fff;border:1px solid #ccc;border-radius:2px;margin-left:4px;"></span> 进行中
+        <span style="display:inline-block;width:8px;height:8px;background:rgba(108,117,125,.2);border-radius:2px;margin-left:4px;"></span> 未启动
+        <span style="display:inline-block;width:8px;height:8px;background:rgba(25,135,84,.3);border-radius:2px;margin-left:4px;"></span> 已完成
+    </div>
+</div>
+{% else %}
+{# 无点灯图数据：显示原需求列表 #}
 {% set _mode_labels = {'full': '', 'diff_assignee': '仅显示父需求+责任人不同的子需求', 'parent_only': '仅显示父需求', 'priority': '按截止日期排序，优先显示延期项（前40条）'} %}
 {% set ns.n = ns.n + 1 %}
 <div class="report-section">
@@ -314,6 +393,24 @@
         {% endfor %}
         </tbody>
     </table>
+</div>
+{% endif %}
+{% endif %}
+
+{% if pinned_knowledge is defined and pinned_knowledge %}
+{% set ns.n = ns.n + 1 %}
+<div class="report-section">
+    <h6>{{ CN[ns.n-1] }}、知识管理</h6>
+    {% set _kg = {} %}
+    {% for k in pinned_knowledge %}{% if _kg.update({k.project.name: (_kg.get(k.project.name, []) + [k])}) %}{% endif %}{% endfor %}
+    {% for proj_name, items in _kg.items() %}
+    <div style="font-size:.85em;line-height:1.8;{% if not loop.first %}margin-top:2px;{% endif %}">
+        <span style="color:#999;font-size:.9em;">{{ proj_name }}：</span>
+        {% for k in items %}
+        <span style="white-space:nowrap;">{% if k.link %}<a href="{{ k.link }}" target="_blank" class="text-decoration-none">{% endif %}<span class="badge bg-light text-dark border" style="font-size:.8em;">{{ k.LINK_TYPES.get(k.link_type, k.link_type) }}</span> {{ k.title }}{% if k.link %}</a>{% endif %}</span>{% if not loop.last %}<span style="color:#ccc;margin:0 4px;">·</span>{% endif %}
+        {% endfor %}
+    </div>
+    {% endfor %}
 </div>
 {% endif %}
 
@@ -400,23 +497,17 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/eml-utils.js') }}?v={{ range(10000,99999)|random }}"></script>
 <script>
 document.querySelectorAll('#btn-gen, #btn-gen-top').forEach(function(genBtn) {
-    genBtn.closest('form').addEventListener('submit', function() {
-        genBtn.disabled = true;
-        genBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 生成中...';
-    });
+    aiBindForm(genBtn.closest('form'), genBtn, '生成中');
 });
 
 function copyRichText() {
     var el = document.getElementById('report-content');
     if (!el) return;
-    navigator.clipboard.write([
-        new ClipboardItem({
-            'text/html': new Blob([el.innerHTML], {type: 'text/html'}),
-            'text/plain': new Blob([el.innerText], {type: 'text/plain'})
-        })
-    ]).then(function() { alert('已复制富文本，可直接粘贴到 Outlook'); });
+    var btn = document.querySelector('[onclick="copyRichText()"]');
+    copyWithFeedback(el.innerText, btn, el.innerHTML);
 }
 
 function autoFillManager() {
@@ -455,52 +546,6 @@ function onSaveEmailSettings() {
         });
 })();
 
-function encodeHeader(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
-var _badgeMap = {
-    'bg-success':'background:#198754;color:#fff;','bg-primary':'background:#0d6efd;color:#fff;',
-    'bg-warning':'background:#ffc107;color:#333;','bg-secondary':'background:#6c757d;color:#fff;',
-    'bg-danger':'background:#dc3545;color:#fff;','bg-info':'background:#0dcaf0;color:#333;',
-    'bg-dark':'background:#212529;color:#fff;'
-};
-var _textMap = {
-    'text-success':'color:#198754;','text-primary':'color:#0d6efd;','text-warning':'color:#ffc107;',
-    'text-danger':'color:#dc3545;','text-secondary':'color:#6c757d;','text-muted':'color:#6c757d;',
-    'text-info':'color:#0dcaf0;','fw-bold':'font-weight:700;'
-};
-function _inlineStyles(html) {
-    // Convert badge classes to inline styles
-    html = html.replace(/<span\s+class="badge\s+([^"]+)"/g, function(m, cls) {
-        var s = 'display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;';
-        cls.split(/\s+/).forEach(function(c) { if (_badgeMap[c]) s += _badgeMap[c]; });
-        return '<span style="' + s + '"';
-    });
-    // Convert text-* and fw-bold classes
-    html = html.replace(/<span\s+class="([^"]*(?:text-|fw-)[^"]*)"/g, function(m, cls) {
-        var s = '';
-        cls.split(/\s+/).forEach(function(c) { if (_textMap[c]) s += _textMap[c]; });
-        return s ? '<span style="' + s + '"' : m;
-    });
-    return html;
-}
-function _emlSection(title, body, titleColor) {
-    var c = titleColor || '#4a5568';
-    return '<tr><td colspan="99" style="background:' + c + ';color:#fff;padding:7px 16px;font-size:13px;font-weight:600;">' + title + '</td></tr>'
-        + '<tr><td colspan="99" style="padding:4px 12px 4px;font-size:13px;color:#4a5568;">' + body + '</td></tr>';
-}
-function _emlTable(tableEl) {
-    if (!tableEl) return '';
-    var h = '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">';
-    tableEl.querySelectorAll('tr').forEach(function(tr, ri) {
-        h += '<tr' + (tr.classList.contains('row-risk') ? ' style="background:#fef2f2;"' : (ri > 0 && ri % 2 === 0 ? ' style="background:#fafbfc;"' : '')) + '>';
-        tr.querySelectorAll('th,td').forEach(function(cell) {
-            var tag = cell.tagName.toLowerCase();
-            var bg = tag === 'th' ? 'background:#f7fafc;font-weight:600;color:#4a5568;' : '';
-            h += '<' + tag + ' style="border:1px solid #718096;padding:4px 8px;' + bg + '">' + _inlineStyles(cell.innerHTML) + '</' + tag + '>';
-        });
-        h += '</tr>';
-    });
-    return h + '</table>';
-}
 function exportEml() {
     var el = document.getElementById('report-content');
     if (!el) return;
@@ -516,13 +561,26 @@ function exportEml() {
 
     // Meta
     var metaEls = el.querySelectorAll('.report-meta');
-    metaEls.forEach(function(m) {
+    metaEls.forEach(function(m, mi) {
         var align = m.style.textAlign === 'left' ? 'left' : 'center';
-        var txt = m.textContent.trim().replace(/\n/g, '<br>');
-        rows += '<tr><td style="background:#f0f4f8;text-align:' + align + ';padding:6px 20px;font-size:12px;color:#64748b;line-height:1.6;">' + txt + '</td></tr>';
+        // TOC meta: use innerHTML to preserve anchor links
+        var isToc = m.querySelector('a');
+        if (isToc) {
+            // Rebuild TOC with #anchor links for email
+            var tocHtml = '<span style="color:#999;">导航：</span>';
+            m.querySelectorAll('a').forEach(function(a, ai) {
+                if (ai > 0) tocHtml += '<span style="color:#ccc;margin:0 4px;">·</span>';
+                tocHtml += '<a href="#sec-' + ai + '" style="color:#4a5568;text-decoration:none;">' + a.textContent + '</a>';
+            });
+            rows += '<tr><td align="center" style="background:#f0f4f8;text-align:center;padding:4px 20px;font-size:12px;color:#64748b;line-height:1.6;">' + tocHtml + '</td></tr>';
+        } else {
+            var txt = m.textContent.trim().replace(/\n/g, '<br>');
+            rows += '<tr><td style="background:#f0f4f8;text-align:' + align + ';padding:6px 20px;font-size:12px;color:#64748b;line-height:1.6;">' + txt + '</td></tr>';
+        }
     });
 
     // Sections
+    var _secIdx = 0;
     el.querySelectorAll('.report-section').forEach(function(sec) {
         var h6 = sec.querySelector('h6');
         if (!h6) return;
@@ -547,7 +605,7 @@ function exportEml() {
                     else if (num.classList.contains('text-secondary')) numStyle += 'color:#718096;';
                 }
                 body += '<td style="text-align:center;padding:6px 4px;border-right:1px solid #718096;">'
-                    + '<div style="' + numStyle + '">' + (num ? num.textContent : '') + '</div>'
+                    + '<div style="' + numStyle + '">' + (num ? emlInlineStyles(num.innerHTML) : '') + '</div>'
                     + '<div style="font-size:11px;color:#94a3b8;">' + (lbl ? lbl.textContent : '') + '</div></td>';
             });
             body += '</tr></table>';
@@ -600,30 +658,32 @@ function exportEml() {
             body += '<img src="' + img.src + '" width="100%" style="width:100%;" alt="' + (img.alt || '') + '">';
         });
 
-        // Risk stats bar + domain bar (before tables, centered)
-        var statsBar = sec.querySelector('.risk-stats-bar');
-        if (statsBar) {
-            var statsHtml = '<table width="100%" cellpadding="0" cellspacing="0" style="font-size:12px;margin-bottom:2px;"><tr>';
-            statsBar.querySelectorAll('span:not(.border-start)').forEach(function(s) {
-                var color = s.classList.contains('text-danger') ? '#dc3545' : s.classList.contains('text-success') ? '#198754' : s.classList.contains('text-muted') ? '#6c757d' : '#1e3a5f';
-                statsHtml += '<td style="padding:4px 10px;text-align:center;color:' + color + ';">' + s.innerHTML + '</td>';
-            });
-            statsHtml += '</tr></table>';
-            body += statsHtml;
-        }
+        // Data tables — respect DOM order: stats table → domain bar → risk list table
         var domainBar = sec.querySelector('.risk-domain-bar');
-        if (domainBar) {
+        var allTables = sec.querySelectorAll('.report-table, table.report-table');
+        var domainRendered = false;
+        allTables.forEach(function(t) {
+            // Render domain bar after stats table (first table), before risk list (second table)
+            if (!domainRendered && domainBar && t !== allTables[0] && allTables.length > 1) {
+                var dHtml = '';
+                domainBar.querySelectorAll('span[style*="border"]').forEach(function(b) {
+                    dHtml += '<span style="display:inline-block;padding:2px 8px;margin:2px;font-size:11px;border:1px solid #718096;border-radius:4px;">' + emlInlineStyles(b.innerHTML) + '</span>';
+                });
+                if (dHtml) body += '<div style="text-align:center;margin-bottom:2px;">' + dHtml + '<span style="font-size:10px;color:#999;margin-left:4px;">（未闭环/近两周总数）</span></div>';
+                domainRendered = true;
+            }
+            body += emlTable(t);
+        });
+        // If only one table (or no second table), render domain bar after it
+        if (!domainRendered && domainBar) {
             var dHtml = '';
-            domainBar.querySelectorAll('.badge').forEach(function(b) {
-                dHtml += '<span style="display:inline-block;padding:2px 8px;margin:2px;font-size:11px;border:1px solid #718096;border-radius:4px;">' + b.innerHTML + '</span>';
+            domainBar.querySelectorAll('span[style*="border"]').forEach(function(b) {
+                dHtml += '<span style="display:inline-block;padding:2px 8px;margin:2px;font-size:11px;border:1px solid #718096;border-radius:4px;">' + emlInlineStyles(b.innerHTML) + '</span>';
             });
-            if (dHtml) body += '<div style="text-align:center;margin-bottom:2px;">' + dHtml + '</div>';
+            if (dHtml) body += '<div style="text-align:center;margin-bottom:2px;">' + dHtml + '<span style="font-size:10px;color:#999;margin-left:4px;">（未闭环/近两周总数）</span></div>';
         }
-
-        // Data tables
-        sec.querySelectorAll('.report-table, table.report-table').forEach(function(t) { body += _emlTable(t); });
         sec.querySelectorAll('table:not(.report-table)').forEach(function(t) {
-            if (!t.closest('.report-stats') && !t.closest('.progress') && !t.closest('.d-flex')) body += _emlTable(t);
+            if (!t.closest('.report-stats') && !t.closest('.progress') && !t.closest('.d-flex')) body += emlTable(t);
         });
 
         // Lists — convert to table for Outlook
@@ -640,47 +700,31 @@ function exportEml() {
             if (!p.closest('.report-summary') && !p.closest('table')) body += '<p style="font-size:13px;color:#64748b;margin:4px 0;">' + p.innerHTML + '</p>';
         });
 
-        rows += _emlSection(title, body, isRisk ? '#c53030' : '#4a5568');
+        // Progress legend & knowledge links (plain divs not inside other containers)
+        sec.querySelectorAll('div').forEach(function(d) {
+            if (d.parentElement !== sec) return;  // only direct children
+            if (d.classList.contains('report-stats') || d.classList.contains('report-summary')
+                || d.classList.contains('progress') || d.closest('table')
+                || d.querySelector('h6') || d.querySelector('table') || d.querySelector('img')
+                || d.classList.contains('people-tree') || d.classList.contains('risk-stats-bar')
+                || d.classList.contains('risk-domain-bar')
+                || d.getAttribute('data-eml') || d.style.background.indexOf('fef2f2') >= 0
+                || d.classList.contains('text-center')) return;
+            var txt = d.innerHTML.trim();
+            if (txt) body += '<div style="font-size:12px;color:#64748b;margin:2px 0;line-height:1.6;">' + emlInlineStyles(txt) + '</div>';
+        });
+
+        rows += emlSection(title, body, isRisk ? '#c53030' : '#4a5568', _secIdx);
+        _secIdx++;
     });
 
 
     var _r = getMergedRecipients((document.getElementById('emlTo') || {}).value, (document.getElementById('emlCc') || {}).value);
     var to = _r.to, cc = _r.cc;
-    // Prepend To/Cc as plain text in body
-    var recipientBlock = '';
-    if (to || cc) {
-        recipientBlock = '<table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:2px;font-size:12px;color:#64748b;">';
-        if (to) recipientBlock += '<tr><td style="padding:2px 16px;"><b>To:</b> ' + to + '</td></tr>';
-        if (cc) recipientBlock += '<tr><td style="padding:2px 16px;"><b>Cc:</b> ' + cc + '</td></tr>';
-        recipientBlock += '</table>';
-    }
 
-    var html = '<html><head><meta charset="UTF-8"></head><body style="font-family:Microsoft YaHei,Segoe UI,sans-serif;margin:0;padding:0;background:#ffffff;">'
-        + '<table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:20px;">'
-        + recipientBlock
-        + '<table width="100%" cellpadding="0" cellspacing="0" style="max-width:800px;margin:0 auto;background:#fff;">'
-        + rows + '</table>'
-        + '</td></tr></table></body></html>';
-    var boundary = 'boundary_' + Date.now();
-    var headers = [
-        'Subject: ' + encodeHeader(subject),
-        'MIME-Version: 1.0',
-        'Content-Type: multipart/alternative; boundary="' + boundary + '"',
-        'X-Unsent: 1',
-    ];
-    var eml = headers.concat([
-        '', '--' + boundary,
-        'Content-Type: text/html; charset=UTF-8',
-        'Content-Transfer-Encoding: base64',
-        '', btoa(unescape(encodeURIComponent(html))).match(/.{1,76}/g).join('\n'),
-        '', '--' + boundary + '--',
-    ]).join('\r\n');
-    var blob = new Blob([eml], {type: 'message/rfc822'});
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = subject + '.eml';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    var html = emlWrapHtml(rows, {to: to, cc: cc, fontFamily: 'Microsoft YaHei Light,Microsoft YaHei,PingFang SC,Segoe UI,sans-serif'});
+    var eml = emlBuildFile(subject, html);
+    emlDownload(subject + '.eml', eml);
 }
 
 </script>

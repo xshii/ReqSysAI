@@ -1,5 +1,5 @@
 body {
-    font-family: system-ui, -apple-system, "Microsoft YaHei", sans-serif;
+    font-family: "Microsoft YaHei Light", "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", system-ui, -apple-system, sans-serif;
 }
 /* Manager-only elements hidden by default, JS adds .mgr-visible to show */
 .mgr-only:not(.mgr-visible) { display: none !important; }
@@ -219,3 +219,6 @@ body {
     margin-bottom: 0;
     margin-top: 4px;
 }
+/* Todo list performance: skip layout/style recalc for collapsed sections */
+.todo-list-for-req { contain: layout style; }
+.todo-list-for-req.collapsing { transition: none !important; }

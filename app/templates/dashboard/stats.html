@@ -2,153 +2,437 @@
 {% block title %}统计报表 - {{ site_name }}{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-3">
     <h4>统计报表{% if cur_project %} · {{ cur_project.name }}{% endif %}</h4>
-    <a href="{{ url_for('dashboard.stats_export', week=offset, group=cur_group, project_id=cur_project_id) }}" class="btn btn-sm btn-outline-success">
-        <i class="bi bi-download"></i> 导出 Excel
-    </a>
+    <div class="d-flex gap-2">
+        {% if cur_project %}
+        <a href="?tab={{ cur_tab }}&week={{ offset }}&project_id={{ cur_project_id }}&include_sub={{ '0' if include_sub else '1' }}" class="btn btn-sm {{ 'btn-info' if include_sub else 'btn-outline-info' }}" title="包含子项目">
+            <i class="bi bi-diagram-3"></i> 含子项目
+        </a>
+        {% endif %}
+        <a href="{{ url_for('dashboard.stats_export', week=offset, project_id=cur_project_id) }}" class="btn btn-sm btn-outline-success">
+            <i class="bi bi-download"></i> 导出
+        </a>
+    </div>
 </div>
 
-<!-- Week selector -->
-<div class="d-flex align-items-center gap-2 mb-4">
-    <a href="?week={{ offset - 1 }}&group={{ cur_group }}&project_id={{ cur_project_id }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
-    <span class="fw-bold">{{ monday.strftime('%Y-%m-%d') }} ~ {{ sunday.strftime('%Y-%m-%d') }}</span>
-    {% if offset < 0 %}
-    <a href="?week={{ offset + 1 }}&group={{ cur_group }}&project_id={{ cur_project_id }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
-    {% endif %}
-    {% if offset != 0 %}
-    <a href="?week=0&group={{ cur_group }}&project_id={{ cur_project_id }}" class="btn btn-sm btn-outline-primary">本周</a>
-    {% endif %}
-</div>
-
-<!-- Group tabs -->
-{% if groups %}
-<ul class="nav nav-tabs mb-4">
-    <li class="nav-item">
-        <a class="nav-link {% if not cur_group %}active{% endif %}" href="?week={{ offset }}&group=&project_id={{ cur_project_id }}">全部</a>
-    </li>
-    {% for g in groups %}
-    <li class="nav-item">
-        <a class="nav-link {% if cur_group == g %}active{% endif %}" href="?week={{ offset }}&group={{ g }}&project_id={{ cur_project_id }}">{{ g }}</a>
-    </li>
-    {% endfor %}
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-3 small">
+    <li class="nav-item"><a class="nav-link {% if cur_tab != 'people' %}active{% endif %}" href="?tab=overview&project_id={{ cur_project_id }}&include_sub={{ '1' if include_sub else '0' }}"><i class="bi bi-bar-chart"></i> 专题&需求&问题</a></li>
+    <li class="nav-item"><a class="nav-link {% if cur_tab == 'people' %}active{% endif %}" href="?tab=people&week={{ offset }}&project_id={{ cur_project_id }}&include_sub={{ '1' if include_sub else '0' }}"><i class="bi bi-people"></i> 人力统计</a></li>
 </ul>
+
+{% if cur_tab != 'people' %}
+{# ==================== Tab 1: 专题 & 需求 & 问题 ==================== #}
+
+<!-- 点灯图 macros -->
+{% set _light_bg = {'danger': 'rgba(220,53,69,.15)', 'success': 'rgba(25,135,84,.12)', 'secondary': 'rgba(108,117,125,.08)', 'primary': ''} %}
+{% set _src_short = {'analysis': '分析', 'coding': '编码', 'testing': '测试'} %}
+{% macro src_cell(c, is_testing=false) %}
+{% if c and c.total > 0 %}
+{% set wpct = (c.wpct_sum / c.total)|round|int %}
+<div style="line-height:1.15;">
+<span class="fw-bold" style="font-size:.85em;">{{ wpct }}%</span>{% if c.overdue_assignee %} <span class="fw-bold" style="font-size:.75em;color:#dc3545;">{{ c.overdue_assignee }}</span><span style="font-size:.55em;color:#dc3545;"> 延{{ c.overdue_days }}天</span>{% elif c.assignee %} <span class="fw-bold" style="font-size:.75em;color:#444;">{{ c.assignee }}</span>{% endif %}
+{% if is_testing and c.tc_total > 0 %}<div style="font-size:.58em;color:#999;line-height:1;margin-top:1px;">{{ c.tc_done }}/{{ c.tc_total }}例</div>{% endif %}
+{% if c.min_start or c.max_due %}<div style="font-size:.55em;color:#aaa;line-height:1;">{% if c.min_start %}{{ c.min_start.strftime('%m-%d') }}{% endif %}{% if c.max_due %}~{{ c.max_due.strftime('%m-%d') }}{% endif %}</div>{% endif %}
+</div>
+{% else %}<span class="text-muted">-</span>{% endif %}
+{% endmacro %}
+
+<!-- 1. 业务专题进展 -->
+{% if pivot_l1s %}
+<div class="card mb-4">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span class="fw-bold"><i class="bi bi-grid-3x3-gap"></i> 业务专题进展</span>
+        <span class="text-muted small">在需求的"分类"字段填写 <code>分类名-平台</code> 格式即可触发</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-bordered mb-0" style="font-size:.82em;">
+                <thead class="table-light">
+                    <tr>
+                        <th rowspan="2" class="text-center align-middle px-1" style="min-width:60px;">分类</th>
+                        {% for l2 in pivot_l2s %}
+                        <th colspan="{{ pivot_sources|length }}" class="text-center border-bottom-0 px-0 py-1" style="line-height:1.1;">{{ l2 }}{% if pivot_l2_start.get(l2) or pivot_l2_due.get(l2) %}<div class="fw-normal text-muted" style="font-size:.78em;line-height:1;">{% if pivot_l2_start.get(l2) %}{{ pivot_l2_start[l2].strftime('%m-%d') }}{% endif %}{% if pivot_l2_due.get(l2) %}~{{ pivot_l2_due[l2].strftime('%m-%d') }}{% endif %}</div>{% endif %}</th>
+                        {% endfor %}
+                    </tr>
+                    <tr>
+                        {% for l2 in pivot_l2s %}{% for s in pivot_sources %}
+                        <th class="text-center px-1" style="font-size:.78em;min-width:48px;">{{ _src_short.get(s, s) }}</th>
+                        {% endfor %}{% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for l1 in pivot_l1s %}
+                    <tr>
+                        <td class="fw-bold align-middle text-center px-1">{{ l1 }}</td>
+                        {% for l2 in pivot_l2s %}{% for s in pivot_sources %}
+                        {% set c = pivot_src_cells.get((l1, l2, s)) %}
+                        <td class="text-center px-0 py-0" style="background:{{ _light_bg.get(c.light, '') if c else '' }};">{{ src_cell(c, s == 'testing') }}</td>
+                        {% endfor %}{% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card-footer py-1 small text-muted">
+        <span style="display:inline-block;width:10px;height:10px;background:rgba(220,53,69,.3);border-radius:2px;"></span> 延期
+        <span style="display:inline-block;width:10px;height:10px;background:#fff;border:1px solid #ccc;border-radius:2px;margin-left:6px;"></span> 进行中
+        <span style="display:inline-block;width:10px;height:10px;background:rgba(108,117,125,.2);border-radius:2px;margin-left:6px;"></span> 未启动
+        <span style="display:inline-block;width:10px;height:10px;background:rgba(25,135,84,.3);border-radius:2px;margin-left:6px;"></span> 已完成
+    </div>
+</div>
 {% endif %}
 
-<!-- Summary cards -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <div class="text-muted small">需求完成率</div>
-                <div class="fs-3 fw-bold text-primary">{{ data.req_rate }}%</div>
-                <div class="text-muted small">{{ data.req_done }} / {{ data.req_total }}</div>
-            </div>
+<!-- 2. 需求统计 -->
+{% if all_reqs %}
+{% set _total = all_reqs | length %}
+{% set _done = all_reqs | selectattr('status', 'in', ['done','closed']) | list | length %}
+{% set _dev = all_reqs | selectattr('status', 'equalto', 'in_dev') | list | length %}
+{% set _test = all_reqs | selectattr('status', 'equalto', 'in_test') | list | length %}
+{% set _pending = _total - _done - _dev - _test %}
+{% set _est_total = all_reqs | map(attribute='estimate_days') | select('number') | sum %}
+{% set _d = weekly_deltas %}
+<div class="card mb-4">
+    <div class="card-header py-2"><span class="fw-bold"><i class="bi bi-list-check"></i> 需求统计</span></div>
+    <div class="card-body">
+        <div class="report-stats mb-2">
+            <div class="report-stat"><div class="num">{{ _total }}{% if _d.get('new_req_delta') %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">+{{ _d.new_req_delta }}</span>{% endif %}</div><div class="label">需求总数</div></div>
+            {% if completion_weighted is not none %}<div class="report-stat"><div class="num">{{ completion_weighted }}%{% if _d.get('completion_delta', 0) != 0 %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">{{ '+' if _d.completion_delta > 0 }}{{ _d.completion_delta }}%</span>{% endif %}</div><div class="label">加权完成率</div></div>{% endif %}
+            <div class="report-stat"><div class="num">{{ _done }}{% if _d.get('done_delta') %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">+{{ _d.done_delta }}</span>{% endif %}</div><div class="label">需求完成</div></div>
+            {% if _d.get('tc_total_all') %}<div class="report-stat"><div class="num">{{ _d.tc_done_all }}/{{ _d.tc_total_all }}{% if _d.get('tc_done_delta') %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">+{{ _d.tc_done_delta }}</span>{% endif %}</div><div class="label">用例个数</div></div>{% endif %}
+            {% if _d.get('overdue_count') %}<div class="report-stat"><div class="num text-danger">{{ _d.overdue_count }}{% if _d.get('overdue_delta', 0) != 0 %}<span style="font-size:.45em;font-weight:400;margin-left:2px;">{{ '+' if _d.overdue_delta > 0 }}{{ _d.overdue_delta }}</span>{% endif %}</div><div class="label">超期个数</div></div>{% endif %}
+            <div class="report-stat"><div class="num">{{ _est_total | round(0) | int }}{% if _d.get('done_days_delta') %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">+{{ _d.done_days_delta | round(0) | int }}</span>{% endif %}</div><div class="label">总人天</div></div>
+            {% if _d.get('ai_days') %}<div class="report-stat"><div class="num">{{ _d.ai_days | round(0) | int }}{% if _d.get('ai_days_delta') %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">+{{ _d.ai_days_delta | round(0) | int }}</span>{% endif %}</div><div class="label">AI辅助人天</div></div>{% endif %}
         </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <div class="text-muted small">本周新建任务</div>
-                <div class="fs-3 fw-bold">{{ data.user_stats | sum(attribute='created') }}</div>
+        <div style="font-size:.75em;color:#999;">已完成{{ _done }} · 开发中{{ _dev }} · 测试中{{ _test }} · 待开发{{ _pending }}</div>
+        {% if req_trend_json is defined %}
+        <div class="mt-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="small fw-bold">需求趋势（近12周）</span>
+                <div id="reqTrendLegend" class="d-flex gap-2" style="font-size:.75em;">
+                    <span style="color:#4a90d9;">● 总需求</span>
+                    <span style="color:#27ae60;">● 已完成</span>
+                    <span style="color:#c0392b;">● 超期</span>
+                </div>
             </div>
+            <canvas id="reqTrendChart" height="160" style="width:100%;"></canvas>
         </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <div class="text-muted small">本周完成任务</div>
-                <div class="fs-3 fw-bold text-success">{{ data.user_stats | sum(attribute='done') }}</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <div class="text-muted small">团队完成率</div>
-                {% set total_c = data.user_stats | sum(attribute='created') %}
-                {% set total_d = data.user_stats | sum(attribute='done') %}
-                <div class="fs-3 fw-bold text-info">{{ (total_d / total_c * 100) | round | int if total_c else 0 }}%</div>
-            </div>
-        </div>
+        {% endif %}
     </div>
 </div>
+{% endif %}
 
-<!-- Per-user table -->
-<div class="card">
+<!-- 3. 风险问题统计 -->
+{% if risk_stats and risk_stats.total > 0 %}
+{% set rs = risk_stats %}
+<div class="card mb-4">
+    <div class="card-header py-2"><span class="fw-bold"><i class="bi bi-exclamation-triangle"></i> 风险问题统计</span></div>
+    <div class="card-body">
+        <table class="table table-bordered table-sm mb-2" style="font-size:.8rem;">
+            <tr>
+                <td class="text-center">总计 <strong>{{ rs.total }}</strong>{% if rs.get('new_delta') %}<span style="font-size:.8em;color:#999;margin-left:2px;">+{{ rs.new_delta }}</span>{% endif %}</td>
+                {% if rs.overdue %}<td class="text-center text-danger">超期 <strong>{{ rs.overdue }}</strong>{% if rs.get('overdue_delta') %}<span style="font-size:.8em;margin-left:2px;">+{{ rs.overdue_delta }}</span>{% endif %}</td>{% endif %}
+                {% if rs.open %}<td class="text-center text-danger">未解决 <strong>{{ rs.open }}</strong></td>{% endif %}
+                {% if rs.get('resolved_delta') or rs.resolved %}<td class="text-center">已解决 <strong>{{ rs.resolved or 0 }}</strong>{% if rs.get('resolved_delta') %}<span style="font-size:.8em;color:#999;margin-left:2px;">+{{ rs.resolved_delta }}</span>{% endif %}</td>{% endif %}
+                {% if rs.closed %}<td class="text-center text-muted">已关闭 <strong>{{ rs.closed }}</strong></td>{% endif %}
+                {% if rs.high %}<td class="text-center text-danger">高 <strong>{{ rs.high }}/{{ rs.high_total }}</strong>{% if rs.get('high_delta') %}<span style="font-size:.8em;color:#999;margin-left:2px;">+{{ rs.high_delta }}</span>{% endif %}</td>{% endif %}
+                {% if rs.medium %}<td class="text-center" style="color:#e67e22;">中 <strong>{{ rs.medium }}/{{ rs.medium_total }}</strong>{% if rs.get('medium_delta') %}<span style="font-size:.8em;color:#999;margin-left:2px;">+{{ rs.medium_delta }}</span>{% endif %}</td>{% endif %}
+                {% if rs.low %}<td class="text-center text-muted">低 <strong>{{ rs.low }}/{{ rs.low_total }}</strong>{% if rs.get('low_delta') %}<span style="font-size:.8em;color:#999;margin-left:2px;">+{{ rs.low_delta }}</span>{% endif %}</td>{% endif %}
+            </tr>
+        </table>
+        {% if domain_stats %}
+        <div class="text-center" style="font-size:.75rem;">
+            {% for domain, dv in domain_stats.items() %}<span style="display:inline-block;padding:2px 8px;margin:2px;font-size:.85em;border:1px solid #dee2e6;border-radius:4px;">{{ domain }} <strong style="color:#dc3545;">{{ dv.open }}</strong>/{{ dv.total }}</span>{% endfor %}
+            <span style="font-size:.85em;color:#999;margin-left:4px;">（未闭环/总数）</span>
+        </div>
+        {% endif %}
+        {% if risk_trend and risk_trend.weeks %}
+        <div class="mt-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="small fw-bold">各领域问题收敛趋势（近12周）</span>
+                <div id="trendLegend" class="d-flex flex-wrap gap-1" style="font-size:.75em;"></div>
+            </div>
+            <canvas id="riskTrendChart" height="180" style="width:100%;"></canvas>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% else %}
+{# ==================== Tab 2: 人力统计 ==================== #}
+
+<!-- Time range selector -->
+<div class="d-flex align-items-center gap-2 mb-4">
+    {% for p, label in [('1w', '近1周'), ('2w', '近2周'), ('1m', '近1月'), ('2m', '近2月')] %}
+    <a href="?tab=people&period={{ p }}&project_id={{ cur_project_id }}&include_sub={{ '1' if include_sub else '0' }}" class="btn btn-sm {{ 'btn-primary' if period == p else 'btn-outline-secondary' }}">{{ label }}</a>
+    {% endfor %}
+    <span class="text-muted small ms-2">{{ people_start.strftime('%Y-%m-%d') }} ~ {{ people_end.strftime('%Y-%m-%d') }}</span>
+</div>
+
+<!-- 人力统计 -->
+{% if data.user_stats %}
+<div class="card mb-4">
+    <div class="card-header py-2 d-flex justify-content-between">
+        <span class="fw-bold"><i class="bi bi-people"></i> 人力统计</span>
+        <span class="text-muted small">{{ data.user_stats | length }}人 · 新建{{ data.user_stats | sum(attribute='created') }} · 完成{{ data.user_stats | sum(attribute='done') }}</span>
+    </div>
     <div class="table-responsive">
-        <table class="table table-hover mb-0">
+        <table class="table table-hover table-sm mb-0">
             <thead class="table-light">
-                <tr>
-                    <th>姓名</th>
-                    <th>工号</th>
-                    <th>小组</th>
-                    <th>新建</th>
-                    <th>完成</th>
-                    <th>完成率</th>
-                </tr>
+                <tr><th>姓名</th><th>新建</th><th>完成</th><th>完成率</th></tr>
             </thead>
             <tbody>
                 {% for s in data.user_stats %}
                 <tr>
                     <td>{{ s.user.name }}</td>
-                    <td>{{ s.user.employee_id or '-' }}</td>
-                    <td>{{ s.user.group or '-' }}</td>
                     <td>{{ s.created }}</td>
                     <td>{{ s.done }}</td>
                     <td>
                         <div class="d-flex align-items-center gap-2">
                             <div class="progress flex-grow-1" style="height:6px;">
-                                <div class="progress-bar bg-{{ 'success' if s.rate >= 80 else ('warning' if s.rate >= 50 else 'danger') }}"
-                                     style="width:{{ s.rate }}%"></div>
+                                <div class="progress-bar bg-{{ 'success' if s.rate >= 80 else ('warning' if s.rate >= 50 else 'danger') }}" style="width:{{ s.rate }}%"></div>
                             </div>
                             <span class="small">{{ s.rate }}%</span>
                         </div>
                     </td>
                 </tr>
-                {% else %}
-                <tr><td colspan="6" class="text-center text-muted py-3">暂无数据</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
-
-<!-- Project investment -->
-{% if data.project_investment %}
-<h6 class="mt-4 mb-3">项目投入汇总（人天）</h6>
-{% for pi in data.project_investment %}
-<div class="card mb-3">
-    <div class="card-header d-flex justify-content-between">
-        <strong>{{ pi.project.name }}</strong>
-        <span class="text-muted small">{{ pi.people_count }} 人 · {{ pi.total_days }} 人天</span>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-sm mb-0">
-            <thead class="table-light">
-                <tr><th>姓名</th><th>工号</th><th>投入（人天）</th><th>占比</th></tr>
-            </thead>
-            <tbody>
-                {% for ud in pi.user_days %}
-                <tr>
-                    <td>{{ ud.user.name }}</td>
-                    <td>{{ ud.user.employee_id or '-' }}</td>
-                    <td>{{ ud.days }}</td>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            {% set pct = (ud.days / pi.total_days * 100) | round | int if pi.total_days else 0 %}
-                            <div class="progress flex-grow-1" style="height:6px;max-width:100px;">
-                                <div class="progress-bar" style="width:{{ pct }}%"></div>
-                            </div>
-                            <span class="small">{{ pct }}%</span>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endfor %}
+{% else %}
+<div class="text-center text-muted py-5"><i class="bi bi-people" style="font-size:2rem;"></i><p class="mt-2">本周暂无人力数据</p></div>
 {% endif %}
+
+<!-- 项目投入 -->
+{% if data.project_investment %}
+<div class="card mb-4">
+    <div class="card-header py-2"><span class="fw-bold"><i class="bi bi-clock-history"></i> 项目投入汇总（人天）</span></div>
+    <div class="card-body p-0">
+    {% for pi in data.project_investment %}
+    <div class="{% if not loop.first %}border-top{% endif %}">
+        <div class="px-3 py-2 d-flex justify-content-between bg-light">
+            <strong>{{ pi.project.name }}</strong>
+            <span class="text-muted small">{{ pi.people_count }} 人 · {{ pi.total_days }} 人天</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0">
+                <thead class="table-light"><tr><th>姓名</th><th>投入（人天）</th><th>占比</th></tr></thead>
+                <tbody>
+                    {% for ud in pi.user_days %}
+                    <tr>
+                        <td>{{ ud.user.name }}</td>
+                        <td>{{ ud.days }}</td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                {% set pct = (ud.days / pi.total_days * 100) | round | int if pi.total_days else 0 %}
+                                <div class="progress flex-grow-1" style="height:6px;max-width:100px;">
+                                    <div class="progress-bar" style="width:{{ pct }}%"></div>
+                                </div>
+                                <span class="small">{{ pct }}%</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+
+{% block extra_js %}
+{% if cur_tab != 'people' %}
+{% if req_trend_json is defined %}
+<script>
+setTimeout(function() {
+    var data = {{ req_trend_json|safe }};
+    var canvas = document.getElementById('reqTrendChart');
+    if (!canvas || !data.weeks || !data.weeks.length) return;
+    var ctx = canvas.getContext('2d');
+    var W = canvas.offsetWidth || canvas.parentElement.offsetWidth || 600;
+    var H = 160;
+    canvas.width = W * 2; canvas.height = H * 2;
+    ctx.scale(2, 2);
+
+    var weeks = data.weeks;
+    var series = [
+        {name: '总需求', data: data.total, color: '#4a90d9'},
+        {name: '已完成', data: data.done, color: '#27ae60'},
+        {name: '超期', data: data.overdue, color: '#c0392b'},
+    ];
+
+    var px = 36, py = 12, pb = 22, pr = 12;
+    var chartW = W - px - pr, chartH = H - py - pb;
+
+    var maxV = 1;
+    series.forEach(function(s) { s.data.forEach(function(v) { if (v > maxV) maxV = v; }); });
+
+    var stepX = chartW / Math.max(weeks.length - 1, 1);
+    var stepY = chartH / maxV;
+
+    // Grid
+    ctx.strokeStyle = '#e9ecef'; ctx.lineWidth = 0.5;
+    for (var i = 0; i <= 4; i++) {
+        var gy = py + chartH - (chartH / 4) * i;
+        ctx.beginPath(); ctx.moveTo(px, gy); ctx.lineTo(px + chartW, gy); ctx.stroke();
+        ctx.fillStyle = '#aaa'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+        ctx.fillText(Math.round(maxV / 4 * i), px - 4, gy + 3);
+    }
+    // X labels
+    ctx.fillStyle = '#aaa'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    weeks.forEach(function(w, i) { if (i % 2 === 0 || i === weeks.length - 1) ctx.fillText(w, px + stepX * i, H - 4); });
+
+    // Lines
+    series.forEach(function(s) {
+        ctx.strokeStyle = s.color; ctx.lineWidth = 2;
+        ctx.beginPath();
+        s.data.forEach(function(v, i) {
+            var x = px + stepX * i, y = py + chartH - v * stepY;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        // Dots
+        s.data.forEach(function(v, i) {
+            var x = px + stepX * i, y = py + chartH - v * stepY;
+            ctx.fillStyle = s.color;
+            ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
+        });
+        // End label
+        var last = s.data[s.data.length - 1];
+        ctx.fillStyle = s.color; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(last, px + stepX * (s.data.length - 1) + 6, py + chartH - last * stepY + 3);
+    });
+
+    window.addEventListener('resize', function() {
+        W = canvas.offsetWidth || 600; canvas.width = W * 2; canvas.height = H * 2;
+        ctx.scale(2, 2); chartW = W - px - pr; stepX = chartW / Math.max(weeks.length - 1, 1);
+        // redraw (simplified - just reload)
+        location.reload();
+    });
+}, 100);
+</script>
+{% endif %}
+{% if risk_trend_json is defined %}
+<script>
+setTimeout(function() {
+    var data = {{ risk_trend_json|safe }};
+    var canvas = document.getElementById('riskTrendChart');
+    if (!canvas || !data.weeks || !data.weeks.length) return;
+    var ctx = canvas.getContext('2d');
+    var W = canvas.offsetWidth || canvas.parentElement.offsetWidth || 600;
+    var H = 180;
+    canvas.width = W * 2; canvas.height = H * 2;
+    ctx.scale(2, 2);
+
+    var domains = Object.keys(data.domains);
+    var weeks = data.weeks;
+    var colors = ['#4a90d9','#e67e22','#27ae60','#8e44ad','#c0392b','#16a085','#2c3e50','#f39c12','#7f8c8d','#d35400','#1abc9c','#9b59b6'];
+    var selected = new Set(domains);
+
+    var px = 36, py = 16, pb = 24, pr = 12;
+    var chartW = W - px - pr, chartH = H - py - pb;
+
+    function getMax() {
+        var mx = 1;
+        domains.forEach(function(d) { if (selected.has(d)) data.domains[d].forEach(function(v) { if (v > mx) mx = v; }); });
+        return mx;
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, W, H);
+        var maxV = getMax();
+        var stepX = chartW / Math.max(weeks.length - 1, 1);
+        var stepY = chartH / maxV;
+
+        ctx.strokeStyle = '#e9ecef'; ctx.lineWidth = 0.5;
+        for (var i = 0; i <= 4; i++) {
+            var gy = py + chartH - (chartH / 4) * i;
+            ctx.beginPath(); ctx.moveTo(px, gy); ctx.lineTo(px + chartW, gy); ctx.stroke();
+            ctx.fillStyle = '#aaa'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+            ctx.fillText(Math.round(maxV / 4 * i), px - 4, gy + 3);
+        }
+
+        ctx.fillStyle = '#aaa'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+        weeks.forEach(function(w, i) { ctx.fillText(w, px + stepX * i, H - 4); });
+
+        domains.forEach(function(domain, di) {
+            if (!selected.has(domain)) return;
+            var vals = data.domains[domain];
+            var color = colors[di % colors.length];
+            ctx.strokeStyle = color; ctx.lineWidth = 2;
+            ctx.beginPath();
+            vals.forEach(function(v, i) {
+                var x = px + stepX * i, y = py + chartH - v * stepY;
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+            vals.forEach(function(v, i) {
+                var x = px + stepX * i, y = py + chartH - v * stepY;
+                ctx.fillStyle = color;
+                ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+            });
+            var last = vals[vals.length - 1];
+            ctx.fillStyle = color; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'left';
+            ctx.fillText(last, px + stepX * (vals.length - 1) + 6, py + chartH - last * stepY + 3);
+        });
+    }
+
+    var legend = document.getElementById('trendLegend');
+    var domainBtns = [];
+    if (legend) {
+        // "全部" toggle button
+        var allBtn = document.createElement('span');
+        allBtn.style.cssText = 'cursor:pointer;padding:1px 6px;border:1px solid #6c757d;border-radius:3px;color:#6c757d;background:#6c757d15;margin-right:2px;';
+        allBtn.textContent = '全部';
+        allBtn.onclick = function() {
+            if (selected.size === domains.length) {
+                // All selected → deselect all
+                selected.clear();
+                domainBtns.forEach(function(o) { o.btn.style.opacity = '0.3'; o.btn.style.background = '#f8f9fa'; });
+            } else {
+                // Not all selected → select all
+                domains.forEach(function(d) { selected.add(d); });
+                domainBtns.forEach(function(o) { o.btn.style.opacity = '1'; o.btn.style.background = o.color + '15'; });
+            }
+            draw();
+        };
+        legend.appendChild(allBtn);
+
+        domains.forEach(function(domain, di) {
+            var color = colors[di % colors.length];
+            var btn = document.createElement('span');
+            btn.style.cssText = 'cursor:pointer;padding:1px 6px;border:1px solid ' + color + ';border-radius:3px;color:' + color + ';background:' + color + '15;';
+            btn.textContent = domain;
+            btn.onclick = function() {
+                if (selected.has(domain)) {
+                    selected.delete(domain); btn.style.opacity = '0.3'; btn.style.background = '#f8f9fa';
+                } else {
+                    selected.add(domain); btn.style.opacity = '1'; btn.style.background = color + '15';
+                }
+                draw();
+            };
+            legend.appendChild(btn);
+            domainBtns.push({btn: btn, color: color});
+        });
+    }
+
+    draw();
+    window.addEventListener('resize', function() {
+        W = canvas.offsetWidth || 600; canvas.width = W * 2; canvas.height = H * 2;
+        ctx.scale(2, 2); chartW = W - px - pr; draw();
+    });
+}, 100);
+</script>
+{% endif %}
+{% endif %}
+{% endblock %}
 {% endblock %}

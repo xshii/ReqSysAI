@@ -23,6 +23,18 @@ ALTER_STATEMENTS = [
     "ALTER TABLE requirements ADD COLUMN assignee_name VARCHAR(100)",
     "ALTER TABLE requirements ADD COLUMN code_lines INTEGER",
     "ALTER TABLE requirements ADD COLUMN test_cases INTEGER",
+    # incentives 表新增字段
+    "ALTER TABLE incentives ADD COLUMN amount_detail VARCHAR(200)",
+    "ALTER TABLE incentives ADD COLUMN gift_status VARCHAR(20)",
+    "ALTER TABLE incentives ADD COLUMN gift_item_id INTEGER",
+    "ALTER TABLE incentives ADD COLUMN gift_selected_at DATETIME",
+    "ALTER TABLE incentives ADD COLUMN gift_notified_at DATETIME",
+    "ALTER TABLE incentives ADD COLUMN gift_expires_at DATETIME",
+    "ALTER TABLE incentives ADD COLUMN gift_notify_count INTEGER DEFAULT 0",
+    # permission_applications 补字段
+    "ALTER TABLE permission_applications ADD COLUMN applicant_eid VARCHAR(30)",
+    # permission_items 补字段
+    "ALTER TABLE permission_items ADD COLUMN created_by INTEGER REFERENCES users(id)",
 ]
 
 # 需要补齐的 CREATE TABLE 语句
@@ -55,7 +67,8 @@ CREATE_STATEMENTS = [
         id INTEGER PRIMARY KEY,
         item_id INTEGER NOT NULL REFERENCES permission_items(id),
         applicant_name TEXT NOT NULL,
-        reason TEXT,
+        applicant_eid VARCHAR(30),
+        reason VARCHAR(300),
         status VARCHAR(20) DEFAULT 'pending',
         is_frozen BOOLEAN DEFAULT 0,
         submitted_by INTEGER NOT NULL REFERENCES users(id),
@@ -70,6 +83,291 @@ CREATE_STATEMENTS = [
         value TEXT,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )""",
+    # 礼品库表
+    """CREATE TABLE IF NOT EXISTS gift_items (
+        id INTEGER PRIMARY KEY,
+        name VARCHAR(200) NOT NULL,
+        description VARCHAR(500),
+        link VARCHAR(500),
+        image VARCHAR(300),
+        price FLOAT,
+        picks INTEGER DEFAULT 0,
+        is_active BOOLEAN DEFAULT 1,
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # 礼品领取记录表
+    """CREATE TABLE IF NOT EXISTS gift_records (
+        id INTEGER PRIMARY KEY,
+        incentive_id INTEGER NOT NULL REFERENCES incentives(id),
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        gift_item_id INTEGER REFERENCES gift_items(id),
+        status VARCHAR(20) DEFAULT 'pending',
+        notified_at DATETIME,
+        expires_at DATETIME,
+        selected_at DATETIME,
+        purchased_at DATETIME,
+        notify_count INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # 活动计时器表
+    """CREATE TABLE IF NOT EXISTS activity_timers (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        activity VARCHAR(30) NOT NULL,
+        label VARCHAR(50) NOT NULL,
+        started_at DATETIME NOT NULL,
+        minutes INTEGER NOT NULL DEFAULT 0,
+        date DATE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # 情绪预测记录
+    """CREATE TABLE IF NOT EXISTS emotion_records (
+        id INTEGER PRIMARY KEY,
+        scan_date DATE NOT NULL,
+        member_name VARCHAR(100) NOT NULL,
+        "group" VARCHAR(50),
+        status VARCHAR(20) NOT NULL,
+        risk_level VARCHAR(10) NOT NULL,
+        signals TEXT,
+        suggestion TEXT,
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # 情绪评论/跟进
+    """CREATE TABLE IF NOT EXISTS emotion_comments (
+        id INTEGER PRIMARY KEY,
+        record_id INTEGER NOT NULL REFERENCES emotion_records(id),
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        content VARCHAR(500) NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # 会议记录
+    """CREATE TABLE IF NOT EXISTS meetings (
+        id INTEGER PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects(id),
+        title VARCHAR(200) NOT NULL,
+        date DATE,
+        attendees TEXT,
+        cc TEXT,
+        content TEXT,
+        ai_result TEXT,
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # 周报
+    """CREATE TABLE IF NOT EXISTS weekly_reports (
+        id INTEGER PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects(id),
+        week_start DATE NOT NULL,
+        week_end DATE NOT NULL,
+        summary TEXT,
+        risks_json TEXT,
+        plan_json TEXT,
+        content_html TEXT,
+        is_frozen BOOLEAN DEFAULT 0,
+        frozen_by INTEGER REFERENCES users(id),
+        frozen_at DATETIME,
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME
+    )""",
+    # 个人周报
+    """CREATE TABLE IF NOT EXISTS personal_weeklies (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        week_start DATE NOT NULL,
+        week_end DATE NOT NULL,
+        ai_html TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME
+    )""",
+    # 站会记录
+    """CREATE TABLE IF NOT EXISTS standup_records (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        date DATE NOT NULL,
+        yesterday_done TEXT,
+        today_plan TEXT,
+        blocker TEXT,
+        has_blocker BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME
+    )""",
+    # 知识库
+    """CREATE TABLE IF NOT EXISTS knowledges (
+        id INTEGER PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects(id),
+        title VARCHAR(200) NOT NULL,
+        link_type VARCHAR(30),
+        biz_category VARCHAR(50),
+        link VARCHAR(500),
+        is_pinned BOOLEAN DEFAULT 0,
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME
+    )""",
+    # AAR 复盘
+    """CREATE TABLE IF NOT EXISTS aars (
+        id INTEGER PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects(id),
+        title VARCHAR(200) NOT NULL,
+        trigger VARCHAR(50),
+        trigger_ref VARCHAR(200),
+        date DATE,
+        participants TEXT,
+        goal TEXT,
+        result TEXT,
+        analysis TEXT,
+        action TEXT,
+        status VARCHAR(20) DEFAULT 'open',
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME
+    )""",
+    # 循环 Todo
+    """CREATE TABLE IF NOT EXISTS recurring_todos (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        title VARCHAR(500) NOT NULL,
+        cycle VARCHAR(20) NOT NULL,
+        weekdays VARCHAR(20),
+        monthly_day INTEGER,
+        monthly_days VARCHAR(50),
+        is_active BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # 循环 Todo 完成记录
+    """CREATE TABLE IF NOT EXISTS recurring_completions (
+        id INTEGER PRIMARY KEY,
+        recurring_id INTEGER NOT NULL REFERENCES recurring_todos(id),
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        completed_date DATE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # 审计日志
+    """CREATE TABLE IF NOT EXISTS audit_logs (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id),
+        action VARCHAR(50) NOT NULL,
+        entity_type VARCHAR(50),
+        entity_id INTEGER,
+        entity_title VARCHAR(200),
+        detail TEXT,
+        ip_address VARCHAR(45),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # 树洞
+    """CREATE TABLE IF NOT EXISTS rants (
+        id INTEGER PRIMARY KEY,
+        alias VARCHAR(50),
+        content TEXT NOT NULL,
+        likes INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # AI 解析日志
+    """CREATE TABLE IF NOT EXISTS ai_parse_logs (
+        id INTEGER PRIMARY KEY,
+        input_type VARCHAR(50),
+        raw_input TEXT,
+        ai_output TEXT,
+        created_by INTEGER REFERENCES users(id),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # 邮件设置
+    """CREATE TABLE IF NOT EXISTS email_settings (
+        id INTEGER PRIMARY KEY,
+        entity_type VARCHAR(50) NOT NULL,
+        entity_id INTEGER NOT NULL,
+        subject VARCHAR(300),
+        to_list TEXT,
+        cc_list TEXT,
+        updated_by INTEGER REFERENCES users(id),
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # IP 变更申请
+    """CREATE TABLE IF NOT EXISTS ip_change_requests (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        old_ip VARCHAR(45),
+        new_ip VARCHAR(45) NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        reviewed_by INTEGER REFERENCES users(id),
+        reviewed_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # 里程碑模版
+    """CREATE TABLE IF NOT EXISTS milestone_templates (
+        id INTEGER PRIMARY KEY,
+        name VARCHAR(200) NOT NULL,
+        description TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # 里程碑模版子项
+    """CREATE TABLE IF NOT EXISTS milestone_template_items (
+        id INTEGER PRIMARY KEY,
+        template_id INTEGER NOT NULL REFERENCES milestone_templates(id),
+        name VARCHAR(200) NOT NULL,
+        offset_days INTEGER DEFAULT 0,
+        sort_order INTEGER DEFAULT 0
+    )""",
+    # 激励报告
+    """CREATE TABLE IF NOT EXISTS incentive_reports (
+        id INTEGER PRIMARY KEY,
+        period VARCHAR(50),
+        data TEXT,
+        created_by INTEGER REFERENCES users(id),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # 激励基金
+    """CREATE TABLE IF NOT EXISTS incentive_funds (
+        id INTEGER PRIMARY KEY,
+        name VARCHAR(200) NOT NULL,
+        source VARCHAR(100),
+        total_amount FLOAT DEFAULT 0,
+        expires_at DATE,
+        note TEXT,
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
+    # ---- 关联表 ----
+    """CREATE TABLE IF NOT EXISTS user_roles (
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        role_id INTEGER NOT NULL REFERENCES roles(id),
+        PRIMARY KEY (user_id, role_id)
+    )""",
+    """CREATE TABLE IF NOT EXISTS user_followed_projects (
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        project_id INTEGER NOT NULL REFERENCES projects(id),
+        PRIMARY KEY (user_id, project_id)
+    )""",
+    """CREATE TABLE IF NOT EXISTS requirement_dependencies (
+        from_id INTEGER NOT NULL REFERENCES requirements(id),
+        to_id INTEGER NOT NULL REFERENCES requirements(id),
+        PRIMARY KEY (from_id, to_id)
+    )""",
+    """CREATE TABLE IF NOT EXISTS todo_requirements (
+        todo_id INTEGER NOT NULL REFERENCES todos(id),
+        requirement_id INTEGER NOT NULL REFERENCES requirements(id),
+        PRIMARY KEY (todo_id, requirement_id)
+    )""",
+    """CREATE TABLE IF NOT EXISTS incentive_nominees (
+        incentive_id INTEGER NOT NULL REFERENCES incentives(id),
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        PRIMARY KEY (incentive_id, user_id)
+    )""",
+]
+
+
+INDEX_STATEMENTS = [
+    "CREATE INDEX IF NOT EXISTS ix_todos_user_id ON todos(user_id)",
+    "CREATE INDEX IF NOT EXISTS ix_requirements_project_id ON requirements(project_id)",
+    "CREATE INDEX IF NOT EXISTS ix_requirements_assignee_id ON requirements(assignee_id)",
+    "CREATE INDEX IF NOT EXISTS ix_requirements_parent_id ON requirements(parent_id)",
+    "CREATE INDEX IF NOT EXISTS ix_risks_owner_id ON risks(owner_id)",
+    "CREATE INDEX IF NOT EXISTS ix_risks_tracker_id ON risks(tracker_id)",
+    "CREATE INDEX IF NOT EXISTS ix_risks_project_id ON risks(project_id)",
+    "CREATE INDEX IF NOT EXISTS ix_pomodoro_sessions_todo_id ON pomodoro_sessions(todo_id)",
 ]
 
 
@@ -101,6 +399,20 @@ def run():
                     print(f'  - {table}.{col} 已存在，跳过')
                 else:
                     print(f'  ! {table}.{col} 失败: {e}')
+
+        # 执行索引语句
+        for sql in INDEX_STATEMENTS:
+            idx_name = sql.split('IF NOT EXISTS')[1].split('ON')[0].strip()
+            try:
+                db.session.execute(db.text(sql))
+                db.session.commit()
+                print(f'  ✓ 索引 {idx_name} 创建成功')
+            except Exception as e:
+                db.session.rollback()
+                if 'already exists' in str(e).lower():
+                    print(f'  - 索引 {idx_name} 已存在，跳过')
+                else:
+                    print(f'  ! 索引 {idx_name} 失败: {e}')
 
         print('\n✅ 数据库补齐完成！')
         print('接下来执行: flask db stamp head')

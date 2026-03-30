@@ -17,7 +17,7 @@
         <div class="d-flex align-items-center gap-2 mb-1">
             <span class="badge bg-{{ 'info text-dark' if req.category else 'light text-muted border' }}" id="catBadge" style="cursor:pointer;min-width:3.5em;" onclick="this.classList.add('d-none');document.getElementById('catInput').classList.remove('d-none');document.getElementById('catInput').focus();">{{ req.category_label or '分类' }}</span>
             <input type="text" id="catInput" class="form-control form-control-sm d-none" style="width:100px;font-size:.85rem;" list="catList" placeholder="输入分类" value="{{ req.category or '' }}" onblur="saveCategory(this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
-            <datalist id="catList">{% for c in req.CATEGORY_CHOICES %}<option value="{{ c[1] }}">{% endfor %}</datalist>
+            <datalist id="catList">{% for c in existing_categories %}<option value="{{ c }}">{% endfor %}</datalist>
             <h4 class="mb-0">
                 <span id="titleDisplay" style="cursor:pointer;" onclick="this.classList.add('d-none');document.getElementById('titleInput').classList.remove('d-none');document.getElementById('titleInput').focus();">{{ req.title }}</span>
                 <input type="text" id="titleInput" class="form-control form-control-sm d-none" style="font-size:1.2rem;font-weight:600;" value="{{ req.title }}" onblur="saveField('title',this.value,this)" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">

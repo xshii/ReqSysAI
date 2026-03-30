@@ -147,7 +147,7 @@ if (typeof enterFocusMode === 'undefined') {
                     } else {
                         btn.className = btn.className.replace('btn-success', 'btn-outline-secondary');
                         btn.querySelector('i').className = 'bi bi-clock';
-                        addTomatoIcon(btn, d.minutes || 0);
+                        if (typeof addTomatoIcon === 'function') addTomatoIcon(btn, d.minutes || 0);
                         if (typeof showToast === 'function') showToast('专注 ' + d.minutes + ' 分钟', 'info');
                     }
                 }
@@ -225,6 +225,334 @@ if (_blockPop) {
         });
     });
 }
+{% endmacro %}
+
+{# Unified requirement section — single source of truth for homepage and team page #}
+{% macro req_section(r, r_todos, today, user_id=none, recent_comments=none) %}
+{% set r_all_done = r_todos|length > 0 and r_todos|rejectattr('status', 'equalto', 'done')|list|length == 0 %}
+{% set done_count = r_todos|selectattr('status', 'equalto', 'done')|list|length %}
+{% set cur_pct = 100 if r.status in ('done','closed') else (r.completion or 0) %}
+<div class="card mb-2 {% if r_all_done %}border-success border-opacity-25{% endif %}">
+    <div class="card-body py-2">
+    <div class="d-flex align-items-center gap-1 mb-1">
+        <i class="bi bi-chevron-{{ 'right' if r_all_done else 'down' }} text-muted" style="font-size:.6em;cursor:pointer;" role="button" data-bs-toggle="collapse" data-bs-target="#reqTodos{{ r.id }}"></i>
+        <span class="badge bg-{{ r.status_color }} req-status-badge" data-req-id="{{ r.id }}" style="font-size:.6em;">{{ r.status_label }}</span>
+        {% if r_todos %}<span class="badge bg-{{ 'success' if r_all_done else 'secondary' }} bg-opacity-{{ '75' if r_all_done else '50' }}" style="font-size:.55em;flex-shrink:0;">{{ done_count }}/{{ r_todos|length }}</span>{% endif %}
+        {% if r.due_date and r.due_date < today %}<span class="badge bg-danger" style="font-size:.6em;flex-shrink:0;">超期</span>{% endif %}
+        <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="small fw-bold text-primary text-decoration-none text-truncate" title="{{ r.number }} {{ r.title }}">{{ r.title }}</a>
+        {% if r.status not in ('done', 'closed') %}
+        <select class="form-select form-select-sm py-0 flex-shrink-0 req-completion-sel" data-req-id="{{ r.id }}" data-status="{{ r.status }}"
+                style="width:62px;font-size:.65em;padding-right:18px;">
+            {% for p in range(0, 110, 10) %}
+            <option value="{{ p }}" {% if cur_pct == p %}selected{% endif %}>{{ p }}%</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+        {% if not r_todos %}<span class="text-muted" style="font-size:.6em;">暂无Todo</span>{% endif %}
+        <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-grow-1 quick-todo-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="req_id" value="{{ r.id }}">
+            {% if user_id %}<input type="hidden" name="user_id" value="{{ user_id }}">
+            <input type="hidden" name="next" value="{{ request.url }}">{% endif %}
+            <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加Todo / @人名 求助 / #总结" required style="font-size:.8em;">
+        </form>
+    </div>
+    {% if recent_comments %}
+    <div class="ps-2 mb-1 req-comments" data-req-id="{{ r.id }}">
+        {% for c in recent_comments %}
+        <div class="text-muted" style="font-size:.7em;"><i class="bi bi-chat-left-text"></i> <strong>{{ c.user.name }}</strong> {{ c.created_at.strftime('%m-%d %H:%M') }}：{{ c.content }}</div>
+        {% endfor %}
+        {% if r.comments|length > recent_comments|length %}<a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="text-muted ps-2" style="font-size:.6em;">查看全部 {{ r.comments|length }} 条评论</a>{% endif %}
+    </div>
+    {% endif %}
+    <div class="collapse {% if not r_all_done %}show{% endif %} todo-list-for-req" data-req-id="{{ r.id }}" id="reqTodos{{ r.id }}" style="min-height:24px;">
+    {% for t in r_todos %}{{ todo_row(t) }}{% endfor %}
+    </div>
+    </div>
+</div>
+{% endmacro %}
+
+{# Shared JS for requirement completion + status auto-advance — include once per page #}
+{% macro req_section_js() %}
+var _nextStatusMap = {"pending_review":"pending_dev","pending_dev":"in_dev","in_dev":"in_test","in_test":"done"};
+document.querySelectorAll('.req-completion-sel').forEach(function(sel) {
+    sel.addEventListener('change', function() {
+        var reqId = sel.dataset.reqId;
+        var pct = parseInt(sel.value);
+        var curStatus = sel.dataset.status;
+        apiPost('/requirements/' + reqId + '/completion-api', {completion: pct}).then(function(d) {
+            if (!d || !d.ok) { showToast('更新失败', 'danger'); return; }
+        });
+        if (pct === 100) {
+            var next = _nextStatusMap[curStatus];
+            if (next) {
+                apiPost('/requirements/' + reqId + '/status-api', {status: next}).then(function(d) {
+                    if (d && d.ok) {
+                        if (d.status !== 'done') {
+                            apiPost('/requirements/' + reqId + '/completion-api', {completion: 0});
+                            sel.value = '0';
+                        }
+                        sel.dataset.status = d.status;
+                        var badge = document.querySelector('.req-status-badge[data-req-id="' + reqId + '"]');
+                        if (badge) {
+                            badge.textContent = d.label;
+                            badge.className = 'badge bg-' + (d.color || 'secondary') + ' req-status-badge';
+                        }
+                        showToast('已完成 → ' + d.label, 'success');
+                        if (d.status === 'done') sel.style.display = 'none';
+                    }
+                });
+            }
+        }
+    });
+});
+{% endmacro %}
+
+{# Shared: _checkSectionDone — auto-collapse/expand + badge sync after toggle/delete #}
+{% macro check_section_done_js() %}
+function _checkSectionDone(row) {
+    var container = row.closest('.todo-list-for-req');
+    if (!container) return;
+    var items = container.querySelectorAll('.todo-drag-item');
+    if (!items.length) return;
+    var allDone = Array.from(items).every(function(el) { return el.classList.contains('text-decoration-line-through'); });
+    var card = container.closest('.card');
+    var collapseId = container.id;
+    var chevron = card ? card.querySelector('[data-bs-target="#' + collapseId + '"]') : null;
+    if (card) {
+        if (allDone) { card.classList.add('border-success', 'border-opacity-25'); card.classList.remove('border-danger'); }
+        else { card.classList.remove('border-success', 'border-opacity-25'); }
+    }
+    var bsCollapse = bootstrap.Collapse.getInstance(container) || new bootstrap.Collapse(container, {toggle: false});
+    if (allDone) { bsCollapse.hide(); } else { bsCollapse.show(); }
+    var doneCount = Array.from(items).filter(function(el) { return el.classList.contains('text-decoration-line-through'); }).length;
+    var sectionBadges = card ? card.querySelectorAll('.badge') : [];
+    sectionBadges.forEach(function(b) {
+        if (b.textContent.match(/^\d+\/\d+$/)) {
+            b.textContent = doneCount + '/' + items.length;
+            b.className = 'badge bg-' + (allDone ? 'success' : 'secondary') + ' bg-opacity-' + (allDone ? '75' : '50');
+            b.style.fontSize = '.55em';
+        }
+    });
+}
+{% endmacro %}
+
+{# Shared: createTodoRow — build a fully interactive todo row in JS (used after AJAX add) #}
+{% macro create_todo_row_js() %}
+function _escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function createTodoRow(todoId, title, opts) {
+    opts = opts || {};
+    var wrapper = document.createElement('div');
+    wrapper.className = 'mb-1 ps-2';
+    var row = document.createElement('div');
+    row.className = 'd-flex align-items-center gap-1 todo-drag-item';
+    row.draggable = true;
+    row.style.cursor = 'grab';
+    row.dataset.todoId = todoId;
+    var badge = '';
+    var isHelp = !!opts.helper;
+    if (opts.source === 'ai') badge += ' <span class="badge bg-info" style="font-size:.55em;">AI</span>';
+    if (isHelp) badge += ' <span class="badge bg-warning text-dark" style="font-size:.55em;">@' + _escHtml(opts.helper) + ' 待响应</span>';
+    var icon = isHelp
+        ? '<i class="bi bi-hourglass-split text-warning" style="font-size:.9em;"></i>'
+        : '<i class="bi bi-circle text-secondary btn-toggle-r" style="cursor:pointer;"></i>';
+    row.innerHTML = icon
+        + ' <span class="small">' + _escHtml(title) + '</span>' + badge
+        + ' <button class="btn btn-sm py-0 px-0 btn-outline-secondary btn-timer-r todo-action-btn" data-id="' + todoId + '" style="font-size:.7em;line-height:1;" data-tip="启动番茄钟" data-tip-pos="bottom"><i class="bi bi-clock"></i></button>'
+        + ' <button class="btn btn-sm py-0 px-0 text-muted btn-block-r todo-action-btn" data-id="' + todoId + '" style="font-size:.7em;line-height:1;" data-tip="标记阻塞" data-tip-pos="bottom"><i class="bi bi-pause-circle"></i></button>'
+        + ' <button class="btn btn-sm py-0 px-0 text-muted btn-del-r" data-id="' + todoId + '" style="font-size:.7em;line-height:1;"><i class="bi bi-x"></i></button>';
+    wrapper.appendChild(row);
+    // Bind toggle done
+    if (!isHelp) {
+        row.querySelector('.btn-toggle-r').addEventListener('click', function() {
+            var ic = this;
+            apiPost('/todo/' + todoId + '/toggle', {}).then(function(d) {
+                if (d && d.ok) {
+                    if (d.done) {
+                        row.classList.add('text-muted', 'text-decoration-line-through');
+                        ic.className = 'bi bi-check-circle-fill text-success btn-toggle-r';
+                        ic.style.cursor = 'pointer';
+                        row.querySelectorAll('.todo-action-btn').forEach(function(b) { b.style.display = 'none'; });
+                    } else {
+                        row.classList.remove('text-muted', 'text-decoration-line-through');
+                        ic.className = 'bi bi-circle text-secondary btn-toggle-r';
+                        ic.style.cursor = 'pointer';
+                        row.querySelectorAll('.todo-action-btn').forEach(function(b) { b.style.display = ''; });
+                    }
+                    if (typeof _updateProgress === 'function') {
+                        if (d.done) _todoDone++; else _todoDone--;
+                        _updateProgress();
+                    }
+                    if (typeof _checkSectionDone === 'function') _checkSectionDone(row);
+                }
+            });
+        });
+    }
+    // Bind timer
+    row.querySelector('.btn-timer-r').addEventListener('click', function() {
+        var b = this;
+        if (typeof enterFocusMode === 'function' && typeof focusTodoId !== 'undefined'
+            && focusTodoId == todoId && focusOverlay && focusOverlay.style.display !== 'none') {
+            exitFocusMode(); return;
+        }
+        apiPost('/todos/' + todoId + '/timer', {}).then(function(x) {
+            if (x && x.ok) {
+                if (x.running) {
+                    b.className = b.className.replace('btn-outline-secondary', 'btn-success');
+                    b.querySelector('i').className = 'bi bi-clock-fill';
+                    if (typeof enterFocusMode === 'function') enterFocusMode(todoId, title);
+                } else {
+                    b.className = b.className.replace('btn-success', 'btn-outline-secondary');
+                    b.querySelector('i').className = 'bi bi-clock';
+                    if (typeof addTomatoIcon === 'function') addTomatoIcon(b, x.minutes || 0);
+                    if (typeof showToast === 'function') showToast('◐ 打断，' + (x.minutes || 0) + '分钟', 'info');
+                }
+            }
+        });
+    });
+    // Bind blocker
+    row.querySelector('.btn-block-r').addEventListener('click', function() {
+        if (typeof showBlockPopover === 'function') showBlockPopover(this, todoId);
+    });
+    // Bind delete
+    row.querySelector('.btn-del-r').addEventListener('click', function() {
+        apiPost('/todos/' + todoId + '/edit', {title: ''}).then(function(x) {
+            if (x && x.ok) {
+                wrapper.remove();
+                if (typeof _todoTotal !== 'undefined') { _todoTotal--; if (typeof _updateProgress === 'function') _updateProgress(); }
+                if (typeof _checkSectionDone === 'function') _checkSectionDone(row);
+            }
+        });
+    });
+    return wrapper;
+}
+{% endmacro %}
+
+{# Shared: @autocomplete with user + group support — include once per page #}
+{% macro at_autocomplete_js() %}
+var _userCache = null;
+function loadUsers(cb) {
+    if (_userCache) return cb(_userCache);
+    fetch('/api/users').then(function(r) { return r.json(); }).then(function(users) {
+        _userCache = users;
+        cb(users);
+    });
+}
+function setupAtAutocomplete(inp) {
+    var dropdown = document.createElement('div');
+    dropdown.className = 'position-absolute bg-white border rounded shadow-sm small';
+    dropdown.style.cssText = 'z-index:1000;display:none;max-height:150px;overflow-y:auto;width:200px;';
+    inp.parentElement.style.position = 'relative';
+    inp.parentElement.appendChild(dropdown);
+    var _groups = {{ sidebar_groups | tojson }};
+    inp.addEventListener('input', function() {
+        var val = inp.value;
+        var atIdx = val.lastIndexOf('@');
+        if (atIdx < 0) { dropdown.style.display = 'none'; return; }
+        var query = val.substring(atIdx + 1).toLowerCase();
+        loadUsers(function(users) {
+            var groupMatches = _groups.filter(function(g) { return g.toLowerCase().includes(query); }).map(function(g) {
+                return '<div class="px-2 py-1 user-ac-item" style="cursor:pointer;" data-name="' + g + '"><i class="bi bi-people-fill text-primary"></i> ' + g + ' <span class="text-muted">小组</span></div>';
+            });
+            var userMatches = users.filter(function(u) {
+                return u.name.toLowerCase().includes(query)
+                    || (u.pinyin && u.pinyin.toLowerCase().includes(query))
+                    || (u.employee_id && u.employee_id.toLowerCase().includes(query));
+            }).slice(0, 8).map(function(u) {
+                return '<div class="px-2 py-1 user-ac-item" style="cursor:pointer;" data-name="' + u.name + '">' + u.name + ' <span class="text-muted">' + (u.employee_id || '') + '</span></div>';
+            });
+            var all = groupMatches.concat(userMatches);
+            if (!all.length) { dropdown.style.display = 'none'; return; }
+            dropdown.innerHTML = all.join('');
+            dropdown.style.display = 'block';
+            dropdown.querySelectorAll('.user-ac-item').forEach(function(item) {
+                item.addEventListener('mousedown', function(e) {
+                    e.preventDefault();
+                    var v = inp.value;
+                    var ai = v.lastIndexOf('@');
+                    inp.value = v.substring(0, ai) + '@' + item.dataset.name + ' ';
+                    dropdown.style.display = 'none';
+                    inp.focus();
+                });
+            });
+        });
+    });
+    inp.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; }, 200); });
+}
+document.querySelectorAll('.quick-todo-form input[name="title"]').forEach(setupAtAutocomplete);
+{% endmacro %}
+
+{# Shared: AJAX quick-todo form handler — include once per page #}
+{% macro quick_todo_form_js() %}
+document.querySelectorAll('form[action$="/quick-todo"], form.quick-todo-form').forEach(function(form) {
+    if (form._boundQuickTodo) return;
+    form._boundQuickTodo = true;
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (form._submitting) return;
+        var titleInput = form.querySelector('input[name="title"]');
+        var title = titleInput ? titleInput.value.trim() : '';
+        if (!title) return;
+        form._submitting = true;
+        var data = {title: title, category: 'work'};
+        var reqId = form.querySelector('input[name="req_id"]');
+        if (reqId) data.req_id = parseInt(reqId.value);
+        var userId = form.querySelector('input[name="user_id"]');
+        if (userId) data.user_id = parseInt(userId.value);
+        var catInput = form.querySelector('input[name="category"]');
+        if (catInput) data.category = catInput.value;
+        titleInput.disabled = true;
+        apiPost('/quick-todo', data).then(function(d) {
+            titleInput.disabled = false;
+            form._submitting = false;
+            if (d && d.ok) {
+                if (titleInput.type === 'text') titleInput.value = '';
+                // #comment: insert into requirement comment area
+                if (d.action === 'comment') {
+                    var rid = d.req_id;
+                    if (rid) {
+                        var commentArea = document.querySelector('.req-comments[data-req-id="' + rid + '"]');
+                        var now = new Date();
+                        var timeStr = String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0')
+                            + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+                        var commentHtml = '<div class="text-muted" style="font-size:.7em;"><i class="bi bi-chat-left-text"></i> <strong>' + (d.user || '') + '</strong> ' + timeStr + '：' + d.title + '</div>';
+                        if (commentArea) {
+                            commentArea.insertAdjacentHTML('afterbegin', commentHtml);
+                        } else {
+                            var todoList = document.getElementById('reqTodos' + rid);
+                            if (todoList) {
+                                var div = document.createElement('div');
+                                div.className = 'ps-2 mb-1 req-comments';
+                                div.dataset.reqId = rid;
+                                div.innerHTML = commentHtml;
+                                todoList.parentElement.insertBefore(div, todoList);
+                            }
+                        }
+                    }
+                    showToast('评论已添加', 'success');
+                    titleInput.focus();
+                    return;
+                }
+                // Insert new todo row — always find container relative to the form (not global)
+                // because team page has multiple users with same req_id / category sections
+                var row = createTodoRow(d.todo_id, d.title || title, {helper: d.helper || '', source: d.source || ''});
+                var listContainer = null;
+                var ancestor = form.closest('.card, .team-todo-section, .mb-2');
+                if (ancestor) listContainer = ancestor.querySelector('.todo-list-for-req') || ancestor.querySelector('.team-todo-list');
+                if (!listContainer) {
+                    var cb = form.closest('.card-body');
+                    if (cb) listContainer = cb.querySelector('.todo-list-for-req');
+                }
+                if (listContainer) listContainer.appendChild(row);
+                if (typeof _todoTotal !== 'undefined') { _todoTotal++; if (typeof _updateProgress === 'function') _updateProgress(); }
+                showToast(d.helper ? '已向 ' + d.helper + ' 发起求助' : (d.title || title) + ' 已添加', 'success');
+                titleInput.focus();
+            } else {
+                showToast('添加失败', 'danger');
+            }
+        }).catch(function() { titleInput.disabled = false; form._submitting = false; });
+    });
+});
 {% endmacro %}
 
 {# Block popover HTML — include once per page #}

@@ -44,6 +44,14 @@
                     {% endfor %}
                 </select>
             </div>
+            <div class="col-auto">
+                <select name="category" class="form-select form-select-sm">
+                    <option value="">全部分类</option>
+                    {% for c in category_l1s %}
+                    <option value="{{ c }}" {% if cur_category == c %}selected{% endif %}>{{ c }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             {% if not cur_project %}
             <div class="col-auto">
                 <select name="project_id" class="form-select form-select-sm">
@@ -101,7 +109,8 @@
     <table class="table table-hover">
         <thead class="table-light">
             <tr>
-                <th>编号</th>
+                <th style="width:32px;"><input type="checkbox" id="batchSelectAll" class="form-check-input" title="全选"></th>
+                <th>分类</th>
                 <th>标题</th>
                 <th>项目</th>
                 <th>优先级</th>
@@ -117,8 +126,9 @@
         </thead>
         <tbody>
             {% for r in requirements %}
-            <tr>
-                <td class="text-muted small">{{ r.number }}</td>
+            <tr data-req-id="{{ r.id }}">
+                <td><input type="checkbox" class="form-check-input batch-check" value="{{ r.id }}"></td>
+                <td>{% if r.category %}<span class="badge bg-light text-dark border" style="font-size:.75em;">{{ r.category_label }}</span>{% else %}<span class="text-muted small">-</span>{% endif %}</td>
                 <td><a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}">{{ r.title }}</a></td>
                 <td><span class="text-muted small">{{ r.project.name }}</span></td>
                 <td><span class="badge bg-{{ r.priority_color }}">{{ r.priority_label }}</span></td>
@@ -157,19 +167,19 @@
 <nav>
     <ul class="pagination pagination-sm justify-content-center">
         {% if pagination.has_prev %}
-        <li class="page-item"><a class="page-link" href="?page={{ pagination.prev_num }}&q={{ cur_search or '' }}&status={{ cur_status or '' }}&priority={{ cur_priority or '' }}&project_id={{ cur_project or '' }}&sort={{ cur_sort or 'newest' }}">上一页</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ pagination.prev_num }}&q={{ cur_search or '' }}&status={{ cur_status or '' }}&priority={{ cur_priority or '' }}&category={{ cur_category or '' }}&project_id={{ cur_project or '' }}&sort={{ cur_sort or 'newest' }}">上一页</a></li>
         {% endif %}
         {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
             {% if p %}
             <li class="page-item {% if p == pagination.page %}active{% endif %}">
-                <a class="page-link" href="?page={{ p }}&q={{ cur_search or '' }}&status={{ cur_status or '' }}&priority={{ cur_priority or '' }}&project_id={{ cur_project or '' }}&sort={{ cur_sort or 'newest' }}">{{ p }}</a>
+                <a class="page-link" href="?page={{ p }}&q={{ cur_search or '' }}&status={{ cur_status or '' }}&priority={{ cur_priority or '' }}&category={{ cur_category or '' }}&project_id={{ cur_project or '' }}&sort={{ cur_sort or 'newest' }}">{{ p }}</a>
             </li>
             {% else %}
             <li class="page-item disabled"><span class="page-link">...</span></li>
             {% endif %}
         {% endfor %}
         {% if pagination.has_next %}
-        <li class="page-item"><a class="page-link" href="?page={{ pagination.next_num }}&q={{ cur_search or '' }}&status={{ cur_status or '' }}&priority={{ cur_priority or '' }}&project_id={{ cur_project or '' }}&sort={{ cur_sort or 'newest' }}">下一页</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ pagination.next_num }}&q={{ cur_search or '' }}&status={{ cur_status or '' }}&priority={{ cur_priority or '' }}&category={{ cur_category or '' }}&project_id={{ cur_project or '' }}&sort={{ cur_sort or 'newest' }}">下一页</a></li>
         {% endif %}
     </ul>
 </nav>
@@ -185,6 +195,58 @@
 </div>
 {% endif %}
 
+<!-- Batch Action Toolbar (floating) -->
+<div id="batchToolbar" class="d-none" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:1050;background:#fff;border:1px solid #dee2e6;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,.15);padding:10px 20px;align-items:center;gap:12px;">
+    <span class="fw-bold text-primary" id="batchCount">已选 0 项</span>
+    <div class="vr"></div>
+    <div class="dropup">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">修改状态</button>
+        <ul class="dropdown-menu">
+            {% for k, v in statuses.items() %}
+            <li><a class="dropdown-item" href="#" onclick="batchAction('status','{{ k }}','{{ v }}');return false;">{{ v }}</a></li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="dropup">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">修改优先级</button>
+        <ul class="dropdown-menu">
+            {% for k, v in priorities.items() %}
+            <li><a class="dropdown-item" href="#" onclick="batchAction('priority','{{ k }}','{{ v }}');return false;">{{ v }}</a></li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="dropup">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">修改负责人</button>
+        <ul class="dropdown-menu" style="max-height:240px;overflow-y:auto;">
+            <li><a class="dropdown-item" href="#" onclick="batchAction('assignee','','未分配');return false;"><em class="text-muted">清除负责人</em></a></li>
+            {% for u in users %}
+            <li><a class="dropdown-item" href="#" onclick="batchAction('assignee','{{ u.id }}','{{ u.name }}');return false;">{{ u.name }}</a></li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div class="vr"></div>
+    <button class="btn btn-sm btn-outline-danger" onclick="clearBatchSelection()"><i class="bi bi-x-lg"></i> 取消</button>
+</div>
+
+<!-- Batch Confirm Modal -->
+<div class="modal fade" id="batchConfirmModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title">确认批量操作</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="batchConfirmBody">
+                确定要修改选中的需求吗？
+            </div>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-sm btn-primary" id="batchConfirmBtn" onclick="executeBatchAction()">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {# AI Diagnostic panel #}
 <div id="diagnosePanel" class="card border-warning mt-3 d-none">
     <div class="card-header py-1 bg-warning bg-opacity-10 d-flex justify-content-between">
@@ -196,6 +258,80 @@
 
 {% block extra_js %}
 <script>
+/* ---- Batch Operations ---- */
+var _pendingBatch = {action: '', value: '', label: ''};
+function getSelectedIds() {
+    return Array.from(document.querySelectorAll('.batch-check:checked')).map(function(cb) { return parseInt(cb.value); });
+}
+function updateBatchToolbar() {
+    var ids = getSelectedIds();
+    var toolbar = document.getElementById('batchToolbar');
+    if (ids.length > 0) {
+        toolbar.classList.remove('d-none');
+        toolbar.style.display = 'flex';
+        document.getElementById('batchCount').textContent = '已选 ' + ids.length + ' 项';
+    } else {
+        toolbar.classList.add('d-none');
+        toolbar.style.display = 'none';
+    }
+}
+function clearBatchSelection() {
+    document.querySelectorAll('.batch-check').forEach(function(cb) { cb.checked = false; });
+    document.getElementById('batchSelectAll').checked = false;
+    updateBatchToolbar();
+}
+// Select all
+document.getElementById('batchSelectAll').addEventListener('change', function() {
+    var checked = this.checked;
+    document.querySelectorAll('.batch-check').forEach(function(cb) { cb.checked = checked; });
+    updateBatchToolbar();
+});
+// Individual checkbox
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('batch-check')) {
+        var all = document.querySelectorAll('.batch-check');
+        var checked = document.querySelectorAll('.batch-check:checked');
+        document.getElementById('batchSelectAll').checked = all.length === checked.length;
+        updateBatchToolbar();
+    }
+});
+function batchAction(action, value, label) {
+    var ids = getSelectedIds();
+    if (!ids.length) return;
+    _pendingBatch = {action: action, value: value, label: label};
+    var actionNames = {status: '状态', priority: '优先级', assignee: '负责人'};
+    document.getElementById('batchConfirmBody').innerHTML =
+        '确定要将 <strong>' + ids.length + '</strong> 条需求的<strong>' + (actionNames[action] || action) + '</strong>修改为「<strong>' + label + '</strong>」吗？';
+    new bootstrap.Modal(document.getElementById('batchConfirmModal')).show();
+}
+function executeBatchAction() {
+    var ids = getSelectedIds();
+    if (!ids.length) return;
+    var btn = document.getElementById('batchConfirmBtn');
+    btn.disabled = true;
+    btn.textContent = '处理中...';
+    fetch('/requirements/batch_update', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ids: ids, action: _pendingBatch.action, value: _pendingBatch.value})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        bootstrap.Modal.getInstance(document.getElementById('batchConfirmModal')).hide();
+        btn.disabled = false;
+        btn.textContent = '确定';
+        if (d.ok) {
+            showToast(d.msg, 'success');
+            setTimeout(function() { location.reload(); }, 600);
+        } else {
+            showToast(d.msg || '操作失败', 'danger');
+        }
+    }).catch(function() {
+        bootstrap.Modal.getInstance(document.getElementById('batchConfirmModal')).hide();
+        btn.disabled = false;
+        btn.textContent = '确定';
+        showToast('请求失败', 'danger');
+    });
+}
+
 var _nextStatusMap = {"pending_review":"pending_dev","pending_dev":"in_dev","in_dev":"in_test","in_test":"done"};
 function _updateBar(sel, pct) {
     var row = sel.closest('td');
@@ -246,13 +382,11 @@ function updateCompletion(reqId, sel) {
 }
 function runDiagnose() {
     var btn = document.getElementById('btnDiagnose');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 诊断中...';
+    var loading = aiLoading(btn, '诊断中');
     fetch('/requirements/diagnose?project_id={{ cur_project or 0 }}')
     .then(function(r) { return r.json(); })
     .then(function(d) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-robot"></i> AI诊断';
+        loading.stop();
         var panel = document.getElementById('diagnosePanel');
         var content = document.getElementById('diagnoseContent');
         if (!d.ok || !d.issues.length) {
@@ -270,11 +404,12 @@ function runDiagnose() {
             }).join('');
         }
         panel.classList.remove('d-none');
+        panel.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+        if (!d.ai) showToast('AI服务暂不可用，正在紧急修复（已用规则引擎诊断）', 'warning');
     })
     .catch(function() {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-robot"></i> AI诊断';
-        showToast('诊断失败', 'danger');
+        loading.stop();
+        showToast('AI服务暂不可用，正在紧急修复', 'danger');
     });
 }
 // Auto-show saved diagnosis on page load

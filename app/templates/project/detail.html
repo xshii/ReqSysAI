@@ -180,7 +180,7 @@
                              data-bs-toggle="tooltip" title="{{ r.number }} {{ r.title }} | {{ r.status_label }} {{ pct }}% | {{ r.source_label }}{{ ' ↳子需求' if r.parent_id else '' }}"
                      onclick="window.location=this.dataset.href">
                             <span style="position:absolute;inset:0;padding:0 2px;font-size:.8em;line-height:{{ bar_h }}px;color:{{ bar_color }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                                {{ r.title[:6] }}{% if r.title|length > 6 %}…{% endif %} {{ pct }}%
+                                {{ r.title }} {{ pct }}%
                             </span>
                         </div>
                         {% endif %}
@@ -667,7 +667,7 @@ function _saveGanttState() {
                                 <div class="gantt-bar" data-type="{{ 'child' if r.parent_id else 'parent' }}" data-start-date="{{ r.start_date.strftime('%Y-%m-%d') }}" data-end-date="{{ r.due_date.strftime('%Y-%m-%d') }}" data-bar-days="{{ bar_days }}" style="position:absolute;top:{{ bar_top }}px;left:1px;width:{{ bar_w }}px;height:{{ bar_h }}px;background:linear-gradient(to right, {{ bar_color }}30 {{ pct }}%, #f0f0f0 {{ pct }}%);border:1px solid {{ bar_color }}80;border-radius:3px;z-index:1;overflow:hidden;"
                                      data-bs-toggle="tooltip" title="{{ r.number }} {{ r.title }} | {{ r.status_label }} {{ pct }}% | {{ r.source_label }}{{ ' ↳子需求' if r.parent_id else '' }}">
                                     <span style="position:absolute;inset:0;padding:0 2px;font-size:.8em;line-height:{{ bar_h }}px;color:{{ bar_color }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                                        {{ r.title[:6] }}{% if r.title|length > 6 %}…{% endif %} {{ pct }}%
+                                        {{ r.title }} {{ pct }}%
                                     </span>
                                 </div>
                                 {% endif %}

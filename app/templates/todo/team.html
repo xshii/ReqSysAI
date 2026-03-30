@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}团队 Todo - {{ site_name }}{% endblock %}
 
-{% from "_todo_macros.html" import todo_row, block_popover_html, todo_row_js with context %}
+{% from "_todo_macros.html" import todo_row, block_popover_html, todo_row_js, req_section, req_section_js, check_section_done_js, create_todo_row_js, at_autocomplete_js, quick_todo_form_js with context %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -61,70 +61,57 @@
             <div class="collapse {% if not u_all_done %}show{% endif %} team-card-body" id="teamUser{{ u.id }}" style="min-height:30px;">
             <div class="card-body py-2">
             {% if ud %}
-                {# Risk todos #}
-                {% if ud.risk_todos %}
-                <div class="mb-2">
+                {# Risk todos — always show (same card structure as homepage) #}
+                {% set risk_all_done = ud.risk_todos|length > 0 and ud.risk_todos|rejectattr('status', 'equalto', 'done')|list|length == 0 %}
+                {% set risk_done_count = ud.risk_todos|selectattr('status', 'equalto', 'done')|list|length %}
+                <div class="card mb-2 {% if risk_all_done %}border-success border-opacity-25{% else %}border-danger border-opacity-25{% endif %}">
+                    <div class="card-body py-2">
                     <div class="d-flex align-items-center gap-1 mb-1">
-                        <span class="badge bg-danger" style="font-size:.6em;">风险</span>
-                        <span class="badge bg-secondary bg-opacity-50" style="font-size:.5em;">{{ ud.risk_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ ud.risk_todos|length }}</span>
+                        <i class="bi bi-chevron-{{ 'right' if risk_all_done else 'down' }} text-muted" style="font-size:.6em;cursor:pointer;" role="button" data-bs-toggle="collapse" data-bs-target="#riskTodos{{ u.id }}"></i>
+                        <span class="badge bg-danger" style="font-size:.65em;">风险</span>
+                        {% if ud.risk_todos %}<span class="badge bg-{{ 'success' if risk_all_done else 'secondary' }} bg-opacity-{{ '75' if risk_all_done else '50' }}" style="font-size:.55em;">{{ risk_done_count }}/{{ ud.risk_todos|length }}</span>{% endif %}
+                        <span class="small fw-bold text-danger"><i class="bi bi-lightning-charge"></i> 风险&突发</span>
+                        <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-grow-1 quick-todo-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="category" value="risk">
+                            <input type="hidden" name="user_id" value="{{ u.id }}">
+                            <input type="hidden" name="next" value="{{ request.url }}">
+                            <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加风险Todo / @人名 求助" required style="font-size:.8em;">
+                        </form>
                     </div>
-                    {% for t in ud.risk_todos %}{{ todo_row(t, 'text-danger', ) }}{% endfor %}
+                    <div class="collapse {% if not risk_all_done %}show{% endif %} todo-list-for-req" data-req-id="risk" id="riskTodos{{ u.id }}">
+                    {% for t in ud.risk_todos %}{{ todo_row(t, 'text-danger') }}{% endfor %}
+                    </div>
+                    </div>
                 </div>
-                {% endif %}
 
-                {# Requirement todos — same as homepage #}
+                {# Requirement todos — shared macro #}
                 {% for r in ud.display_reqs %}
                 {% set r_todos = ud.req_todos.get(r.id, []) %}
-                <div class="mb-2">
-                    <div class="d-flex align-items-center gap-1 mb-1">
-                        <span class="badge bg-{{ r.status_color }} req-status-badge" data-req-id="{{ r.id }}" style="font-size:.6em;">{{ r.status_label }}</span>
-                        {% if r_todos %}<span class="badge bg-secondary bg-opacity-50" style="font-size:.5em;">{{ r_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ r_todos|length }}</span>{% endif %}
-                        {% if r.due_date and r.due_date < today %}<span class="badge bg-danger" style="font-size:.55em;">超期</span>{% endif %}
-                        <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="small fw-bold text-primary text-decoration-none" style="overflow:hidden;text-overflow:ellipsis;">{{ r.number }} {{ r.title }}</a>
-                        {% set rpct = 100 if r.status in ('done','closed') else (r.completion or 0) %}
-                        <select class="form-select form-select-sm req-completion-sel" data-req-id="{{ r.id }}" data-status="{{ r.status }}" style="width:62px;font-size:.65em;padding:0 .2rem;height:20px;display:inline-block;">
-                            {% for v in range(0, 110, 10) %}
-                            <option value="{{ v }}" {% if v == rpct %}selected{% endif %}>{{ v }}%</option>
-                            {% endfor %}
-                        </select>
-                        {% if not r_todos %}<span class="text-muted" style="font-size:.65em;">暂无Todo</span>{% endif %}
-                    </div>
-                    {% for t in r_todos %}{{ todo_row(t) }}{% endfor %}
-                    {% if req_comments.get(r.id) %}
-                    <div class="ps-2 mt-1" style="border-left:2px solid #e9ecef;">
-                        {% for c in req_comments[r.id][:3] %}
-                        <div class="small text-muted" style="font-size:.7em;">
-                            <strong>{{ c.user.name }}</strong> <span style="font-size:.85em;">{{ c.created_at.strftime('%m-%d %H:%M') }}</span>：{{ c.content }}
-                        </div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                    <form method="POST" action="{{ url_for('main.quick_todo') }}" class="d-flex gap-1 ps-2 mt-1 quick-todo-form" style="max-width:400px;">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="req_id" value="{{ r.id }}">
-                        <input type="hidden" name="user_id" value="{{ u.id }}">
-                        <input type="hidden" name="next" value="{{ request.url }}">
-                        <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加Todo / @人名 求助 / #评论" required style="font-size:.75em;">
-                    </form>
-                </div>
+                {{ req_section(r, r_todos, today, user_id=u.id, recent_comments=req_comments.get(r.id)) }}
                 {% endfor %}
 
-                {# Team todos — always show section #}
-                <div class="mb-1 team-todo-section" data-uid="{{ u.id }}">
+                {# Team todos — card structure matching risk/requirement sections #}
+                {% set team_all_done = ud.team_todos|length > 0 and ud.team_todos|rejectattr('status', 'equalto', 'done')|list|length == 0 %}
+                {% set team_done_count = ud.team_todos|selectattr('status', 'equalto', 'done')|list|length %}
+                <div class="card mb-2 {% if team_all_done %}border-success border-opacity-25{% endif %} team-todo-section" data-uid="{{ u.id }}">
+                    <div class="card-body py-2">
                     <div class="d-flex align-items-center gap-1 mb-1">
+                        <i class="bi bi-chevron-{{ 'right' if team_all_done else 'down' }} text-muted" style="font-size:.6em;cursor:pointer;" role="button" data-bs-toggle="collapse" data-bs-target="#teamTodos{{ u.id }}"></i>
                         <span class="badge bg-secondary" style="font-size:.6em;">团队</span>
-                        {% if ud.team_todos %}<span class="badge bg-secondary bg-opacity-50" style="font-size:.5em;">{{ ud.team_todos|selectattr('status', 'equalto', 'done')|list|length }}/{{ ud.team_todos|length }}</span>{% endif %}
+                        {% if ud.team_todos %}<span class="badge bg-{{ 'success' if team_all_done else 'secondary' }} bg-opacity-{{ '75' if team_all_done else '50' }}" style="font-size:.55em;">{{ team_done_count }}/{{ ud.team_todos|length }}</span>{% endif %}
+                        <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-grow-1 quick-todo-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="category" value="team">
+                            <input type="hidden" name="user_id" value="{{ u.id }}">
+                            <input type="hidden" name="next" value="{{ request.url }}">
+                            <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="给{{ u.name }}添加Todo / @人名求助" required style="font-size:.8em;">
+                        </form>
                     </div>
-                    <div class="team-todo-list">
+                    <div class="collapse {% if not team_all_done %}show{% endif %} todo-list-for-req team-todo-list" data-req-id="team" id="teamTodos{{ u.id }}">
                     {% for t in ud.team_todos %}{{ todo_row(t) }}{% endfor %}
                     </div>
-                    <form method="POST" action="{{ url_for('main.quick_todo') }}" class="d-flex gap-1 ps-2 mt-1 quick-todo-form" style="max-width:400px;">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="category" value="team">
-                        <input type="hidden" name="user_id" value="{{ u.id }}">
-                        <input type="hidden" name="next" value="{{ request.url }}">
-                        <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="给{{ u.name }}添加Todo / @人名求助" required style="font-size:.75em;">
-                    </form>
+                    </div>
                 </div>
             {% else %}
             <div class="text-muted small text-center py-1">暂无待办</div>
@@ -297,137 +284,17 @@ function filterTeamPerson(uid) {
     }
 })();
 
-/* Quick-add forms: AJAX insert row */
-function _escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function _insertTodoRow(form, d) {
-    var container = form.closest('.team-todo-section');
-    if (!container) container = form.closest('.mb-2');
-    if (!container) return;
-    var list = container.querySelector('.team-todo-list');
-    if (!list) {
-        // For requirement-level forms, insert before the form
-        list = document.createElement('div');
-        list.className = 'team-todo-list';
-        form.parentElement.insertBefore(list, form);
-    }
-    var row = document.createElement('div');
-    row.className = 'mb-1 ps-2';
-    var safe = _escHtml(d.title);
-    var badges = '';
-    if (d.is_help) {
-        badges += ' <span class="badge bg-warning text-dark" style="font-size:.55em;">@' + _escHtml(d.helper) + ' 待响应</span>';
-    }
-    var icon = d.is_help
-        ? '<i class="bi bi-hourglass-split text-warning" style="font-size:.9em;"></i>'
-        : '<i class="bi bi-circle text-secondary"></i>';
-    row.innerHTML = '<div class="d-flex align-items-center gap-1 todo-drag-item" data-todo-id="' + (d.todo_id || '') + '">'
-        + icon + ' <span class="small">' + safe + '</span>' + badges
-        + '</div>';
-    list.appendChild(row);
-}
-document.querySelectorAll('.quick-todo-form').forEach(function(form) {
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        var input = form.querySelector('input[name="title"]');
-        var title = input.value.trim();
-        if (!title) return;
-        var data = {title: title, category: 'work'};
-        var reqId = form.querySelector('input[name="req_id"]');
-        if (reqId) data.req_id = parseInt(reqId.value);
-        var userId = form.querySelector('input[name="user_id"]');
-        if (userId) data.user_id = parseInt(userId.value);
-        var catInput = form.querySelector('input[name="category"]');
-        if (catInput) data.category = catInput.value;
-        input.disabled = true;
-        apiPost('/quick-todo', data).then(function(d) {
-            input.disabled = false;
-            if (d && d.ok) {
-                input.value = '';
-                if (d.action === 'comment') {
-                    // Insert comment into DOM
-                    var container = form.closest('.mb-2');
-                    var commentArea = container ? container.querySelector('.ps-2.mt-1[style*="border-left"]') : null;
-                    if (!commentArea && container) {
-                        commentArea = document.createElement('div');
-                        commentArea.className = 'ps-2 mt-1';
-                        commentArea.style.borderLeft = '2px solid #e9ecef';
-                        form.parentElement.insertBefore(commentArea, form);
-                    }
-                    if (commentArea) {
-                        var now = new Date();
-                        var mm = String(now.getMonth()+1).padStart(2,'0');
-                        var dd = String(now.getDate()).padStart(2,'0');
-                        var hh = String(now.getHours()).padStart(2,'0');
-                        var mi = String(now.getMinutes()).padStart(2,'0');
-                        var div = document.createElement('div');
-                        div.className = 'small text-muted';
-                        div.style.fontSize = '.7em';
-                        div.innerHTML = '<strong>{{ current_user.name }}</strong> <span style="font-size:.85em;">' + mm + '-' + dd + ' ' + hh + ':' + mi + '</span>：' + d.title;
-                        commentArea.appendChild(div);
-                    }
-                    showToast('评论已添加', 'success');
-                } else {
-                    if (d.is_help) {
-                        showToast('求助已发送 → ' + d.helper, 'success');
-                    } else {
-                        showToast(d.title + ' 已添加', 'success');
-                    }
-                    _insertTodoRow(form, d);
-                }
-                input.focus();
-            } else {
-                showToast('添加失败', 'danger');
-            }
-        });
-    });
-});
+/* Shared: _checkSectionDone (auto-collapse/expand + badge sync) */
+{{ check_section_done_js() }}
 
-/* @autocomplete for todo inputs */
-var _userCache = null;
-function loadUsers(cb) {
-    if (_userCache) return cb(_userCache);
-    fetch('/api/users').then(function(r) { return r.json(); }).then(function(users) {
-        _userCache = users;
-        cb(users);
-    });
-}
-function setupAtAutocomplete(inp) {
-    var dropdown = document.createElement('div');
-    dropdown.className = 'position-absolute bg-white border rounded shadow-sm small';
-    dropdown.style.cssText = 'z-index:1000;display:none;max-height:150px;overflow-y:auto;width:200px;';
-    inp.parentElement.style.position = 'relative';
-    inp.parentElement.appendChild(dropdown);
-    inp.addEventListener('input', function() {
-        var val = inp.value;
-        var atIdx = val.lastIndexOf('@');
-        if (atIdx < 0) { dropdown.style.display = 'none'; return; }
-        var query = val.substring(atIdx + 1).toLowerCase();
-        loadUsers(function(users) {
-            var matches = users.filter(function(u) {
-                return u.name.toLowerCase().includes(query)
-                    || (u.pinyin && u.pinyin.toLowerCase().includes(query))
-                    || (u.employee_id && u.employee_id.toLowerCase().includes(query));
-            }).slice(0, 8);
-            if (!matches.length) { dropdown.style.display = 'none'; return; }
-            dropdown.innerHTML = matches.map(function(u) {
-                return '<div class="px-2 py-1 user-ac-item" style="cursor:pointer;" data-name="' + u.name + '">' + u.name + ' <span class="text-muted">' + (u.employee_id || '') + '</span></div>';
-            }).join('');
-            dropdown.style.display = 'block';
-            dropdown.querySelectorAll('.user-ac-item').forEach(function(item) {
-                item.addEventListener('mousedown', function(e) {
-                    e.preventDefault();
-                    var v = inp.value;
-                    var ai = v.lastIndexOf('@');
-                    inp.value = v.substring(0, ai) + '@' + item.dataset.name + ' ';
-                    dropdown.style.display = 'none';
-                    inp.focus();
-                });
-            });
-        });
-    });
-    inp.addEventListener('blur', function() { setTimeout(function() { dropdown.style.display = 'none'; }, 200); });
-}
-document.querySelectorAll('.quick-todo-form input[name="title"]').forEach(setupAtAutocomplete);
+/* Shared: createTodoRow (fully interactive dynamic todo row) */
+{{ create_todo_row_js() }}
+
+/* Shared: AJAX quick-todo form handler */
+{{ quick_todo_form_js() }}
+
+/* Shared: @autocomplete (users + groups) */
+{{ at_autocomplete_js() }}
 
 /* Standup */
 function genStandup() {
@@ -441,47 +308,13 @@ function genStandup() {
             document.getElementById('standupContent').innerHTML = d.html;
             document.getElementById('standupPanel').classList.remove('d-none');
         } else {
-            alert(d && d.error ? d.error : '生成失败');
+            alert(d && d.error ? d.error : 'AI服务暂不可用，正在紧急修复');
         }
     }).catch(function() { loading.stop(); });
 }
 
-/* Requirement completion change — same logic as homepage */
-var _nextStatusMap = {"pending_review":"pending_dev","pending_dev":"in_dev","in_dev":"in_test","in_test":"done"};
-document.querySelectorAll('.req-completion-sel').forEach(function(sel) {
-    sel.addEventListener('change', function() {
-        var reqId = sel.dataset.reqId;
-        var pct = parseInt(sel.value);
-        var curStatus = sel.dataset.status;
-        // 1. Save completion
-        apiPost('/requirements/' + reqId + '/completion-api', {completion: pct}).then(function(d) {
-            if (!d || !d.ok) { showToast('更新失败', 'danger'); return; }
-        });
-        // 2. Auto-advance on 100%
-        if (pct === 100) {
-            var next = _nextStatusMap[curStatus];
-            if (next) {
-                apiPost('/requirements/' + reqId + '/status-api', {status: next}).then(function(d) {
-                    if (d && d.ok) {
-                        // 3. Reset completion to 0 for new stage, keep 100 for done
-                        if (d.status !== 'done') {
-                            apiPost('/requirements/' + reqId + '/completion-api', {completion: 0});
-                            sel.value = '0';
-                        }
-                        sel.dataset.status = d.status;
-                        var badge = document.querySelector('.req-status-badge[data-req-id="' + reqId + '"]');
-                        if (badge) {
-                            badge.textContent = d.label;
-                            badge.className = 'badge bg-' + d.color + ' req-status-badge';
-                        }
-                        showToast('已完成 → ' + d.label, 'success');
-                        if (d.status === 'done') sel.style.display = 'none';
-                    }
-                });
-            }
-        }
-    });
-});
+/* Requirement completion change — shared macro */
+{{ req_section_js() }}
 
 // Lazy-init Bootstrap tooltips
 document.addEventListener('mouseover', function(e) {

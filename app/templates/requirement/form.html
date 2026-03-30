@@ -430,8 +430,7 @@ document.getElementById('btnAiFill').addEventListener('click', function() {
 // Quality Check
 function qualityCheck() {
     var btn = document.getElementById('btnQualityCheck');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 检查中...';
+    var loading = aiLoading(btn, '检查中');
     var data = {
         title: document.querySelector('[name="title"]').value,
         description: document.querySelector('[name="description"]').value,
@@ -443,8 +442,7 @@ function qualityCheck() {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(data),
     }).then(function(r) { return r.json(); }).then(function(d) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-shield-check"></i> AI 质量检查';
+        loading.stop();
         var panel = document.getElementById('qualityResult');
         if (d.ok) {
             var scoreColor = d.score >= 80 ? 'success' : d.score >= 60 ? 'warning' : 'danger';
@@ -468,8 +466,7 @@ function qualityCheck() {
             panel.classList.remove('d-none');
         }
     }).catch(function() {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-shield-check"></i> AI 质量检查';
+        loading.stop();
     });
 }
 

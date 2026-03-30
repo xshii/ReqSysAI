@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}选择你的礼物 - {{ site_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.gift-hero { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 24px; border-radius: 12px; text-align: center; margin-bottom: 24px; }
+.gift-hero h3 { margin: 0 0 8px; }
+.gift-hero .desc { opacity: .85; font-size: .9em; }
+.gift-hero .countdown { font-size: .85em; margin-top: 8px; opacity: .7; }
+.gift-card { border: 2px solid transparent; border-radius: 10px; transition: all .2s; cursor: pointer; }
+.gift-card:hover { border-color: #667eea; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,.2); }
+.gift-card.selected { border-color: #667eea; background: #f0f0ff; }
+.gift-card img { width: 100%; height: 100px; object-fit: cover; border-radius: 8px 8px 0 0; }
+.gift-card .placeholder-img { width: 100%; height: 100px; background: #f0f0f0; border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: center; }
+.confetti { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 700px; margin: 0 auto;">
+
+<!-- Hero -->
+<div class="gift-hero">
+    <h3>🎉 恭喜！你获得了一份激励</h3>
+    <div class="fw-bold" style="font-size:1.1em;">{{ inc.title }}</div>
+    {% if inc.review_comment %}<div class="desc">「{{ inc.review_comment }}」</div>{% endif %}
+    {% if inc.gift_expires_at %}
+    <div class="countdown">
+        {% set remaining = (inc.gift_expires_at - now).days %}
+        {% if remaining > 0 %}还剩 <strong>{{ remaining }}</strong> 天选择你的礼物{% else %}选择期即将结束{% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- Gift Selection -->
+<h5 class="mb-3">请选择一份你喜欢的礼物</h5>
+<form method="POST" id="giftSelectForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="gift_id" id="selectedGiftId" value="">
+    <div class="row g-3 mb-4">
+        {% for g in gifts %}
+        <div class="col-md-4 col-6">
+            <div class="gift-card p-0" data-gift-id="{{ g.id }}" onclick="selectGift(this, {{ g.id }})">
+                {% if g.image %}
+                <img src="{{ url_for('static', filename=g.image) }}" alt="{{ g.name }}">
+                {% else %}
+                <div class="placeholder-img"><i class="bi bi-gift" style="font-size:2rem;color:#ccc;"></i></div>
+                {% endif %}
+                <div class="p-2">
+                    <div class="fw-bold">{{ g.name }}</div>
+                    {% if g.description %}<div class="text-muted small">{{ g.description }}</div>{% endif %}
+                    <div class="d-flex justify-content-between align-items-center mt-1">
+                        <span class="text-muted small"><i class="bi bi-people"></i> {{ g.picks or 0 }}人选择</span>
+                        {% if g.link %}<a href="{{ g.link }}" target="_blank" class="small text-decoration-none" onclick="event.stopPropagation();" style="color:#667eea;">查看详情 →</a>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="text-center">
+        <button type="submit" class="btn btn-lg btn-primary px-5" id="confirmBtn" disabled>
+            <i class="bi bi-check-circle"></i> 确认选择
+        </button>
+    </div>
+</form>
+</div>
+
+<script>
+var selectedName = '';
+function selectGift(el, giftId) {
+    document.querySelectorAll('.gift-card').forEach(function(c) { c.classList.remove('selected'); });
+    el.classList.add('selected');
+    document.getElementById('selectedGiftId').value = giftId;
+    document.getElementById('confirmBtn').disabled = false;
+    selectedName = el.querySelector('.fw-bold').textContent;
+}
+document.getElementById('giftSelectForm').addEventListener('submit', function(e) {
+    if (!document.getElementById('selectedGiftId').value) { e.preventDefault(); return; }
+    if (!confirm('确认选择「' + selectedName + '」吗？选定后不可更改。')) { e.preventDefault(); }
+});
+</script>
+{% endblock %}

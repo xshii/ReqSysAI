@@ -1,4 +1,5 @@
 from flask import current_app, flash, jsonify, redirect, render_template, request, session, url_for
+from app.utils.api import api_ok, api_err
 from flask_login import current_user, login_required
 
 from app.ai import ai_bp
@@ -15,7 +16,9 @@ from app.services.ai import check_ollama_status, extract_text_from_docx, parse_r
 def api_status():
     """Quick AI service connectivity check."""
     ok, msg = check_ollama_status()
-    return jsonify(ok=ok, msg=msg)
+    if ok:
+        return api_ok(msg=msg)
+    return api_err(msg=msg)
 
 
 # Session keys in one place
@@ -62,12 +65,12 @@ def api_parse():
     text = (data.get('text') or '').strip() if data else ''
     project_id = data.get('project_id') if data else None
     if not text:
-        return jsonify(ok=False, msg='请输入内容')
+        return api_err(msg='请输入内容')
     result, raw_output = parse_requirement(text, project_id=project_id)
     if not result:
         msg = raw_output if raw_output else 'AI 解析失败，请重试'
-        return jsonify(ok=False, msg=msg)
-    return jsonify(ok=True, result=result)
+        return api_err(msg=msg)
+    return api_ok(result=result)
 
 
 @ai_bp.route('/api/parse-docx', methods=['POST'])
@@ -76,15 +79,15 @@ def api_parse_docx():
     """JSON API: parse uploaded docx and return structured result."""
     file = request.files.get('file')
     if not file:
-        return jsonify(ok=False, msg='请选择文件')
+        return api_err(msg='请选择文件')
     raw_text = extract_text_from_docx(file)
     if not raw_text.strip():
-        return jsonify(ok=False, msg='文档内容为空')
+        return api_err(msg='文档内容为空')
     result, raw_output = parse_requirement(raw_text)
     if not result:
         msg = raw_output if raw_output else 'AI 解析失败，请重试'
-        return jsonify(ok=False, msg=msg)
-    return jsonify(ok=True, result=result)
+        return api_err(msg=msg)
+    return api_ok(result=result)
 
 
 @ai_bp.route('/parse-text', methods=['POST'])

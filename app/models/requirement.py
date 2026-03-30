@@ -28,7 +28,7 @@ class Requirement(db.Model):
     due_date = db.Column(db.Date, nullable=True)
     parent_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=True)
     source = db.Column(db.String(50), default='coding')  # 需求类型: analysis/coding/testing
-    category = db.Column(db.String(100), nullable=True)  # 需求分类
+    category = db.Column(db.String(100), nullable=True)  # 业务分类: "模型名-软件/EDA/FPGA"
     ai_ratio = db.Column(db.Integer, nullable=True)  # AI辅助占比(%)
     completion = db.Column(db.Integer, default=0)  # 完成率(%) 0/30/60/90/100
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -83,16 +83,7 @@ class Requirement(db.Model):
         'testing': '测试',
     }
 
-    CATEGORY_CHOICES = [
-        ('feature', '功能需求'),
-        ('bugfix', '缺陷修复'),
-        ('optimization', '性能优化'),
-        ('refactor', '代码重构'),
-        ('infra', '基础设施'),
-        ('doc', '文档'),
-        ('other', '其他'),
-    ]
-    CATEGORY_LABELS = dict(CATEGORY_CHOICES)
+    CATEGORY_L2_CHOICES = ['软件', 'EDA', 'FPGA']
 
     @property
     def source_label(self):
@@ -100,7 +91,21 @@ class Requirement(db.Model):
 
     @property
     def category_label(self):
-        return self.CATEGORY_LABELS.get(self.category, self.category or '')
+        return self.category or ''
+
+    @property
+    def category_l1(self):
+        """一级分类（模型名），从 category 按 '-' 切割"""
+        if self.category and '-' in self.category:
+            return self.category.split('-', 1)[0]
+        return self.category or ''
+
+    @property
+    def category_l2(self):
+        """二级分类（软件/EDA/FPGA），从 category 按 '-' 切割"""
+        if self.category and '-' in self.category:
+            return self.category.split('-', 1)[1]
+        return ''
 
     ALLOWED_TRANSITIONS = {
         'pending_review': ['pending_dev'],

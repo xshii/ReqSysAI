@@ -261,7 +261,7 @@ function aiStatsAnalysis() {
     var period = document.getElementById('statsPeriodSel').value;
     apiPost('{{ url_for("incentive.stats_ai_analysis") }}', {period: period}).then(function(d) {
         loading.stop();
-        if (!d || !d.ok) { alert((d && d.msg) || 'AI分析失败'); return; }
+        if (!d || !d.ok) { alert((d && d.msg) || 'AI服务暂不可用，正在紧急修复'); return; }
         renderAiReport(d);
         document.getElementById('aiStatsResult').classList.remove('d-none');
     }).catch(function() { loading.stop(); });

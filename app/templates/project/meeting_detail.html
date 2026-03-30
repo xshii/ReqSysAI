@@ -213,6 +213,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/eml-utils.js') }}?v={{ range(10000,99999)|random }}"></script>
 <script>
 // Lock/unlock toggle
 var _locked = true;
@@ -362,7 +363,6 @@ function meetingAutoFillManager() {
 }
 
 // Send email as EML file (Outlook draft)
-function encodeHeader(s) { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
 function sendEmail() {
     var _r = getMergedRecipients((document.getElementById('meetingEmlTo').value || '').trim(), (document.getElementById('meetingEmlCc').value || '').trim());
     var emlTo = _r.to, emlCc = _r.cc;
@@ -409,26 +409,8 @@ function sendEmail() {
 
     html += '</body></html>';
 
-    var boundary = 'boundary_' + Date.now();
-    var headers = [
-        'Subject: ' + encodeHeader(subject),
-        'MIME-Version: 1.0',
-        'Content-Type: multipart/alternative; boundary="' + boundary + '"',
-        'X-Unsent: 1',
-    ];
-    var eml = headers.concat([
-        '', '--' + boundary,
-        'Content-Type: text/html; charset=UTF-8',
-        'Content-Transfer-Encoding: base64',
-        '', btoa(unescape(encodeURIComponent(html))).match(/.{1,76}/g).join('\n'),
-        '', '--' + boundary + '--',
-    ]).join('\r\n');
-    var blob = new Blob([eml], {type: 'message/rfc822'});
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = subject + '.eml';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    var eml = emlBuildFile(subject, html);
+    emlDownload(subject + '.eml', eml);
 }
 
 // Auto-extract

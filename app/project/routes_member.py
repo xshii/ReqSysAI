@@ -1,5 +1,6 @@
 """Project member routes for the project blueprint."""
 from flask import flash, jsonify, make_response, redirect, render_template, request, url_for
+from app.utils.api import api_ok, api_err
 from flask_login import current_user, login_required
 
 from app.extensions import db
@@ -94,14 +95,14 @@ def member_ajax(project_id):
     project = db.get_or_404(Project, project_id)
     denied = _check_project_access(project)
     if denied:
-        return jsonify(ok=False, msg='无权限'), 403
+        return api_err(msg='无权限', status=403)
     data = request.get_json() or {}
     action = data.get('action')
     if action == 'add':
         member_name = (data.get('member_name') or '').strip()
         role = (data.get('project_role') or '').strip()
         if not member_name:
-            return jsonify(ok=False, msg='请输入成员名')
+            return api_err(msg='请输入成员名')
         # New member goes to end
         max_order = db.session.query(db.func.max(ProjectMember.sort_order))\
             .filter_by(project_id=project_id).scalar() or 0
@@ -110,23 +111,23 @@ def member_ajax(project_id):
             if not role:
                 role = _default_project_role(user)
             if ProjectMember.query.filter_by(project_id=project_id, user_id=user.id).first():
-                return jsonify(ok=False, msg=f'{user.name} 已在项目中')
+                return api_err(msg=f'{user.name} 已在项目中')
             m = ProjectMember(project_id=project_id, user_id=user.id, project_role=role,
                               sort_order=max_order + 1)
             db.session.add(m)
             db.session.commit()
-            return jsonify(ok=True, member={
+            return api_ok(member={
                 'id': m.id, 'name': user.name, 'group': user.group or '',
                 'role': role, 'is_key': m.is_key, 'user_id': user.id,
             })
         else:
             if ProjectMember.query.filter_by(project_id=project_id, external_name=member_name).first():
-                return jsonify(ok=False, msg=f'{member_name} 已在项目中')
+                return api_err(msg=f'{member_name} 已在项目中')
             m = ProjectMember(project_id=project_id, external_name=member_name, project_role=role,
                               sort_order=max_order + 1)
             db.session.add(m)
             db.session.commit()
-            return jsonify(ok=True, member={
+            return api_ok(member={
                 'id': m.id, 'name': member_name, 'group': '',
                 'role': role, 'is_key': m.is_key, 'user_id': None,
             })
@@ -142,8 +143,8 @@ def member_ajax(project_id):
             pinyin = user.pinyin if user else ''
             db.session.delete(m)
             db.session.commit()
-            return jsonify(ok=True, user_id=uid, name=name, eid=eid, group=group, pinyin=pinyin)
-        return jsonify(ok=False, msg='成员不存在')
+            return api_ok(user_id=uid, name=name, eid=eid, group=group, pinyin=pinyin)
+        return api_err(msg='成员不存在')
     elif action == 'role':
         member_id = data.get('member_id')
         new_role = data.get('project_role', 'DEV')
@@ -151,17 +152,17 @@ def member_ajax(project_id):
         if m and m.project_id == project_id:
             m.project_role = new_role
             db.session.commit()
-            return jsonify(ok=True)
-        return jsonify(ok=False, msg='成员不存在')
+            return api_ok()
+        return api_err(msg='成员不存在')
     elif action == 'toggle_key':
         member_id = data.get('member_id')
         m = db.session.get(ProjectMember, member_id)
         if m and m.project_id == project_id:
             m.is_key = not m.is_key
             db.session.commit()
-            return jsonify(ok=True, is_key=m.is_key)
-        return jsonify(ok=False, msg='成员不存在')
-    return jsonify(ok=False, msg='未知操作')
+            return api_ok(is_key=m.is_key)
+        return api_err(msg='成员不存在')
+    return api_err(msg='未知操作')
 
 
 # ---- Member CSV import/export ----
@@ -263,10 +264,10 @@ def member_reorder(project_id):
     """Reorder project members via drag-and-drop."""
     ids = request.json.get('ids', [])
     if not ids:
-        return jsonify(ok=False), 400
+        return api_err(status=400)
     for i, mid in enumerate(ids):
         m = db.session.get(ProjectMember, int(mid))
         if m and m.project_id == project_id:
             m.sort_order = i
     db.session.commit()
-    return jsonify(ok=True)
+    return api_ok()

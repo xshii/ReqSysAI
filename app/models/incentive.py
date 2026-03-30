@@ -51,10 +51,26 @@ class Incentive(db.Model):
     likes = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=db.func.now())
 
+    # 礼物选择流程
+    gift_status = db.Column(db.String(20), nullable=True)  # None/pending_gift/gift_selected/gift_purchased
+    gift_item_id = db.Column(db.Integer, db.ForeignKey('gift_items.id'), nullable=True)
+    gift_selected_at = db.Column(db.DateTime, nullable=True)
+    gift_notified_at = db.Column(db.DateTime, nullable=True)
+    gift_expires_at = db.Column(db.DateTime, nullable=True)
+    gift_notify_count = db.Column(db.Integer, default=0)  # 1=first(15d), 2=retry(7d)
+
     fund = db.relationship('IncentiveFund', backref='incentives')
+    gift_item = db.relationship('GiftItem', backref='incentive_picks')
     submitter = db.relationship('User', foreign_keys=[submitted_by], backref='submitted_incentives')
     reviewer = db.relationship('User', foreign_keys=[reviewed_by], backref='reviewed_incentives')
     nominees = db.relationship('User', secondary=incentive_nominees, backref='nominated_incentives')
+
+    @property
+    def gift_expired(self):
+        if not self.gift_expires_at:
+            return False
+        from datetime import datetime
+        return datetime.now() > self.gift_expires_at and self.gift_status == 'pending_gift'
 
     @property
     def all_nominee_names(self):

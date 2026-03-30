@@ -568,7 +568,7 @@ function aiEfficiency() {
         if (d.ok) {
             document.getElementById('aiEffContent').innerHTML = d.html || d.text || '';
             document.getElementById('aiEffPanel').classList.remove('d-none');
-        } else { alert(d.error || 'AI分析失败'); }
+        } else { alert(d.error || 'AI服务暂不可用，正在紧急修复'); }
     }).catch(function(e) { loading.stop(); alert('请求失败：' + e.message); });
 }
 

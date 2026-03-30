@@ -2,6 +2,7 @@ from app.models.ai_log import AIParseLog  # noqa: F401
 from app.models.audit import AuditLog  # noqa: F401
 from app.models.email_setting import EmailSetting  # noqa: F401
 from app.models.emotion import EmotionComment, EmotionRecord  # noqa: F401
+from app.models.gift import GiftItem, GiftRecord  # noqa: F401
 from app.models.incentive import Incentive  # noqa: F401
 from app.models.ip_request import IPChangeRequest  # noqa: F401
 from app.models.knowledge import AAR, Knowledge, PermissionApplication, PermissionItem, PermissionRequest  # noqa: F401

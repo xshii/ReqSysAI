@@ -1,7 +1,8 @@
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 
-from flask import current_app, flash, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask import abort, current_app, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
+from app.utils.api import api_ok, api_err
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
@@ -56,6 +57,7 @@ def _build_people_tree(project_id, sub_project_ids):
     ).order_by(ProjectMember.sort_order).all()
 
     seen_names = set()
+    _seen_entries = set()  # (proj_name, role_group, name) for O(1) dedup
     tree = OrderedDict()  # project_name → {role_group → [person]}
     for m in members:
         proj_name = m.project.name if m.project else '未分配'
@@ -77,7 +79,9 @@ def _build_people_tree(project_id, sub_project_ids):
             tree[proj_name] = OrderedDict()
         if role_group not in tree[proj_name]:
             tree[proj_name][role_group] = []
-        if not any(p['name'] == name for p in tree[proj_name][role_group]):
+        _key = (proj_name, role_group, name)
+        if _key not in _seen_entries:
+            _seen_entries.add(_key)
             tree[proj_name][role_group].append({'name': name, 'note': note})
 
     unique_count = len(seen_names)
@@ -124,15 +128,16 @@ def _guard_hidden_project(cur_project_id):
     if not cur_project_id:
         return cur_project_id, None
     p = db.session.get(Project, cur_project_id)
-    if p and p.is_hidden and not current_user.is_team_manager:
+    if p and p.id in g.hidden_pids:
         return None, None
     return cur_project_id, p
 
 
 def _visible_projects():
     """Active projects visible to current user."""
+    _hset = set(g.hidden_pids)
     return [p for p in Project.query.filter_by(status='active').order_by(Project.name).all()
-            if not p.is_hidden or current_user.is_team_manager]
+            if p.id not in _hset]
 
 
 def _build_sub_projects(cur_project, monday):
@@ -148,22 +153,38 @@ def _build_sub_projects(cur_project, monday):
         fo = pm or PM_.query.filter_by(project_id=child.id, project_role='FO').first()
         summary = child_saved.summary if child_saved and child_saved.summary else None
         if summary is None:
-            # AI generate one-line summary for child project
-            child_reqs = Requirement.query.filter_by(project_id=child.id, parent_id=None).all()
-            c_total = len(child_reqs)
-            c_done = sum(1 for r in child_reqs if r.status in ('done', 'closed'))
-            c_dev = sum(1 for r in child_reqs if r.status == 'in_dev')
-            c_overdue = sum(1 for r in child_reqs if r.due_date and r.due_date < date.today()
-                           and r.status not in ('done', 'closed'))
-            # Completed todos this week
-            child_req_ids = [r.id for r in child_reqs]
-            week_done = 0
-            if child_req_ids:
-                from app.models.todo import todo_requirements as tr_
-                week_done = Todo.query.filter(
-                    Todo.done_date >= monday, Todo.done_date <= date.today()
-                ).join(tr_, Todo.id == tr_.c.todo_id).filter(
-                    tr_.c.requirement_id.in_(child_req_ids)).count()
+            # AI generate one-line summary for child project (single aggregate query)
+            from sqlalchemy import func as _fn, case as _case
+            _today_d = date.today()
+            stats = db.session.query(
+                _fn.count(Requirement.id),
+                _fn.sum(_case((Requirement.status.in_(('done', 'closed')), 1), else_=0)),
+                _fn.sum(_case((Requirement.status == 'in_dev', 1), else_=0)),
+                _fn.sum(_case((
+                    db.and_(
+                        Requirement.due_date < _today_d,
+                        Requirement.status.notin_(('done', 'closed')),
+                        Requirement.due_date.isnot(None),
+                    ), 1), else_=0)),
+            ).filter(
+                Requirement.project_id == child.id,
+                Requirement.parent_id.is_(None),
+            ).first()
+            c_total = stats[0] or 0
+            c_done = int(stats[1] or 0)
+            c_dev = int(stats[2] or 0)
+            c_overdue = int(stats[3] or 0)
+            # Completed todos this week (subquery for req ids)
+            from app.models.todo import todo_requirements as tr_
+            child_req_subq = db.session.query(Requirement.id).filter(
+                Requirement.project_id == child.id,
+                Requirement.parent_id.is_(None),
+            ).subquery()
+            week_done = Todo.query.filter(
+                Todo.done_date >= monday, Todo.done_date <= _today_d
+            ).join(tr_, Todo.id == tr_.c.todo_id).filter(
+                tr_.c.requirement_id.in_(db.session.query(child_req_subq.c.id))
+            ).count()
             context = (f'{child.name}：需求 {c_done}/{c_total} 完成，{c_dev}个开发中，'
                        f'本周完成 {week_done} 个todo'
                        + (f'，{c_overdue}个延期' if c_overdue else ''))
@@ -195,10 +216,8 @@ def requirement_progress():
         query = query.filter_by(status=cur_status)
     if cur_project_id:
         query = query.filter_by(project_id=cur_project_id)
-    if not current_user.is_team_manager:
-        hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
-        if hidden_pids:
-            query = query.filter(Requirement.project_id.notin_(hidden_pids))
+    if g.hidden_pids:
+        query = query.filter(Requirement.project_id.notin_(g.hidden_pids))
     requirements = query.order_by(Requirement.updated_at.desc()).all()
 
     todo_counts = get_todo_progress([r.id for r in requirements])
@@ -213,25 +232,433 @@ def requirement_progress():
 
 
 
+def _get_pinned_knowledge(project_id, sub_project_ids=None):
+    """Get pinned knowledge items for project (+ children)."""
+    from app.models.knowledge import Knowledge
+    if not project_id:
+        return []
+    pids = [project_id] + (sub_project_ids or [])
+    return Knowledge.query.filter(
+        Knowledge.project_id.in_(pids), Knowledge.is_pinned == True
+    ).order_by(Knowledge.project_id, Knowledge.title).all()
+
+
+# ---- Weekly delta helper ----
+
+def _compute_weekly_deltas(all_reqs, project_ids, monday, sunday):
+    """Compute week-over-week delta indicators from existing data."""
+    from app.models.requirement import Activity
+
+    today_ = date.today()
+    req_ids = {r.id for r in all_reqs}
+
+    # 1. 本周完成的需求数 (Activity记录 或 updated_at本周+status=done)
+    done_activities = Activity.query.filter(
+        Activity.action == 'status_changed',
+        Activity.detail.contains('→ 已完成'),
+        Activity.created_at >= monday,
+        Activity.created_at <= sunday + timedelta(days=1),
+    ).all()
+    done_req_ids = {a.requirement_id for a in done_activities if a.requirement_id in req_ids}
+    # Fallback: 没有Activity记录但updated_at在本周且status=done的也算
+    for r in all_reqs:
+        if r.id not in done_req_ids and r.status in ('done', 'closed') \
+                and r.updated_at and r.updated_at.date() >= monday and r.updated_at.date() <= sunday:
+            done_req_ids.add(r.id)
+    done_delta = len(done_req_ids)
+    tc_done_delta = 0
+    for r in all_reqs:
+        if r.id in done_req_ids and r.source == 'testing' and r.test_cases:
+            tc_done_delta += r.test_cases
+
+    # 3. 延期变化
+    overdue_count = sum(1 for r in all_reqs
+                        if r.due_date and r.due_date < today_
+                        and r.status not in ('done', 'closed'))
+    new_overdue = sum(1 for r in all_reqs
+                      if r.due_date and monday <= r.due_date < today_
+                      and r.status not in ('done', 'closed'))
+    resolved_overdue = sum(1 for r in all_reqs
+                          if r.id in done_req_ids and r.due_date and r.due_date < monday)
+    overdue_delta = new_overdue - resolved_overdue
+
+    # 4. 按时交付率: 已完成需求中，完成时间 <= due_date 的占比
+    done_reqs = [r for r in all_reqs if r.status in ('done', 'closed')]
+    on_time = sum(1 for r in done_reqs
+                  if r.due_date and r.updated_at and r.updated_at.date() <= r.due_date)
+    on_time_total = sum(1 for r in done_reqs if r.due_date)
+    on_time_rate = round(on_time / on_time_total * 100) if on_time_total else None
+
+    # 5. 加权完成率变化（估算）
+    _active = [r for r in all_reqs if r.status != 'closed']
+    _comp_pct = lambda r: 100 if r.status == 'done' else (r.completion or 0)
+    _comp_w_sum = sum(_comp_pct(r) * (r.estimate_days or 1) for r in _active)
+    _comp_d_sum = sum((r.estimate_days or 1) for r in _active)
+    current_weighted = round(_comp_w_sum / _comp_d_sum) if _comp_d_sum else 0
+
+    if done_req_ids and _comp_d_sum:
+        est_prev_sum = _comp_w_sum
+        for r in all_reqs:
+            if r.id in done_req_ids and r.status in ('done', 'closed'):
+                days = r.estimate_days or 1
+                est_prev_sum -= 100 * days
+                est_prev_sum += 60 * days
+        prev_weighted = round(est_prev_sum / _comp_d_sum)
+        completion_delta = current_weighted - prev_weighted
+    else:
+        completion_delta = 0
+
+    # 6. 本周新增需求数
+    new_req_delta = sum(1 for r in all_reqs
+                        if r.created_at and r.created_at.date() >= monday
+                        and r.created_at.date() <= sunday)
+
+    # 7. 本周完成的人天数
+    done_days_delta = sum(r.estimate_days or 0 for r in all_reqs if r.id in done_req_ids)
+
+    # 7. AI辅助人天 = sum(estimate_days * ai_ratio / 100)
+    ai_days = sum((r.estimate_days or 0) * (r.ai_ratio or 0) / 100 for r in all_reqs)
+    ai_days_delta = sum((r.estimate_days or 0) * (r.ai_ratio or 0) / 100
+                        for r in all_reqs if r.id in done_req_ids)
+    est_total = sum(r.estimate_days or 0 for r in all_reqs)
+
+    # 8. 用例基线: 总用例数 + 已完成用例数(按加权完成率向下取整)
+    import math as _math
+    tc_total_all = 0
+    tc_done_all = 0
+    for r in all_reqs:
+        if r.source == 'testing' and r.test_cases and r.test_cases > 0:
+            tc_total_all += r.test_cases
+            wpct = 100 if r.status in ('done', 'closed') else r.weighted_completion
+            tc_done_all += _math.floor(r.test_cases * wpct / 100)
+
+    return {
+        'done_delta': done_delta,
+        'done_days_delta': round(done_days_delta, 1),
+        'tc_done_delta': tc_done_delta,
+        'overdue_count': overdue_count,
+        'overdue_delta': overdue_delta,
+        'on_time': on_time,
+        'on_time_total': on_time_total,
+        'on_time_rate': on_time_rate,
+        'completion_delta': completion_delta,
+        'ai_days': round(ai_days, 1),
+        'ai_days_delta': round(ai_days_delta, 1),
+        'new_req_delta': new_req_delta,
+        'est_total': round(est_total, 1),
+        'tc_total_all': tc_total_all,
+        'tc_done_all': tc_done_all,
+    }
+
+
+# ---- Pivot / 点灯图 helper ----
+
+def _build_pivot_data(project_id, include_sub=True):
+    """Build pivot table data for category L1 x L2 x source.
+    Returns a dict of template variables, or empty dict if no pivot data."""
+    import math
+    from collections import Counter, defaultdict
+
+    _parent_ids = {r.parent_id for r in db.session.query(Requirement.parent_id).filter(Requirement.parent_id.isnot(None)).distinct()}
+    pivot_query = Requirement.query.filter(
+        Requirement.category.isnot(None), Requirement.category.contains('-'),
+        Requirement.id.notin_(_parent_ids) if _parent_ids else db.true())
+    if project_id:
+        if include_sub:
+            child_ids = [c.id for c in Project.query.filter_by(parent_id=project_id).all()]
+            pivot_query = pivot_query.filter(Requirement.project_id.in_([project_id] + child_ids))
+        else:
+            pivot_query = pivot_query.filter(Requirement.project_id == project_id)
+    if g.hidden_pids:
+        pivot_query = pivot_query.filter(Requirement.project_id.notin_(g.hidden_pids))
+    pivot_reqs = pivot_query.all()
+    if not pivot_reqs:
+        return {}
+
+    _sources = ['analysis', 'coding', 'testing']
+    _src_labels = Requirement.SOURCE_LABELS
+    today_ = date.today()
+
+    _l1_min_start, _l2_min_start = {}, {}
+    _l1_max_due, _l2_max_due = {}, {}
+    for r in pivot_reqs:
+        l1, l2 = r.category_l1, r.category_l2
+        if r.start_date:
+            if l1 not in _l1_min_start or r.start_date < _l1_min_start[l1]:
+                _l1_min_start[l1] = r.start_date
+            if l2 not in _l2_min_start or r.start_date < _l2_min_start[l2]:
+                _l2_min_start[l2] = r.start_date
+        if r.due_date:
+            if l1 not in _l1_max_due or r.due_date > _l1_max_due[l1]:
+                _l1_max_due[l1] = r.due_date
+            if l2 not in _l2_max_due or r.due_date > _l2_max_due[l2]:
+                _l2_max_due[l2] = r.due_date
+    _far_future = date(2099, 1, 1)
+    pivot_l1s = sorted(set(r.category_l1 for r in pivot_reqs), key=lambda x: (_l1_min_start.get(x, _far_future), _l1_max_due.get(x, _far_future)))
+    pivot_l2s = sorted(set(r.category_l2 for r in pivot_reqs), key=lambda x: (_l2_min_start.get(x, _far_future), _l2_max_due.get(x, _far_future)))
+
+    def _empty_cell():
+        return {'total': 0, 'days': 0, 'done': 0, 'overdue': 0, 'active': 0, 'not_started': 0,
+                'wpct_sum': 0, 'assignee': '', 'light': 'secondary',
+                'tc_total': 0, 'tc_done': 0,
+                'min_start': None, 'max_due': None,
+                'overdue_assignee': '', 'overdue_days': 0}
+
+    def _classify(r):
+        if r.status in ('done', 'closed'):
+            return 'done'
+        if r.due_date and r.due_date < today_ and r.status not in ('done', 'closed'):
+            return 'overdue'
+        if r.status == 'pending_review' and not (r.completion and r.completion > 0):
+            return 'not_started'
+        return 'active'
+
+    def _finish_cell(c, names):
+        if c['overdue'] > 0:
+            c['light'] = 'danger'
+        elif c['done'] == c['total'] and c['total'] > 0:
+            c['light'] = 'success'
+        elif c['active'] > 0:
+            c['light'] = 'primary'
+        else:
+            c['light'] = 'secondary'
+        if names:
+            c['assignee'] = Counter(names).most_common(1)[0][0]
+
+    pivot_src_cells = defaultdict(_empty_cell)
+    _src_assignees = defaultdict(list)
+
+    for r in pivot_reqs:
+        src = r.source or 'coding'
+        key = (r.category_l1, r.category_l2, src)
+        c = pivot_src_cells[key]
+        c['total'] += 1
+        c['days'] += r.estimate_days or 0
+        c['wpct_sum'] += r.weighted_completion
+        cls = _classify(r)
+        c[cls] += 1
+        if cls == 'overdue' and r.due_date:
+            od = (today_ - r.due_date).days
+            if od > c['overdue_days']:
+                c['overdue_days'] = od
+                c['overdue_assignee'] = r.assignee_display or '未分配'
+        if r.test_cases and r.test_cases > 0:
+            c['tc_total'] += r.test_cases
+            c['tc_done'] += math.floor(r.test_cases * r.weighted_completion / 100)
+        if r.start_date and (not c['min_start'] or r.start_date < c['min_start']):
+            c['min_start'] = r.start_date
+        if r.due_date and (not c['max_due'] or r.due_date > c['max_due']):
+            c['max_due'] = r.due_date
+        if r.assignee_display and r.assignee_display != '未分配':
+            _src_assignees[key].append(r.assignee_display)
+
+    for key, c in pivot_src_cells.items():
+        _finish_cell(c, _src_assignees.get(key, []))
+
+    def _merge_cells(cells_list):
+        merged = _empty_cell()
+        for c in cells_list:
+            for k in ('total', 'days', 'done', 'overdue', 'active', 'not_started', 'wpct_sum', 'tc_total', 'tc_done'):
+                merged[k] += c[k]
+            if c['min_start'] and (not merged['min_start'] or c['min_start'] < merged['min_start']):
+                merged['min_start'] = c['min_start']
+            if c['max_due'] and (not merged['max_due'] or c['max_due'] > merged['max_due']):
+                merged['max_due'] = c['max_due']
+            if c['overdue_days'] > merged['overdue_days']:
+                merged['overdue_days'] = c['overdue_days']
+                merged['overdue_assignee'] = c['overdue_assignee']
+        _finish_cell(merged, [])
+        return merged
+
+    pivot_cells = {}
+    for l1 in pivot_l1s:
+        for l2 in pivot_l2s:
+            sub = [pivot_src_cells.get((l1, l2, s), _empty_cell()) for s in _sources]
+            pivot_cells[(l1, l2)] = _merge_cells(sub)
+
+    pivot_row_totals = {l1: _merge_cells([pivot_cells.get((l1, l2), _empty_cell()) for l2 in pivot_l2s]) for l1 in pivot_l1s}
+    pivot_col_totals = {l2: _merge_cells([pivot_cells.get((l1, l2), _empty_cell()) for l1 in pivot_l1s]) for l2 in pivot_l2s}
+    pivot_grand = _merge_cells(list(pivot_cells.values()))
+    pivot_src_row_totals = {}
+    for l1 in pivot_l1s:
+        for s in _sources:
+            pivot_src_row_totals[(l1, s)] = _merge_cells([pivot_src_cells.get((l1, l2, s), _empty_cell()) for l2 in pivot_l2s])
+    pivot_src_col_totals = {}
+    for l2 in pivot_l2s:
+        for s in _sources:
+            pivot_src_col_totals[(l2, s)] = _merge_cells([pivot_src_cells.get((l1, l2, s), _empty_cell()) for l1 in pivot_l1s])
+    pivot_src_grand = {}
+    for s in _sources:
+        pivot_src_grand[s] = _merge_cells([pivot_src_cells.get((l1, l2, s), _empty_cell()) for l1 in pivot_l1s for l2 in pivot_l2s])
+
+    return {
+        'pivot_l1s': pivot_l1s, 'pivot_l2s': pivot_l2s,
+        'pivot_cells': dict(pivot_cells), 'pivot_src_cells': dict(pivot_src_cells),
+        'pivot_row_totals': pivot_row_totals, 'pivot_col_totals': pivot_col_totals,
+        'pivot_grand': pivot_grand,
+        'pivot_src_row_totals': pivot_src_row_totals, 'pivot_src_col_totals': pivot_src_col_totals,
+        'pivot_src_grand': pivot_src_grand,
+        'pivot_sources': _sources, 'pivot_src_labels': _src_labels,
+        'pivot_l1_start': _l1_min_start, 'pivot_l2_start': _l2_min_start,
+        'pivot_l1_due': _l1_max_due, 'pivot_l2_due': _l2_max_due,
+    }
+
+
 # ---- Stats / Weekly Report / Excel Export ----
 
 @dashboard_bp.route('/stats')
 @login_required
 def stats():
 
+    cur_tab = request.args.get('tab', 'overview')
+    period = request.args.get('period', '1w')  # 1w/2w/1m/2m
     offset = request.args.get('week', 0, type=int)
-    cur_group = request.args.get('group', '')
     cur_project_id = request.args.get('project_id', type=int)
     cur_project_id, cur_project = _guard_hidden_project(cur_project_id)
+    # People tab: use period range; overview tab: use current week
     monday, sunday = week_range(offset)
+    if cur_tab == 'people':
+        period_days = {'1w': 7, '2w': 14, '1m': 30, '2m': 60}.get(period, 7)
+        people_start = date.today() - timedelta(days=period_days - 1)
+        people_end = date.today()
+    else:
+        people_start, people_end = monday, sunday
 
-    groups = [g.name for g in Group.query.filter_by(is_hidden=False).order_by(Group.name).all()]
-    data = gather_week_stats(monday, sunday, group=cur_group or None, project_id=cur_project_id)
+    # Include sub-projects toggle
+    has_children = cur_project and cur_project.children
+    is_child = cur_project and cur_project.parent_id
+    default_sub = '1' if has_children and not is_child else '0'
+    include_sub = request.args.get('include_sub', default_sub) == '1'
+
+    sub_project_ids = []
+    if include_sub and cur_project and cur_project.children:
+        sub_project_ids = [c.id for c in cur_project.children]
+    all_pids = [cur_project_id] + sub_project_ids if cur_project_id else []
+
+    data = gather_week_stats(people_start, people_end, project_id=cur_project_id)
+
+    # Requirement stats + deltas
+    req_overview_q = Requirement.query.filter(Requirement.parent_id.is_(None))
+    if cur_project_id:
+        req_overview_q = req_overview_q.filter(Requirement.project_id.in_(all_pids))
+    all_reqs = req_overview_q.all()
+    weekly_deltas = _compute_weekly_deltas(all_reqs, all_pids, monday, sunday) if all_reqs else {}
+
+    # Weighted completion
+    _active = [r for r in all_reqs if r.status != 'closed']
+    _comp_pct = lambda r: 100 if r.status == 'done' else (r.completion or 0)
+    _comp_w_sum = sum(_comp_pct(r) * (r.estimate_days or 1) for r in _active)
+    _comp_d_sum = sum((r.estimate_days or 1) for r in _active)
+    completion_weighted = round(_comp_w_sum / _comp_d_sum) if _comp_d_sum else None
+
+    # Risk stats + deltas
+    from app.models.risk import Risk
+    from datetime import timedelta as _td
+    risk_q = Risk.query.filter(Risk.deleted_at.is_(None))
+    if cur_project_id:
+        risk_q = risk_q.filter(Risk.project_id.in_(all_pids))
+    if g.hidden_pids:
+        risk_q = risk_q.filter(Risk.project_id.notin_(g.hidden_pids))
+    all_risks_stats = risk_q.all()
+    today_ = date.today()
+    _rn = sum(1 for r in all_risks_stats if r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday)
+    _rr = sum(1 for r in all_risks_stats if r.status in ('resolved', 'closed') and r.updated_at and r.updated_at.date() >= monday and r.updated_at.date() <= sunday)
+    _ro = sum(1 for r in all_risks_stats if r.status == 'open' and r.due_date and monday <= r.due_date < today_)
+    risk_stats = {
+        'total': len(all_risks_stats),
+        'open': sum(1 for r in all_risks_stats if r.status == 'open'),
+        'overdue': sum(1 for r in all_risks_stats if r.is_overdue),
+        'resolved': sum(1 for r in all_risks_stats if r.status == 'resolved'),
+        'closed': sum(1 for r in all_risks_stats if r.status == 'closed'),
+        'high': sum(1 for r in all_risks_stats if r.status == 'open' and r.severity == 'high'),
+        'high_total': sum(1 for r in all_risks_stats if r.severity == 'high'),
+        'medium': sum(1 for r in all_risks_stats if r.status == 'open' and r.severity == 'medium'),
+        'medium_total': sum(1 for r in all_risks_stats if r.severity == 'medium'),
+        'low': sum(1 for r in all_risks_stats if r.status == 'open' and r.severity == 'low'),
+        'low_total': sum(1 for r in all_risks_stats if r.severity == 'low'),
+        'new_delta': _rn, 'resolved_delta': _rr, 'overdue_delta': _ro,
+        'high_delta': sum(1 for r in all_risks_stats if r.severity == 'high' and r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday),
+        'medium_delta': sum(1 for r in all_risks_stats if r.severity == 'medium' and r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday),
+        'low_delta': sum(1 for r in all_risks_stats if r.severity == 'low' and r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday),
+    }
+    from collections import defaultdict as _dd
+    domain_stats = _dd(lambda: {'total': 0, 'open': 0})
+    for r in all_risks_stats:
+        d = (r.domain_display or '').strip() or '未分类'
+        domain_stats[d]['total'] += 1
+        if r.status == 'open':
+            domain_stats[d]['open'] += 1
+    domain_stats = {k: v for k, v in sorted(domain_stats.items(), key=lambda x: (-x[1]['open'], -x[1]['total']))}
+
+    # Trends: 12 weeks snapshot
+    import json as _json
+    _trend_weeks = 12
+    _snap_dates = [today_ - timedelta(days=7 * w) for w in range(_trend_weeks - 1, -1, -1)]
+    _snap_labels = [d.strftime('%m-%d') for d in _snap_dates]
+
+    # Requirement trend: total, done, overdue per week
+    req_trend = {'weeks': _snap_labels, 'total': [], 'done': [], 'overdue': []}
+    if all_reqs:
+        for snap in _snap_dates:
+            total_at = sum(1 for r in all_reqs if r.created_at and r.created_at.date() <= snap)
+            done_at = sum(1 for r in all_reqs
+                          if r.created_at and r.created_at.date() <= snap
+                          and r.status in ('done', 'closed')
+                          and (not r.updated_at or r.updated_at.date() <= snap
+                               or r.status in ('done', 'closed')))
+            # More accurate done_at: count reqs that were done by snap_date
+            done_at2 = 0
+            for r in all_reqs:
+                if not r.created_at or r.created_at.date() > snap:
+                    continue
+                if r.status in ('done', 'closed'):
+                    if r.updated_at and r.updated_at.date() <= snap:
+                        done_at2 += 1
+                    elif not r.updated_at:
+                        done_at2 += 1
+                # else: not done now, so wasn't done at snap either (unless re-opened, ignore)
+            overdue_at = sum(1 for r in all_reqs
+                             if r.created_at and r.created_at.date() <= snap
+                             and r.due_date and r.due_date < snap
+                             and not (r.status in ('done', 'closed') and r.updated_at and r.updated_at.date() <= snap))
+            req_trend['total'].append(total_at)
+            req_trend['done'].append(done_at2)
+            req_trend['overdue'].append(overdue_at)
+
+    # Risk trend: open count per domain
+    risk_trend = {'weeks': _snap_labels, 'domains': {}}
+    if all_risks_stats:
+        all_domains = sorted(domain_stats.keys())
+        for domain in all_domains:
+            risk_trend['domains'][domain] = []
+            for snap in _snap_dates:
+                open_at = 0
+                for r in all_risks_stats:
+                    rd = (r.domain_display or '').strip() or '未分类'
+                    if rd != domain:
+                        continue
+                    if not r.created_at or r.created_at.date() > snap:
+                        continue
+                    if r.status == 'open':
+                        open_at += 1
+                    elif r.updated_at and r.updated_at.date() > snap:
+                        open_at += 1
+                risk_trend['domains'][domain].append(open_at)
+
+    pivot = _build_pivot_data(cur_project_id, include_sub=include_sub)
 
     return render_template('dashboard/stats.html',
         data=data, monday=monday, sunday=sunday,
-        offset=offset, groups=groups, cur_group=cur_group,
+        offset=offset, cur_tab=cur_tab, period=period,
+        people_start=people_start, people_end=people_end,
         cur_project=cur_project, cur_project_id=cur_project_id or 0,
+        include_sub=include_sub,
+        all_reqs=all_reqs, weekly_deltas=weekly_deltas,
+        completion_weighted=completion_weighted,
+        risk_stats=risk_stats, domain_stats=domain_stats,
+        req_trend_json=_json.dumps(req_trend, ensure_ascii=False),
+        risk_trend=risk_trend, risk_trend_json=_json.dumps(risk_trend, ensure_ascii=False),
+        **pivot,
     )
 
 
@@ -554,13 +981,21 @@ def weekly_report():
         prompt = tpl.format(project_name=project_name) + '\n\n' + '\n'.join(lines)
 
         import json as json_lib
-        result, _ = call_ollama(prompt)
-        ai_analysis = {
-            'summary': '数据不足，无法生成摘要',
-            'highlights': [],
-            'risks': [],
-            'plan': [],
-        }
+        result, raw = call_ollama(prompt)
+        if result is None:
+            ai_analysis = {
+                'summary': 'AI服务暂时不可用，请人工填写',
+                'highlights': [],
+                'risks': [],
+                'plan': [],
+            }
+        else:
+            ai_analysis = {
+                'summary': '数据不足，无法生成摘要',
+                'highlights': [],
+                'risks': [],
+                'plan': [],
+            }
         if isinstance(result, dict):
             ai_analysis['summary'] = result.get('summary', ai_analysis['summary'])
             ai_analysis['highlights'] = result.get('highlights', [])
@@ -654,6 +1089,10 @@ def weekly_report():
         # Risk stats & domain stats for report
         # Stats scope: open + recently closed (2 weeks)
         all_project_risks = list(open_risks) + list(recent_closed_risks)
+        # Deltas: this week's new/resolved/new overdue
+        _risk_new = sum(1 for r in all_project_risks if r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday)
+        _risk_resolved = sum(1 for r in all_project_risks if r.status in ('resolved', 'closed') and r.updated_at and r.updated_at.date() >= monday and r.updated_at.date() <= sunday)
+        _risk_new_overdue = sum(1 for r in all_project_risks if r.status == 'open' and r.due_date and monday <= r.due_date < date.today())
         risk_stats = {
             'total': len(all_project_risks),
             'open': sum(1 for r in all_project_risks if r.status == 'open'),
@@ -666,6 +1105,12 @@ def weekly_report():
             'medium_total': sum(1 for r in all_project_risks if r.severity == 'medium'),
             'low': sum(1 for r in all_project_risks if r.status == 'open' and r.severity == 'low'),
             'low_total': sum(1 for r in all_project_risks if r.severity == 'low'),
+            'new_delta': _risk_new,
+            'resolved_delta': _risk_resolved,
+            'overdue_delta': _risk_new_overdue,
+            'high_delta': sum(1 for r in all_project_risks if r.severity == 'high' and r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday),
+            'medium_delta': sum(1 for r in all_project_risks if r.severity == 'medium' and r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday),
+            'low_delta': sum(1 for r in all_project_risks if r.severity == 'low' and r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday),
         }
         from collections import defaultdict as _defaultdict
         domain_stats = _defaultdict(lambda: {'total': 0, 'open': 0})
@@ -682,6 +1127,7 @@ def weekly_report():
         _comp_w_sum = sum(_comp_pct(r) * (r.estimate_days or 1) for r in _active)
         _comp_d_sum = sum((r.estimate_days or 1) for r in _active)
         completion_weighted = round(_comp_w_sum / _comp_d_sum) if _comp_d_sum else None
+        weekly_deltas = _compute_weekly_deltas(all_reqs, all_pids, monday, sunday)
 
         report_data = {
             'project_name': project_name,
@@ -694,6 +1140,7 @@ def weekly_report():
             'all_reqs': all_reqs, 'display_reqs': display_reqs, 'req_list_mode': req_list_mode, 'req_total_with_children': len(all_with_children),
             'req_investment': req_investment,
             'completion_weighted': completion_weighted,
+            'weekly_deltas': weekly_deltas,
             'person_done': dict(person_done),
             'person_active': dict(person_active),
             'all_persons': all_persons,
@@ -733,12 +1180,15 @@ def weekly_report():
         db.session.commit()
 
         _def_to, _def_cc = _compute_default_recipients(cur_project_id)
+        pivot = _build_pivot_data(cur_project_id, include_sub=include_sub)
         return render_template('dashboard/weekly_report.html',
             report_data=report_data, saved_report=saved,
             monday=monday, sunday=sunday, offset=offset,
             cur_project=cur_project, cur_project_id=cur_project_id or 0,
             include_sub=include_sub,
             default_to=_def_to, default_cc=_def_cc,
+            **pivot,
+            pinned_knowledge=_get_pinned_knowledge(cur_project_id, sub_project_ids if include_sub else []),
         )
 
     # GET: check if saved report exists, and load full DB data
@@ -855,6 +1305,9 @@ def weekly_report():
 
         # Risk stats & domain stats for saved report (open + recently closed)
         all_project_risks2 = list(open_risks) + list(recent_closed_risks)
+        _rn2 = sum(1 for r in all_project_risks2 if r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday)
+        _rr2 = sum(1 for r in all_project_risks2 if r.status in ('resolved', 'closed') and r.updated_at and r.updated_at.date() >= monday and r.updated_at.date() <= sunday)
+        _ro2 = sum(1 for r in all_project_risks2 if r.status == 'open' and r.due_date and monday <= r.due_date < date.today())
         risk_stats2 = {
             'total': len(all_project_risks2),
             'open': sum(1 for r in all_project_risks2 if r.status == 'open'),
@@ -867,6 +1320,10 @@ def weekly_report():
             'medium_total': sum(1 for r in all_project_risks2 if r.severity == 'medium'),
             'low': sum(1 for r in all_project_risks2 if r.status == 'open' and r.severity == 'low'),
             'low_total': sum(1 for r in all_project_risks2 if r.severity == 'low'),
+            'new_delta': _rn2, 'resolved_delta': _rr2, 'overdue_delta': _ro2,
+            'high_delta': sum(1 for r in all_project_risks2 if r.severity == 'high' and r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday),
+            'medium_delta': sum(1 for r in all_project_risks2 if r.severity == 'medium' and r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday),
+            'low_delta': sum(1 for r in all_project_risks2 if r.severity == 'low' and r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday),
         }
         from collections import defaultdict as _defaultdict
         domain_stats2 = _defaultdict(lambda: {'total': 0, 'open': 0})
@@ -875,7 +1332,7 @@ def weekly_report():
             domain_stats2[domain]['total'] += 1
             if r.status == 'open':
                 domain_stats2[domain]['open'] += 1
-        domain_stats2 = {k: v for k, v in sorted(domain_stats2.items(), key=lambda x: (-x[1]['open'], -x[1]['total'])) if v['open'] > 0}
+        domain_stats2 = {k: v for k, v in sorted(domain_stats2.items(), key=lambda x: (-x[1]['open'], -x[1]['total']))}
 
         # Weighted completion progress
         _active2 = [r for r in all_reqs if r.status != 'closed']
@@ -883,6 +1340,7 @@ def weekly_report():
         _comp_w_sum2 = sum(_comp_pct2(r) * (r.estimate_days or 1) for r in _active2)
         _comp_d_sum2 = sum((r.estimate_days or 1) for r in _active2)
         completion_weighted2 = round(_comp_w_sum2 / _comp_d_sum2) if _comp_d_sum2 else None
+        weekly_deltas2 = _compute_weekly_deltas(all_reqs, all_pids, monday, sunday)
 
         report_data = {
             'project_name': project_name,
@@ -898,6 +1356,7 @@ def weekly_report():
             'req_total_with_children': sum(1 + sum(1 for c in (r.children or []) if not all_pids_set or c.project_id in all_pids_set) for r in all_reqs),
             'req_investment': req_investment,
             'completion_weighted': completion_weighted2,
+            'weekly_deltas': weekly_deltas2,
             'person_done': dict(person_done),
             'person_active': dict(person_active),
             'all_persons': all_persons,
@@ -928,21 +1387,27 @@ def weekly_report():
         report_data['timeline_img'] = timeline_img_saved
 
         _def_to, _def_cc = _compute_default_recipients(cur_project_id)
+        pivot = _build_pivot_data(cur_project_id, include_sub=include_sub)
         return render_template('dashboard/weekly_report.html',
             report_data=report_data, saved_report=saved,
             monday=monday, sunday=sunday, offset=offset,
             cur_project=cur_project, cur_project_id=cur_project_id or 0,
             include_sub=include_sub,
             default_to=_def_to, default_cc=_def_cc,
+            **pivot,
+            pinned_knowledge=_get_pinned_knowledge(cur_project_id, sub_project_ids if include_sub else []),
         )
 
     _def_to, _def_cc = _compute_default_recipients(cur_project_id)
+    pivot = _build_pivot_data(cur_project_id, include_sub=include_sub)
     return render_template('dashboard/weekly_report.html',
         report_data=None, saved_report=None,
         monday=monday, sunday=sunday, offset=offset,
         cur_project=cur_project, cur_project_id=cur_project_id or 0,
         include_sub=include_sub,
         default_to=_def_to, default_cc=_def_cc,
+        **pivot,
+        pinned_knowledge=_get_pinned_knowledge(cur_project_id, sub_project_ids if include_sub else []),
     )
 
 
@@ -1257,7 +1722,8 @@ def my_day():
             dd = day_data[s_date]
             dd['sessions'].append(s)
             dd['total_min'] += s.minutes
-            dd['count'] += 1
+            if s.completed:
+                dd['count'] += 1
             start = s.started_at or s.created_at
             dd['timeline'].append({
                 'start_hour': start.hour,
@@ -1659,8 +2125,8 @@ def my_weekly():
                     lines.append(f'- 周期任务共 {len(all_recurring)} 个：' + '、'.join(r.title for r in all_recurring))
 
             prompt = get_prompt('personal_weekly') + '\n\n' + '\n'.join(lines)
-            _, raw = call_ollama(prompt)
-            ai_report = raw or '生成失败，请重试'
+            _, raw = call_ollama(prompt, response_format='text')
+            ai_report = raw or 'AI服务暂不可用，正在紧急修复'
             ai_report = md_lib.markdown(ai_report, extensions=['tables'])
             report = True
 
@@ -1700,12 +2166,77 @@ def my_weekly():
     from app.utils.recipients import compute_personal_recipients
     _def_to, _def_cc = compute_personal_recipients(current_user)
 
+    # ---- Week-over-week delta (last week vs this week) ----
+    prev_mon, prev_sun = week_range(offset - 1)
+    _prev_done_filter = db.and_(
+        Todo.status == 'done',
+        db.or_(
+            db.and_(Todo.done_date >= prev_mon, Todo.done_date <= prev_sun),
+            db.and_(Todo.done_date.is_(None), Todo.created_date >= prev_mon, Todo.created_date <= prev_sun),
+        ),
+    )
+    from sqlalchemy import func as _fn2, case as _case2
+    _prev = db.session.query(
+        # prev_done_cnt
+        _fn2.sum(_case2((_prev_done_filter, 1), else_=0)),
+        # prev_active_cnt
+        _fn2.sum(_case2((db.and_(Todo.status == 'todo', Todo.created_date <= prev_sun), 1), else_=0)),
+        # prev_overdue_cnt
+        _fn2.sum(_case2((db.and_(Todo.status == 'todo', Todo.created_date < prev_mon), 1), else_=0)),
+        # prev_focus (sum of actual_minutes for done todos in prev week)
+        _fn2.coalesce(_fn2.sum(_case2(
+            (db.and_(_prev_done_filter, Todo.actual_minutes > 0), Todo.actual_minutes),
+            else_=0,
+        )), 0),
+    ).filter(Todo.user_id == current_user.id).first()
+    prev_done_cnt = int(_prev[0] or 0)
+    prev_active_cnt = int(_prev[1] or 0)
+    prev_overdue_cnt = int(_prev[2] or 0)
+    prev_focus = int(_prev[3] or 0)
+    deltas = {
+        'done': len(my_done) - prev_done_cnt,
+        'active': len(my_active) - prev_active_cnt,
+        'overdue': len(overdue_todos) - prev_overdue_cnt,
+        'focus': total_focus - prev_focus,
+    }
+
+    # ---- Group by project, sort by max overdue days (most overdue first) ----
+    from collections import defaultdict as _ddict
+    _today = date.today()
+
+    def _group_by_project(items, get_project, get_overdue_days):
+        groups = _ddict(list)
+        for item in items:
+            pname = get_project(item)
+            groups[pname].append(item)
+        # Sort projects: max overdue days desc, then project name
+        def _proj_sort_key(pname):
+            max_od = max((get_overdue_days(i) for i in groups[pname]), default=0)
+            return (-max_od, pname)
+        sorted_groups = []
+        for pname in sorted(groups.keys(), key=_proj_sort_key):
+            sorted_groups.append((pname, groups[pname]))
+        return sorted_groups
+
+    reqs_by_project = _group_by_project(
+        my_reqs,
+        lambda r: (r.project.name[:6] if r.project else '-'),
+        lambda r: ((_today - r.due_date).days if r.due_date and r.due_date < _today and r.status not in ('done', 'closed') else 0),
+    )
+    risks_by_project = _group_by_project(
+        my_open_risks,
+        lambda r: (r.project.name[:6] if r.project else '-'),
+        lambda r: ((_today - r.due_date).days if r.due_date and r.due_date < _today else 0),
+    )
+
     return render_template('dashboard/my_weekly.html',
         my_done=my_done, my_active=my_active, my_reqs=my_reqs,
+        reqs_by_project=reqs_by_project, risks_by_project=risks_by_project,
         req_days=req_days, report=report, ai_report=ai_report,
         overdue_todos=overdue_todos, blocked_todos=blocked_todos,
         total_focus_min=total_focus, reviewer=reviewer_name,
-        my_open_risks=my_open_risks, my_open_reqs=my_open_reqs,
+        my_open_risks=my_open_risks,
+        deltas=deltas,
         today=date.today(),
         monday=monday, sunday=sunday, offset=offset,
         default_to=_def_to, default_cc=_def_cc,
@@ -1740,9 +2271,14 @@ def resource_map():
         start, end = week_range(week_offset)
     label = f'{start.strftime("%Y-%m-%d")} ~ {end.strftime("%Y-%m-%d")}'
 
+    cur_group = request.args.get('group', '')
+    cur_project_filter = request.args.get('project', 0, type=int)
     hidden_groups = {g.name for g in Group.query.filter_by(is_hidden=True).all()}
+    visible_groups = [g.name for g in Group.query.filter_by(is_hidden=False).order_by(Group.name).all()]
     users = [u for u in User.query.filter_by(is_active=True).order_by(User.group, User.name).all()
              if u.group not in hidden_groups]
+    if cur_group:
+        users = [u for u in users if u.group == cur_group]
     user_ids = [u.id for u in users]
 
     # All todos in the period (by created_date, which always exists)
@@ -1775,12 +2311,11 @@ def resource_map():
     projects = {p.id: p for p in Project.query.filter(Project.id.in_(project_ids)).all()} if project_ids else {}
 
     # Filter out hidden projects for non-managers
-    if not current_user.is_team_manager:
-        hidden_ids = {pid for pid, p in projects.items() if p.is_hidden}
-        if hidden_ids:
-            project_ids = [pid for pid in project_ids if pid not in hidden_ids]
-            projects = {pid: p for pid, p in projects.items() if pid not in hidden_ids}
-            user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in hidden_ids}
+    _hset = set(g.hidden_pids)
+    if _hset:
+        project_ids = [pid for pid in project_ids if pid not in _hset]
+        projects = {pid: p for pid, p in projects.items() if pid not in _hset}
+        user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in _hset}
 
     # Per-user total days
     user_total = defaultdict(float)
@@ -1840,12 +2375,18 @@ def resource_map():
                 'ratio': ratio,
             })
 
+    # Apply project filter
+    if cur_project_filter:
+        flat_rows = [r for r in flat_rows if r['project_id'] == cur_project_filter]
+        proj_flat_rows = [r for r in proj_flat_rows if r['project_id'] == cur_project_filter]
+
     is_pm = current_user.is_admin or current_user.has_role('PM', 'PL', 'FO', 'LM', 'XM', 'HR')
     return render_template('dashboard/resource_map.html',
         flat_rows=flat_rows, proj_flat_rows=proj_flat_rows,
         projects=projects, project_ids=project_ids, users=users,
         period=period, mode=mode, label=label, offset=week_offset,
-        is_pm=is_pm,
+        is_pm=is_pm, groups=visible_groups, cur_group=cur_group,
+        cur_project_filter=cur_project_filter,
     )
 
 
@@ -1913,12 +2454,11 @@ def resource_map_export():
     projects = {p.id: p for p in Project.query.filter(Project.id.in_(project_ids)).all()} if project_ids else {}
 
     # Filter out hidden projects for non-managers
-    if not current_user.is_team_manager:
-        hidden_ids = {pid for pid, p in projects.items() if p.is_hidden}
-        if hidden_ids:
-            project_ids = [pid for pid in project_ids if pid not in hidden_ids]
-            projects = {pid: p for pid, p in projects.items() if pid not in hidden_ids}
-            user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in hidden_ids}
+    _hset = set(g.hidden_pids)
+    if _hset:
+        project_ids = [pid for pid in project_ids if pid not in _hset]
+        projects = {pid: p for pid, p in projects.items() if pid not in _hset}
+        user_project_days = {k: v for k, v in user_project_days.items() if k[1] not in _hset}
 
     user_total = defaultdict(float)
     for (uid, _pid), d in user_project_days.items():
@@ -1984,37 +2524,123 @@ def save_expected_ratio():
 
 # ---- Emotion prediction ----
 
-@dashboard_bp.route('/emotion')
-@manager_required
-def emotion_predict():
-    if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
-        from flask import abort
+def _emotion_guard():
+    """情绪预测：仅管理层+私密模式(eye开)可访问。"""
+    if not current_user.is_team_manager:
         abort(403)
+    if request.cookies.get('mgr_view') != '1':
+        abort(403)
+    if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
+        abort(403)
+
+@dashboard_bp.route('/emotion')
+@login_required
+def emotion_predict():
+    _emotion_guard()
     from app.models.emotion import EmotionRecord
+    visible_groups = [g.name for g in Group.query.filter_by(is_hidden=False).order_by(Group.name).all()]
+    is_senior = current_user.is_admin or current_user.has_role('LM', 'XM', 'HR')
+    # PL 默认看自己组，XM/HR/LM 默认看全部
+    if 'group' in request.args:
+        cur_group = request.args.get('group', '')
+    else:
+        cur_group = '' if is_senior else (current_user.group or '')
+
     # Load saved records grouped by date
     risk_order = db.case(
         (EmotionRecord.risk_level == 'high', 0),
         (EmotionRecord.risk_level == 'medium', 1),
         else_=2
     )
-    records = EmotionRecord.query.order_by(EmotionRecord.scan_date.desc(), risk_order).all()
+    q = EmotionRecord.query
+    if cur_group:
+        q = q.filter_by(group=cur_group)
+    records = q.order_by(EmotionRecord.scan_date.desc(), risk_order).all()
     dates = sorted(set(r.scan_date for r in records), reverse=True)
     grouped = {}
     for d in dates:
         grouped[d] = [r for r in records if r.scan_date == d]
-    return render_template('dashboard/emotion.html', grouped=grouped, dates=dates, today=date.today())
+
+    # 1v1 覆盖率：每人最近一次记录 + 距今天数
+    hidden_groups = {g.name for g in Group.query.filter_by(is_hidden=True).all()}
+    all_users = User.query.filter_by(is_active=True).order_by(User.group, User.name).all()
+    all_users = [u for u in all_users if u.group not in hidden_groups]
+    if cur_group:
+        all_users = [u for u in all_users if u.group == cur_group]
+
+    # Build per-member latest record (across all records, not just filtered)
+    all_records = EmotionRecord.query.order_by(EmotionRecord.scan_date.desc()).all()
+    member_latest = {}  # member_name → latest EmotionRecord
+    member_history = {}  # member_name → [records oldest→newest]
+    for r in all_records:
+        if r.member_name not in member_latest:
+            member_latest[r.member_name] = r
+        member_history.setdefault(r.member_name, []).append(r)
+    # Reverse history to oldest-first
+    for k in member_history:
+        member_history[k] = list(reversed(member_history[k]))
+
+    today_ = date.today()
+    coverage = []
+    for u in all_users:
+        latest = member_latest.get(u.name)
+        days_since = (today_ - latest.scan_date).days if latest else None
+        history = member_history.get(u.name, [])
+        coverage.append({
+            'user': u,
+            'latest': latest,
+            'days_since': days_since,
+            'history': history,
+            'overdue': days_since is None or days_since >= 60,
+            'warning': days_since is not None and 30 <= days_since < 60,
+        })
+    # Sort: overdue first (no record → top, then by days_since desc)
+    coverage.sort(key=lambda c: (0 if c['days_since'] is None else 1, -(c['days_since'] or 999)))
+
+    # 各组汇总统计（XM/HR/LM 视角）
+    group_stats = {}
+    if is_senior:
+        from collections import defaultdict
+        _gs = defaultdict(lambda: {'total': 0, 'overdue': 0, 'warning': 0, 'ok': 0})
+        # Use all users (not filtered by cur_group) to compute cross-group stats
+        _all_users_for_stats = [u for u in User.query.filter_by(is_active=True).all()
+                                if u.group not in hidden_groups and u.group]
+        for u in _all_users_for_stats:
+            g_name = u.group
+            _gs[g_name]['total'] += 1
+            latest = member_latest.get(u.name)
+            ds = (today_ - latest.scan_date).days if latest else None
+            if ds is None or ds >= 60:
+                _gs[g_name]['overdue'] += 1
+            elif ds >= 30:
+                _gs[g_name]['warning'] += 1
+            else:
+                _gs[g_name]['ok'] += 1
+        group_stats = {k: dict(v) for k, v in sorted(_gs.items())}
+
+    # 1v1 谈话模版（后台可配置）
+    from app.models.site_setting import SiteSetting
+    talk_tpl_raw = SiteSetting.get('emotion_talk_template', '')
+    talk_items = [line.strip() for line in talk_tpl_raw.strip().splitlines() if line.strip()] if talk_tpl_raw else []
+
+    return render_template('dashboard/emotion.html', grouped=grouped, dates=dates,
+                           today=today_, groups=visible_groups, cur_group=cur_group,
+                           coverage=coverage, talk_items=talk_items,
+                           is_senior=is_senior, group_stats=group_stats)
 
 
 @dashboard_bp.route('/emotion/analyze', methods=['POST'])
 @login_required
 def emotion_analyze():
     """AI analyzes team emotion and attrition risk."""
-    if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
-        return jsonify(ok=False, msg='无权限'), 403
+    _emotion_guard()
 
-
-
-    users = User.query.filter_by(is_active=True).order_by(User.name).all()
+    cur_group = request.args.get('group', '') or request.form.get('group', '')
+    hidden_groups = {g.name for g in Group.query.filter_by(is_hidden=True).all()}
+    users = [u for u in User.query.filter_by(is_active=True).order_by(User.name).all()
+             if u.group not in hidden_groups]
+    if cur_group:
+        users = [u for u in users if u.group == cur_group]
     today = date.today()
     week_ago = today - timedelta(days=7)
     month_ago = today - timedelta(days=30)
@@ -2053,36 +2679,62 @@ def emotion_analyze():
             f'  进行中 {active} 个 | 阻塞 {blocked} 个 | 协助他人 {help_given} 次\n'
             f'  番茄钟 {focus} 分钟 | 最后完成日期 {last_str}')
 
+    # 补充近2个月的1v1聊天记录
+    from app.models.emotion import EmotionRecord
+    two_months_ago = today - timedelta(days=60)
+    _rq = EmotionRecord.query.filter(EmotionRecord.scan_date >= two_months_ago)
+    if cur_group:
+        _rq = _rq.filter_by(group=cur_group)
+    recent_records = _rq.order_by(EmotionRecord.scan_date.desc()).all()
+    if recent_records:
+        lines.append('\n\n近2个月1v1谈话记录：\n')
+        for r in recent_records:
+            rec_line = f'- {r.member_name}（{r.group or ""}）{r.scan_date}：状态={r.status}，风险={r.risk_level}'
+            if r.suggestion:
+                # 过滤掉"未提及"的观察项，减少 token
+                useful = [l for l in r.suggestion.split('\n') if l.strip() and '未提及' not in l]
+                if useful:
+                    rec_line += f'，记录={"; ".join(useful)}'
+            if r.signals_list:
+                rec_line += f'，信号={"; ".join(r.signals_list)}'
+            if r.comments:
+                for c in r.comments[:3]:  # 最多3条跟进
+                    rec_line += f'，跟进({c.user.name})：{c.content}'
+            lines.append(rec_line)
+
     prompt = get_prompt('emotion_predict') + '\n\n' + '\n'.join(lines)
     result, raw = call_ollama(prompt)
 
     if isinstance(result, list):
         return jsonify(ok=True, members=result)
-    return jsonify(ok=False, raw=raw or '分析失败')
+    return jsonify(ok=False, raw=raw or 'AI服务暂不可用，正在紧急修复')
 
 
 @dashboard_bp.route('/emotion/save', methods=['POST'])
 @login_required
 def emotion_save():
     """Save AI emotion analysis results."""
-    if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
-        return jsonify(ok=False), 403
+    _emotion_guard()
     import json as json_lib
 
     from app.models.emotion import EmotionRecord
     data = request.get_json() or {}
     members = data.get('members', [])
     today = date.today()
-    # Delete existing records for today (re-save)
-    EmotionRecord.query.filter_by(scan_date=today).delete()
+    # 只删今天的 AI 生成记录（signals 以 "__ai__" 开头），保留手动 1v1 记录
+    for old in EmotionRecord.query.filter_by(scan_date=today).all():
+        if old.signals and old.signals.startswith('["__ai__"'):
+            db.session.delete(old)
     for m in members:
+        # AI 记录在 signals 首位加 "__ai__" 标记
+        ai_signals = ['__ai__'] + (m.get('signals') or [])
         db.session.add(EmotionRecord(
             scan_date=today,
             member_name=m.get('name', ''),
             group=m.get('group', ''),
             status=m.get('status', '正常'),
             risk_level=m.get('risk_level', 'low'),
-            signals=json_lib.dumps(m.get('signals', []), ensure_ascii=False),
+            signals=json_lib.dumps(ai_signals, ensure_ascii=False),
             suggestion=m.get('suggestion', ''),
             created_by=current_user.id,
         ))
@@ -2094,6 +2746,7 @@ def emotion_save():
 @login_required
 def emotion_delete_record(record_id):
     """Delete a single emotion record."""
+    _emotion_guard()
     from app.models.emotion import EmotionRecord
     r = db.session.get(EmotionRecord, record_id)
     if r:
@@ -2106,9 +2759,7 @@ def emotion_delete_record(record_id):
 @login_required
 def emotion_delete(scan_date):
     """Delete all emotion records for a specific date."""
-    if not (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')):
-        from flask import abort
-        abort(403)
+    _emotion_guard()
     from app.models.emotion import EmotionRecord
     _ = EmotionRecord.query.filter_by(scan_date=scan_date).delete()
     db.session.commit()
@@ -2120,6 +2771,7 @@ def emotion_delete(scan_date):
 @login_required
 def emotion_comment(record_id):
     """Add comment to an emotion record. Supports #comment and @person for todo."""
+    _emotion_guard()
     import re
 
     from app.models.emotion import EmotionComment, EmotionRecord
@@ -2150,3 +2802,43 @@ def emotion_comment(record_id):
 
     db.session.commit()
     return redirect(url_for('dashboard.emotion_predict'))
+
+
+@dashboard_bp.route('/emotion/add-record', methods=['POST'])
+@login_required
+def emotion_add_record():
+    """手动添加1v1聊天记录，复用 EmotionRecord 模型。"""
+    _emotion_guard()
+    import json as json_lib
+
+    from app.models.emotion import EmotionRecord
+    member_name = request.form.get('member_name', '').strip()
+    if not member_name:
+        return jsonify(ok=False, msg='请选择成员')
+    user_obj = User.query.filter_by(name=member_name, is_active=True).first()
+    member_group = user_obj.group if user_obj else ''
+    status = request.form.get('status', '正常')
+    risk_level = request.form.get('risk_level', 'low')
+    signals_raw = request.form.get('signals', '').strip()
+    signals = [s.strip() for s in signals_raw.split('\n') if s.strip()] if signals_raw else []
+    suggestion = request.form.get('suggestion', '').strip()
+    record_date = request.form.get('record_date', '')
+    try:
+        from datetime import datetime as _dt
+        scan_date = _dt.strptime(record_date, '%Y-%m-%d').date() if record_date else date.today()
+    except ValueError:
+        scan_date = date.today()
+
+    db.session.add(EmotionRecord(
+        scan_date=scan_date,
+        member_name=member_name,
+        group=member_group,
+        status=status,
+        risk_level=risk_level,
+        signals=json_lib.dumps(signals, ensure_ascii=False) if signals else None,
+        suggestion=suggestion or None,
+        created_by=current_user.id,
+    ))
+    db.session.commit()
+    flash(f'已记录 {member_name} 的1v1谈话', 'success')
+    return redirect(url_for('dashboard.emotion_predict', group=member_group or ''))

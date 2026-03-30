@@ -23,16 +23,12 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4>需求看板</h4>
     <div class="d-flex gap-2">
-        <select class="form-select form-select-sm" style="width:auto;" onchange="applyFilter()" id="fProject">
-            <option value="">全部项目</option>
-            {% for p in projects %}<option value="{{ p.id }}" {% if cur_project == p.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
-        </select>
         <select class="form-select form-select-sm" style="width:auto;" onchange="applyFilter()" id="fAssignee">
             <option value="">全部负责人</option>
             {% for u in users %}<option value="{{ u.id }}" {% if cur_assignee == u.id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
         </select>
-        <a href="?project_id={{ cur_project or '' }}&assignee_id={{ cur_assignee or '' }}&show_sub={{ '0' if show_sub else '1' }}" class="btn btn-{{ 'info' if show_sub else 'outline-info' }} btn-sm"><i class="bi bi-diagram-3"></i> 子需求</a>
-        <a href="{{ url_for('requirement.requirement_list', project_id=cur_project or '') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list"></i> 列表</a>
+        <a href="?project_id={{ cur_project }}&assignee_id={{ cur_assignee or '' }}&show_sub={{ '0' if show_sub else '1' }}" class="btn btn-{{ 'info' if show_sub else 'outline-info' }} btn-sm"><i class="bi bi-diagram-3"></i> 子需求</a>
+        <a href="{{ url_for('requirement.requirement_list') }}?project_id={{ cur_project }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list"></i> 列表</a>
     </div>
 </div>
 
@@ -91,9 +87,8 @@ var showSub = {{ 'true' if show_sub else 'false' }};
 
 function applyFilter() {
     var url = new URL(window.location);
-    var p = document.getElementById('fProject').value;
+    url.searchParams.set('project_id', '{{ cur_project }}');
     var a = document.getElementById('fAssignee').value;
-    if (p) url.searchParams.set('project_id', p); else url.searchParams.delete('project_id');
     if (a) url.searchParams.set('assignee_id', a); else url.searchParams.delete('assignee_id');
     window.location = url;
 }

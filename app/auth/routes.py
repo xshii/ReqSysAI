@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timezone
 
 from flask import current_app, flash, jsonify, redirect, render_template, request, session, url_for
+from app.utils.api import api_ok, api_err
 from flask_login import current_user, login_required, login_user, logout_user
 
 from app.auth import auth_bp
@@ -258,7 +259,7 @@ def profile():
 def toggle_my_group():
     current_user.only_my_group = not current_user.only_my_group
     db.session.commit()
-    return jsonify(ok=True, only_my_group=current_user.only_my_group)
+    return api_ok(only_my_group=current_user.only_my_group)
 
 
 @auth_bp.route('/profile/stats')
@@ -399,8 +400,8 @@ def ai_efficiency():
 
     if raw:
         html = md_lib.markdown(raw, extensions=['tables'])
-        return jsonify(ok=True, html=html)
-    return jsonify(ok=False, error='分析失败')
+        return api_ok(html=html)
+    return api_err(msg='AI服务暂不可用，正在紧急修复')
 
 
 @auth_bp.route('/logout')

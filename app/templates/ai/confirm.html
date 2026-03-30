@@ -96,10 +96,6 @@
 
 {% block extra_js %}
 <script>
-document.getElementById('refine-form').addEventListener('submit', function() {
-    var btn = document.getElementById('btn-refine');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> AI 重新解析中...';
-});
+aiBindForm(document.getElementById('refine-form'), document.getElementById('btn-refine'), 'AI 重新解析中');
 </script>
 {% endblock %}

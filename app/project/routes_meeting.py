@@ -12,6 +12,7 @@ from app.models.risk import Risk
 from app.models.user import User
 from app.project import project_bp
 from app.project.routes import _check_project_access, _resolve_owner_id
+from app.utils.api import api_ok, api_err
 
 # ---- Meeting minutes ----
 
@@ -178,7 +179,7 @@ def meeting_extract(project_id, meeting_id):
     parsed, raw = call_ollama(full_text, system_prompt=system_prompt)
 
     if parsed is None:
-        flash('AI 提取失败，请稍后重试。' + (f' ({raw})' if raw else ''), 'danger')
+        flash('AI服务暂不可用，正在紧急修复' + (f' ({raw})' if raw else ''), 'danger')
         return redirect(url_for('project.meeting_detail', project_id=project.id, meeting_id=meeting.id))
 
     # Save AI result (polished content saved only when user accepts)

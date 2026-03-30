@@ -3,9 +3,150 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4>情绪预测 · 人员流失风险</h4>
+    <h4>情绪预测 · 活力激发</h4>
     <button class="btn btn-primary btn-sm" id="btnAnalyze" onclick="runAnalyze()"><i class="bi bi-robot"></i> 分析</button>
 </div>
+
+{# Group filter #}
+{% if groups %}
+<div class="d-flex gap-1 mb-3 flex-wrap">
+    <a href="?group=" class="badge {{ 'bg-primary' if not cur_group else 'bg-light text-dark border' }}" style="cursor:pointer;font-size:.75em;text-decoration:none;">全部</a>
+    {% for g in groups %}
+    <a href="?group={{ g }}" class="badge {{ 'bg-primary' if cur_group == g else 'bg-light text-dark border' }}" style="cursor:pointer;font-size:.75em;text-decoration:none;">{{ g }}</a>
+    {% endfor %}
+</div>
+{% endif %}
+
+
+{# 各组汇总统计（XM/HR/LM 视角） #}
+{% if is_senior and group_stats and not cur_group %}
+<div class="card mb-3">
+    <div class="card-header py-2">
+        <span class="small fw-bold"><i class="bi bi-bar-chart"></i> 各组 1v1 覆盖概览</span>
+    </div>
+    <div class="card-body py-2">
+        <div class="row g-2">
+        {% for g_name, gs in group_stats.items() %}
+        {% set pct = ((gs.ok / gs.total * 100) | round | int) if gs.total else 0 %}
+        <div class="col-6 col-md-4 col-lg-3">
+            <a href="?group={{ g_name }}" class="text-decoration-none">
+            <div class="p-2 rounded {% if gs.overdue > 0 %}bg-danger bg-opacity-10 border border-danger border-opacity-25{% elif gs.warning > 0 %}bg-warning bg-opacity-10 border border-warning border-opacity-25{% else %}bg-success bg-opacity-10 border border-success border-opacity-25{% endif %}" style="font-size:.8em;">
+                <div class="d-flex justify-content-between">
+                    <strong>{{ g_name }}</strong>
+                    <span class="text-muted">{{ gs.total }}人</span>
+                </div>
+                <div class="d-flex gap-2 mt-1">
+                    {% if gs.overdue %}<span class="text-danger"><i class="bi bi-exclamation-triangle"></i> {{ gs.overdue }}超期</span>{% endif %}
+                    {% if gs.warning %}<span class="text-warning"><i class="bi bi-clock"></i> {{ gs.warning }}即将</span>{% endif %}
+                    <span class="text-success"><i class="bi bi-check-circle"></i> {{ gs.ok }}正常</span>
+                </div>
+                <div class="progress mt-1" style="height:4px;">
+                    <div class="progress-bar bg-success" style="width:{{ pct }}%"></div>
+                    <div class="progress-bar bg-warning" style="width:{{ ((gs.warning / gs.total * 100) | round | int) if gs.total else 0 }}%"></div>
+                    <div class="progress-bar bg-danger" style="width:{{ ((gs.overdue / gs.total * 100) | round | int) if gs.total else 0 }}%"></div>
+                </div>
+            </div>
+            </a>
+        </div>
+        {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# 1v1 覆盖率面板 #}
+{% if coverage %}
+{% set overdue_count = coverage | selectattr('overdue') | list | length %}
+{% set warning_count = coverage | selectattr('warning') | list | length %}
+<div class="card mb-3">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+        <span class="small fw-bold"><i class="bi bi-people"></i> 1v1 覆盖率
+            {% if overdue_count %}<span class="badge bg-danger ms-1">{{ overdue_count }}人超期</span>{% endif %}
+            {% if warning_count %}<span class="badge bg-warning text-dark ms-1">{{ warning_count }}人即将到期</span>{% endif %}
+        </span>
+        <button class="btn btn-sm py-0 px-1 btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#coverageBody"><i class="bi bi-chevron-down"></i></button>
+    </div>
+    <div class="collapse show" id="coverageBody">
+    <div class="card-body py-2">
+        <div class="row g-2">
+        {% for c in coverage %}
+        <div class="col-6 col-md-4 col-lg-3">
+            <div class="d-flex align-items-center gap-2 p-2 rounded small {% if c.overdue %}bg-danger bg-opacity-10 border border-danger border-opacity-25{% elif c.warning %}bg-warning bg-opacity-10 border border-warning border-opacity-25{% else %}bg-light{% endif %}"
+                 style="cursor:pointer;" onclick="toggleTimeline(this)">
+                <div class="flex-grow-1">
+                    <strong>{{ c.user.name }}</strong>
+                    <span class="text-muted" style="font-size:.8em;">{{ c.user.group or '' }}</span>
+                    <div style="font-size:.75em;" class="{% if c.overdue %}text-danger fw-bold{% elif c.warning %}text-warning{% else %}text-muted{% endif %}">
+                        {% if c.days_since is none %}
+                            <i class="bi bi-exclamation-triangle"></i> 从未1v1
+                        {% elif c.days_since == 0 %}
+                            <i class="bi bi-check-circle text-success"></i> 今天
+                        {% else %}
+                            {% if c.overdue %}<i class="bi bi-exclamation-triangle"></i>{% elif c.warning %}<i class="bi bi-clock"></i>{% else %}<i class="bi bi-check-circle text-success"></i>{% endif %}
+                            {{ c.days_since }}天前
+                        {% endif %}
+                        {% if c.latest %} · {{ c.latest.status }}{% endif %}
+                    </div>
+                </div>
+                {% if c.history | length > 1 %}
+                <span class="text-muted" style="font-size:.65em;">{{ c.history | length }}次</span>
+                {% endif %}
+            </div>
+            {# Inline timeline + quick record form (collapsed) #}
+            <div class="timeline-panel d-none mt-1" data-member="{{ c.user.name }}">
+                {% if c.history %}
+                <div class="ps-2 mb-2">
+                {% set s_map = {'正常': 'success', '疲劳': 'warning', '低迷': 'secondary', '预警': 'danger'} %}
+                {% set r_map = {'low': 'success', 'medium': 'warning', 'high': 'danger'} %}
+                {% for r in c.history | reverse %}
+                <div class="d-flex align-items-start gap-1 mb-1" style="font-size:.75em;">
+                    <span class="text-muted flex-shrink-0" style="width:55px;">{{ r.scan_date.strftime('%m-%d') }}</span>
+                    <span class="badge bg-{{ s_map.get(r.status, 'secondary') }}" style="font-size:.85em;">{{ r.status }}</span>
+                    <span class="badge bg-{{ r_map.get(r.risk_level, 'secondary') }}" style="font-size:.85em;">{{ r.risk_level }}</span>
+                    {% if r.suggestion %}<span class="text-muted text-truncate" style="max-width:150px;" title="{{ r.suggestion }}">{{ r.suggestion.split('\n')[0][:30] }}</span>{% endif %}
+                </div>
+                {% endfor %}
+                </div>
+                {% endif %}
+                <form method="POST" action="{{ url_for('dashboard.emotion_add_record') }}" class="border-top pt-2" onclick="event.stopPropagation();">
+                    <input type="hidden" name="member_name" value="{{ c.user.name }}">
+                    <div class="d-flex gap-1 align-items-center flex-wrap mb-1" style="font-size:.75em;">
+                        <input type="date" name="record_date" class="form-control form-control-sm py-0" style="width:auto;font-size:inherit;" value="{{ today.strftime('%Y-%m-%d') }}">
+                        <select name="status" class="form-select form-select-sm py-0" style="width:auto;font-size:inherit;">
+                            <option value="正常">正常</option><option value="疲劳">疲劳</option><option value="低迷">低迷</option><option value="预警">预警</option>
+                        </select>
+                        <select name="risk_level" class="form-select form-select-sm py-0" style="width:auto;font-size:inherit;">
+                            <option value="low">低</option><option value="medium">中</option><option value="high">高</option>
+                        </select>
+                    </div>
+                    {% if talk_items %}
+                    <div class="mb-1" style="font-size:.72em;">
+                        {% for item in talk_items %}
+                        <div class="d-flex align-items-center gap-1 mb-1 talk-point" onclick="event.stopPropagation();">
+                            <span class="text-muted flex-shrink-0">{{ item }}</span>
+                            <input type="text" class="form-control form-control-sm py-0 talk-input" list="talkOpts" value="未提及" style="width:80px;font-size:inherit;" oninput="buildSuggestion(this)">
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    <input type="hidden" name="suggestion" class="suggestion-area">
+                    <input type="text" name="signals" class="form-control form-control-sm" placeholder="补充备注（可选）" style="font-size:.75em;" onclick="event.stopPropagation();">
+                    <button type="submit" class="btn btn-sm btn-info py-0 mt-1" style="font-size:.7em;"><i class="bi bi-check-lg"></i> 记录</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+        </div>
+    </div>
+    </div>
+</div>
+{% endif %}
+
+{% if talk_items %}
+<datalist id="talkOpts">
+    <option value="正常"><option value="需关注"><option value="未提及"><option value="有改善"><option value="明显下降">
+</datalist>
+{% endif %}
 
 <!-- AI Result (live, unsaved) -->
 <div id="resultPanel" class="d-none mb-4">
@@ -52,7 +193,9 @@
                         <ul class="mb-0 ps-3">{% for s in r.signals_list %}<li>{{ s }}</li>{% endfor %}</ul>
                     </div>
                     {% endif %}
-                    <div><strong>建议：</strong>{{ r.suggestion or '-' }}</div>
+                    <div><strong>{% if '：' in (r.suggestion or '') %}记录{% else %}建议{% endif %}：</strong>
+                        {% for line in (r.suggestion or '-').split('\n') %}<div>{{ line }}</div>{% endfor %}
+                    </div>
                     <!-- Comments -->
                     {% if r.comments %}
                     <div class="mt-2 border-top pt-1">
@@ -91,6 +234,37 @@
 <script>
 var _aiMembers = null;
 
+function buildSuggestion(el) {
+    var form = (el && el.closest) ? el.closest('form') : el;
+    if (!form) return;
+    var area = form.querySelector('.suggestion-area');
+    if (!area) return;
+    var lines = [];
+    form.querySelectorAll('.talk-point').forEach(function(pt) {
+        var label = pt.querySelector('.text-muted');
+        var inp = pt.querySelector('.talk-input');
+        if (label && inp && inp.value.trim()) lines.push(label.textContent.trim() + '：' + inp.value.trim());
+    });
+    // Append the extra note if any
+    var note = form.querySelector('input[name="signals"]');
+    if (note && note.value.trim()) lines.push('备注：' + note.value.trim());
+    area.value = lines.join('\n');
+}
+// Ensure suggestion is built before every submit
+document.addEventListener('submit', function(e) {
+    var form = e.target;
+    if (form.querySelector('.suggestion-area') && form.querySelector('.talk-point')) {
+        buildSuggestion(form);
+    }
+});
+
+function toggleTimeline(el) {
+    var col = el.closest('.col-6, .col-md-4, .col-lg-3');
+    if (!col) return;
+    var panel = col.querySelector('.timeline-panel');
+    if (panel) panel.classList.toggle('d-none');
+}
+
 function deleteRecord(rid, btn) {
     var card = btn.closest('.col-md-6');
     if (card) card.style.opacity = '0.3';
@@ -106,11 +280,11 @@ function runAnalyze() {
     var hint = document.getElementById('emptyHint');
     if (hint) hint.classList.add('d-none');
 
-    fetch('{{ url_for("dashboard.emotion_analyze") }}', {method: 'POST'})
+    fetch('{{ url_for("dashboard.emotion_analyze") }}?group={{ cur_group or "" }}', {method: 'POST'})
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(d) {
         loading.stop();
-        if (!d.ok) { alert('分析失败：' + (d.raw || d.msg || '')); return; }
+        if (!d.ok) { alert('AI服务暂不可用，正在紧急修复'); return; }
 
         _aiMembers = d.members;
         var container = document.getElementById('memberCards');

@@ -10,6 +10,7 @@ from app.models.risk import Risk
 from app.models.user import User
 from app.project import project_bp
 from app.project.routes import _check_project_access, _resolve_owner_id
+from app.utils.api import api_ok, api_err
 
 # ---- Risk management ----
 
@@ -57,8 +58,17 @@ def risk_list(project_id):
     reqs = Requirement.query.filter_by(project_id=project_id).order_by(Requirement.number).all()
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
 
-    # Stats for EML header
+    # Stats for EML header + weekly deltas
+    from datetime import timedelta
+    today_ = date.today()
+    weekday = today_.weekday()
+    monday = today_ - timedelta(days=weekday)
+    sunday = monday + timedelta(days=6)
+
     all_risks = Risk.query.filter_by(project_id=project_id).filter(Risk.deleted_at.is_(None)).all()
+    _new = sum(1 for r in all_risks if r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday)
+    _resolved = sum(1 for r in all_risks if r.status in ('resolved', 'closed') and r.updated_at and r.updated_at.date() >= monday and r.updated_at.date() <= sunday)
+    _new_overdue = sum(1 for r in all_risks if r.status == 'open' and r.due_date and monday <= r.due_date < today_)
     risk_stats = {
         'total': len(all_risks),
         'open': sum(1 for r in all_risks if r.status == 'open'),
@@ -71,6 +81,10 @@ def risk_list(project_id):
         'low_total': sum(1 for r in all_risks if r.severity == 'low'),
         'resolved': sum(1 for r in all_risks if r.status == 'resolved'),
         'closed': sum(1 for r in all_risks if r.status == 'closed'),
+        'new_delta': _new, 'resolved_delta': _resolved, 'overdue_delta': _new_overdue,
+        'high_delta': sum(1 for r in all_risks if r.severity == 'high' and r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday),
+        'medium_delta': sum(1 for r in all_risks if r.severity == 'medium' and r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday),
+        'low_delta': sum(1 for r in all_risks if r.severity == 'low' and r.created_at and r.created_at.date() >= monday and r.created_at.date() <= sunday),
     }
 
     # Per-domain stats: {domain: {total, open}}
@@ -530,4 +544,4 @@ def risk_ai_scan(project_id):
     elif isinstance(result, list) and not result:
         return jsonify(ok=True, risks=[], msg='AI 未识别到新风险')
     else:
-        return jsonify(ok=False, raw=raw or '生成失败')
+        return jsonify(ok=False, raw=raw or 'AI服务暂不可用，正在紧急修复')

@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
-from flask import flash, jsonify, redirect, render_template, request, url_for
+from flask import flash, g, jsonify, redirect, render_template, request, url_for
+from app.utils.api import api_ok, api_err
 from flask_login import current_user, login_required
 
 from app.constants import MILESTONE_COLOR
@@ -45,7 +46,7 @@ def _get_gantt_state(project_id):
 
 def _check_project_access(project):
     """隐藏项目访问控制：仅管理层+eye打开时可访问（隐私模式）。"""
-    if project.is_hidden and not _mgr_view_open():
+    if project.id in g.hidden_pids:
         flash('无权访问该项目', 'danger')
         return redirect(url_for('project.project_list'))
 
@@ -58,9 +59,9 @@ def project_list():
     query = Project.query
     if status != 'all':
         query = query.filter_by(status=status)
-    # 隐藏项目仅管理层+eye打开时可见（隐私模式，见 _mgr_view_open 注释）
-    if not _mgr_view_open():
-        query = query.filter_by(is_hidden=False)
+    # 隐藏项目仅管理层+eye打开时可见（隐私模式）
+    if g.hidden_pids:
+        query = query.filter(Project.id.notin_(g.hidden_pids))
     if search:
         query = query.filter(Project.name.contains(search))
 
@@ -215,8 +216,8 @@ def api_template(tpl_id):
     from app.models.project import MilestoneTemplate
     tpl = db.session.get(MilestoneTemplate, tpl_id)
     if not tpl:
-        return jsonify(ok=False), 404
-    return jsonify(ok=True, items=[
+        return api_err(status=404)
+    return api_ok(items=[
         {'name': item.name, 'offset_days': item.offset_days}
         for item in tpl.items
     ])
@@ -235,9 +236,9 @@ def api_templates():
         if action == 'create':
             name = (data.get('name') or '').strip()
             if not name:
-                return jsonify(ok=False, msg='名称不能为空')
+                return api_err(msg='名称不能为空')
             if MilestoneTemplate.query.filter_by(name=name).first():
-                return jsonify(ok=False, msg=f'模板 {name} 已存在')
+                return api_err(msg=f'模板 {name} 已存在')
             tpl = MilestoneTemplate(name=name, description=(data.get('description') or '').strip() or None)
             cumulative = 0
             for i, item in enumerate(data.get('items', [])):
@@ -247,12 +248,12 @@ def api_templates():
                     tpl.items.append(MilestoneTemplateItem(name=iname, offset_days=cumulative, sort_order=i))
             db.session.add(tpl)
             db.session.commit()
-            return jsonify(ok=True, id=tpl.id)
+            return api_ok(id=tpl.id)
         elif action == 'copy':
             tpl_id = data.get('id')
             tpl = db.session.get(MilestoneTemplate, tpl_id) if tpl_id else None
             if not tpl:
-                return jsonify(ok=False, msg='模板不存在')
+                return api_err(msg='模板不存在')
             new_name = f'{tpl.name}（副本）'
             idx = 2
             while MilestoneTemplate.query.filter_by(name=new_name).first():
@@ -263,14 +264,14 @@ def api_templates():
                 copy.items.append(MilestoneTemplateItem(name=item.name, offset_days=item.offset_days, sort_order=item.sort_order))
             db.session.add(copy)
             db.session.commit()
-            return jsonify(ok=True, id=copy.id, name=new_name)
+            return api_ok(id=copy.id, name=new_name)
         elif action == 'delete':
             tpl_id = data.get('id')
             tpl = db.session.get(MilestoneTemplate, tpl_id) if tpl_id else None
             if tpl:
                 db.session.delete(tpl)
                 db.session.commit()
-            return jsonify(ok=True)
+            return api_ok()
 
     # GET: return all templates
     templates = MilestoneTemplate.query.order_by(MilestoneTemplate.name).all()
@@ -283,7 +284,7 @@ def api_templates():
             items.append({'name': item.name, 'offset': delta, 'cumulative': item.offset_days})
             prev = item.offset_days
         result.append({'id': t.id, 'name': t.name, 'description': t.description, 'items': items})
-    return jsonify(ok=True, templates=result)
+    return api_ok(templates=result)
 
 
 @project_bp.route('/<int:project_id>')
@@ -396,7 +397,7 @@ def toggle_follow(project_id):
         followed = True
     db.session.commit()
     if request.is_json:
-        return jsonify(ok=True, followed=followed)
+        return api_ok(followed=followed)
     return redirect(url_for('project.project_detail', project_id=project_id))
 
 

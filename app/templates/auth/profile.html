@@ -14,10 +14,10 @@
                     <div class="d-flex align-items-center gap-3 mb-3 pb-2 border-bottom">
                         <div class="flex-shrink-0" style="position:relative;width:60px;height:60px;">
                             {% if current_user.avatar %}
-                            <img id="avatarPreview" src="{{ url_for('static', filename=current_user.avatar) }}" class="rounded-circle img-lightbox" style="width:60px;height:60px;object-fit:cover;cursor:pointer;" title="点击查看大图">
+                            <img id="avatarPreview" src="{{ url_for('static', filename=current_user.avatar) }}" alt="头像" class="rounded-circle img-lightbox" style="width:60px;height:60px;object-fit:cover;cursor:pointer;" title="点击查看大图">
                             {% else %}
                             <div id="avatarPlaceholder" class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center" style="width:60px;height:60px;font-size:1.5rem;">{{ current_user.name[0] }}</div>
-                            <img id="avatarPreview" class="rounded-circle img-lightbox" style="position:absolute;top:0;left:0;width:60px;height:60px;object-fit:cover;cursor:pointer;display:none;" title="点击查看大图">
+                            <img id="avatarPreview" alt="头像" class="rounded-circle img-lightbox" style="position:absolute;top:0;left:0;width:60px;height:60px;object-fit:cover;cursor:pointer;display:none;" title="点击查看大图">
                             {% endif %}
                             <label class="position-absolute d-flex align-items-center justify-content-center rounded-circle bg-white border" style="bottom:-2px;right:-2px;width:22px;height:22px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.15);" title="更换头像">
                                 <i class="bi bi-camera-fill text-muted" style="font-size:.7em;"></i>

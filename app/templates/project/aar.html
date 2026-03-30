@@ -374,22 +374,20 @@ function _aiIssues(goal, result, analysis, action, onDone) {
 // From new AAR modal
 function aiExtractIssues() {
     var btn = document.getElementById('btnAiIssues');
-    var orig = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 提取中...';
+    var loading = aiLoading(btn, '提取中');
     _aiIssues(
         document.getElementById('addGoal').value,
         document.getElementById('addResult').value,
         document.getElementById('addAnalysis').value,
         document.getElementById('addAction').value,
         function(d) {
-            btn.disabled = false; btn.innerHTML = orig;
+            loading.stop();
             var el = document.getElementById('issuesResult');
             el.style.display = '';
             if (d && d.ok && d.issues) {
                 _lastIssues = d.issues;
                 _renderIssues(d.issues, el, true);
-            } else { showToast(d.msg || 'AI 提取失败', 'danger'); }
+            } else { showToast(d.msg || 'AI服务暂不可用，正在紧急修复', 'danger'); }
         }
     );
 }
@@ -398,17 +396,15 @@ function aiExtractIssues() {
 document.addEventListener('click', function(e) {
     var btn = e.target.closest('.ai-issues-btn');
     if (!btn) return;
-    var orig = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    var loading = aiLoading(btn, '提取中');
     _aiIssues(btn.dataset.goal, btn.dataset.result, btn.dataset.analysis, btn.dataset.action,
         function(d) {
-            btn.disabled = false; btn.innerHTML = orig;
+            loading.stop();
             var area = document.getElementById(btn.dataset.target);
             if (d && d.ok && d.issues) {
                 _lastIssues = d.issues;
                 _renderIssues(d.issues, area, true);
-            } else { showToast(d.msg || 'AI 提取失败', 'danger'); }
+            } else { showToast(d.msg || 'AI服务暂不可用，正在紧急修复', 'danger'); }
         }
     );
 });

@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta
 
-from flask import jsonify, redirect, render_template, request, url_for
+from flask import g, jsonify, redirect, render_template, request, url_for
+from app.utils.api import api_ok, api_err
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
@@ -65,9 +66,7 @@ def index():
     todo_total = len(my_todos)
     todo_done = sum(1 for t in my_todos if t.status == TODO_STATUS_DONE)
 
-    # 隐藏项目仅管理层+eye打开时可见（隐私模式，见 routes.py _mgr_view_open 注释）
-    from app.project.routes import _mgr_view_open
-    _hidden_pids = [] if _mgr_view_open() else [p.id for p in Project.query.filter_by(is_hidden=True).all()]
+    _hidden_pids = g.hidden_pids
     _req_q = Requirement.query.filter_by(assignee_id=current_user.id)\
         .filter(Requirement.status.notin_(REQ_INACTIVE_STATUSES))
     if _hidden_pids:
@@ -444,12 +443,15 @@ def batch_adopt():
                 reqs = [req]
         reason = (item.get('reason') or '').strip()
         full_title = f'{title}（{reason}）' if reason else title
+        cat = item.get('category', 'work')
+        if cat not in ('work', 'risk'):
+            cat = 'work'
         todo = Todo(user_id=current_user.id, title=full_title, due_date=today,
-                    category='work', source='ai', requirements=reqs)
+                    category=cat, source='ai', requirements=reqs)
         todo.items.append(TodoItem(title=full_title, sort_order=0))
         db.session.add(todo)
         db.session.flush()
-        results.append({'todo_id': todo.id, 'title': full_title, 'req_id': req_id or 0})
+        results.append({'todo_id': todo.id, 'title': full_title, 'req_id': req_id or 0, 'category': cat})
     db.session.commit()
     return jsonify(ok=True, count=len(results), items=results)
 
@@ -555,7 +557,7 @@ def ai_recommend_todos():
     prompt = get_prompt('todo_recommend') + '\n\n' + '\n'.join(lines)
     result, _ = call_ollama(prompt)
     if not result:
-        return jsonify(ok=False, msg='AI 推荐失败，请重试')
+        return jsonify(ok=False, msg='AI服务暂不可用，正在紧急修复')
     if isinstance(result, dict):
         result = [result]
     if not isinstance(result, list):
@@ -565,12 +567,14 @@ def ai_recommend_todos():
     for item in result:
         if isinstance(item, dict) and item.get('title'):
             req_num = item.get('req_number', '')
+            is_risk = req_num.upper() == 'RISK'
             t = {
                 'title': item['title'],
                 'req_number': req_num,
                 'req_id': req_map.get(req_num, 0),
                 'reason': item.get('reason', ''),
                 'est_min': item.get('est_min', 0),
+                'category': 'risk' if is_risk else 'work',
             }
             todos.append(t)
     return jsonify(ok=True, todos=todos, recurring_highlight_ids=recurring_highlight_ids)
@@ -955,7 +959,7 @@ def daily_standup():
     if raw:
         html = md_lib.markdown(raw, extensions=['tables'])
         return jsonify(ok=True, html=html)
-    return jsonify(ok=False, error='生成失败')
+    return jsonify(ok=False, error='AI服务暂不可用，正在紧急修复')
 
 
 # ---- Daily Progress Report ----
@@ -1202,7 +1206,7 @@ def recurring_ai_recommend():
 
     if isinstance(result, list):
         return jsonify(ok=True, items=result)
-    return jsonify(ok=False, raw=raw or '生成失败')
+    return jsonify(ok=False, raw=raw or 'AI服务暂不可用，正在紧急修复')
 
 
 @main_bp.route('/recurring-todos/<int:rid>/toggle', methods=['POST'])

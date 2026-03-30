@@ -23,6 +23,21 @@
         </div>
     </div>
     <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header py-2"><strong><i class="bi bi-key"></i> API 密钥</strong></div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin.api_key_save') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-2">
+                        <label class="form-label small mb-0">外部系统 API Key</label>
+                        <input type="text" class="form-control form-control-sm" name="api_key"
+                               value="{{ api_key }}" placeholder="用于测试平台等外部系统调用接口">
+                        <div class="form-text">调用方在请求头 <code>X-API-Key</code> 中携带此密钥</div>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary">保存</button>
+                </form>
+            </div>
+        </div>
         <div class="card">
             <div class="card-header py-2"><strong><i class="bi bi-calendar-week"></i> Exchange 日历同步</strong></div>
             <div class="card-body">
@@ -51,6 +66,21 @@
                     {% else %}
                     <span class="badge bg-secondary ms-2">未配置</span>
                     {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header py-2"><strong>1v1 谈话模版</strong></div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin.talk_template_save') }}">
+                    <div class="mb-2">
+                        <textarea name="talk_template" class="form-control form-control-sm" rows="6" placeholder="每行一个观察维度，例如：&#10;最近加班情况是否有变化&#10;工作积极性和主动性&#10;团队协作和沟通意愿&#10;对项目目标的认同度&#10;个人成长诉求" style="font-size:.85em;">{{ talk_template }}</textarea>
+                        <div class="form-text">每行一个维度，用于情绪预测页面 1v1 谈话记录的快速选择</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">保存</button>
                 </form>
             </div>
         </div>

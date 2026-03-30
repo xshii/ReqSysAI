@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 
 from flask import current_app, flash, jsonify, redirect, render_template, request, url_for
+from app.utils.api import api_ok, api_err
 from flask_login import current_user, login_required
 
 from app.constants import MAX_COMMENT_LENGTH
@@ -20,8 +21,9 @@ def index():
     """List incentives with status filter."""
     is_reviewer = current_user.has_role('PL', 'XM', 'LM', 'HR') or current_user.is_admin
     status_filter = request.args.get('status', '')
-    # Only default to 'submitted' when no URL params at all (first visit)
-    if not request.args and is_reviewer:
+    # Only default to 'submitted' when no URL params at all (first visit) AND in private mode
+    mgr_view_early = request.cookies.get('mgr_view') == '1'
+    if not request.args and is_reviewer and mgr_view_early:
         status_filter = 'submitted'
 
     # Ordinary users: only see own submitted items; reviewers see all
@@ -52,12 +54,17 @@ def index():
         since = date.today() - timedelta(days=period_days)
         q = Incentive.query.filter(Incentive.created_at >= since)
 
+    # Visibility
+    mgr_view = request.cookies.get('mgr_view') == '1'
     if not is_reviewer:
-        # Ordinary users: see own items + all approved
+        # Ordinary users: own items + all approved
         q = q.filter(db.or_(
             Incentive.submitted_by == current_user.id,
             Incentive.status == 'approved',
         ))
+    elif not mgr_view:
+        # Management in non-private mode: only own submitted (all statuses)
+        q = q.filter(Incentive.submitted_by == current_user.id)
     elif scope == 'mine':
         q = q.filter_by(submitted_by=current_user.id)
     if status_filter and status_filter != 'funds':
@@ -68,11 +75,8 @@ def index():
             Incentive.title.contains(search_q),
             Incentive.description.contains(search_q),
         ))
-    if status_filter not in ('funds', 'stats'):
-        if status_filter == 'approved':
-            items = q.order_by(Incentive.reviewed_at.desc()).all()
-        else:
-            items = q.order_by(Incentive.created_at.desc()).all()
+    if status_filter not in ('funds', 'stats', 'gifts'):
+        items = q.order_by(db.func.coalesce(Incentive.reviewed_at, Incentive.created_at).desc(), Incentive.created_at.desc()).all()
     else:
         items = []
 
@@ -88,6 +92,46 @@ def index():
         inc_stats = _build_incentive_stats(since=stats_since)
         saved_report = IncentiveReport.query.filter_by(period=stats_period)\
             .order_by(IncentiveReport.created_at.desc()).first()
+
+    # Gift filtering tab (reviewers only)
+    gift_items = []
+    gift_catalog = []
+    gift_start_month = ''
+    if is_reviewer and status_filter == 'gifts':
+        from app.models.gift import GiftItem
+        from app.models.site_setting import SiteSetting
+        gift_start_month = SiteSetting.get('gift_start_month', '')
+        gift_catalog = GiftItem.query.filter_by(is_active=True).order_by(GiftItem.picks.desc(), GiftItem.created_at.desc()).all()
+
+        gift_max = request.args.get('gift_max', 200, type=int)
+        gift_month = request.args.get('gift_month', '').strip()
+        gq = Incentive.query.filter_by(status='approved')
+        if gift_max > 0:
+            gq = gq.filter(db.or_(Incentive.amount <= gift_max, Incentive.amount.is_(None)))
+        if gift_month:
+            try:
+                gm_start = date.fromisoformat(gift_month + '-01')
+                if gm_start.month == 12:
+                    gm_end = gm_start.replace(year=gm_start.year + 1, month=1)
+                else:
+                    gm_end = gm_start.replace(month=gm_start.month + 1)
+                gq = gq.filter(Incentive.created_at >= gm_start, Incentive.created_at < gm_end)
+            except ValueError:
+                pass
+        elif gift_start_month:
+            # Default: show from gift_start_month onwards
+            try:
+                gs = date.fromisoformat(gift_start_month + '-01')
+                gq = gq.filter(Incentive.created_at >= gs)
+            except ValueError:
+                pass
+        gift_items = gq.order_by(Incentive.created_at.desc()).all()
+
+        # Gift admin data: per-person records
+        from app.models.gift import GiftRecord
+        gift_pending = GiftRecord.query.filter_by(status='pending').order_by(GiftRecord.expires_at).all()
+        gift_selected = GiftRecord.query.filter_by(status='selected').order_by(GiftRecord.selected_at.desc()).all()
+        gift_purchased = GiftRecord.query.filter_by(status='purchased').order_by(GiftRecord.purchased_at.desc()).all()
 
     # Fund data for inline tab (reviewers only)
     funds = []
@@ -118,18 +162,28 @@ def index():
         fund_conflict_keys = [src for src, types in source_types.items() if len(types) > 1]
         fund_conflicts = [source_stats[src]['label'] for src in fund_conflict_keys]
 
+    # Load gift_start_month for review modal (all tabs need it)
+    from app.models.site_setting import SiteSetting as _SS
+    _gift_start = _SS.get('gift_start_month', '') if is_reviewer else ''
+
     return render_template('incentive/index.html',
         items=items, users=users, is_reviewer=is_reviewer,
         status_filter=status_filter, scope=scope, period=period,
         month_filter=month_filter, search_q=search_q,
         can_export=is_reviewer or current_user.is_admin,
         today=date.today(),
+        gift_start_month=_gift_start,
         funds=funds, source_stats=source_stats,
         fund_conflicts=fund_conflicts if funds else [],
         fund_conflict_keys=fund_conflict_keys if funds else [],
         source_labels=_get_source_labels(),
         inc_stats=inc_stats, stats_period=stats_period, saved_report=saved_report,
-        all_funds=IncentiveFund.query.order_by(IncentiveFund.name).all() if is_reviewer else [])
+        all_funds=IncentiveFund.query.order_by(IncentiveFund.name).all() if is_reviewer else [],
+        gift_items=gift_items, gift_catalog=gift_catalog,
+        gift_pending=gift_pending if status_filter == 'gifts' else [],
+        gift_selected=gift_selected if status_filter == 'gifts' else [],
+        gift_purchased=gift_purchased if status_filter == 'gifts' else [],
+    )
 
 
 @incentive_bp.route('/submit', methods=['POST'])
@@ -216,14 +270,35 @@ def review(inc_id):
     inc = db.get_or_404(Incentive, inc_id)
     action = request.form.get('action')
     description = request.form.get('description', '').strip()
-    amount = request.form.get('amount', type=float)
+    # Parse amount: single number or comma-separated for multiple nominees
+    amount_raw = request.form.get('amount', '').strip().replace('，', ',')
+    try:
+        amount = float(amount_raw) if amount_raw and ',' not in amount_raw else None
+    except ValueError:
+        amount = None
+    amount_detail = amount_raw if ',' in amount_raw else None
 
     source = request.form.get('source', 'instant')
     action_labels = {'approve': '通过', 'reject': '拒绝', 'pending': '退回修改'}
     fund_id = request.form.get('fund_id', type=int)
+
+    # Validate: multiple nominees need comma-separated amounts
+    nominee_count = len(inc.nominees)
+    if action == 'approve' and nominee_count > 1 and amount_raw and ',' not in amount_raw:
+        flash(f'团队奖（{nominee_count}人）请用逗号分隔每人金额，如 100,200,300', 'danger')
+        return redirect(url_for('incentive.index'))
+
     if action == 'approve':
         inc.status = 'approved'
-        inc.amount = amount
+        if amount_detail:
+            # Comma-separated: store total as amount, keep detail
+            try:
+                amounts = [float(x.strip()) for x in amount_detail.split(',') if x.strip()]
+                inc.amount = sum(amounts)
+            except ValueError:
+                inc.amount = None
+        else:
+            inc.amount = amount
         inc.source = source
         inc.fund_id = fund_id
         inc.is_public = 'is_public' in request.form
@@ -257,6 +332,16 @@ def review(inc_id):
     from app.services.audit import log_audit
     log_audit(action, 'incentive', inc.id, inc.title, f'{action_labels.get(action, action)} 金额={amount}')
     db.session.commit()
+
+    # Trigger gift notification if conditions met
+    sync_gift = 'sync_gift' in request.form
+    import logging
+    logging.getLogger(__name__).info(
+        'Review inc=%s action=%s is_public=%s sync_gift=%s form_keys=%s',
+        inc.id, action, inc.is_public, sync_gift, list(request.form.keys()))
+    if action == 'approve' and inc.is_public and sync_gift:
+        _try_trigger_gift_notification(inc)
+
     flash(f'已{action_labels.get(action, action)}', 'success')
     return redirect(url_for('incentive.index'))
 
@@ -753,7 +838,7 @@ def ai_recommend_candidates():
 
     if isinstance(result, list):
         return jsonify(ok=True, candidates=result)
-    return jsonify(ok=False, raw=raw or '生成失败')
+    return jsonify(ok=False, raw=raw or 'AI服务暂不可用，正在紧急修复')
 
 
 @incentive_bp.route('/rant', methods=['GET', 'POST'])
@@ -1420,3 +1505,215 @@ def fund_import_csv():
         msg += f'，跳过 {skipped} 条重复'
     flash(msg, 'success')
     return redirect(url_for('incentive.fund_list'))
+
+
+def _try_trigger_gift_notification(inc):
+    """If incentive qualifies for gift selection, create per-person GiftRecord + notification."""
+    from app.models.site_setting import SiteSetting
+    from app.models.notification import Notification
+    from app.models.gift import GiftRecord
+    gift_start = SiteSetting.get('gift_start_month', '')
+    if not gift_start:
+        return
+    if not inc.reviewed_at:
+        return
+    award_ym = inc.reviewed_at.strftime('%Y-%m')
+    if award_ym < gift_start:
+        return
+    # Already triggered
+    if inc.gift_status:
+        return
+
+    days = 15
+    inc.gift_status = 'pending_gift'
+    inc.gift_notified_at = datetime.now()
+    inc.gift_expires_at = datetime.now() + timedelta(days=days)
+    inc.gift_notify_count = 1
+
+    # Create per-person gift record + notification
+    for user in inc.nominees:
+        rec = GiftRecord(
+            incentive_id=inc.id, user_id=user.id,
+            status='pending', notify_count=1,
+            notified_at=datetime.now(),
+            expires_at=datetime.now() + timedelta(days=days),
+        )
+        db.session.add(rec)
+        n = Notification(
+            user_id=user.id,
+            type='gift',
+            title=f'🎉 恭喜！你获得了一份激励「{inc.title}」— 请在{days}天内选择你的礼物',
+            link=url_for('incentive.gift_select', inc_id=inc.id),
+            is_read=False,
+        )
+        db.session.add(n)
+    db.session.commit()
+
+
+def _retrigger_gift_notification(inc, days=7):
+    """Re-trigger gift notification (second chance)."""
+    from app.models.notification import Notification
+    inc.gift_status = 'pending_gift'
+    inc.gift_notified_at = datetime.now()
+    inc.gift_expires_at = datetime.now() + timedelta(days=days)
+    inc.gift_notify_count = (inc.gift_notify_count or 0) + 1
+    for user in inc.nominees:
+        n = Notification(
+            user_id=user.id,
+            type='gift',
+            title=f'🎁 礼物选择提醒（第{inc.gift_notify_count}次）「{inc.title}」— 请在{days}天内选择',
+            link=url_for('incentive.gift_select', inc_id=inc.id),
+            is_read=False,
+        )
+        db.session.add(n)
+    db.session.commit()
+
+
+@incentive_bp.route('/gifts/<int:inc_id>/select', methods=['GET', 'POST'])
+@login_required
+def gift_select(inc_id):
+    """Nominee selects a gift for their incentive."""
+    from app.models.gift import GiftItem, GiftRecord
+    inc = db.get_or_404(Incentive, inc_id)
+
+    # Verify current user is a nominee
+    if current_user not in inc.nominees:
+        flash('无权操作', 'danger')
+        return redirect(url_for('main.index'))
+
+    # Find this user's gift record
+    rec = GiftRecord.query.filter_by(incentive_id=inc.id, user_id=current_user.id).first()
+    if not rec or rec.status != 'pending':
+        flash('该激励不在礼物选择阶段', 'warning')
+        return redirect(url_for('main.index'))
+
+    # Check expiry
+    if rec.expires_at and datetime.now() > rec.expires_at:
+        flash('选择期已过', 'warning')
+        return redirect(url_for('main.index'))
+
+    gifts = GiftItem.query.filter_by(is_active=True).order_by(GiftItem.picks.desc()).all()
+
+    if request.method == 'POST':
+        gift_id = request.form.get('gift_id', type=int)
+        gift = db.get_or_404(GiftItem, gift_id)
+        rec.status = 'selected'
+        rec.gift_item_id = gift.id
+        rec.selected_at = datetime.now()
+        gift.picks = (gift.picks or 0) + 1
+
+        # Check if all nominees have selected → mark incentive as gift_selected
+        all_recs = GiftRecord.query.filter_by(incentive_id=inc.id).all()
+        if all(r.status in ('selected', 'purchased') for r in all_recs):
+            inc.gift_status = 'gift_selected'
+            inc.gift_selected_at = datetime.now()
+
+        # Mark related gift notifications as read
+        from app.models.notification import Notification
+        Notification.query.filter_by(
+            user_id=current_user.id, type='gift', is_read=False
+        ).filter(Notification.link.contains(str(inc.id))).update({'is_read': True})
+
+        db.session.commit()
+        flash(f'已选择「{gift.name}」，礼物正在路上~', 'success')
+        return redirect(url_for('main.index'))
+
+    return render_template('incentive/gift_select.html',
+                           inc=inc, gifts=gifts, rec=rec, now=datetime.now())
+
+
+
+@incentive_bp.route('/gifts/<int:inc_id>/mark-purchased', methods=['POST'])
+@login_required
+def gift_mark_purchased(inc_id):
+    """Admin marks gift as purchased (legacy incentive-level)."""
+    inc = db.get_or_404(Incentive, inc_id)
+    inc.gift_status = 'gift_purchased'
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@incentive_bp.route('/gifts/record/<int:rec_id>/mark-purchased', methods=['POST'])
+@login_required
+def gift_mark_purchased_rec(rec_id):
+    """Admin marks a per-person gift record as purchased."""
+    from app.models.gift import GiftRecord
+    from app.models.notification import Notification
+    rec = db.get_or_404(GiftRecord, rec_id)
+    rec.status = 'purchased'
+    rec.purchased_at = datetime.now()
+    # Check if all records for this incentive are purchased
+    all_recs = GiftRecord.query.filter_by(incentive_id=rec.incentive_id).all()
+    if all(r.status == 'purchased' for r in all_recs):
+        rec.incentive.gift_status = 'gift_purchased'
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@incentive_bp.route('/gifts/<int:inc_id>/retrigger', methods=['POST'])
+@login_required
+def gift_retrigger(inc_id):
+    """Admin re-triggers gift notification for expired incentive."""
+    inc = db.get_or_404(Incentive, inc_id)
+    _retrigger_gift_notification(inc, days=7)
+    return jsonify(ok=True, msg='已重新触发通知（7天）')
+
+
+@incentive_bp.route('/gifts/config', methods=['POST'])
+@login_required
+def gift_config():
+    """Save gift start month config."""
+    from app.models.site_setting import SiteSetting
+    month = request.form.get('gift_start_month', '').strip()
+    SiteSetting.set('gift_start_month', month)
+    flash(f'小额礼物制生效月份已设为 {month}' if month else '已清除小额礼物制生效月份', 'success')
+    return redirect(url_for('incentive.index', tab='gifts', status='gifts', scope='all'))
+
+
+@incentive_bp.route('/gifts/add', methods=['POST'])
+@login_required
+def gift_add():
+    """Add a gift item to the catalog."""
+    from app.models.gift import GiftItem
+    name = request.form.get('name', '').strip()
+    if not name:
+        flash('请填写礼物名称', 'danger')
+        return redirect(url_for('incentive.index', tab='gifts', status='gifts', scope='all'))
+    description = request.form.get('description', '').strip()
+    link = request.form.get('link', '').strip()
+    price = request.form.get('price', type=float)
+    image_path = None
+    if 'image' in request.files and request.files['image'].filename:
+        image_path = save_photo(request.files['image'])
+    gift = GiftItem(name=name, description=description, link=link,
+                    price=price, image=image_path, created_by=current_user.id)
+    db.session.add(gift)
+    db.session.commit()
+    flash(f'礼物 "{name}" 已添加', 'success')
+    return redirect(url_for('incentive.index', tab='gifts', status='gifts', scope='all'))
+
+
+@incentive_bp.route('/gifts/<int:gift_id>/pick', methods=['POST'])
+@login_required
+def gift_pick(gift_id):
+    """Toggle pick on a gift item (+1 / -1)."""
+    from app.models.gift import GiftItem
+    gift = db.get_or_404(GiftItem, gift_id)
+    action = request.json.get('action', 'pick') if request.is_json else 'pick'
+    if action == 'unpick':
+        gift.picks = max((gift.picks or 0) - 1, 0)
+    else:
+        gift.picks = (gift.picks or 0) + 1
+    db.session.commit()
+    return jsonify(ok=True, picks=gift.picks)
+
+
+@incentive_bp.route('/gifts/<int:gift_id>/delete', methods=['POST'])
+@login_required
+def gift_delete(gift_id):
+    """Soft-delete a gift item (hide from catalog, keep data)."""
+    from app.models.gift import GiftItem
+    gift = db.get_or_404(GiftItem, gift_id)
+    gift.is_active = False
+    db.session.commit()
+    return jsonify(ok=True)

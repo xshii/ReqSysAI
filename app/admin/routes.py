@@ -6,6 +6,7 @@ import os
 import requests
 import yaml
 from flask import Response, current_app, flash, jsonify, redirect, render_template, request, url_for
+from app.utils.api import api_ok, api_err
 from flask_login import current_user
 
 logger = logging.getLogger(__name__)
@@ -804,11 +805,11 @@ def ai_test():
     try:
         result, raw = call_ollama(test_prompt)
         if raw:
-            return jsonify(ok=True, response=raw[:200])
+            return api_ok(response=raw[:200])
         else:
-            return jsonify(ok=False, error='AI 返回为空')
+            return api_err(msg='AI 返回为空')
     except Exception as e:
-        return jsonify(ok=False, error=str(e)[:200])
+        return api_err(msg=str(e)[:200])
 
 
 @admin_bp.route('/ai-models/test-all', methods=['POST'])
@@ -874,7 +875,7 @@ def ai_test_all():
             results.append({'provider': 'OpenAI', 'model': '-', 'size': '-',
                             'status': 'fail', 'reply': f'连接失败: {e}', 'time': '-'})
 
-    return jsonify(ok=True, results=results)
+    return api_ok(results=results)
 
 
 @admin_bp.route('/ai-models/test-one', methods=['POST'])
@@ -886,14 +887,14 @@ def ai_test_one():
     provider = data.get('provider', 'ollama')
     model_name = data.get('model', '')
     if not model_name:
-        return jsonify(ok=False, error='缺少模型名')
+        return api_err(msg='缺少模型名')
 
     t0 = time.time()
     try:
         if provider == 'ollama':
             url = current_app.config.get('OLLAMA_BASE_URL', '').rstrip('/')
             if not url:
-                return jsonify(ok=False, error='Ollama 未配置 API 地址')
+                return api_err(msg='Ollama 未配置 API 地址')
             r = requests.post(f'{url}/api/chat', timeout=30,
                               proxies={'http': '', 'https': ''},
                               json={'model': model_name, 'messages': [{'role': 'user', 'content': 'hi'}], 'stream': False})
@@ -902,7 +903,7 @@ def ai_test_one():
         else:
             url = current_app.config.get('OPENAI_BASE_URL', '').rstrip('/')
             if not url:
-                return jsonify(ok=False, error='OpenAI 未配置 API 地址')
+                return api_err(msg='OpenAI 未配置 API 地址')
             key = current_app.config.get('OPENAI_API_KEY', '')
             headers = {'Authorization': f'Bearer {key}'} if key else {}
             r = requests.post(f'{url}/chat/completions', headers=headers, timeout=30,
@@ -910,9 +911,9 @@ def ai_test_one():
             r.raise_for_status()
             reply = r.json()['choices'][0]['message']['content'][:100]
         elapsed = round(time.time() - t0, 1)
-        return jsonify(ok=True, reply=reply, time=f'{elapsed}s')
+        return api_ok(reply=reply, time=f'{elapsed}s')
     except Exception as e:
-        return jsonify(ok=False, error=str(e)[:200])
+        return api_err(msg=str(e)[:200])
 
 
 @admin_bp.route('/site-settings')
@@ -926,7 +927,10 @@ def site_settings():
                            current_site_name=site_name,
                            exchange_server=SiteSetting.get('exchange_server', exc_cfg.get('server', '')),
                            exchange_domain=SiteSetting.get('exchange_domain', exc_cfg.get('domain', '')),
-                           mail_domain=SiteSetting.get('mail_domain', current_app.config.get('MAIL_DOMAIN', 'company.com')))
+                           mail_domain=SiteSetting.get('mail_domain', current_app.config.get('MAIL_DOMAIN', 'company.com')),
+                           api_key=SiteSetting.get('api_key', ''),
+                           api_key_set=bool(SiteSetting.get('api_key', '')),
+                           talk_template=SiteSetting.get('emotion_talk_template', ''))
 
 
 @admin_bp.route('/site-settings/save', methods=['POST'])
@@ -940,6 +944,16 @@ def site_settings_save():
     SiteSetting.set('site_name', new_name)
     current_app.config['SITE_NAME'] = new_name
     flash('站点名称已更新', 'success')
+    return redirect(url_for('admin.site_settings'))
+
+
+@admin_bp.route('/site-settings/api-key', methods=['POST'])
+@admin_required
+def api_key_save():
+    from app.models.site_setting import SiteSetting
+    key = request.form.get('api_key', '').strip()
+    SiteSetting.set('api_key', key)
+    flash('API 密钥已更新', 'success')
     return redirect(url_for('admin.site_settings'))
 
 
@@ -957,6 +971,16 @@ def exchange_settings_save():
     current_app.config['EXCHANGE_CONFIG'] = {'server': server, 'domain': domain}
     current_app.config['MAIL_DOMAIN'] = mail or 'company.com'
     flash('Exchange 配置已保存' + ('（已启用）' if server else '（已禁用）'), 'success')
+    return redirect(url_for('admin.site_settings'))
+
+
+@admin_bp.route('/site-settings/talk-template', methods=['POST'])
+@admin_required
+def talk_template_save():
+    from app.models.site_setting import SiteSetting
+    tpl = request.form.get('talk_template', '').strip()
+    SiteSetting.set('emotion_talk_template', tpl)
+    flash('1v1 谈话模版已保存', 'success')
     return redirect(url_for('admin.site_settings'))
 
 

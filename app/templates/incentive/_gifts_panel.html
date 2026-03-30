@@ -1,0 +1,88 @@
+{# 礼物激励页签 #}
+
+<!-- 配置：小额礼物制生效月份 -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="POST" action="{{ url_for('incentive.gift_config') }}" class="d-flex align-items-center gap-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <span class="small fw-bold">小额礼物制生效月份：</span>
+            <input type="month" name="gift_start_month" class="form-control form-control-sm" style="width:150px;" value="{{ gift_start_month or '' }}">
+            <button type="submit" class="btn btn-sm btn-outline-primary">保存</button>
+            <span class="text-muted small ms-2">从该月起，审批通过的激励默认发放礼物而非现金</span>
+        </form>
+    </div>
+</div>
+
+<!-- 礼物库 -->
+<div class="card mb-3">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center" role="button" data-bs-toggle="collapse" data-bs-target="#giftCatalogBody" style="cursor:pointer;">
+        <span><i class="bi bi-chevron-right" id="giftCatalogIcon"></i> <i class="bi bi-box-seam"></i> 礼物库 {% if gift_catalog %}<span class="badge bg-secondary">{{ gift_catalog|length }}</span>{% endif %}</span>
+        <button class="btn btn-sm btn-primary" onclick="event.stopPropagation();" data-bs-toggle="collapse" data-bs-target="#addGiftForm"><i class="bi bi-plus-lg"></i> 录入礼物</button>
+    </div>
+    <div class="collapse" id="giftCatalogBody">
+    <div class="collapse mb-0" id="addGiftForm">
+        <div class="card-body py-2 border-bottom">
+            <form method="POST" action="{{ url_for('incentive.gift_add') }}" enctype="multipart/form-data" class="row g-2 align-items-end">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="col-md-3">
+                    <label class="form-label small mb-0">名称 <span class="text-danger">*</span></label>
+                    <input type="text" name="name" class="form-control form-control-sm" required placeholder="如：定制笔记本">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small mb-0">一句话说明</label>
+                    <input type="text" name="description" class="form-control form-control-sm" placeholder="如：A5皮面烫金，适合技术人员">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">链接</label>
+                    <input type="url" name="link" class="form-control form-control-sm" placeholder="购买链接">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-0">图片</label>
+                    <input type="file" name="image" class="form-control form-control-sm" accept="image/*">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-sm btn-success">添加</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="card-body py-2">
+        {% if gift_catalog %}
+        <div class="row g-2">
+            {% for g in gift_catalog %}
+            <div class="col-md-3 col-sm-6">
+                <div class="border rounded p-2 h-100 d-flex flex-column" style="font-size:.85em;">
+                    {% if g.image %}
+                    <img src="{{ url_for('static', filename=g.image) }}" class="rounded mb-1" style="width:100%;height:80px;object-fit:cover;" alt="{{ g.name }}">
+                    {% else %}
+                    <div class="rounded mb-1 d-flex align-items-center justify-content-center bg-light" style="height:80px;"><i class="bi bi-image text-muted" style="font-size:1.5rem;"></i></div>
+                    {% endif %}
+                    <div class="fw-bold">{{ g.name }}</div>
+                    {% if g.description %}<div class="text-muted small">{{ g.description }}</div>{% endif %}
+                    <div class="mt-auto d-flex justify-content-between align-items-center pt-1">
+                        <span class="text-muted" style="font-size:.75em;"><i class="bi bi-people"></i> {{ g.picks or 0 }}人选择</span>
+                        <span class="d-flex gap-1">
+                            {% if g.link %}<a href="{{ g.link }}" target="_blank" class="btn btn-outline-primary btn-sm py-0" style="font-size:.75em;">链接</a>{% endif %}
+                            <button class="btn btn-outline-danger btn-sm py-0" style="font-size:.75em;" onclick="if(confirm('删除此礼物？'))apiPost('{{ url_for('incentive.gift_delete', gift_id=g.id) }}',{}).then(function(d){if(d&&d.ok)location.reload();});">删除</button>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-3 small">暂无礼物，点击上方"录入礼物"添加</div>
+        {% endif %}
+    </div>
+    </div>{# /giftCatalogBody #}
+</div>
+<script>
+document.getElementById('giftCatalogBody')?.addEventListener('show.bs.collapse', function() {
+    document.getElementById('giftCatalogIcon').className = 'bi bi-chevron-down';
+});
+document.getElementById('giftCatalogBody')?.addEventListener('hide.bs.collapse', function() {
+    document.getElementById('giftCatalogIcon').className = 'bi bi-chevron-right';
+});
+</script>
+
+{% include "incentive/_gifts_admin.html" %}

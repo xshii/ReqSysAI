@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask
+from flask import Flask, g, request
 
 from config import config
 
@@ -50,6 +50,22 @@ def create_app(config_name=None):
     register_events()
 
 
+    @app.before_request
+    def _set_hidden_pids():
+        """Pre-compute hidden project IDs for the current request.
+        Managers with eye-toggle open see all projects; others are filtered.
+        """
+        from flask_login import current_user
+        if not current_user.is_authenticated:
+            g.hidden_pids = []
+            return
+        # mgr_view_open: manager + eye cookie on → can see hidden projects
+        if current_user.is_team_manager and request.cookies.get('mgr_view') == '1':
+            g.hidden_pids = []
+            return
+        from app.models.project import Project
+        g.hidden_pids = [p.id for p in Project.query.filter_by(is_hidden=True).all()]
+
     @app.after_request
     def _no_cache(response):
         if 'text/html' in response.content_type:
@@ -81,11 +97,10 @@ def create_app(config_name=None):
             cur_group = req.args.get('group', current_user.group or '')
             if not cur_group and groups:
                 cur_group = groups[0]
-            # 侧边栏项目：隐藏项目仅管理层+eye打开时显示（隐私模式 cookie mgr_view）
-            _show_hidden = current_user.is_team_manager and req.cookies.get('mgr_view') == '1'
+            # 侧边栏项目：隐藏项目仅管理层+eye打开时显示（隐私模式，g.hidden_pids）
             _pq = Project.query.filter_by(status='active')
-            if not _show_hidden:
-                _pq = _pq.filter_by(is_hidden=False)
+            if g.hidden_pids:
+                _pq = _pq.filter(Project.id.notin_(g.hidden_pids))
             all_projects = _pq.order_by(Project.name).all()
             followed_ids = set(p.id for p in current_user.followed_projects.all())
             # Followed projects first, then others

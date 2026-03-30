@@ -30,8 +30,10 @@
 </div>
 
 {# Tab navigation #}
-{% if is_reviewer %}
-{% set cur_tab = request.args.get('tab', status_filter or 'submitted') %}
+{% set cur_tab = request.args.get('tab', status_filter or 'all') %}
+{% set _mgr_view = request.cookies.get('mgr_view') == '1' %}
+{% if is_reviewer and _mgr_view %}
+{# Private mode: full management tabs #}
 <ul class="nav nav-tabs mb-3 small mgr-only">
     <li class="nav-item"><a class="nav-link {% if cur_tab == 'all' %}active{% endif %}" href="?tab=all&status=&scope=all&period={{ period }}">全部</a></li>
     <li class="nav-item"><a class="nav-link {% if cur_tab == 'submitted' %}active{% endif %}" href="?tab=submitted&status=submitted&scope=all&period={{ period }}">待评审</a></li>
@@ -40,7 +42,10 @@
     <li class="nav-item"><a class="nav-link {% if cur_tab == 'rejected' %}active{% endif %}" href="?tab=rejected&status=rejected&scope=all&period={{ period }}">已拒绝</a></li>
     <li class="nav-item"><a class="nav-link {% if cur_tab == 'funds' %}active{% endif %}" href="?tab=funds&status=funds&scope=all"><i class="bi bi-bank"></i> 资金池</a></li>
     <li class="nav-item"><a class="nav-link {% if cur_tab == 'stats' %}active{% endif %}" href="?tab=stats&status=stats&scope=all"><i class="bi bi-bar-chart"></i> 统计报表</a></li>
+    <li class="nav-item"><a class="nav-link {% if cur_tab == 'gifts' %}active{% endif %}" href="?tab=gifts&status=gifts&scope=all"><i class="bi bi-gift"></i> 礼物激励</a></li>
 </ul>
+{% else %}
+{# Non-private mode / ordinary users: no tabs #}
 {% endif %}
 
 {% if status_filter == 'stats' and is_reviewer %}
@@ -48,6 +53,8 @@
 {% elif status_filter == 'funds' and is_reviewer %}
 {# ---- Fund Pool Tab Content (inline) ---- #}
 {% include "incentive/_funds_panel.html" %}
+{% elif status_filter == 'gifts' and is_reviewer %}
+{% include "incentive/_gifts_panel.html" %}
 {% else %}
 {# ---- Incentive List Tab Content ---- #}
 <div class="d-flex gap-2 mb-3 align-items-center flex-wrap">
@@ -119,7 +126,7 @@
                 {% endif %}
                 <div class="flex-shrink-0 position-relative">
                     {% if inc.photo %}
-                    <img src="{{ url_for('static', filename=inc.photo) }}" class="rounded img-lightbox" style="width:80px;height:80px;object-fit:cover;cursor:pointer;" data-src="{{ url_for('static', filename=inc.photo) }}">
+                    <img src="{{ url_for('static', filename=inc.photo) }}" alt="照片" class="rounded img-lightbox" style="width:80px;height:80px;object-fit:cover;cursor:pointer;" data-src="{{ url_for('static', filename=inc.photo) }}">
                     {% else %}
                     <div class="rounded bg-light d-flex align-items-center justify-content-center text-muted" style="width:80px;height:80px;"><i class="bi bi-image" style="font-size:1.5em;"></i></div>
                     {% endif %}
@@ -156,8 +163,12 @@
                 </div>
             </div>
             <div class="text-end">
-                {% if is_reviewer or current_user.id == inc.submitted_by %}
+                {% if is_reviewer and _mgr_view %}
                 <span class="badge bg-{{ inc.status_color }}">{{ inc.status_label }}</span>
+                {% elif inc.status in ('approved', 'rejected') %}
+                <span class="badge bg-info">已评审</span>
+                {% elif inc.status == 'pending' %}
+                <span class="badge bg-warning text-dark">待修改</span>
                 {% else %}
                 <span class="badge bg-secondary">已提交</span>
                 {% endif %}
@@ -171,6 +182,7 @@
                         data-amount="{{ inc.amount or '' }}"
                         data-source="{{ inc.source or 'instant' }}"
                         data-nominee-ids="{{ inc.nominees|map(attribute='id')|list|join(',') }}"
+                        data-nominee-count="{{ inc.nominees|length }}"
                         data-public="{{ '1' if inc.is_public else '0' }}">评审</button>
                 {% endif %}
                 {% if (current_user.id == inc.submitted_by or current_user.is_admin) and inc.status in ('submitted', 'pending') %}
@@ -190,6 +202,7 @@
                         data-amount="{{ inc.amount or '' }}"
                         data-source="{{ inc.source or 'instant' }}"
                         data-nominee-ids="{{ inc.nominees|map(attribute='id')|list|join(',') }}"
+                        data-nominee-count="{{ inc.nominees|length }}"
                         data-public="{{ '1' if inc.is_public else '0' }}"><i class="bi bi-pencil"></i> 编辑</button>
                 {% endif %}
                 {% if is_reviewer and inc.status == 'approved' %}
@@ -323,7 +336,7 @@
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">金额（元）</label>
-                        <div class="col-9"><input type="number" name="amount" class="form-control form-control-sm" step="50" min="0" placeholder="可选"></div>
+                        <div class="col-9"><input type="text" name="amount" id="reviewAmount" class="form-control form-control-sm" placeholder="单人填数字，多人用逗号隔开（如 100,200,300）" oninput="validateAmount()"><div id="amountHint" class="small mt-1" style="display:none;"></div></div>
                     </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">激励来源</label>
@@ -359,6 +372,17 @@
                             </div>
                         </div>
                     </div>
+                    {% if gift_start_month %}
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">礼物激励</label>
+                        <div class="col-9">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="sync_gift" id="reviewSyncGift" value="1" checked>
+                                <label class="form-check-label small text-muted" for="reviewSyncGift">同步触发小额礼物选择（{{ gift_start_month }}起生效）</label>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
                 <div class="modal-footer py-1">
                     <button type="submit" name="action" value="reject" class="btn btn-sm btn-outline-danger">拒绝</button>
@@ -576,7 +600,7 @@ function aiPolishReview() {
                 document.getElementById('reviewComment').value = d.comment;
                 document.getElementById('charCount').textContent = d.comment.length + '/150';
             }
-        } else { showToast(d.msg || 'AI润色失败', 'danger'); }
+        } else { showToast(d.msg || 'AI服务暂不可用，正在紧急修复', 'danger'); }
     }).catch(function() { loading.stop(); });
 }
 
@@ -599,7 +623,7 @@ function aiSummarizeComment() {
         if (d.ok) {
             document.getElementById('reviewComment').value = d.text;
             document.getElementById('charCount').textContent = d.text.length + '/150';
-        } else { showToast(d.msg || 'AI润色失败', 'danger'); }
+        } else { showToast(d.msg || 'AI服务暂不可用，正在紧急修复', 'danger'); }
     }).catch(function() { loading.stop(); });
 }
 
@@ -654,13 +678,11 @@ function previewAndSubmitPhoto(input) {
 
 function aiRecommendCandidates() {
     var btn = document.getElementById('btnAiIncentive');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 分析中...';
+    var loading = aiLoading(btn, '分析中');
     fetch('{{ url_for("incentive.ai_recommend_candidates") }}', {method: 'POST'})
     .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function(d) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-robot"></i> AI 推荐候选';
+        loading.stop();
         var panel = document.getElementById('aiIncentivePanel');
         var tbody = document.querySelector('#aiIncentiveTable tbody');
         tbody.innerHTML = '';
@@ -674,11 +696,10 @@ function aiRecommendCandidates() {
         } else if (d.ok) {
             alert('未识别到候选人');
         } else {
-            alert('推荐失败：' + (d.raw || d.msg || ''));
+            alert('AI服务暂不可用，正在紧急修复');
         }
     }).catch(function(err) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-robot"></i> AI 推荐候选';
+        loading.stop();
         alert('请求失败：' + err.message);
     });
 }
@@ -873,9 +894,75 @@ function _refreshNomineeDisplay() {
     });
 }
 
+// Validate amount: real-time hint for multi-nominee
+function validateAmount() {
+    var form = document.getElementById('reviewForm');
+    var nc = parseInt(form?.dataset.nomineeCount || '1');
+    var amt = document.getElementById('reviewAmount');
+    var hint = document.getElementById('amountHint');
+    if (!amt || !hint) return true;
+    var val = amt.value.trim();
+    hint.style.display = 'none';
+    amt.classList.remove('is-invalid');
+    if (nc <= 1 || !val) return true;
+    // Normalize Chinese commas
+    val = val.replace(/，/g, ',');
+    if (val.indexOf(',') === -1) {
+        hint.style.display = '';
+        hint.className = 'small mt-1 text-danger';
+        hint.textContent = '团队奖（' + nc + '人）请用逗号分隔每人金额';
+        amt.classList.add('is-invalid');
+        return false;
+    }
+    var parts = val.split(',');
+    // Get nominee names from the display area
+    var names = [];
+    document.querySelectorAll('#reviewNomineeDisplay .badge').forEach(function(b) {
+        var n = b.textContent.trim().replace(/×$/, '').trim();
+        if (n) names.push(n);
+    });
+    // Always show per-person breakdown as you type
+    var total = 0;
+    var detail = '';
+    for (var i = 0; i < nc; i++) {
+        var name = names[i] || ('人员' + (i+1));
+        var v = (i < parts.length) ? parts[i].trim() : '';
+        var a = parseFloat(v) || 0;
+        if (v) {
+            total += a;
+            detail += '<span style="margin-right:8px;">' + name + ' <strong>¥' + a + '</strong></span>';
+        } else {
+            detail += '<span style="margin-right:8px;color:#ccc;">' + name + ' ¥?</span>';
+        }
+    }
+    hint.style.display = '';
+    var filled = parts.filter(function(s) { return s.trim(); }).length;
+    if (filled === nc) {
+        hint.className = 'small mt-1 text-success';
+        hint.innerHTML = detail + '<span style="color:#999;margin-left:4px;">合计 ¥' + total + '</span>';
+        return true;
+    } else if (filled > nc) {
+        hint.className = 'small mt-1 text-danger';
+        hint.textContent = '金额个数（' + filled + '）超过获奖人数（' + nc + '）';
+        amt.classList.add('is-invalid');
+        return false;
+    } else {
+        hint.className = 'small mt-1';
+        hint.innerHTML = detail;
+        amt.classList.add('is-invalid');
+        return false;
+    }
+}
+document.getElementById('reviewForm')?.addEventListener('submit', function(e) {
+    var action = e.submitter ? e.submitter.value : '';
+    if (action !== 'approve') return;
+    if (!validateAmount()) { e.preventDefault(); }
+});
+
 document.querySelectorAll('.btn-review-inc').forEach(function(btn) {
     btn.addEventListener('click', function() {
         document.getElementById('reviewForm').action = '{{ url_for("incentive.review", inc_id=0) }}'.replace('/0/', '/' + btn.dataset.incId + '/');
+        document.getElementById('reviewForm').dataset.nomineeCount = btn.dataset.nomineeCount || '1';
         document.getElementById('reviewTitle').textContent = '评审：' + btn.dataset.title;
         var catSel = document.getElementById('reviewCategory');
         if (catSel && btn.dataset.category) catSel.value = btn.dataset.category;
@@ -934,16 +1021,23 @@ function filterFundsBySource(src) {
     var sel = document.getElementById('reviewFundId');
     if (!sel) return;
     var best = null, bestExpires = '9999-12-31';
+    var fallback = null;  // latest fund if all empty
     sel.querySelectorAll('option').forEach(function(opt) {
         if (!opt.value) { opt.style.display = ''; return; }
         var match = opt.dataset.source === src;
         opt.style.display = match ? '' : 'none';
-        if (match && parseFloat(opt.dataset.remaining) > 0 && opt.dataset.expires < bestExpires) {
-            best = opt.value;
-            bestExpires = opt.dataset.expires;
+        if (match) {
+            if (parseFloat(opt.dataset.remaining) > 0 && opt.dataset.expires < bestExpires) {
+                best = opt.value;
+                bestExpires = opt.dataset.expires;
+            }
+            // Track latest as fallback (highest value = newest id)
+            if (!fallback || parseInt(opt.value) > parseInt(fallback)) {
+                fallback = opt.value;
+            }
         }
     });
-    sel.value = best || '';
+    sel.value = best || fallback || '';
 }
 // Bind source change to re-filter
 var reviewSourceSel = document.querySelector('#reviewModal select[name="source"]');
