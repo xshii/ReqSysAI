@@ -1393,10 +1393,11 @@ def weekly_report():
                 from app.models.project_member import ProjectMember as PM_
                 pm = PM_.query.filter_by(project_id=child.id, project_role='PM').first()
                 fo = pm or PM_.query.filter_by(project_id=child.id, project_role='FO').first()
+                child_summary = (child_saved.summary if child_saved and child_saved.summary else '') or ''
                 sub_projects.append({
                     'project': child,
                     'owner': fo.user if fo and fo.user else (child.owner if child.owner else None),
-                    'summary': child_saved.summary if child_saved and child_saved.summary else None,
+                    'summary': child_summary or '-',
                 })
 
         # Risk stats & domain stats for saved report (open + recently closed)

@@ -639,7 +639,8 @@ def api_users():
     """Return active users for @autocomplete."""
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
     return jsonify([{'id': u.id, 'name': u.name, 'pinyin': u.pinyin or '',
-                      'employee_id': u.employee_id, 'manager': u.manager or ''} for u in users])
+                      'employee_id': u.employee_id, 'manager': u.manager or '',
+                      'domain': u.domain or '', 'group': u.group or ''} for u in users])
 
 
 @main_bp.route('/api/personnel/options')

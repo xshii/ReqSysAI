@@ -127,7 +127,7 @@ def risk_add(project_id):
         tracker_name=request.form.get('tracker_id', '').strip() or None,
         tracker_id=_resolve_owner_id(request.form.get('tracker_id', '').strip()),
         requirement_id=request.form.get('requirement_id', type=int) or None,
-        due_date=date.fromisoformat(request.form.get('due_date')) if request.form.get('due_date') else None,
+        due_date=date.fromisoformat(request.form['due_date']) if request.form.get('due_date', '').strip() else None,
         domain=request.form.get('domain', '').strip() or None,
         created_by=current_user.id,
         created_at=datetime.strptime(request.form.get('created_at'), '%Y-%m-%d') if request.form.get('created_at') else None,
@@ -144,6 +144,33 @@ def risk_add(project_id):
     db.session.commit()
     flash('风险已登记', 'success')
     return redirect(url_for('project.risk_list', project_id=project_id))
+
+
+@project_bp.route('/<int:project_id>/risks/create-api', methods=['POST'])
+@login_required
+def risk_create_api(project_id):
+    """AJAX create risk (used by meeting page). Returns JSON."""
+    title = request.form.get('title', '').strip()
+    if not title:
+        return jsonify(ok=False, msg='标题不能为空')
+    tracker_val = request.form.get('tracker_id', '').strip() or None
+    risk = Risk(
+        project_id=project_id,
+        title=title,
+        severity=request.form.get('severity', 'medium'),
+        owner=request.form.get('owner', '').strip() or None,
+        owner_id=_resolve_owner_id(request.form.get('owner', '').strip()),
+        tracker_name=tracker_val,
+        tracker_id=_resolve_owner_id(tracker_val),
+        domain=request.form.get('domain', '').strip() or None,
+        due_date=date.fromisoformat(request.form['due_date']) if request.form.get('due_date', '').strip() else None,
+        meeting_id=request.form.get('meeting_id', type=int) or None,
+        created_by=current_user.id,
+        owner_since=datetime.now() if request.form.get('owner', '').strip() else None,
+    )
+    db.session.add(risk)
+    db.session.commit()
+    return jsonify(ok=True, risk_id=risk.id, title=risk.title, severity=risk.severity, owner=risk.owner or '')
 
 
 @project_bp.route('/risks/<int:risk_id>/resolve', methods=['POST'])

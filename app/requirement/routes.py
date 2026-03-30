@@ -208,7 +208,7 @@ def requirement_list():
         projects=[p for p in Project.query.all() if p.id not in g.hidden_pids],
         users=filter_users,
         statuses=Requirement.STATUS_LABELS, priorities=Requirement.PRIORITY_LABELS,
-        category_tree=category_tree, category_l2s=category_l2s, cur_category=category,
+        category_tree=category_tree, category_l2s=category_l2s, all_cats=all_cats, cur_category=category,
         cur_status=status, cur_priority=priority, cur_project=project_id,
         cur_assignee=assignee_id, cur_search=search, cur_sort=sort,
         include_sub=include_sub,

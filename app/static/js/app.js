@@ -146,12 +146,12 @@ function initUserPicker(wrap) {
         list.style.display = 'none';
     }
 
-    list.querySelectorAll('.user-picker-opt').forEach(function(o) {
-        o.addEventListener('mousedown', function(e) {
-            e.preventDefault();
-            if (input.closest('#applyModal')) return;
-            selectOpt(o);
-        });
+    // Use event delegation on list so dynamically added options work
+    list.addEventListener('mousedown', function(e) {
+        var o = e.target.closest('.user-picker-opt');
+        if (!o) return;
+        e.preventDefault();
+        selectOpt(o);
     });
 }
 document.addEventListener('DOMContentLoaded', function() {

@@ -152,7 +152,7 @@
         <tr>
             <td>{{ sp.project.name }}</td>
             <td>{{ sp.owner.name if sp.owner else '-' }}</td>
-            <td>{{ sp.summary }}</td>
+            <td>{{ sp.summary or '-' }}</td>
         </tr>
         {% endfor %}
         </tbody>

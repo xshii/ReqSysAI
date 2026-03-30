@@ -123,6 +123,7 @@
     {% if completion_weighted is not none %}<span>加权完成进度 <strong class="text-success">{{ completion_weighted }}%</strong></span>{% endif %}
 </div>
 {% endif %}
+<datalist id="catDatalist">{% for c in all_cats %}<option value="{{ c }}">{% endfor %}</datalist>
 <div class="table-responsive">
     <table class="table table-hover">
         <thead class="table-light">
@@ -146,7 +147,9 @@
             {% for r in requirements %}
             <tr data-req-id="{{ r.id }}">
                 <td><input type="checkbox" class="form-check-input batch-check" value="{{ r.id }}"></td>
-                <td>{% if r.category %}<span class="badge bg-light text-dark border" style="font-size:.75em;">{{ r.category_label }}</span>{% else %}<span class="text-muted small">-</span>{% endif %}</td>
+                <td class="cat-cell" style="cursor:pointer;white-space:nowrap;" data-req-id="{{ r.id }}" data-cat="{{ r.category or '' }}" onclick="showCatEdit(this)">
+                    {% if r.category %}<span class="badge bg-light text-dark border" style="font-size:.75em;">{{ r.category_label }}</span>{% else %}<span class="text-muted small">-</span>{% endif %}
+                </td>
                 <td><a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}">{{ r.title }}</a></td>
                 <td><span class="text-muted small">{{ r.project.name }}</span></td>
                 <td><span class="badge bg-{{ r.priority_color }}">{{ r.priority_label }}</span></td>
@@ -398,6 +401,39 @@ function updateCompletion(reqId, sel) {
     }
     sel.classList.add('d-none');
 }
+// Inline category edit (supports custom input + existing options)
+function showCatEdit(td) {
+    if (td.querySelector('input')) return;
+    var reqId = td.dataset.reqId;
+    var cur = td.dataset.cat;
+    var inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'form-control form-control-sm py-0';
+    inp.style.cssText = 'font-size:.75em;width:100px;';
+    inp.value = cur;
+    inp.setAttribute('list', 'catDatalist');
+    inp.placeholder = '输入分类';
+    td.innerHTML = '';
+    td.appendChild(inp);
+    inp.focus();
+    inp.select();
+    function save() {
+        var val = inp.value.trim();
+        if (val !== cur) {
+            apiPost('/requirements/' + reqId + '/field-api', {field: 'category', value: val}).then(function(d) {
+                if (d && d.ok) td.dataset.cat = val;
+            });
+        }
+        td.dataset.cat = val;
+        td.innerHTML = val ? '<span class="badge bg-light text-dark border" style="font-size:.75em;">' + val + '</span>' : '<span class="text-muted small">-</span>';
+    }
+    inp.addEventListener('blur', save);
+    inp.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+        if (e.key === 'Escape') { td.dataset.cat = cur; inp.blur(); }
+    });
+}
+
 function runDiagnose() {
     var btn = document.getElementById('btnDiagnose');
     var loading = aiLoading(btn, '诊断中');

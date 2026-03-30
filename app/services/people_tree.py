@@ -295,7 +295,8 @@ def generate_people_tree_image(tree, project_name='', width=None):
     # ════════════════════════════════════════════════════════════════
     # PASS 2: Sort, apply _best_cols to topics, build columns
     # ════════════════════════════════════════════════════════════════
-    topics.sort(key=lambda t: -t['count'])
+    # Sort by person count descending, but keep first topic (parent project) always first
+    topics.sort(key=lambda t: (0 if t['pi'] == 0 else 1, -t['count']))
 
     # Total topic sizes (header + card grid)
     for t in topics:

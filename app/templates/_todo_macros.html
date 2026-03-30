@@ -239,7 +239,9 @@ if (_blockPop) {
         <span class="badge bg-{{ r.status_color }} req-status-badge" data-req-id="{{ r.id }}" style="font-size:.6em;">{{ r.status_label }}</span>
         {% if r_todos %}<span class="badge bg-{{ 'success' if r_all_done else 'secondary' }} bg-opacity-{{ '75' if r_all_done else '50' }}" style="font-size:.55em;flex-shrink:0;">{{ done_count }}/{{ r_todos|length }}</span>{% endif %}
         {% if r.due_date and r.due_date < today %}<span class="badge bg-danger" style="font-size:.6em;flex-shrink:0;">超期</span>{% endif %}
-        <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="small fw-bold text-primary text-decoration-none text-truncate" title="{{ r.number }} {{ r.title }}">{{ r.title }}</a>
+        {% set _req_title = r.title.replace(r.category, '').strip(' -—·') if r.category and r.category in r.title else r.title %}
+        {% if r.category %}<span class="badge bg-light text-dark border" style="font-size:.55em;flex-shrink:0;">{{ r.category }}</span>{% endif %}
+        <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="small fw-bold text-primary text-decoration-none text-truncate" title="{{ r.number }} {{ r.title }}">{{ _req_title }}</a>
         {% if r.status not in ('done', 'closed') %}
         <select class="form-select form-select-sm py-0 flex-shrink-0 req-completion-sel" data-req-id="{{ r.id }}" data-status="{{ r.status }}"
                 style="width:62px;font-size:.65em;padding-right:18px;">

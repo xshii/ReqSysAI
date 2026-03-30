@@ -114,87 +114,68 @@ def compute_default_recipients(cur_project_id):
 def compute_meeting_recipients(project_id, meeting):
     """Compute To/Cc for a meeting email.
 
-    To: attendees' employee_ids + linked risk tracker/owner employee_ids
-    Cc: all above people's managers, minus anyone in To
+    To: 与会人工号 + 关联风险跟踪人/责任人工号
+    Cc: 风险责任人主管工号 + 发件人主管工号 + 项目经理工号
     """
     to_set = set()
-    all_user_ids = set()
+    risk_owner_ids = set()  # 风险责任人 user_id，用于取主管
 
-    # Attendees: match names to User.employee_id
+    # To: 与会人工号
     if meeting.attendees:
         for name in meeting.attendees.split(','):
             name = name.strip()
             if not name:
                 continue
             user = User.query.filter_by(name=name, is_active=True).first()
-            if user:
-                if user.employee_id:
-                    to_set.add(user.employee_id)
-                all_user_ids.add(user.id)
+            if user and user.employee_id:
+                to_set.add(user.employee_id)
 
-    # Project members also go to To
-    members = ProjectMember.query.filter_by(project_id=project_id).all()
-    for m in members:
-        if m.user and m.user.employee_id:
-            to_set.add(m.user.employee_id)
-        if m.user:
-            all_user_ids.add(m.user.id)
-
-    # Linked risks: tracker + owner
+    # To: 关联风险的跟踪人 + 责任人
     linked_risks = Risk.query.filter_by(meeting_id=meeting.id)\
         .filter(Risk.deleted_at.is_(None)).all()
     for r in linked_risks:
         if r.tracker and r.tracker.employee_id:
             to_set.add(r.tracker.employee_id)
-            all_user_ids.add(r.tracker.id)
         if r.owner_id:
             owner_user = db.session.get(User, r.owner_id)
             if owner_user:
                 if owner_user.employee_id:
                     to_set.add(owner_user.employee_id)
-                all_user_ids.add(owner_user.id)
-
-    # Also include open project risks (same as weekly report)
-    open_risks = Risk.query.filter_by(project_id=project_id, status='open')\
-        .filter(Risk.deleted_at.is_(None)).all()
-    for r in open_risks:
-        if r.tracker and r.tracker.employee_id:
-            to_set.add(r.tracker.employee_id)
-            all_user_ids.add(r.tracker.id)
-        if r.owner_id:
-            owner_user = db.session.get(User, r.owner_id)
-            if owner_user:
-                if owner_user.employee_id:
-                    to_set.add(owner_user.employee_id)
-                all_user_ids.add(owner_user.id)
+                risk_owner_ids.add(owner_user.id)
 
     default_to = ';'.join(sorted(to_set))
 
-    # Include current user's manager
-    from flask_login import current_user as _cu2
-    if _cu2.is_authenticated:
-        all_user_ids.add(_cu2.id)
-    # Current user's manager first
-    my_mgr_eid2 = ''
-    if _cu2.is_authenticated and _cu2.manager:
-        parts = _cu2.manager.strip().split()
-        my_mgr_eid2 = parts[-1] if len(parts) > 1 else parts[0]
-    # Cc: all above people's managers
-    cc_eids = set()
-    for uid in all_user_ids:
+    # Cc: 风险责任人主管 + 发件人主管 + 项目经理
+    cc_set = set()
+
+    # 风险责任人的主管
+    for uid in risk_owner_ids:
         u = db.session.get(User, uid)
         if u and u.manager:
             parts = u.manager.strip().split()
             mgr_eid = parts[-1] if len(parts) > 1 else parts[0]
             if mgr_eid:
-                cc_eids.add(mgr_eid)
-    cc_eids -= to_set
-    cc_list = []
-    if my_mgr_eid2 and my_mgr_eid2 not in to_set:
-        cc_list.append(my_mgr_eid2)
-        cc_eids.discard(my_mgr_eid2)
-    cc_list.extend(sorted(cc_eids))
-    default_cc = ';'.join(cc_list)
+                cc_set.add(mgr_eid)
+
+    # 发件人（当前用户）的主管
+    from flask_login import current_user as _cu2
+    if _cu2.is_authenticated and _cu2.manager:
+        parts = _cu2.manager.strip().split()
+        my_mgr_eid = parts[-1] if len(parts) > 1 else parts[0]
+        if my_mgr_eid:
+            cc_set.add(my_mgr_eid)
+
+    # 项目经理
+    from app.models.project import Project
+    project = db.session.get(Project, project_id)
+    if project and project.owner_id:
+        pm_user = db.session.get(User, project.owner_id)
+        if pm_user and pm_user.employee_id:
+            cc_set.add(pm_user.employee_id)
+
+    # 去掉已在 To 中的
+    cc_set -= to_set
+    default_cc = ';'.join(sorted(cc_set))
     return default_to, default_cc
 
 

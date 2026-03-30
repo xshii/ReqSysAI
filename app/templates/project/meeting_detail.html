@@ -78,32 +78,9 @@
     </div>
 </div>
 
-{# AI results + linked risks — full width, above content #}
-<div class="row mb-3">
-    <div class="col-12">
-        {# Linked risks #}
-        {% if linked_risks %}
-        <div class="card mb-2">
-            <div class="card-header py-2"><strong><i class="bi bi-shield-exclamation"></i> 关联的风险/遗留问题 ({{ linked_risks|length }})</strong></div>
-            <div class="card-body py-2">
-                {% for r in linked_risks %}
-                <div class="d-flex align-items-center gap-2 mb-1 small">
-                    <span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span>
-                    <span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
-                    <a href="{{ url_for('project.risk_list', project_id=project.id) }}?status={{ r.status }}" class="text-decoration-none flex-grow-1">{{ r.title }}</a>
-                    {% if r.owner %}<span class="text-muted">{{ r.owner }}</span>{% endif %}
-                    {% if r.due_date %}<span class="text-muted">{{ r.due_date.strftime('%m-%d') }}</span>{% endif %}
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
 <div class="row">
-    {# Left: content #}
-    <div class="col-lg-5 mb-3">
+    {# Left: content (wider) #}
+    <div class="col-lg-6 mb-3">
         <div class="card h-100">
             <div class="card-header py-2 d-flex justify-content-between">
                 <strong>会议内容</strong>
@@ -114,24 +91,23 @@
         </div>
     </div>
 
-    {# Polished preview #}
-    {% if ai_data and ai_data.get('polished') and ai_data.polished != meeting.content %}
-    <div class="col-lg-12 mb-3" id="polishPanel">
-        <div class="card border-info">
-            <div class="card-header py-2 bg-info bg-opacity-10 d-flex justify-content-between align-items-center">
-                <span class="fw-bold small"><i class="bi bi-robot"></i> AI 润色结果</span>
-                <div class="d-flex gap-1">
-                    <button type="button" class="btn btn-sm btn-success py-0" onclick="acceptPolish()"><i class="bi bi-check-lg"></i> 接受润色</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="document.getElementById('polishPanel').remove()"><i class="bi bi-x"></i> 忽略</button>
+    {# Right: AI polished + extract results #}
+    <div class="col-lg-6 mb-3">
+        {# Polished preview #}
+        {% if ai_data and ai_data.get('polished') and ai_data.polished != meeting.content %}
+        <div id="polishPanel" class="mb-2">
+            <div class="card border-info">
+                <div class="card-header py-2 bg-info bg-opacity-10 d-flex justify-content-between align-items-center">
+                    <span class="fw-bold small"><i class="bi bi-robot"></i> AI 润色结果</span>
+                    <div class="d-flex gap-1">
+                        <button type="button" class="btn btn-sm btn-success py-0" onclick="acceptPolish()"><i class="bi bi-check-lg"></i> 接受润色</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="document.getElementById('polishPanel').remove()"><i class="bi bi-x"></i> 忽略</button>
+                    </div>
                 </div>
+                <div class="card-body small" style="white-space:pre-wrap;max-height:300px;overflow-y:auto;">{{ ai_data.polished }}</div>
             </div>
-            <div class="card-body small" style="white-space:pre-wrap;max-height:200px;overflow-y:auto;">{{ ai_data.polished }}</div>
         </div>
-    </div>
-    {% endif %}
-
-    {# Right: AI extract results #}
-    <div class="col-lg-7 mb-3">
+        {% endif %}
 
         {# AI extract results #}
         {% if ai_data %}
@@ -207,6 +183,49 @@
             </div>
         </div>
         {% endif %}
+
+        {# Linked risks / issues #}
+        <div class="card mt-2" id="linkedRisksCard">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                <strong><i class="bi bi-shield-exclamation"></i> 关联的风险/遗留问题 (<span id="riskCount">{{ linked_risks|length }}</span>)</strong>
+                <button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="toggleRiskForm()"><i class="bi bi-plus-lg"></i> 添加</button>
+            </div>
+            <div class="card-body py-2">
+                {# Add form (hidden by default) #}
+                <div id="riskAddForm" class="d-none border rounded p-2 mb-2 bg-light" style="font-size:.85em;">
+                    <div class="row g-1 mb-1">
+                        <div class="col-8"><input type="text" id="raTitle" class="form-control form-control-sm" placeholder="风险标题"></div>
+                        <div class="col-4"><select id="raSeverity" class="form-select form-select-sm"><option value="high">高</option><option value="medium" selected>中</option><option value="low">低</option></select></div>
+                    </div>
+                    <div class="row g-1 mb-1">
+                        <div class="col-3"><input type="text" id="raOwner" class="form-control form-control-sm" placeholder="责任人" list="raUserList" autocomplete="off"></div>
+                        <div class="col-2"><input type="text" id="raDomain" class="form-control form-control-sm" placeholder="领域" list="raDomainList" autocomplete="off"></div>
+                        <div class="col-3"><input type="text" id="raTracker" class="form-control form-control-sm" placeholder="跟踪人" list="raUserList" autocomplete="off"></div>
+                        <div class="col-4"><input type="date" id="raDue" class="form-control form-control-sm" value="{{ meeting.date.strftime('%Y-%m-%d') if meeting.date else '' }}"></div>
+                    </div>
+                    <datalist id="raUserList"></datalist>
+                    <datalist id="raDomainList"></datalist>
+                    <button type="button" class="btn btn-sm btn-primary py-0" onclick="addRisk()"><i class="bi bi-check-lg"></i> 确认</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="toggleRiskForm()">取消</button>
+                </div>
+                {# Risk list #}
+                <div id="riskList">
+                {% for r in linked_risks %}
+                <div class="d-flex align-items-center gap-2 mb-1 small risk-row" data-risk-id="{{ r.id }}">
+                    <span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span>
+                    <span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>
+                    <a href="{{ url_for('project.risk_list', project_id=project.id) }}?status={{ r.status }}" class="text-decoration-none flex-grow-1">{{ r.title }}</a>
+                    {% if r.owner %}<span class="text-muted">{{ r.owner }}</span>{% endif %}
+                    {% if r.due_date %}<span class="text-muted">{{ r.due_date.strftime('%m-%d') }}</span>{% endif %}
+                    <button type="button" class="btn btn-sm p-0 border-0 text-muted" onclick="deleteRisk({{ r.id }}, this)" title="删除" style="font-size:.7em;"><i class="bi bi-x"></i></button>
+                </div>
+                {% endfor %}
+                {% if not linked_risks %}
+                <div class="text-muted small text-center py-2" id="riskEmpty">暂无关联风险</div>
+                {% endif %}
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 </form>
@@ -411,6 +430,98 @@ function sendEmail() {
 
     var eml = emlBuildFile(subject, html);
     emlDownload(subject + '.eml', eml);
+}
+
+// ---- Populate datalists for risk form ----
+var _raUsers = null;
+fetch('/api/users').then(function(r){return r.json();}).then(function(users) {
+    _raUsers = users;
+    var dl = document.getElementById('raUserList');
+    if (dl) users.forEach(function(u) {
+        var o = document.createElement('option');
+        o.value = u.name;
+        o.textContent = (u.employee_id || '') + (u.group ? ' · ' + u.group : '');
+        dl.appendChild(o);
+    });
+    var domainSet = {};
+    users.forEach(function(u) { if (u.domain) domainSet[u.domain] = true; });
+    var dl2 = document.getElementById('raDomainList');
+    if (dl2) Object.keys(domainSet).sort().forEach(function(d) {
+        var o = document.createElement('option');
+        o.value = d;
+        dl2.appendChild(o);
+    });
+});
+// Auto-fill domain from owner's domain (listen both input & change for datalist compat)
+function _autoFillDomain(e) {
+    if (e.target.id === 'raOwner' && _raUsers) {
+        var name = e.target.value.trim();
+        var u = _raUsers.find(function(x) { return x.name === name; });
+        if (u && u.domain) document.getElementById('raDomain').value = u.domain;
+    }
+}
+document.addEventListener('input', _autoFillDomain);
+document.addEventListener('change', _autoFillDomain);
+
+// ---- Linked risks: add/delete ----
+var _sevMap = {high: '危急', medium: '严重', low: '一般'};
+var _sevColor = {high: 'danger', medium: 'warning', low: 'info'};
+function toggleRiskForm() {
+    document.getElementById('riskAddForm').classList.toggle('d-none');
+}
+function addRisk() {
+    var title = document.getElementById('raTitle').value.trim();
+    if (!title) { document.getElementById('raTitle').focus(); return; }
+    var data = new FormData();
+    data.append('title', title);
+    data.append('severity', document.getElementById('raSeverity').value);
+    data.append('owner', document.getElementById('raOwner').value.trim());
+    data.append('tracker_id', document.getElementById('raTracker').value.trim());
+    data.append('domain', document.getElementById('raDomain').value.trim());
+    data.append('due_date', document.getElementById('raDue').value);
+    data.append('meeting_id', '{{ meeting.id }}');
+    fetch('/projects/{{ project.id }}/risks/create-api', {
+        method: 'POST', body: data,
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d && d.ok) {
+            var sev = d.severity || 'medium';
+            var row = document.createElement('div');
+            row.className = 'd-flex align-items-center gap-2 mb-1 small risk-row';
+            row.dataset.riskId = d.risk_id;
+            row.innerHTML = '<span class="badge bg-' + (_sevColor[sev]||'info') + '">' + (_sevMap[sev]||sev) + '</span>'
+                + '<span class="badge bg-secondary">待解决</span>'
+                + '<span class="flex-grow-1">' + d.title + '</span>'
+                + (d.owner ? '<span class="text-muted">' + d.owner + '</span>' : '')
+                + '<button type="button" class="btn btn-sm p-0 border-0 text-muted" onclick="deleteRisk(' + d.risk_id + ', this)" style="font-size:.7em;"><i class="bi bi-x"></i></button>';
+            var list = document.getElementById('riskList');
+            var empty = document.getElementById('riskEmpty');
+            if (empty) empty.remove();
+            list.appendChild(row);
+            document.getElementById('riskCount').textContent = list.querySelectorAll('.risk-row').length;
+            // Reset form
+            document.getElementById('raTitle').value = '';
+            document.getElementById('raOwner').value = '';
+            document.getElementById('raTracker').value = '';
+            document.getElementById('raDomain').value = '';
+            document.getElementById('raDue').value = '';
+            toggleRiskForm();
+            showToast(title + ' 已添加', 'success');
+        } else {
+            showToast(d.msg || '添加失败', 'danger');
+        }
+    });
+}
+function deleteRisk(riskId, btn) {
+    if (!confirm('删除此风险？')) return;
+    var row = btn.closest('.risk-row');
+    apiPost('/projects/risks/' + riskId + '/delete', {}).then(function(d) {
+        if (d && d.ok) {
+            row.remove();
+            document.getElementById('riskCount').textContent = document.querySelectorAll('.risk-row').length;
+        } else {
+            showToast('删除失败', 'danger');
+        }
+    });
 }
 
 // Auto-extract
