@@ -151,24 +151,10 @@ def compute_meeting_recipients(project_id, meeting):
         if m.user:
             all_user_ids.add(m.user.id)
 
-    # Linked risks: tracker + owner
+    # Linked risks (this meeting only): tracker + owner
     linked_risks = Risk.query.filter_by(meeting_id=meeting.id)\
         .filter(Risk.deleted_at.is_(None)).all()
     for r in linked_risks:
-        if r.tracker and r.tracker.employee_id:
-            to_set.add(r.tracker.employee_id)
-            all_user_ids.add(r.tracker.id)
-        if r.owner_id:
-            owner_user = db.session.get(User, r.owner_id)
-            if owner_user:
-                if owner_user.employee_id:
-                    to_set.add(owner_user.employee_id)
-                all_user_ids.add(owner_user.id)
-
-    # Also include open project risks (same as weekly report)
-    open_risks = Risk.query.filter_by(project_id=project_id, status='open')\
-        .filter(Risk.deleted_at.is_(None)).all()
-    for r in open_risks:
         if r.tracker and r.tracker.employee_id:
             to_set.add(r.tracker.employee_id)
             all_user_ids.add(r.tracker.id)
@@ -202,9 +188,8 @@ def compute_meeting_recipients(project_id, meeting):
             if pm_mgr_eid:
                 cc_eids.add(pm_mgr_eid)
 
-    # Risk owner's managers (linked risks + open project risks)
-    all_risks = list(linked_risks) + list(open_risks)
-    for r in all_risks:
+    # Risk owner's managers (only risks linked to this meeting)
+    for r in linked_risks:
         if r.owner_id:
             owner_user = db.session.get(User, r.owner_id)
             if owner_user and owner_user.manager:
