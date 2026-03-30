@@ -58,11 +58,16 @@ def requirement_list():
     if priority:
         query = query.filter_by(priority=priority)
     if category:
-        # Match category_l1 (prefix before '-') or exact category
-        query = query.filter(
-            db.or_(Requirement.category == category,
-                   Requirement.category.like(category + '-%'))
-        )
+        if category.startswith('l2:'):
+            # L2-only filter: match suffix after '-'
+            l2_val = category[3:]
+            query = query.filter(Requirement.category.like('%-' + l2_val))
+        else:
+            # Match category_l1 (prefix before '-') or exact category
+            query = query.filter(
+                db.or_(Requirement.category == category,
+                       Requirement.category.like(category + '-%'))
+            )
     if project_id:
         if include_sub:
             child_ids = [c.id for c in Project.query.filter_by(parent_id=project_id).all()]
@@ -179,9 +184,10 @@ def requirement_list():
     if g.hidden_pids:
         cat_rows = cat_rows.filter(Requirement.project_id.notin_(g.hidden_pids))
     all_cats = sorted({c for (c,) in cat_rows.distinct() if c})
-    # Build {l1: [l2_full_category, ...]} structure
+    # Build {l1: [l2_full_category, ...]} and unique L2 list
     from collections import OrderedDict
     category_tree = OrderedDict()
+    category_l2s = sorted({c.split('-', 1)[1] for c in all_cats if '-' in c})
     for c in all_cats:
         if '-' in c:
             l1 = c.split('-', 1)[0]
@@ -196,7 +202,7 @@ def requirement_list():
         projects=[p for p in Project.query.all() if p.id not in g.hidden_pids],
         users=filter_users,
         statuses=Requirement.STATUS_LABELS, priorities=Requirement.PRIORITY_LABELS,
-        category_tree=category_tree, cur_category=category,
+        category_tree=category_tree, category_l2s=category_l2s, cur_category=category,
         cur_status=status, cur_priority=priority, cur_project=project_id,
         cur_assignee=assignee_id, cur_search=search, cur_sort=sort,
         include_sub=include_sub,

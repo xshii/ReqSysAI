@@ -47,6 +47,14 @@
             <div class="col-auto">
                 <select name="category" class="form-select form-select-sm">
                     <option value="">全部分类</option>
+                    {% if category_l2s %}
+                    <optgroup label="按二级分类">
+                    {% for l2 in category_l2s %}
+                    <option value="l2:{{ l2 }}" {% if cur_category == 'l2:' ~ l2 %}selected{% endif %}>{{ l2 }}</option>
+                    {% endfor %}
+                    </optgroup>
+                    {% endif %}
+                    <optgroup label="按一级分类">
                     {% for l1, l2s in category_tree.items() %}
                     {% if l2s %}
                     <option value="{{ l1 }}" {% if cur_category == l1 %}selected{% endif %}>{{ l1 }}（全部）</option>
@@ -57,6 +65,7 @@
                     <option value="{{ l1 }}" {% if cur_category == l1 %}selected{% endif %}>{{ l1 }}</option>
                     {% endif %}
                     {% endfor %}
+                    </optgroup>
                 </select>
             </div>
             {% if not cur_project %}
