@@ -199,7 +199,7 @@
             <td>{{ r.severity_label }}</td>
             <td>{{ r.owner or '-' }}</td>
             <td>{{ r.domain_display or '-' }}</td>
-            <td class="small">{% if r.comments %}{% for c in r.comments[:2] %}{% if not loop.first %}<br>{% endif %}{{ c.created_at.strftime('%m-%d') }}：{{ c.content[:40] }}{% if c.content|length > 40 %}…{% endif %}{% endfor %}{% else %}-{% endif %}</td>
+            <td class="small">{% if r.comments %}{% for c in r.comments[:2] %}{% if not loop.first %}<br>{% endif %}{{ c.created_at.strftime('%m-%d') }}：{{ c.content[:40] }}{% if c.content|length > 40 %}…{% endif %}{% endfor %}{% elif r.resolution %}<span style="color:#198754;">解决方案：</span>{{ r.resolution[:50] }}{% if r.resolution|length > 50 %}…{% endif %}{% else %}-{% endif %}</td>
             <td class="{{ 'text-danger fw-bold' if r.is_overdue and not is_closed else '' }}">{% if is_closed %}<span class="badge bg-success">{{ '已解决' if r.status == 'resolved' else '已关闭' }}</span>{% if r.due_date and r.updated_at %}{% set delta = (r.due_date - r.updated_at.date()).days %}{% if delta > 0 %}<br><span style="font-size:.85em;">(提前{{ delta }}天)</span>{% elif delta < 0 %}<br><span style="font-size:.85em;">(延期{{ -delta }}天)</span>{% else %}<br><span style="font-size:.85em;">(按时)</span>{% endif %}{% endif %}{% elif r.due_date %}{{ r.due_date.strftime('%m-%d') }}{% if r.is_overdue %}<br><span class="text-danger fw-bold" style="font-size:.85em;">超期{{ (report_data.today - r.due_date).days }}天</span>{% endif %}{% else %}-{% endif %}</td>
         </tr>
         {% endfor %}
