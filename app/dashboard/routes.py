@@ -84,6 +84,17 @@ def _build_people_tree(project_id, sub_project_ids):
             _seen_entries.add(_key)
             tree[proj_name][role_group].append({'name': name, 'note': note})
 
+    # Ensure parent project appears first in the tree
+    parent_proj = Project.query.get(project_id)
+    parent_name = parent_proj.name if parent_proj else None
+    if parent_name and parent_name in tree:
+        reordered = OrderedDict()
+        reordered[parent_name] = tree[parent_name]
+        for k, v in tree.items():
+            if k != parent_name:
+                reordered[k] = v
+        tree = reordered
+
     unique_count = len(seen_names)
     tree._unique_count = unique_count
     return tree
@@ -375,7 +386,7 @@ def _build_pivot_data(project_id, include_sub=True):
     if not pivot_reqs:
         return {}
 
-    _sources = ['analysis', 'coding', 'testing']
+    _all_sources = ['analysis', 'coding', 'testing']
     _src_labels = Requirement.SOURCE_LABELS
     today_ = date.today()
 
@@ -454,6 +465,10 @@ def _build_pivot_data(project_id, include_sub=True):
 
     for key, c in pivot_src_cells.items():
         _finish_cell(c, _src_assignees.get(key, []))
+
+    # Only keep sources that have at least one non-empty cell
+    _used_sources = set(r.source or 'coding' for r in pivot_reqs)
+    _sources = [s for s in _all_sources if s in _used_sources]
 
     def _merge_cells(cells_list):
         merged = _empty_cell()
