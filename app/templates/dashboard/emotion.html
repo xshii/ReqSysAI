@@ -197,17 +197,15 @@
                         {% for line in (r.suggestion or '-').split('\n') %}<div>{{ line }}</div>{% endfor %}
                     </div>
                     <!-- Comments -->
-                    {% if r.comments %}
-                    <div class="mt-2 border-top pt-1">
+                    <div class="mt-2 border-top pt-1 comment-list" data-rid="{{ r.id }}">
                         {% for c in r.comments %}
                         <div class="text-muted" style="font-size:.8em;">
                             <strong>{{ c.user.name }}</strong> <span>{{ c.created_at.strftime('%m-%d %H:%M') }}</span>：{{ c.content }}
                         </div>
                         {% endfor %}
                     </div>
-                    {% endif %}
-                    <!-- Comment input -->
-                    <form method="POST" action="{{ url_for('dashboard.emotion_comment', record_id=r.id) }}" class="mt-1">
+                    <!-- Comment input (AJAX) -->
+                    <form class="mt-1 emotion-comment-form" data-rid="{{ r.id }}" onsubmit="return submitComment(event, this)">
                         <div class="input-group input-group-sm position-relative">
                             <input type="text" name="content" class="form-control at-input" placeholder="@某人跟进" maxlength="500" required style="font-size:.8em;" autocomplete="off">
                             <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-send"></i></button>
@@ -351,6 +349,38 @@ function removeAiCard(idx, name) {
     var el = document.getElementById('aiCard' + idx);
     if (el) el.remove();
     if (_aiMembers) _aiMembers = _aiMembers.filter(function(m) { return m.name !== name; });
+}
+
+// AJAX comment submit
+function submitComment(e, form) {
+    e.preventDefault();
+    var rid = form.dataset.rid;
+    var inp = form.querySelector('input[name="content"]');
+    var content = inp.value.trim();
+    if (!content) return false;
+    inp.disabled = true;
+    var formData = new FormData();
+    formData.append('content', content);
+    fetch('/dashboard/emotion/comment/' + rid, {
+        method: 'POST',
+        headers: {'X-Requested-With': 'XMLHttpRequest'},
+        body: formData,
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        inp.disabled = false;
+        if (d && d.ok) {
+            inp.value = '';
+            var list = form.closest('.card-body').querySelector('.comment-list[data-rid="' + rid + '"]');
+            if (list) {
+                var div = document.createElement('div');
+                div.className = 'text-muted';
+                div.style.fontSize = '.8em';
+                div.innerHTML = '<strong>' + d.user + '</strong> <span>' + d.time + '</span>：' + d.content;
+                list.appendChild(div);
+            }
+            if (d.todo_created) showToast('已创建跟进 Todo → ' + d.todo_created, 'success');
+        }
+    }).catch(function() { inp.disabled = false; });
+    return false;
 }
 
 // @autocomplete for emotion comment inputs

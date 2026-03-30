@@ -2778,14 +2778,18 @@ def emotion_comment(record_id):
     from app.models.todo import Todo, TodoItem
 
     record = db.get_or_404(EmotionRecord, record_id)
-    content = request.form.get('content', '').strip()[:500]
+    content = (request.form.get('content') or '').strip()[:500]
     if not content:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify(ok=False, msg='内容不能为空')
         return redirect(url_for('dashboard.emotion_predict'))
 
     # Save comment
-    db.session.add(EmotionComment(record_id=record.id, user_id=current_user.id, content=content))
+    comment = EmotionComment(record_id=record.id, user_id=current_user.id, content=content)
+    db.session.add(comment)
 
     # Check for @mention — create a follow-up todo
+    todo_created = None
     at_match = re.search(r'@(\S+)', content)
     if at_match:
         target_name = at_match.group(1)
@@ -2799,8 +2803,16 @@ def emotion_comment(record_id):
                         due_date=date.today() + timedelta(days=7), category='team', source='help')
             todo.items.append(TodoItem(title=todo_title, sort_order=0))
             db.session.add(todo)
+            todo_created = target_user.name
 
     db.session.commit()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        from datetime import datetime as _dt
+        return jsonify(ok=True, content=content,
+                       user=current_user.name,
+                       time=_dt.now().strftime('%m-%d %H:%M'),
+                       todo_created=todo_created)
     return redirect(url_for('dashboard.emotion_predict'))
 
 
