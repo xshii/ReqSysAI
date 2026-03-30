@@ -362,6 +362,68 @@ def _compute_weekly_deltas(all_reqs, project_ids, monday, sunday):
     }
 
 
+# ---- Rule-based weekly summary (no AI) ----
+
+def _build_rule_based_summary(project_name, all_reqs, todos_done, todos_active,
+                              open_risks, milestones, monday, sunday):
+    """Generate a rule-based weekly report summary when AI service is disabled."""
+    today_ = date.today()
+
+    # Summary
+    total = len(all_reqs)
+    done = sum(1 for r in all_reqs if r.status in ('done', 'closed'))
+    overdue = sum(1 for r in all_reqs if r.due_date and r.due_date < today_ and r.status not in ('done', 'closed'))
+    active = total - done
+    pct = round(done / total * 100) if total else 0
+    summary = f'{project_name}本周（{monday.strftime("%m/%d")}~{sunday.strftime("%m/%d")}）：需求 {done}/{total} 完成（{pct}%）'
+    if overdue:
+        summary += f'，{overdue} 项延期'
+    summary += f'；本周完成 {len(todos_done)} 个任务，进行中 {len(todos_active)} 个'
+    if open_risks:
+        summary += f'；{len(open_risks)} 个风险待处理'
+    summary += '。'
+
+    # Highlights: completed requirements this week + milestone progress
+    highlights = []
+    for r in all_reqs:
+        if r.status in ('done', 'closed') and r.updated_at and r.updated_at.date() >= monday:
+            highlights.append(f'需求 [{r.number}] {r.title} 已完成')
+    for m in (milestones or []):
+        if m.status == 'completed':
+            highlights.append(f'里程碑「{m.name}」已达成')
+    if not highlights:
+        if todos_done:
+            highlights.append(f'本周完成 {len(todos_done)} 个任务')
+
+    # Risks: from open_risks
+    risk_lines = []
+    for r in open_risks:
+        line = f'{r.title}（{r.severity_label}）'
+        if r.due_date and r.due_date < today_:
+            line += f' - 已超期{(today_ - r.due_date).days}天'
+        risk_lines.append(line)
+
+    # Plan: overdue + active items
+    plan = []
+    for r in all_reqs:
+        if r.due_date and r.due_date < today_ and r.status not in ('done', 'closed'):
+            plan.append(f'推进延期需求 [{r.number}] {r.title}')
+    for m in (milestones or []):
+        if m.status != 'completed' and m.due_date:
+            days_left = (m.due_date - today_).days
+            if 0 <= days_left <= 14:
+                plan.append(f'里程碑「{m.name}」将于 {m.due_date.strftime("%m-%d")} 到期')
+    if not plan:
+        plan.append('继续推进各项需求')
+
+    return {
+        'summary': summary,
+        'highlights': highlights[:5],
+        'risks': risk_lines[:5],
+        'plan': plan[:5],
+    }
+
+
 # ---- Pivot / 点灯图 helper ----
 
 def _build_pivot_data(project_id, include_sub=True):
@@ -997,31 +1059,44 @@ def weekly_report():
                 fo_name = fo.display_name if fo else (child.owner.name if child.owner else '未分配')
                 lines.append(f'- {child.name}（负责人：{fo_name}，需求 {c_done}/{c_total} 完成，进度 {child.progress}%）')
 
-        # AI prompt: only generate analysis (summary, risks, plan)
-        tpl = get_prompt('weekly_report')
-        prompt = tpl.format(project_name=project_name) + '\n\n' + '\n'.join(lines)
-
         import json as json_lib
-        result, raw = call_ollama(prompt)
-        if result is None:
-            ai_analysis = {
-                'summary': 'AI服务暂时不可用，请人工填写',
-                'highlights': [],
-                'risks': [],
-                'plan': [],
-            }
+
+        # Check if AI service is enabled
+        ai_enabled = current_app.config.get('AI_ENABLED', False)
+
+        if ai_enabled:
+            # AI prompt: only generate analysis (summary, risks, plan)
+            tpl = get_prompt('weekly_report')
+            prompt = tpl.format(project_name=project_name) + '\n\n' + '\n'.join(lines)
+
+            result, raw = call_ollama(prompt)
+            if isinstance(result, dict):
+                ai_analysis = {
+                    'summary': result.get('summary', '数据不足，无法生成摘要'),
+                    'highlights': result.get('highlights', []),
+                    'risks': result.get('risks', []),
+                    'plan': result.get('plan', []),
+                }
+            elif result is None:
+                ai_analysis = {
+                    'summary': 'AI服务暂时不可用，请人工填写',
+                    'highlights': [],
+                    'risks': [],
+                    'plan': [],
+                }
+            else:
+                ai_analysis = {
+                    'summary': '数据不足，无法生成摘要',
+                    'highlights': [],
+                    'risks': [],
+                    'plan': [],
+                }
         else:
-            ai_analysis = {
-                'summary': '数据不足，无法生成摘要',
-                'highlights': [],
-                'risks': [],
-                'plan': [],
-            }
-        if isinstance(result, dict):
-            ai_analysis['summary'] = result.get('summary', ai_analysis['summary'])
-            ai_analysis['highlights'] = result.get('highlights', [])
-            ai_analysis['risks'] = result.get('risks', [])
-            ai_analysis['plan'] = result.get('plan', [])
+            # Rule-based summary when AI is disabled
+            ai_analysis = _build_rule_based_summary(
+                project_name, all_reqs, todos_done, todos_active,
+                open_risks, milestones, monday, sunday,
+            )
 
         # Reviewer: PL of current user's group; if user is PL, then XM; fallback to manager
         reviewer = ''
