@@ -15,8 +15,9 @@ class ExternalRequest(db.Model):
     status = db.Column(db.String(20), default='pending')  # pending/accepted/done/rejected
     response = db.Column(db.Text)  # 回复
     assigned_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=db.func.now())
-    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
+    created_at = db.Column(db.DateTime, default=lambda: __import__('datetime').datetime.now())
+    updated_at = db.Column(db.DateTime, default=lambda: __import__('datetime').datetime.now(),
+                           onupdate=lambda: __import__('datetime').datetime.now())
 
     target_user = db.relationship('User', foreign_keys=[target_user_id], lazy='joined')
     assignee = db.relationship('User', foreign_keys=[assigned_id], lazy='joined')

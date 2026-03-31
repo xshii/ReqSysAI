@@ -50,6 +50,13 @@ def request_submit(eid):
     urgency = 'today' if days_left <= 0 else ('tomorrow' if days_left <= 1 else 'week')
     deadline_label = deadline.strftime('%m-%d %H:%M')
 
+    # 用客户端本地时间作为 created_at
+    client_time_str = request.form.get('client_time', '').strip()
+    try:
+        client_time = _dt.strptime(client_time_str, '%Y-%m-%dT%H:%M:%S') if client_time_str else None
+    except ValueError:
+        client_time = None
+
     req = ExternalRequest(
         target_user_id=user.id,
         name=submitter,
@@ -58,6 +65,8 @@ def request_submit(eid):
         urgency=urgency,
         status='pending',
     )
+    if client_time:
+        req.created_at = client_time
     db.session.add(req)
 
     # 创建求助 todo

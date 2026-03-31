@@ -51,7 +51,8 @@
             <div class="card sticky-top" style="top:16px;">
                 <div class="card-header py-2"><span class="small fw-bold"><i class="bi bi-pencil-square"></i> 新诉求</span></div>
                 <div class="card-body py-2">
-                    <form method="POST" action="{{ url_for('public.request_submit', eid=target_user.employee_id) }}">
+                    <form method="POST" action="{{ url_for('public.request_submit', eid=target_user.employee_id) }}" onsubmit="var _n=new Date();this.querySelector('[name=client_time]').value=_n.getFullYear()+'-'+String(_n.getMonth()+1).padStart(2,'0')+'-'+String(_n.getDate()).padStart(2,'0')+'T'+String(_n.getHours()).padStart(2,'0')+':'+String(_n.getMinutes()).padStart(2,'0')+':'+String(_n.getSeconds()).padStart(2,'0');">
+                        <input type="hidden" name="client_time" value="">
                         <div class="mb-2">
                             <input type="text" name="name" class="form-control form-control-sm" placeholder="你的姓名 *" required>
                         </div>
