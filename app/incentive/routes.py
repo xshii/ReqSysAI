@@ -15,6 +15,24 @@ from app.models.user import User
 from app.utils.upload import save_photo
 
 
+def _find_nominee_photo(nominees):
+    """查找获奖人历史照片。优先级：激励上传 > 用户头像。单人时才查。"""
+    if not nominees or len(nominees) != 1:
+        return None
+    user = nominees[0]
+    # 1. 该用户最近一条有图片的激励记录
+    recent = Incentive.query.filter(
+        Incentive.nominees.any(id=user.id),
+        Incentive.photo.isnot(None), Incentive.photo != '',
+    ).order_by(Incentive.created_at.desc()).first()
+    if recent and recent.photo:
+        return recent.photo
+    # 2. 用户头像
+    if user.avatar:
+        return user.avatar
+    return None
+
+
 @incentive_bp.route('/')
 @login_required
 def index():
@@ -205,6 +223,9 @@ def submit():
     if not nominees and not ext_str:
         flash('请选择至少一位推荐人员', 'danger')
         return redirect(url_for('incentive.index'))
+    # 没上传图片时自动关联历史照片/头像
+    if not photo_path:
+        photo_path = _find_nominee_photo(nominees)
     category = request.form.get('category', 'professional')
     inc = Incentive(
         title=title, description=description, category=category,
@@ -302,16 +323,26 @@ def review(inc_id):
         inc.source = source
         inc.fund_id = fund_id
         inc.is_public = 'is_public' in request.form
+        # 审批通过时自动关联历史照片（如果没有图片）
+        if not inc.photo:
+            inc.photo = _find_nominee_photo(inc.nominees)
     elif action == 'reject':
         inc.status = 'rejected'
     elif action == 'pending':
         inc.status = 'pending'
     if description:
         inc.description = description
+    # Update title if provided
+    new_title = request.form.get('title', '').strip()
+    if new_title:
+        inc.title = new_title
     # Update category if provided
     new_category = request.form.get('category', '').strip()
     if new_category:
         inc.category = new_category
+    # Update external nominees
+    ext_nominees = request.form.getlist('external_nominees')
+    inc.external_nominees = ','.join(n.strip() for n in ext_nominees if n.strip()) or None
     # Update nominees if provided
     new_nominee_ids = request.form.getlist('nominee_ids')
     if new_nominee_ids:

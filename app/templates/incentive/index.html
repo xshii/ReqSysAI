@@ -182,7 +182,8 @@
                         data-amount="{{ inc.amount or '' }}"
                         data-source="{{ inc.source or 'instant' }}"
                         data-nominee-ids="{{ inc.nominees|map(attribute='id')|list|join(',') }}"
-                        data-nominee-count="{{ inc.nominees|length }}"
+                        data-nominee-count="{{ inc.all_nominee_names|length }}"
+                        data-external-nominees="{{ inc.external_nominees or '' }}"
                         data-public="{{ '1' if inc.is_public else '0' }}">评审</button>
                 {% endif %}
                 {% if (current_user.id == inc.submitted_by or current_user.is_admin) and inc.status in ('submitted', 'pending') %}
@@ -289,10 +290,14 @@
 <div class="modal fade" id="reviewModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST" id="reviewForm">
+            <form method="POST" id="reviewForm" onkeydown="if(event.key==='Enter'&&event.target.tagName!=='TEXTAREA')event.preventDefault();">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-header py-2"><h6 class="modal-title" id="reviewTitle">评审激励</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-header py-2"><h6 class="modal-title">评审激励</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body">
+                    <div class="row mb-2">
+                        <label class="col-3 col-form-label col-form-label-sm">标题</label>
+                        <div class="col-9"><input type="text" name="title" id="reviewTitleInput" class="form-control form-control-sm"></div>
+                    </div>
                     <div class="row mb-2">
                         <label class="col-3 col-form-label col-form-label-sm">导向</label>
                         <div class="col-9">
@@ -884,14 +889,29 @@ function _refreshNomineeDisplay() {
     var display = document.getElementById('reviewNomineeDisplay');
     var container = document.getElementById('reviewNomineeIds');
     display.innerHTML = '';
+    // 系统内用户
     container.querySelectorAll('input[name="nominee_ids"]').forEach(function(h) {
         var user = _allUsers.find(function(u) { return u.id == h.value; });
         var name = user ? user.name : h.value;
         var badge = document.createElement('span');
         badge.className = 'badge bg-primary d-flex align-items-center gap-1';
-        badge.innerHTML = name + ' <i class="bi bi-x-lg" style="cursor:pointer;font-size:.7em;" onclick="this.closest(\'span\').remove();document.querySelector(\'#reviewNomineeIds input[value=\\\'' + h.value + '\\\']\').remove();"></i>';
+        badge.innerHTML = name + ' <i class="bi bi-x-lg" style="cursor:pointer;font-size:.7em;" onclick="this.closest(\'span\').remove();document.querySelector(\'#reviewNomineeIds input[value=\\\'' + h.value + '\\\']\').remove();_updateNomineeCount();"></i>';
         display.appendChild(badge);
     });
+    // 外部获奖人
+    container.querySelectorAll('input[name="external_nominees"]').forEach(function(h) {
+        var badge = document.createElement('span');
+        badge.className = 'badge bg-secondary d-flex align-items-center gap-1';
+        badge.innerHTML = h.value + ' <i class="bi bi-x-lg" style="cursor:pointer;font-size:.7em;" onclick="var inp=document.querySelector(\'#reviewNomineeIds input[name=external_nominees][value=\\\'' + h.value.replace(/'/g, "\\'") + '\\\']\');if(inp)inp.remove();this.closest(\'span\').remove();_updateNomineeCount();"></i>';
+        display.appendChild(badge);
+    });
+    _updateNomineeCount();
+}
+function _updateNomineeCount() {
+    var form = document.getElementById('reviewForm');
+    var count = document.querySelectorAll('#reviewNomineeIds input[name="nominee_ids"]').length
+              + document.querySelectorAll('#reviewNomineeIds input[name="external_nominees"]').length;
+    form.dataset.nomineeCount = count || '1';
 }
 
 // Validate amount: real-time hint for multi-nominee
@@ -962,14 +982,19 @@ document.getElementById('reviewForm')?.addEventListener('submit', function(e) {
 document.querySelectorAll('.btn-review-inc').forEach(function(btn) {
     btn.addEventListener('click', function() {
         document.getElementById('reviewForm').action = '{{ url_for("incentive.review", inc_id=0) }}'.replace('/0/', '/' + btn.dataset.incId + '/');
-        document.getElementById('reviewForm').dataset.nomineeCount = btn.dataset.nomineeCount || '1';
-        document.getElementById('reviewTitle').textContent = '评审：' + btn.dataset.title;
+        document.getElementById('reviewTitleInput').value = btn.dataset.title || '';
         var catSel = document.getElementById('reviewCategory');
         if (catSel && btn.dataset.category) catSel.value = btn.dataset.category;
         document.getElementById('reviewDesc').value = btn.dataset.desc || '';
         updateCharCount(document.getElementById('reviewDesc'), 'reviewDescCount');
         document.getElementById('reviewComment').value = btn.dataset.comment || '';
         _fillNomineeIds('reviewNomineeIds', btn.dataset.nomineeIds);
+        // 外部获奖人
+        var extNames = (btn.dataset.externalNominees || '').split(',').filter(Boolean);
+        extNames.forEach(function(n) {
+            var h = document.createElement('input'); h.type = 'hidden'; h.name = 'external_nominees'; h.value = n.trim();
+            document.getElementById('reviewNomineeIds').appendChild(h);
+        });
         _refreshNomineeDisplay();
         var amountInput = document.querySelector('#reviewModal input[name="amount"]');
         if (amountInput) amountInput.value = btn.dataset.amount || '';
