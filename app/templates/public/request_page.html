@@ -134,8 +134,6 @@ function selectType(btn, type) {
     var label = days <= 0 ? '今天' : (days <= 1 ? '明天' : '一周内');
     quickBtns.forEach(function(qb) { if (qb.textContent.trim() === label) { qb.classList.remove('btn-outline-secondary'); qb.classList.add('btn-primary'); } });
 }
-selectType(document.querySelector('.req-type-btn'), 'Review MR');
-
 function setDeadline(days, btn) {
     var d = new Date();
     d.setDate(d.getDate() + days);
@@ -145,11 +143,12 @@ function setDeadline(days, btn) {
     document.querySelectorAll('.deadline-quick').forEach(function(b) { b.classList.remove('btn-primary'); b.classList.add('btn-outline-secondary'); });
     if (btn) { btn.classList.remove('btn-outline-secondary'); btn.classList.add('btn-primary'); }
 }
-// Default: 1 week + set min to today
-var _weekBtn = document.querySelectorAll('.deadline-quick')[2];
-setDeadline(7, _weekBtn);
+// Set min to today
 var _now = new Date();
 document.getElementById('deadlinePick').min = _now.getFullYear() + '-' + String(_now.getMonth()+1).padStart(2,'0') + '-' + String(_now.getDate()).padStart(2,'0') + 'T00:00';
+
+// Default: Review MR → 明天
+selectType(document.querySelector('.req-type-btn'), 'Review MR');
 // Clear quick highlight when user manually picks, and clamp year to 4 digits
 var _dp = document.getElementById('deadlinePick');
 _dp.addEventListener('change', function() {

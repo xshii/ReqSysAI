@@ -358,6 +358,22 @@ CREATE_STATEMENTS = [
         user_id INTEGER NOT NULL REFERENCES users(id),
         PRIMARY KEY (incentive_id, user_id)
     )""",
+    # 权限申请（批量）
+    """CREATE TABLE IF NOT EXISTS permission_requests (
+        id INTEGER PRIMARY KEY,
+        project_id INTEGER NOT NULL REFERENCES projects(id),
+        category VARCHAR(100),
+        resource VARCHAR(200) NOT NULL,
+        repo_path VARCHAR(300),
+        description VARCHAR(300),
+        applicants TEXT,
+        submitter_id INTEGER NOT NULL REFERENCES users(id),
+        status VARCHAR(20) DEFAULT 'draft',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        submitted_at DATETIME,
+        approved_at DATETIME,
+        updated_at DATETIME
+    )""",
     # 外部诉求
     """CREATE TABLE IF NOT EXISTS external_requests (
         id INTEGER PRIMARY KEY,
