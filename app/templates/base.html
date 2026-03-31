@@ -27,6 +27,9 @@
                     <div id="navSearchDropdown" class="position-absolute bg-white border rounded shadow-sm mt-1" style="display:none;width:360px;max-height:50vh;overflow-y:auto;z-index:9999;right:0;font-size:.85em;">
                     </div>
                 </div>
+                <button type="button" class="btn btn-sm btn-outline-light" id="btnCopyRequest" data-tip="复制我的诉求页链接" data-tip-pos="bottom" style="font-size:.8em;" data-url="{{ url_for('public.request_page', eid=current_user.employee_id, _external=True) }}">
+                    <i class="bi bi-link-45deg"></i>
+                </button>
                 <button type="button" class="btn btn-sm btn-outline-light" title="录入人员" onclick="openAddPersonnelModal()" style="font-size:.8em;white-space:nowrap;">
                     <i class="bi bi-person-plus"></i> +人员
                 </button>
@@ -455,6 +458,24 @@
     })();
 
     /* --- Add Personnel Modal --- */
+    // Copy request page link (compatible with HTTP)
+    var _copyBtn = document.getElementById('btnCopyRequest');
+    if (_copyBtn) {
+        _copyBtn.addEventListener('click', function() {
+            var url = _copyBtn.dataset.url;
+            var ta = document.createElement('textarea');
+            ta.value = url;
+            ta.style.cssText = 'position:fixed;left:-9999px;';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            var icon = _copyBtn.querySelector('i');
+            icon.className = 'bi bi-check-lg text-success';
+            setTimeout(function() { icon.className = 'bi bi-link-45deg'; }, 1500);
+        });
+    }
+
     var _apDataLoaded = false;
     var AP_EID_RE = /^[a-z]?(00\d{6}|\d00\d{7})$/;
 

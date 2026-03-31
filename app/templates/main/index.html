@@ -436,29 +436,29 @@ checkHelpAlert();
 
         <!-- Contribution Heatmap -->
         <div class="card mb-3 border-0 shadow-sm">
-            <div class="card-header py-2 bg-white small" role="button" data-bs-toggle="collapse" data-bs-target="#heatmapBody" style="cursor:pointer;">
-                <i class="bi bi-chevron-down text-muted me-1" style="font-size:.6em;"></i><i class="bi bi-calendar-check"></i> 完成热力图 <span class="text-muted">近90天</span>
-            </div>
-            <div class="collapse show" id="heatmapBody">
             <div class="card-body py-2 px-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="small"><i class="bi bi-calendar-check"></i> 完成热力图</span>
+                    <div class="d-flex align-items-center gap-1" style="font-size:.7em;">
+                        <span class="text-muted">少</span>
+                        {% for c in ['#ebedf0','#9be9a8','#40c463','#30a14e','#216e39'] %}
+                        <div style="width:9px;height:9px;background:{{ c }};border-radius:2px;"></div>
+                        {% endfor %}
+                        <span class="text-muted">多</span>
+                    </div>
+                </div>
                 <div class="d-flex gap-1 flex-wrap">
                 {% set ns = namespace(d=heatmap_start) %}
                 {% for i in range(91) %}
                     {% set ds = ns.d.strftime('%Y-%m-%d') %}
                     {% set cnt = heatmap.get(ds, 0) %}
                     {% set color = '#ebedf0' if cnt == 0 else ('#9be9a8' if cnt <= 2 else ('#40c463' if cnt <= 4 else ('#30a14e' if cnt <= 6 else '#216e39'))) %}
-                    <div style="width:11px;height:11px;background:{{ color }};border-radius:2px;" title="{{ ds }}：{{ cnt }} 个"></div>
+                    <div style="width:11px;height:11px;background:{{ color }};border-radius:2px;cursor:default;" data-tip="{{ ds }} 完成{{ cnt }}个" data-tip-pos="bottom"></div>
                     {% set ns.d = ns.d + timedelta(days=1) %}
                 {% endfor %}
                 </div>
-                <div class="d-flex align-items-center gap-1 mt-1 small text-muted">
-                    <span>少</span>
-                    {% for c in ['#ebedf0','#9be9a8','#40c463','#30a14e','#216e39'] %}
-                    <div style="width:11px;height:11px;background:{{ c }};border-radius:2px;"></div>
-                    {% endfor %}
-                    <span>多</span>
+                <div class="d-none">
                 </div>
-            </div>
             </div>
         </div>
 
@@ -497,25 +497,26 @@ checkHelpAlert();
         </div>
         {% endif %}
 
+
         <!-- Incentive Stars -->
         <div class="card mb-3 border-0 shadow-sm">
             <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#incentiveBody" style="cursor:pointer;">
                 <i class="bi bi-chevron-right text-muted me-1" style="font-size:.6em;"></i><i class="bi bi-star-fill text-warning"></i> 激励之星 <span class="badge bg-secondary">{{ approved_incentives | length }}</span>
             </div>
             <div class="collapse show" id="incentiveBody">
-            <div class="card-body py-2">
+            <div class="card-body py-2" style="max-height:280px;overflow-y:auto;">
                 {% if approved_incentives %}
                 {% for inc in approved_incentives %}
-                <div class="d-flex gap-2 mb-2 pb-2 {% if not loop.last %}border-bottom{% endif %}">
+                <div class="d-flex gap-2 mb-2 pb-2 border-bottom inc-item">
                     <div class="flex-shrink-0">
                         {% if inc.photo %}
-                        <img src="{{ url_for('static', filename=inc.photo) }}" class="rounded img-lightbox" style="width:36px;height:36px;object-fit:cover;cursor:pointer;" data-src="{{ url_for('static', filename=inc.photo) }}">
+                        <img src="{{ url_for('static', filename=inc.photo) }}" class="rounded img-lightbox" style="width:48px;height:48px;object-fit:cover;cursor:pointer;" data-src="{{ url_for('static', filename=inc.photo) }}">
                         {% elif inc.nominees | length == 1 and inc.nominees[0].avatar %}
-                        <img src="{{ url_for('static', filename=inc.nominees[0].avatar) }}" class="rounded img-lightbox" style="width:36px;height:36px;object-fit:cover;cursor:pointer;" data-src="{{ url_for('static', filename=inc.nominees[0].avatar) }}">
+                        <img src="{{ url_for('static', filename=inc.nominees[0].avatar) }}" class="rounded img-lightbox" style="width:48px;height:48px;object-fit:cover;cursor:pointer;" data-src="{{ url_for('static', filename=inc.nominees[0].avatar) }}">
                         {% elif inc.nominees | length == 1 %}
-                        <div class="rounded bg-primary text-white d-flex align-items-center justify-content-center fw-bold" style="width:36px;height:36px;font-size:.8em;">{{ inc.nominees[0].name[0] }}</div>
+                        <div class="rounded bg-primary text-white d-flex align-items-center justify-content-center fw-bold" style="width:48px;height:48px;font-size:.8em;">{{ inc.nominees[0].name[0] }}</div>
                         {% else %}
-                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center fw-bold" style="width:36px;height:36px;font-size:1.1em;">?</div>
+                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center fw-bold" style="width:48px;height:48px;font-size:1.1em;">?</div>
                         {% endif %}
                     </div>
                     <div class="small" style="min-width:0;">
@@ -937,8 +938,26 @@ document.querySelectorAll('.btn-risk-todo').forEach(function(btn) {
     });
 });
 
+
 // @autocomplete for todo input (shared macro — users + groups)
 {{ at_autocomplete_js() }}
+
+// Shuffle incentive items based on page open time as seed
+(function() {
+    var items = Array.from(document.querySelectorAll('.inc-item'));
+    if (items.length < 2) return;
+    var parent = items[0].parentElement;
+    var seed = Math.floor(Date.now() / 60000); // changes every minute
+    function rng() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+    for (var i = items.length - 1; i > 0; i--) {
+        var j = Math.floor(rng() * (i + 1));
+        var tmp = items[i]; items[i] = items[j]; items[j] = tmp;
+    }
+    items.forEach(function(el) { parent.appendChild(el); });
+    // Remove border-bottom from last item
+    items.forEach(function(el) { el.classList.add('border-bottom'); });
+    items[items.length - 1].classList.remove('border-bottom');
+})();
 
 // Incentive like (AJAX)
 document.querySelectorAll('.inc-like').forEach(function(btn) {
@@ -952,6 +971,7 @@ document.querySelectorAll('.inc-like').forEach(function(btn) {
         });
     });
 });
+
 
 // Rant alias cache
 var rantAliasEl = document.getElementById('rantAlias');

@@ -150,7 +150,7 @@
         <tbody>
         {% for sp in report_data.sub_projects %}
         <tr>
-            <td>{{ sp.project.name }}</td>
+            <td><a href="{{ url_for('dashboard.weekly_report', project_id=sp.project.id) }}" class="text-decoration-none">{{ sp.project.name }}</a></td>
             <td>{{ sp.owner.name if sp.owner else '-' }}</td>
             <td>{{ sp.summary or '-' }}</td>
         </tr>

@@ -6,9 +6,11 @@
     <div class="card-body py-1 px-2">
         <div class="d-flex justify-content-between align-items-start">
             {% if is_child %}<span class="text-info me-1" style="font-size:.7em;">↳</span>{% endif %}
-            {% set _display_title = r.title.replace(r.category, '').strip(' -—·') if r.category and r.category in r.title else r.title %}
+            {% set _stripped = r.title.replace(r.category, '').strip(' -—·') if r.category and r.category in r.title else '' %}
+            {% set _display_title = _stripped if _stripped else r.title %}
+            {% set _show_cat_badge = r.category and _stripped %}
             <a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" class="text-decoration-none {{ 'text-muted' if is_child else 'text-dark' }} small {{ 'fw-bold' if not is_child else '' }}" style="line-height:1.3;">{{ _display_title }}</a>
-            {% if r.category %}<span class="badge bg-light text-dark border ms-1" style="font-size:.6em;">{{ r.category }}</span>{% endif %}
+            {% if _show_cat_badge %}<span class="badge bg-light text-dark border ms-1" style="font-size:.6em;">{{ r.category }}</span>{% endif %}
         </div>
         <div class="d-flex justify-content-between align-items-center" style="font-size:.7em;">
             {% if r.due_date %}

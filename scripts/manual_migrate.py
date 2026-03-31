@@ -35,6 +35,8 @@ ALTER_STATEMENTS = [
     "ALTER TABLE permission_applications ADD COLUMN applicant_eid VARCHAR(30)",
     # permission_items 补字段
     "ALTER TABLE permission_items ADD COLUMN created_by INTEGER REFERENCES users(id)",
+    # external_requests 补字段（建表后新增）
+    "ALTER TABLE external_requests ADD COLUMN urgency VARCHAR(20) DEFAULT 'week'",
 ]
 
 # 需要补齐的 CREATE TABLE 语句
@@ -355,6 +357,21 @@ CREATE_STATEMENTS = [
         incentive_id INTEGER NOT NULL REFERENCES incentives(id),
         user_id INTEGER NOT NULL REFERENCES users(id),
         PRIMARY KEY (incentive_id, user_id)
+    )""",
+    # 外部诉求
+    """CREATE TABLE IF NOT EXISTS external_requests (
+        id INTEGER PRIMARY KEY,
+        target_user_id INTEGER NOT NULL REFERENCES users(id),
+        name VARCHAR(100),
+        contact VARCHAR(200),
+        title VARCHAR(300) NOT NULL,
+        description TEXT,
+        urgency VARCHAR(20) DEFAULT 'week',
+        status VARCHAR(20) DEFAULT 'pending',
+        response TEXT,
+        assigned_id INTEGER REFERENCES users(id),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )""",
 ]
 

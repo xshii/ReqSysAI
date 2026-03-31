@@ -39,6 +39,9 @@ def create_app(config_name=None):
     app.register_blueprint(todo_bp, url_prefix='/todos')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
 
+    from app.public import public_bp
+    app.register_blueprint(public_bp)
+
     from app.incentive import incentive_bp
     app.register_blueprint(incentive_bp, url_prefix='/incentive')
 
