@@ -56,6 +56,7 @@
     {%- if t.need_help %}<span class="badge bg-danger" style="font-size:.55em;">阻塞{% if t.blocked_reason %}：{{ t.blocked_reason }}{% endif %}</span>{% endif %}
     {%- if t.source == "ai" %}<span class="badge bg-info" style="font-size:.55em;">AI</span>{% endif %}
     {%- if t.source == "help_accepted" and t.parent %}{% set _help_days = (t.due_date - today).days if t.due_date and today else none %}<span class="badge bg-info bg-opacity-75" style="font-size:.55em;">{{ t.parent.user.name }}求助 · 已承诺{{ '今天' if _help_days is not none and _help_days <= 0 else (_help_days|string + '天后') if _help_days is not none else '' }}完成</span>{% endif %}
+    {%- if t.source == "help_accepted" and not t.parent and t.title.startswith('[外部诉求]') %}{% set _help_days = (t.due_date - today).days if t.due_date and today else none %}<span class="badge bg-info bg-opacity-75" style="font-size:.55em;"><i class="bi bi-megaphone"></i> 已接纳 · {{ '今天' if _help_days is not none and _help_days <= 0 else (_help_days|string + '天内') if _help_days is not none else '' }}</span>{% endif %}
     {%- if t.source == "help" and t.parent %}<span class="badge bg-warning text-dark" style="font-size:.55em;">{{ t.parent.user.name }}求助 · 待接纳</span>{% endif %}
     {%- if is_help and _helper_todo %}
     {% if _helper_todo.source == 'rejected' %}

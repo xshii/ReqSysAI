@@ -13,6 +13,23 @@ from app.models.user import Group, User
 from app.todo import todo_bp
 from app.todo.forms import TodoForm
 
+
+def _sync_ext_request(todo, status):
+    """同步外部诉求的 ExternalRequest 状态。通过 blocked_reason 里的 ext_req:ID 精确匹配。"""
+    from app.models.external_request import ExternalRequest
+    if not todo.blocked_reason or not todo.blocked_reason.startswith('ext_req:'):
+        return
+    try:
+        er_id = int(todo.blocked_reason.split(':')[1])
+    except (IndexError, ValueError):
+        return
+    er = db.session.get(ExternalRequest, er_id)
+    if er:
+        er.status = status
+        if not er.assigned_id:
+            from flask_login import current_user
+            er.assigned_id = current_user.id
+
 # ---- Todo CRUD ----
 
 @todo_bp.route('/add', methods=['POST'])
@@ -60,15 +77,19 @@ def edit(todo_id):
     # Accept help request: due_date change without title means acceptance
     if 'due_date' in data and 'title' not in data:
         todo.due_date = date.fromisoformat(data['due_date']) if data['due_date'] else None
-        if todo.source == 'help' and todo.parent_id:
+        if todo.source == 'help':
             todo.source = 'help_accepted'
-            from app.services.notify import notify
-            parent = db.session.get(Todo, todo.parent_id)
-            if parent:
-                days = (todo.due_date - date.today()).days if todo.due_date else 0
-                when = '今天' if days <= 0 else (f'{days}天内')
-                notify(parent.user_id, 'help',
-                       f'{current_user.name} 接纳了你的求助「{todo.title}」，预计{when}完成', '')
+            if todo.parent_id:
+                from app.services.notify import notify
+                parent = db.session.get(Todo, todo.parent_id)
+                if parent:
+                    days = (todo.due_date - date.today()).days if todo.due_date else 0
+                    when = '今天' if days <= 0 else (f'{days}天内')
+                    notify(parent.user_id, 'help',
+                           f'{current_user.name} 接纳了你的求助「{todo.title}」，预计{when}完成', '')
+            # 同步外部诉求状态
+            if todo.title.startswith('[外部诉求]'):
+                _sync_ext_request(todo, 'accepted')
         db.session.commit()
         return api_ok()
 
@@ -76,17 +97,21 @@ def edit(todo_id):
     comment = (data.get('comment') or '').strip()
     if not title:
         # Reject help request: mark as rejected instead of deleting
-        if comment and todo.parent_id and todo.source == 'help':
+        if comment and todo.source == 'help':
+            # 同步外部诉求状态（必须在覆盖 blocked_reason 之前）
+            if todo.title.startswith('[外部诉求]'):
+                _sync_ext_request(todo, 'rejected')
             todo.source = 'rejected'
             todo.blocked_reason = comment
             todo.status = 'done'
             todo.done_date = date.today()
-            from app.services.notify import notify
-            parent = db.session.get(Todo, todo.parent_id)
-            if parent:
-                notify(parent.user_id, 'help',
-                       f'{current_user.name} 暂缓了你的求助「{todo.title}」：{comment}',
-                       '')
+            if todo.parent_id:
+                from app.services.notify import notify
+                parent = db.session.get(Todo, todo.parent_id)
+                if parent:
+                    notify(parent.user_id, 'help',
+                           f'{current_user.name} 暂缓了你的求助「{todo.title}」：{comment}',
+                           '')
             db.session.commit()
             return api_ok(rejected=True)
         # Normal delete: recursively delete all descendants

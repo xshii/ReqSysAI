@@ -23,6 +23,20 @@ from app.models.rant import Rant
 from app.models.requirement import Requirement
 from app.models.risk import Risk
 from app.models.todo import Todo, TodoItem, todo_requirements
+
+
+def _sync_ext_request_by_todo(todo):
+    """同步外部诉求状态（toggle done 时调用）。通过 blocked_reason 里的 ext_req:ID 精确匹配。"""
+    from app.models.external_request import ExternalRequest
+    if not todo.blocked_reason or not todo.blocked_reason.startswith('ext_req:'):
+        return
+    try:
+        er_id = int(todo.blocked_reason.split(':')[1])
+    except (IndexError, ValueError):
+        return
+    er = db.session.get(ExternalRequest, er_id)
+    if er:
+        er.status = 'done' if todo.status == TODO_STATUS_DONE else 'accepted'
 from app.models.user import User
 
 
@@ -82,7 +96,7 @@ def index():
     personal_todos = []
     req_map = {r.id: r for r in my_reqs}  # Known requirements
     # Help requests: others' @me child todos I haven't accepted yet
-    help_requests = [t for t in my_todos if t.parent_id and t.source == 'help' and t.status != 'done']
+    help_requests = [t for t in my_todos if t.status != 'done' and t.source == 'help' and (t.parent_id or t.title.startswith('[外部诉求]'))]
     help_todo_ids = {t.id for t in help_requests}
     for t in my_todos:
         if t.id in help_todo_ids:
@@ -881,6 +895,10 @@ def toggle_todo(todo_id):
             t.done_date = todo.done_date
             for item in t.items:
                 item.is_done = (todo.status == TODO_STATUS_DONE)
+    # 同步外部诉求状态
+    if todo.title.startswith('[外部诉求]'):
+        from app.models.external_request import ExternalRequest
+        _sync_ext_request_by_todo(todo)
     db.session.commit()
     if request.is_json:
         return jsonify(ok=True, done=todo.status == TODO_STATUS_DONE)

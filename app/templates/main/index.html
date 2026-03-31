@@ -45,13 +45,14 @@
     {% endfor %}
 </div>
 {% endif %}
-{% if notifications %}
+{% set filtered_notifs = notifications | rejectattr('type', 'equalto', 'request') | list %}
+{% if filtered_notifs %}
 <div class="alert alert-info py-2 mb-3" id="notifAlert">
     <div class="d-flex align-items-center mb-1">
         <i class="bi bi-bell me-1"></i>
-        <strong class="small">通知 ({{ notifications|length }})</strong>
+        <strong class="small">通知 ({{ filtered_notifs|length }})</strong>
     </div>
-    {% for n in notifications %}
+    {% for n in filtered_notifs %}
     <div class="d-flex align-items-center gap-2 py-1 notif-row {% if not loop.last %}border-bottom border-info border-opacity-25{% endif %}" data-nid="{{ n.id }}">
         {% if n.type == 'gift' %}
         <a href="{{ n.link or '#' }}" class="btn btn-sm btn-primary py-0 px-2 flex-shrink-0" style="font-size:.75em;"><i class="bi bi-gift"></i> 选择礼物</a>
@@ -75,12 +76,13 @@
     </div>
     {% for t in help_requests %}
     <div class="d-flex align-items-center gap-2 help-item py-1 {% if not loop.last %}border-bottom border-warning border-opacity-25{% endif %}{% if t.title.startswith('[情绪跟进]') %} mgr-only{% endif %}" data-todo-id="{{ t.id }}">
+        {% if t.due_date %}<button class="btn btn-sm btn-success py-0 px-1" style="font-size:.65em;" onclick="acceptHelp({{ t.id }},'keep',this)" data-due="{{ t.due_date.isoformat() }}">约定{{ t.due_date.strftime('%m-%d') }}</button>{% endif %}
         <button class="btn btn-sm btn-primary py-0 px-1" style="font-size:.65em;" onclick="acceptHelp({{ t.id }},0,this)">今天</button>
         <button class="btn btn-sm btn-outline-primary py-0 px-1" style="font-size:.65em;" onclick="acceptHelp({{ t.id }},1,this)">明天</button>
         <button class="btn btn-sm btn-outline-primary py-0 px-1" style="font-size:.65em;" onclick="acceptHelp({{ t.id }},7,this)">1周内</button>
         <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:.65em;" onclick="handleHelp({{ t.id }},'reject',this)">暂缓</button>
         <span class="small flex-grow-1">
-            {% if t.parent %}<span class="text-muted">{{ t.parent.user.name }} 求助：</span>{% endif %}
+            {% if t.title.startswith('[外部诉求]') %}<i class="bi bi-megaphone text-info me-1" style="font-size:.8em;"></i>{% elif t.parent %}<span class="text-muted">{{ t.parent.user.name }} 求助：</span>{% endif %}
             {{ t.title }}
         </span>
     </div>
@@ -88,8 +90,13 @@
 </div>
 <script>
 function acceptHelp(todoId, days, btn) {
-    var d = new Date(); d.setDate(d.getDate() + days);
-    var due = d.toISOString().slice(0, 10);
+    var due;
+    if (days === 'keep') {
+        due = btn.dataset.due;
+    } else {
+        var d = new Date(); d.setDate(d.getDate() + days);
+        due = d.toISOString().slice(0, 10);
+    }
     apiPost('/todos/' + todoId + '/edit', {due_date: due}).then(function(r) {
         if (r && r.ok) {
             location.reload();

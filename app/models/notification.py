@@ -23,6 +23,7 @@ class Notification(db.Model):
         'meeting': '会议',
         'aar': 'AAR',
         'gift': '激励礼物',
+        'request': '外部诉求',
     }
 
     TYPE_ICONS = {
@@ -32,6 +33,7 @@ class Notification(db.Model):
         'meeting': 'camera-video',
         'aar': 'journal-text',
         'gift': 'gift',
+        'request': 'megaphone',
     }
 
     @property
