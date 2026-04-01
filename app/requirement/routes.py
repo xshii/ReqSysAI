@@ -884,7 +884,7 @@ def requirement_board():
                 sub_reqs.append(c)
 
     # Group by status for columns
-    columns = list(Requirement._STATUS_META.keys())
+    columns = [s for s in Requirement._STATUS_META.keys() if s != 'closed']
     board = {s: [] for s in columns}
     for r in reqs:
         if r.status in board:

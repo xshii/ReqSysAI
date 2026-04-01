@@ -119,8 +119,8 @@
 {% if requirements %}
 {% if ai_ratio_weighted is not none %}
 <div class="d-flex gap-3 mb-2 small text-muted align-items-center">
-    <span>加权AI辅助占比 <strong style="color:#7c3aed;">{{ ai_ratio_weighted }}%</strong></span>
-    {% if completion_weighted is not none %}<span>加权完成进度 <strong class="text-success">{{ completion_weighted }}%</strong></span>{% endif %}
+    <span>AI辅助占比 <strong style="color:#7c3aed;">{{ ai_ratio_weighted }}%</strong></span>
+    {% if completion_weighted is not none %}<span>完成进度 <strong class="text-success" id="completionWeighted">{{ completion_weighted }}%</strong></span>{% endif %}
 </div>
 {% endif %}
 <datalist id="catDatalist">{% for c in all_cats %}<option value="{{ c }}">{% endfor %}</datalist>
@@ -136,7 +136,6 @@
                 <th>状态</th>
                 <th>负责人</th>
                 <th>进度</th>
-                <th>加权</th>
                 <th>预估</th>
                 <th>AI%</th>
                 <th>开始日期</th>
@@ -145,7 +144,7 @@
         </thead>
         <tbody>
             {% for r in requirements %}
-            <tr data-req-id="{{ r.id }}">
+            <tr data-req-id="{{ r.id }}" data-est="{{ r.estimate_days or 1 }}">
                 <td><input type="checkbox" class="form-check-input batch-check" value="{{ r.id }}"></td>
                 <td class="cat-cell" style="cursor:pointer;white-space:nowrap;" data-req-id="{{ r.id }}" data-cat="{{ r.category or '' }}" onclick="showCatEdit(this)">
                     {% if r.category %}<span class="badge bg-light text-dark border" style="font-size:.75em;">{{ r.category_label }}</span>{% else %}<span class="text-muted small">-</span>{% endif %}
@@ -172,7 +171,6 @@
                         <span class="small text-muted pct-label" style="cursor:pointer;" onclick="this.parentNode.querySelector('select').classList.toggle('d-none'); this.parentNode.querySelector('select').focus();">{{ pct }}%</span>
                     </div>
                 </td>
-                <td class="small {% if r._weighted_pct >= 90 %}text-success{% elif r._weighted_pct >= 50 %}text-primary{% else %}text-muted{% endif %}">{{ r._weighted_pct }}%</td>
                 <td class="small">{{ r.estimate_days or '-' }}天</td>
                 <td class="small">{% if r.ai_ratio is not none %}<span style="color:#7c3aed;">{{ r.ai_ratio }}%</span>{% else %}-{% endif %}</td>
                 <td class="text-muted small">{{ r.start_date.strftime('%m-%d') if r.start_date else '-' }}</td>
@@ -360,6 +358,22 @@ function _updateBar(sel, pct) {
     bar.style.width = pct + '%';
     bar.className = 'progress-bar bg-' + (pct >= 90 ? 'success' : (pct >= 30 ? 'primary' : 'secondary'));
     row.querySelector('.pct-label').textContent = pct + '%';
+    _recalcTotal();
+}
+function _recalcTotal() {
+    var el = document.getElementById('completionWeighted');
+    if (!el) return;
+    var wSum = 0, dSum = 0;
+    document.querySelectorAll('tr[data-req-id]').forEach(function(tr) {
+        var sel = tr.querySelector('select[onchange*="updateCompletion"]');
+        var est = parseFloat(tr.dataset.est) || 1;
+        var pct = sel ? parseInt(sel.value) : 0;
+        var status = sel ? sel.dataset.status : '';
+        if (status === 'done' || status === 'closed') pct = 100;
+        wSum += pct * est;
+        dSum += est;
+    });
+    el.textContent = (dSum ? Math.round(wSum / dSum) : 0) + '%';
 }
 function updateCompletion(reqId, sel) {
     var pct = parseInt(sel.value);
