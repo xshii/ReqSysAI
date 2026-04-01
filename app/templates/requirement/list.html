@@ -37,14 +37,6 @@
                 </select>
             </div>
             <div class="col-auto">
-                <select name="priority" class="form-select form-select-sm">
-                    <option value="">全部优先级</option>
-                    {% for k, v in priorities.items() %}
-                    <option value="{{ k }}" {% if cur_priority == k %}selected{% endif %}>{{ v }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-auto">
                 <select name="category" class="form-select form-select-sm">
                     <option value="">全部分类</option>
                     {% if category_l2s %}
@@ -103,7 +95,6 @@
                 <select name="sort" class="form-select form-select-sm">
                     <option value="urgency" {% if cur_sort in ('urgency', 'newest') %}selected{% endif %}>按紧急度</option>
                     <option value="due_date" {% if cur_sort == 'due_date' %}selected{% endif %}>按截止日期</option>
-                    <option value="priority" {% if cur_sort == 'priority' %}selected{% endif %}>按优先级</option>
                     <option value="oldest" {% if cur_sort == 'oldest' %}selected{% endif %}>最早创建</option>
                     <option value="assignee" {% if cur_sort == 'assignee' %}selected{% endif %}>按负责人</option>
                 </select>
@@ -131,8 +122,7 @@
                 <th style="width:32px;"><input type="checkbox" id="batchSelectAll" class="form-check-input" title="全选"></th>
                 <th>分类</th>
                 <th>标题</th>
-                <th>项目</th>
-                <th>优先级</th>
+                {% if not cur_project or include_sub %}<th>项目</th>{% endif %}
                 <th>状态</th>
                 <th>负责人</th>
                 <th>进度</th>
@@ -150,8 +140,7 @@
                     {% if r.category %}<span class="badge bg-light text-dark border" style="font-size:.75em;">{{ r.category_label }}</span>{% else %}<span class="text-muted small">-</span>{% endif %}
                 </td>
                 <td><a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}">{{ r.title }}</a></td>
-                <td><span class="text-muted small">{{ r.project.name }}</span></td>
-                <td><span class="badge bg-{{ r.priority_color }}">{{ r.priority_label }}</span></td>
+                {% if not cur_project or include_sub %}<td><span class="text-muted small">{{ r.project.name }}</span></td>{% endif %}
                 <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span> <span class="badge bg-light text-secondary border" style="font-size:.7em;">{{ r.source_label }}</span>{% if r.due_date and r.due_date < today and r.status not in ('done','closed') %} <span class="badge bg-danger" style="font-size:.65em;">超期{{ (today - r.due_date).days }}天</span>{% endif %}</td>
                 <td>{{ r.assignee_display }}</td>
                 <td>

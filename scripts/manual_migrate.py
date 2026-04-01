@@ -45,6 +45,8 @@ STATUS_MIGRATION = [
     "UPDATE requirements SET status='pending' WHERE status='pending_dev'",
     "UPDATE requirements SET status='in_progress' WHERE status='in_dev'",
     "UPDATE requirements SET status='in_progress' WHERE status='in_test'",
+    # 清理风险域名空格
+    "UPDATE risks SET domain=TRIM(domain) WHERE domain IS NOT NULL AND domain != TRIM(domain)",
 ]
 
 # 需要补齐的 CREATE TABLE 语句
