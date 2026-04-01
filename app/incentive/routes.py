@@ -191,6 +191,7 @@ def index():
         can_export=is_reviewer or current_user.is_admin,
         today=date.today(),
         gift_start_month=_gift_start,
+        site_setting_poster_prefix=_SS.get('incentive_poster_prefix', ''),
         funds=funds, source_stats=source_stats,
         fund_conflicts=fund_conflicts if funds else [],
         fund_conflict_keys=fund_conflict_keys if funds else [],

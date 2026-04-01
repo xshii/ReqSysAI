@@ -255,6 +255,9 @@ def index():
     notifications = Notification.query.filter_by(user_id=current_user.id, is_read=False)\
         .order_by(Notification.created_at.desc()).limit(10).all()
 
+    from app.models.site_setting import SiteSetting
+    _inc_photo_size = int(SiteSetting.get('incentive_photo_size', '64') or '64')
+
     return render_template('main/index.html',
         my_todos=my_todos, todo_total=todo_total, todo_done=todo_done,
         notifications=notifications,
@@ -267,6 +270,7 @@ def index():
         milestones=milestones, all_recurring=all_recurring, recurring_due=recurring_due,
         recurring_status=recurring_status, week_focus=week_focus,
         unclosed_meetings=unclosed_meetings, unclosed_meeting_risks=unclosed_meeting_risks,
+        inc_photo_size=_inc_photo_size,
     )
 
 

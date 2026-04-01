@@ -517,13 +517,13 @@ checkHelpAlert();
                 <div class="d-flex gap-2 mb-2 pb-2 border-bottom inc-item">
                     <div class="flex-shrink-0">
                         {% if inc.photo %}
-                        <img src="{{ url_for('static', filename=inc.photo) }}" class="rounded img-lightbox" style="width:48px;height:48px;object-fit:cover;cursor:pointer;" data-src="{{ url_for('static', filename=inc.photo) }}">
+                        <img src="{{ url_for('static', filename=inc.photo) }}" class="rounded img-lightbox" style="width:{{ inc_photo_size }}px;height:{{ inc_photo_size }}px;object-fit:cover;cursor:pointer;" data-src="{{ url_for('static', filename=inc.photo) }}">
                         {% elif inc.nominees | length == 1 and inc.nominees[0].avatar %}
-                        <img src="{{ url_for('static', filename=inc.nominees[0].avatar) }}" class="rounded img-lightbox" style="width:48px;height:48px;object-fit:cover;cursor:pointer;" data-src="{{ url_for('static', filename=inc.nominees[0].avatar) }}">
+                        <img src="{{ url_for('static', filename=inc.nominees[0].avatar) }}" class="rounded img-lightbox" style="width:{{ inc_photo_size }}px;height:{{ inc_photo_size }}px;object-fit:cover;cursor:pointer;" data-src="{{ url_for('static', filename=inc.nominees[0].avatar) }}">
                         {% elif inc.nominees | length == 1 %}
-                        <div class="rounded bg-primary text-white d-flex align-items-center justify-content-center fw-bold" style="width:48px;height:48px;font-size:.8em;">{{ inc.nominees[0].name[0] }}</div>
+                        <div class="rounded bg-primary text-white d-flex align-items-center justify-content-center fw-bold" style="width:{{ inc_photo_size }}px;height:{{ inc_photo_size }}px;font-size:.8em;">{{ inc.nominees[0].name[0] }}</div>
                         {% else %}
-                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center fw-bold" style="width:48px;height:48px;font-size:1.1em;">?</div>
+                        <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center fw-bold" style="width:{{ inc_photo_size }}px;height:{{ inc_photo_size }}px;font-size:1.1em;">?</div>
                         {% endif %}
                     </div>
                     <div class="small" style="min-width:0;">

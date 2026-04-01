@@ -930,7 +930,9 @@ def site_settings():
                            mail_domain=SiteSetting.get('mail_domain', current_app.config.get('MAIL_DOMAIN', 'company.com')),
                            api_key=SiteSetting.get('api_key', ''),
                            api_key_set=bool(SiteSetting.get('api_key', '')),
-                           talk_template=SiteSetting.get('emotion_talk_template', ''))
+                           talk_template=SiteSetting.get('emotion_talk_template', ''),
+                           inc_photo_size=SiteSetting.get('incentive_photo_size', '64'),
+                           poster_prefix=SiteSetting.get('incentive_poster_prefix', ''))
 
 
 @admin_bp.route('/site-settings/save', methods=['POST'])
@@ -971,6 +973,18 @@ def exchange_settings_save():
     current_app.config['EXCHANGE_CONFIG'] = {'server': server, 'domain': domain}
     current_app.config['MAIL_DOMAIN'] = mail or 'company.com'
     flash('Exchange 配置已保存' + ('（已启用）' if server else '（已禁用）'), 'success')
+    return redirect(url_for('admin.site_settings'))
+
+
+@admin_bp.route('/site-settings/incentive-poster', methods=['POST'])
+@admin_required
+def incentive_poster_save():
+    from app.models.site_setting import SiteSetting
+    prefix = request.form.get('poster_prefix', '').strip()
+    size = request.form.get('size', '64').strip()
+    SiteSetting.set('incentive_poster_prefix', prefix)
+    SiteSetting.set('incentive_photo_size', size)
+    flash('激励公示设置已保存', 'success')
     return redirect(url_for('admin.site_settings'))
 
 

@@ -139,7 +139,7 @@
                 <td class="cat-cell" style="cursor:pointer;white-space:nowrap;" data-req-id="{{ r.id }}" data-cat="{{ r.category or '' }}" onclick="showCatEdit(this)">
                     {% if r.category %}<span class="badge bg-light text-dark border" style="font-size:.75em;">{{ r.category_label }}</span>{% else %}<span class="text-muted small">-</span>{% endif %}
                 </td>
-                <td><a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}">{{ r.title }}</a></td>
+                <td><a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" target="_blank">{{ r.title }}</a></td>
                 {% if not cur_project or include_sub %}<td><span class="text-muted small">{{ r.project.name }}</span></td>{% endif %}
                 <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span> <span class="badge bg-light text-secondary border" style="font-size:.7em;">{{ r.source_label }}</span>{% if r.due_date and r.due_date < today and r.status not in ('done','closed') %} <span class="badge bg-danger" style="font-size:.65em;">超期{{ (today - r.due_date).days }}天</span>{% endif %}</td>
                 <td>{{ r.assignee_display }}</td>

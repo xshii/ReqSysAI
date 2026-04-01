@@ -10,8 +10,8 @@
 .gift-card { border: 2px solid transparent; border-radius: 10px; transition: all .2s; cursor: pointer; }
 .gift-card:hover { border-color: #667eea; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,.2); }
 .gift-card.selected { border-color: #667eea; background: #f0f0ff; }
-.gift-card img { width: 100%; height: 100px; object-fit: cover; border-radius: 8px 8px 0 0; }
-.gift-card .placeholder-img { width: 100%; height: 100px; background: #f0f0f0; border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: center; }
+.gift-card img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px 8px 0 0; }
+.gift-card .placeholder-img { width: 100%; aspect-ratio: 1; background: #f0f0f0; border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: center; }
 .confetti { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
 </style>
 {% endblock %}

@@ -112,6 +112,7 @@
     <label class="btn btn-sm btn-outline-secondary mb-0"><input type="checkbox" id="selectAll" onchange="document.querySelectorAll('.inc-check').forEach(function(c){c.checked=this.checked}.bind(this))"> 全选</label>
     <button class="btn btn-sm btn-outline-success" onclick="batchTogglePublic(true)"><i class="bi bi-eye"></i> 批量设为可见</button>
     <button class="btn btn-sm btn-outline-secondary" onclick="batchTogglePublic(false)"><i class="bi bi-eye-slash"></i> 批量隐藏</button>
+    <button class="btn btn-sm btn-outline-info" onclick="openBatchPoster()"><i class="bi bi-envelope-arrow-up"></i> 批量导出海报</button>
 </div>
 {% endif %}
 {% for inc in items %}
@@ -123,6 +124,15 @@
                 <div class="flex-shrink-0 d-flex align-items-center">
                     <input type="checkbox" class="form-check-input inc-check" value="{{ inc.id }}">
                 </div>
+                {% endif %}
+                {% if inc.status == 'approved' %}
+                <span class="inc-row-data d-none"
+                      data-names="{{ inc.all_nominee_names | join('、') }}"
+                      data-count="{{ inc.all_nominee_names | length }}"
+                      data-title="{{ inc.title }}"
+                      data-desc="{{ inc.description or '' }}"
+                      data-category="{{ inc.category }}"
+                      data-photo="{{ url_for('static', filename=inc.photo) if inc.photo else '' }}"></span>
                 {% endif %}
                 <div class="flex-shrink-0 position-relative">
                     {% if inc.photo %}
@@ -561,9 +571,42 @@
     </div>
 </div>
 {% endif %}
+
+{# Batch Poster Modal #}
+{% if is_reviewer %}
+<div class="modal fade" id="batchPosterModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title"><i class="bi bi-envelope-arrow-up"></i> 批量导出激励海报</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <label class="small fw-bold flex-shrink-0">通报月份</label>
+                    <input type="month" id="posterMonth" class="form-control form-control-sm" style="width:auto;" value="{{ today.strftime('%Y-%m') }}">
+                </div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small fw-bold">选择要导出的激励项</span>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.75em;" onclick="batchPosterSelectAll(true)">全选</button>
+                        <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.75em;" onclick="batchPosterSelectAll(false)">全不选</button>
+                    </div>
+                </div>
+                <div id="batchPosterList" style="max-height:300px;overflow-y:auto;"></div>
+            </div>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-sm btn-info" onclick="batchPosterExport()"><i class="bi bi-envelope-arrow-up"></i> 导出EML</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/eml-utils.js') }}?v={{ range(10000,99999)|random }}"></script>
 <script>
 /* Batch toggle public */
 function batchTogglePublic(pub) {
@@ -1152,6 +1195,159 @@ function aiPolish(targetId, hintId) {
         if (d.ok) { target.value = d.text; hint.textContent = d.text.length + '/150'; }
         else { hint.textContent = d.msg || 'AI 服务不可用'; }
     }).catch(function(e) { loading.stop(); hint.textContent = e.message || 'AI 请求失败'; });
+}
+
+// ---- Poster Export (consolidated, grouped by category) ----
+var _catMeta = {
+    professional: {label:'专业', color:'#2563eb', bg:'#f0f5ff', border:'#bfdbfe'},
+    proactive:    {label:'积极', color:'#16a34a', bg:'#f0fdf4', border:'#bbf7d0'},
+    beyond:       {label:'超越期望', color:'#d97706', bg:'#fffbeb', border:'#fde68a'},
+    clean:        {label:'代码Clean', color:'#7c3aed', bg:'#f5f3ff', border:'#ddd6fe'},
+};
+var _posterPrefix = {{ (site_setting_poster_prefix or '') | tojson }};
+
+function openBatchPoster() {
+    var modal = document.getElementById('batchPosterModal');
+    bootstrap.Modal.getOrCreateInstance(modal).show();
+    var items = [];
+    document.querySelectorAll('.inc-row-data').forEach(function(el) { items.push(el.dataset); });
+    var list = document.getElementById('batchPosterList');
+    list.innerHTML = '';
+    items.forEach(function(d, i) {
+        var m = _catMeta[d.category] || {label:d.category, color:'#999'};
+        var div = document.createElement('div');
+        div.className = 'form-check mb-1';
+        div.innerHTML = '<input class="form-check-input batch-poster-check" type="checkbox" checked value="' + i + '" id="bp' + i + '">'
+            + '<label class="form-check-label small" for="bp' + i + '">'
+            + '<span class="badge" style="background:' + m.color + ';color:#fff;font-size:.7em;">' + m.label + '</span> '
+            + '<strong>' + d.names + '</strong> · ' + d.title + '</label>';
+        list.appendChild(div);
+    });
+    window._batchPosterItems = items;
+}
+
+function batchPosterExport() {
+    var items = window._batchPosterItems || [];
+    var checked = [];
+    document.querySelectorAll('.batch-poster-check:checked').forEach(function(cb) {
+        checked.push(items[parseInt(cb.value)]);
+    });
+    if (!checked.length) return;
+
+    var monthRaw = document.getElementById('posterMonth').value || '';
+    var monthLabel = '';
+    if (monthRaw) {
+        var parts = monthRaw.split('-');
+        monthLabel = parts[0] + '年' + parseInt(parts[1]) + '月';
+    }
+    var prefix = _posterPrefix;
+    var fullTitle = (prefix ? prefix + ' ' : '') + (monthLabel ? monthLabel : '') + '及时激励公示';
+
+    // Group by category
+    var groups = {};
+    var catOrder = ['professional', 'proactive', 'beyond', 'clean'];
+    checked.forEach(function(d) {
+        var cat = d.category || 'professional';
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push(d);
+    });
+
+    var individuals = checked.filter(function(d) { return parseInt(d.count) <= 1; });
+    var teams = checked.filter(function(d) { return parseInt(d.count) > 1; });
+
+    // Colors
+    var cRed = '#8b1a1a', cRedLight = '#a52a2a', cGold = '#c9952c', cGoldLight = '#d4aa4f', cGoldBg = '#fdf8f0', cWarm = '#fffaf5';
+
+    var html = '<html><head><meta charset="UTF-8"></head>'
+        + '<body style="margin:0;padding:0;background:#f5f0eb;font-family:Microsoft YaHei,Segoe UI,sans-serif;">'
+        + '<div style="max-width:640px;margin:0 auto;background:#fff;">'
+        // Header
+        + '<div style="padding:40px 24px 20px;text-align:center;background:linear-gradient(180deg,' + cRed + ',' + cRedLight + ');">'
+        + '<div style="display:inline-block;border:1px solid ' + cGold + ';padding:20px 40px 16px;border-radius:2px;">'
+        + '<div style="color:#fff;font-size:1.2em;font-weight:700;letter-spacing:4px;">' + (prefix || '') + '</div>'
+        + '<div style="color:#fff;font-size:1.2em;font-weight:600;letter-spacing:2px;margin-top:6px;">' + (monthLabel ? monthLabel + '及时激励公示' : '及时激励公示') + '</div>'
+        + '<div style="margin-top:14px;border-top:1px solid ' + cGold + '80;padding-top:12px;">'
+        // Categories — use table for Outlook compat
+        + '<table cellpadding="0" cellspacing="0" width="100%"><tr>';
+    catOrder.forEach(function(cat, i) {
+        var m = _catMeta[cat];
+        html += '<td style="text-align:center;padding:0 4px;' + (i > 0 ? 'border-left:1px solid ' + cGold + '50;' : '') + '">'
+            + '<span style="color:' + cGoldLight + ';font-size:.9em;font-weight:700;letter-spacing:2px;">' + m.label + '</span></td>';
+    });
+    html += '</tr></table></div></div></div>';
+
+    // Navigation
+    var _navLabel = '<td style="vertical-align:top;white-space:nowrap;width:58px;">';
+    var _navSep = '<span style="color:' + cGold + ';margin:0 4px;">|</span>';
+    html += '<div style="background:' + cGoldBg + ';padding:14px 28px;font-size:.85em;color:#5a4a3a;">'
+        + '<table cellpadding="0" cellspacing="0" width="100%">';
+    if (individuals.length) {
+        html += '<tr>' + _navLabel + '<span style="font-weight:700;color:' + cRed + ';font-size:.9em;">个人奖</span>' + _navSep + '</td>'
+            + '<td style="vertical-align:top;line-height:2.1;">';
+        individuals.forEach(function(d, i) {
+            html += '<a href="#inc-' + i + '" style="text-decoration:none;color:#2d1810;font-weight:600;">' + d.names + '</a>'
+                + '<span style="color:#a09080;font-size:.85em;">(' + d.title + ')</span>';
+            if (i < individuals.length - 1) html += '<span style="color:#d4c4b0;margin:0 3px;">·</span>';
+        });
+        html += '</td></tr>';
+    }
+    if (teams.length) {
+        html += '<tr>' + _navLabel + '<span style="font-weight:700;color:' + cRed + ';font-size:.9em;">团队奖</span>' + _navSep + '</td>'
+            + '<td style="vertical-align:top;line-height:2.1;">';
+        teams.forEach(function(d, i) {
+            if (i > 0) html += '<br>';
+            html += '<a href="#team-' + i + '" style="text-decoration:none;color:#2d1810;font-weight:600;">' + d.title + '</a>'
+                + '<span style="color:#8a7a6a;font-size:.85em;">-' + d.names + '</span>';
+        });
+        html += '</td></tr>';
+    }
+    html += '</table></div>';
+
+    function _renderCard(d, anchorId) {
+        var m = _catMeta[d.category] || _catMeta.professional;
+        var photo = d.photo ? '<img src="' + location.origin + d.photo + '" style="width:72px;height:72px;border-radius:6px;object-fit:cover;border:1px solid #e8e0d8;">' : '';
+        return '<div id="' + anchorId + '" style="margin:12px 28px;padding:16px 20px;background:' + cWarm + ';border-left:3px solid ' + cGold + ';border-radius:2px;">'
+            + '<table width="100%" cellpadding="0" cellspacing="0"><tr>'
+            + (photo ? '<td style="width:84px;vertical-align:middle;padding-right:16px;">' + photo + '</td>' : '')
+            + '<td style="vertical-align:middle;">'
+            + '<div><span style="font-size:1.15em;font-weight:700;color:#2d1810;">' + d.names + '</span>'
+            + ' <span style="display:inline-block;padding:2px 8px;background:' + cGold + '18;color:' + cGold + ';border:1px solid ' + cGold + '40;border-radius:2px;font-size:.75em;font-weight:700;vertical-align:middle;letter-spacing:.5px;">' + m.label + '</span></div>'
+            + '<div style="font-size:.92em;font-weight:600;color:#4a3828;margin-top:5px;">' + d.title + '</div>'
+            + (d.desc ? '<div style="font-size:.85em;color:#5a4a3a;margin-top:8px;line-height:1.7;">' + d.desc.replace(/\n/g, '<br>') + '</div>' : '')
+            + '</td></tr></table></div>';
+    }
+
+    function _sectionHeader(text) {
+        return '<div style="margin:28px 28px 8px;">'
+            + '<table width="100%" cellpadding="0" cellspacing="0"><tr>'
+            + '<td style="width:24px;border-bottom:1px solid ' + cGold + ';"></td>'
+            + '<td style="white-space:nowrap;padding:0 14px;"><span style="font-size:1.05em;font-weight:700;color:' + cRed + ';letter-spacing:2px;">' + text + '</span></td>'
+            + '<td style="border-bottom:1px solid ' + cGold + ';"></td>'
+            + '</tr></table></div>';
+    }
+
+    if (individuals.length) {
+        html += _sectionHeader('个 人 奖');
+        individuals.forEach(function(d, i) { html += _renderCard(d, 'inc-' + i); });
+    }
+    if (teams.length) {
+        html += _sectionHeader('团 队 奖');
+        teams.forEach(function(d, i) { html += _renderCard(d, 'team-' + i); });
+    }
+
+    // Footer
+    html += '<div style="height:3px;margin-top:20px;background:linear-gradient(90deg,transparent,' + cGold + ',transparent);"></div>'
+        + '<div style="padding:14px 24px;background:' + cRed + ';text-align:center;">'
+        + '<a href="' + location.origin + '" style="color:' + cGoldLight + ';font-size:.8em;letter-spacing:2px;text-decoration:none;">{{ site_name }}</a>'
+        + '</div></div></body></html>';
+
+    var subject = fullTitle;
+    var eml = emlBuildFile(subject, html);
+    emlDownload(subject + '.eml', eml);
+}
+
+function batchPosterSelectAll(checked) {
+    document.querySelectorAll('.batch-poster-check').forEach(function(cb) { cb.checked = checked; });
 }
 </script>
 {% endblock %}
