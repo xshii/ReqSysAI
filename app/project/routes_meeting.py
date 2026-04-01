@@ -150,6 +150,19 @@ def meeting_detail(project_id, meeting_id):
                            default_to=_def_to, default_cc=_def_cc)
 
 
+@project_bp.route('/<int:project_id>/meetings/<int:meeting_id>/delete')
+@login_required
+def meeting_delete(project_id, meeting_id):
+    """删除会议纪要。"""
+    meeting = db.get_or_404(Meeting, meeting_id)
+    from app.services.audit import log_audit
+    log_audit('delete', 'meeting', meeting.id, meeting.title)
+    db.session.delete(meeting)
+    db.session.commit()
+    flash('会议纪要已删除', 'success')
+    return redirect(url_for('project.meeting_list', project_id=project_id))
+
+
 @project_bp.route('/<int:project_id>/meetings/<int:meeting_id>/extract', methods=['POST'])
 @login_required
 def meeting_extract(project_id, meeting_id):

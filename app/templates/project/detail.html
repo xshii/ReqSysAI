@@ -261,8 +261,21 @@ function filterGantt() {
         var show = (!start || d >= start) && (!end || d <= end);
         td.style.display = show ? '' : 'none';
     });
+    // Hide rows where no bar overlaps the visible date range
+    document.querySelectorAll('#ganttBody tbody tr').forEach(function(tr) {
+        var bars = tr.querySelectorAll('.gantt-bar');
+        if (!bars.length) return;
+        var hasVisible = false;
+        bars.forEach(function(bar) {
+            if (bar.style.display === 'none') return;
+            var bStart = bar.dataset.startDate || '';
+            var bEnd = bar.dataset.endDate || '';
+            // Bar overlaps filter range if bar-end >= filter-start AND bar-start <= filter-end
+            if ((!start || bEnd >= start) && (!end || bStart <= end)) hasVisible = true;
+        });
+        tr.style.display = hasVisible ? '' : 'none';
+    });
     if (_ganttScale === 'week') {
-        // Re-apply week scale after date filter to reposition bars
         var btn = document.querySelector('.gantt-scale-btn[data-scale="week"]');
         if (btn) setGanttScale('week', btn);
     } else {

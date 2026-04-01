@@ -170,7 +170,7 @@ def _build_sub_projects(cur_project, monday):
             stats = db.session.query(
                 _fn.count(Requirement.id),
                 _fn.sum(_case((Requirement.status.in_(('done', 'closed')), 1), else_=0)),
-                _fn.sum(_case((Requirement.status == 'in_dev', 1), else_=0)),
+                _fn.sum(_case((Requirement.status == 'in_progress', 1), else_=0)),
                 _fn.sum(_case((
                     db.and_(
                         Requirement.due_date < _today_d,
@@ -482,7 +482,7 @@ def _build_pivot_data(project_id, include_sub=True):
             return 'done'
         if r.due_date and r.due_date < today_ and r.status not in ('done', 'closed'):
             return 'overdue'
-        if r.status == 'pending_review' and not (r.completion and r.completion > 0):
+        if r.status in ('pending', 'pending_review') and not (r.completion and r.completion > 0):
             return 'not_started'
         return 'active'
 

@@ -18,7 +18,7 @@ class Requirement(db.Model):
     title = db.Column(db.String(300), nullable=False)
     description = db.Column(db.Text)
     priority = db.Column(db.String(20), default='medium')
-    status = db.Column(db.String(30), default='pending_review')
+    status = db.Column(db.String(30), default='pending')
     assignee_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     assignee_name = db.Column(db.String(100), nullable=True)  # 外部责任人（无系统账号时）
     estimate_days = db.Column(db.Float, nullable=True)
@@ -60,11 +60,17 @@ class Requirement(db.Model):
 
     # Single source of truth: (label, color)
     _STATUS_META = {
-        'pending_review': ('待启动', 'secondary'),
-        'pending_dev':    ('分析中', 'dark'),
-        'in_dev':         ('开发中', 'primary'),
-        'in_test':        ('测试中', 'warning text-dark'),
-        'done':           ('已完成', 'success'),
+        'pending':     ('待启动', 'secondary'),
+        'in_progress': ('进行中', 'primary'),
+        'done':        ('已完成', 'success'),
+        'closed':      ('已取消', 'dark'),
+    }
+    # Backward compat: old statuses map to new ones
+    _STATUS_COMPAT = {
+        'pending_review': 'pending',
+        'pending_dev': 'pending',
+        'in_dev': 'in_progress',
+        'in_test': 'in_progress',
     }
     STATUS_LABELS = {k: v[0] for k, v in _STATUS_META.items()}
     STATUS_COLORS = {k: v[1] for k, v in _STATUS_META.items()}
@@ -108,37 +114,27 @@ class Requirement(db.Model):
         return ''
 
     ALLOWED_TRANSITIONS = {
-        'pending_review': ['pending_dev'],
-        'pending_dev': ['in_dev', 'pending_review'],
-        'in_dev': ['in_test', 'pending_dev'],
-        'in_test': ['done', 'in_dev'],
-        'done': ['in_test'],
+        'pending': ['in_progress'],
+        'in_progress': ['done', 'pending'],
+        'done': ['in_progress'],
+        'closed': ['pending'],
     }
 
     @property
     def weighted_completion(self):
-        from app.constants import REQ_PHASE_ORDER, REQ_PHASE_WEIGHTS
         if self.status in ('done', 'closed'):
             return 100
-        weights = REQ_PHASE_WEIGHTS.get(self.source or 'coding', REQ_PHASE_WEIGHTS['coding'])
-        cur_pct = self.completion or 0
-        cur_idx = REQ_PHASE_ORDER.index(self.status) if self.status in REQ_PHASE_ORDER else 0
-        total = 0.0
-        for phase, w in weights.items():
-            phase_idx = REQ_PHASE_ORDER.index(phase)
-            if phase_idx < cur_idx:
-                total += w * 100
-            elif phase_idx == cur_idx:
-                total += w * cur_pct
-        return round(total)
+        return self.completion or 0
 
     @property
     def status_label(self):
-        return self.STATUS_LABELS.get(self.status, self.status)
+        s = self._STATUS_COMPAT.get(self.status, self.status)
+        return self.STATUS_LABELS.get(s, s)
 
     @property
     def status_color(self):
-        return self.STATUS_COLORS.get(self.status, 'secondary')
+        s = self._STATUS_COMPAT.get(self.status, self.status)
+        return self.STATUS_COLORS.get(s, 'secondary')
 
     @property
     def priority_label(self):

@@ -188,19 +188,19 @@
 <nav>
     <ul class="pagination pagination-sm justify-content-center">
         {% if pagination.has_prev %}
-        <li class="page-item"><a class="page-link" href="?page={{ pagination.prev_num }}&q={{ cur_search or '' }}&status={{ cur_status or '' }}&priority={{ cur_priority or '' }}&category={{ cur_category or '' }}&project_id={{ cur_project or '' }}&sort={{ cur_sort or 'newest' }}">上一页</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ pagination.prev_num }}&q={{ cur_search or '' }}&status={{ cur_status or '' }}&priority={{ cur_priority or '' }}&category={{ cur_category or '' }}&project_id={{ cur_project or '' }}&assignee_id={{ cur_assignee if cur_assignee is not none else '' }}&include_sub={{ '1' if include_sub else '0' }}&sort={{ cur_sort or 'newest' }}">上一页</a></li>
         {% endif %}
         {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
             {% if p %}
             <li class="page-item {% if p == pagination.page %}active{% endif %}">
-                <a class="page-link" href="?page={{ p }}&q={{ cur_search or '' }}&status={{ cur_status or '' }}&priority={{ cur_priority or '' }}&category={{ cur_category or '' }}&project_id={{ cur_project or '' }}&sort={{ cur_sort or 'newest' }}">{{ p }}</a>
+                <a class="page-link" href="?page={{ p }}&q={{ cur_search or '' }}&status={{ cur_status or '' }}&priority={{ cur_priority or '' }}&category={{ cur_category or '' }}&project_id={{ cur_project or '' }}&assignee_id={{ cur_assignee if cur_assignee is not none else '' }}&include_sub={{ '1' if include_sub else '0' }}&sort={{ cur_sort or 'newest' }}">{{ p }}</a>
             </li>
             {% else %}
             <li class="page-item disabled"><span class="page-link">...</span></li>
             {% endif %}
         {% endfor %}
         {% if pagination.has_next %}
-        <li class="page-item"><a class="page-link" href="?page={{ pagination.next_num }}&q={{ cur_search or '' }}&status={{ cur_status or '' }}&priority={{ cur_priority or '' }}&category={{ cur_category or '' }}&project_id={{ cur_project or '' }}&sort={{ cur_sort or 'newest' }}">下一页</a></li>
+        <li class="page-item"><a class="page-link" href="?page={{ pagination.next_num }}&q={{ cur_search or '' }}&status={{ cur_status or '' }}&priority={{ cur_priority or '' }}&category={{ cur_category or '' }}&project_id={{ cur_project or '' }}&assignee_id={{ cur_assignee if cur_assignee is not none else '' }}&include_sub={{ '1' if include_sub else '0' }}&sort={{ cur_sort or 'newest' }}">下一页</a></li>
         {% endif %}
     </ul>
 </nav>
@@ -353,7 +353,7 @@ function executeBatchAction() {
     });
 }
 
-var _nextStatusMap = {"pending_review":"pending_dev","pending_dev":"in_dev","in_dev":"in_test","in_test":"done"};
+var _nextStatusMap = {"pending":"in_progress","in_progress":"done"};
 function _updateBar(sel, pct) {
     var row = sel.closest('td');
     var bar = row.querySelector('.progress-bar');

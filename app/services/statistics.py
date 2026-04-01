@@ -317,8 +317,10 @@ def get_delivery_metrics(project_id=None):
     for a in activities:
         act_map[a.requirement_id].append(a)
 
-    done_label = Requirement.STATUS_LABELS['done']
-    in_dev_label = Requirement.STATUS_LABELS['in_dev']
+    done_label = Requirement.STATUS_LABELS.get('done', '已完成')
+    in_prog_label = Requirement.STATUS_LABELS.get('in_progress', '进行中')
+    # Backward compat: also match old labels
+    _start_labels = {in_prog_label, '开发中', '分析中', '测试中', '进行中'}
 
     results = []
     for req in done_reqs:
@@ -326,20 +328,22 @@ def get_delivery_metrics(project_id=None):
 
         # Find the first activity where status changed TO done (detail ends with done_label)
         done_at = None
-        in_dev_at = None
+        in_prog_at = None
         for act in req_activities:
             detail = act.detail or ''
-            # detail format: "旧状态 → 新状态"
             if detail.endswith(done_label) and done_at is None:
                 done_at = act.created_at
-            if detail.endswith(in_dev_label) and in_dev_at is None:
-                in_dev_at = act.created_at
+            if in_prog_at is None:
+                for lbl in _start_labels:
+                    if detail.endswith(lbl):
+                        in_prog_at = act.created_at
+                        break
 
         if done_at is None:
             continue
 
         lead_time = (done_at - req.created_at).days
-        cycle_time = (done_at - in_dev_at).days if in_dev_at else None
+        cycle_time = (done_at - in_prog_at).days if in_prog_at else None
 
         results.append({
             'req_number': req.number,

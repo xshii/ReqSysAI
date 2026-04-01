@@ -41,7 +41,7 @@
             <span class="badge bg-{{ meta[1] }} px-2 py-1">{{ meta[0] }}</span>
             <span class="text-muted small">{{ reqs | length }}</span>
         </div>
-        {% set has_zones = status not in ('pending_review', 'done') %}
+        {% set has_zones = status not in ('pending', 'done', 'closed') %}
         <div class="kanban-col rounded p-1 bg-light" data-status="{{ status }}">
             {% if has_zones %}
                 {% for z in [0, 30, 60, 90] %}

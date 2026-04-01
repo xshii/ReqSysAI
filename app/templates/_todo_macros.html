@@ -279,7 +279,7 @@ if (_blockPop) {
 
 {# Shared JS for requirement completion + status auto-advance — include once per page #}
 {% macro req_section_js() %}
-var _nextStatusMap = {"pending_review":"pending_dev","pending_dev":"in_dev","in_dev":"in_test","in_test":"done"};
+var _nextStatusMap = {"pending":"in_progress","in_progress":"done"};
 document.querySelectorAll('.req-completion-sel').forEach(function(sel) {
     sel.addEventListener('change', function() {
         var reqId = sel.dataset.reqId;

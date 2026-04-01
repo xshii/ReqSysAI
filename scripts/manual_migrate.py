@@ -39,6 +39,14 @@ ALTER_STATEMENTS = [
     "ALTER TABLE external_requests ADD COLUMN urgency VARCHAR(20) DEFAULT 'week'",
 ]
 
+# 状态简化迁移：旧状态 → 新状态
+STATUS_MIGRATION = [
+    "UPDATE requirements SET status='pending' WHERE status='pending_review'",
+    "UPDATE requirements SET status='pending' WHERE status='pending_dev'",
+    "UPDATE requirements SET status='in_progress' WHERE status='in_dev'",
+    "UPDATE requirements SET status='in_progress' WHERE status='in_test'",
+]
+
 # 需要补齐的 CREATE TABLE 语句
 CREATE_STATEMENTS = [
     # 项目成员表
@@ -447,8 +455,21 @@ def run():
                 else:
                     print(f'  ! 索引 {idx_name} 失败: {e}')
 
+        # 执行状态迁移
+        for sql in STATUS_MIGRATION:
+            try:
+                result = db.session.execute(db.text(sql))
+                db.session.commit()
+                rows = result.rowcount
+                if rows > 0:
+                    print(f'  ✓ 状态迁移: {sql.split("=")[1].split("WHERE")[0].strip()} ← {rows} 行')
+                else:
+                    print(f'  - 状态迁移: 无需更新')
+            except Exception as e:
+                db.session.rollback()
+                print(f'  ! 状态迁移失败: {e}')
+
         print('\n✅ 数据库补齐完成！')
-        print('接下来执行: flask db stamp head')
 
 
 if __name__ == '__main__':

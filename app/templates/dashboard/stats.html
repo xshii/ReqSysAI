@@ -65,10 +65,10 @@
                 <tbody>
                     {% for l1 in pivot_l1s %}
                     <tr>
-                        <td class="fw-bold align-middle text-center px-1">{{ l1 }}</td>
+                        <td class="fw-bold align-middle text-center px-1"><a href="{{ url_for('requirement.requirement_list', project_id=cur_project_id, category=l1) }}" class="text-decoration-none" style="color:inherit;">{{ l1 }}</a></td>
                         {% for l2 in pivot_l2s %}{% for s in pivot_l2_sources[l2] %}
                         {% set c = pivot_src_cells.get((l1, l2, s)) %}
-                        <td class="text-center px-0 py-0" style="background:{{ _light_bg.get(c.light, '') if c else '' }};">{{ src_cell(c, s == 'testing') }}</td>
+                        <td class="text-center px-0 py-0" style="background:{{ _light_bg.get(c.light, '') if c else '' }};"><a href="{{ url_for('requirement.requirement_list', project_id=cur_project_id, category=l1 ~ '-' ~ l2, status='') }}" class="text-decoration-none d-block" style="color:inherit;">{{ src_cell(c, s == 'testing') }}</a></td>
                         {% endfor %}{% endfor %}
                     </tr>
                     {% endfor %}
@@ -89,9 +89,8 @@
 {% if all_reqs %}
 {% set _total = all_reqs | length %}
 {% set _done = all_reqs | selectattr('status', 'in', ['done','closed']) | list | length %}
-{% set _dev = all_reqs | selectattr('status', 'equalto', 'in_dev') | list | length %}
-{% set _test = all_reqs | selectattr('status', 'equalto', 'in_test') | list | length %}
-{% set _pending = _total - _done - _dev - _test %}
+{% set _inprog = all_reqs | selectattr('status', 'equalto', 'in_progress') | list | length %}
+{% set _pending = _total - _done - _inprog %}
 {% set _est_total = all_reqs | map(attribute='estimate_days') | select('number') | sum %}
 {% set _d = weekly_deltas %}
 <div class="card mb-4">
@@ -106,7 +105,7 @@
             <div class="report-stat"><div class="num">{{ _est_total | round(0) | int }}{% if _d.get('done_days_delta') %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">+{{ _d.done_days_delta | round(0) | int }}</span>{% endif %}</div><div class="label">总人天</div></div>
             {% if _d.get('ai_days') %}<div class="report-stat"><div class="num">{{ _d.ai_days | round(0) | int }}{% if _d.get('ai_days_delta') %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">+{{ _d.ai_days_delta | round(0) | int }}</span>{% endif %}</div><div class="label">AI辅助人天</div></div>{% endif %}
         </div>
-        <div style="font-size:.75em;color:#999;">已完成{{ _done }} · 开发中{{ _dev }} · 测试中{{ _test }} · 待开发{{ _pending }}</div>
+        <div style="font-size:.75em;color:#999;">已完成{{ _done }} · 进行中{{ _inprog }} · 待启动{{ _pending }}</div>
         {% if req_trend_json is defined %}
         <div class="mt-3">
             <div class="d-flex justify-content-between align-items-center mb-2">

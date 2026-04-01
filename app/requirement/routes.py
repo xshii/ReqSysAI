@@ -1231,6 +1231,8 @@ def import_csv():
 
     # Reverse lookup maps
     status_rev = {v: k for k, v in Requirement.STATUS_LABELS.items()}
+    # Backward compat: old labels → new status
+    status_rev.update({'待评估': 'pending', '分析中': 'pending', '开发中': 'in_progress', '测试中': 'in_progress', '待开发': 'pending'})
     priority_rev = {v: k for k, v in Requirement.PRIORITY_LABELS.items()}
     source_rev = {v: k for k, v in Requirement.SOURCE_LABELS.items()}
     user_map = {u.name: u.id for u in User.query.filter_by(is_active=True).all()}
@@ -1337,7 +1339,7 @@ def import_csv():
             project_id=pid,
             title=title,
             priority=priority_rev.get((row.get('优先级') or '').strip(), 'medium'),
-            status=status_rev.get((row.get('状态') or '').strip(), 'pending_review'),
+            status=status_rev.get((row.get('状态') or '').strip(), 'pending'),
             source=source_rev.get((row.get('需求类型') or '').strip(), 'coding'),
             category=(row.get('业务分类') or '').strip() or None,
             assignee_id=assignee_id,

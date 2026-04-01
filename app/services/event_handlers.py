@@ -53,9 +53,9 @@ def _auto_advance_requirement(req, reason=''):
     """Advance requirement to next logical status."""
     from app.models.requirement import Activity
     transitions = req.allowed_next_statuses
-    # Prefer advancing forward: in_test > done
+    # Prefer advancing forward: done > in_progress
     target = None
-    for candidate in ('in_test', 'done'):
+    for candidate in ('done', 'in_progress'):
         if candidate in transitions:
             target = candidate
             break

@@ -48,12 +48,15 @@ MGR_FIELD_MSG = '格式：姓名 工号，如 张三 a00123456 或 张三 001234
 # Requirement phase weights (加权完成率)
 # 按需求类型，在不同阶段的工作量占比
 # ---------------------------------------------------------------------------
-REQ_PHASE_ORDER = ['pending_review', 'pending_dev', 'in_dev', 'in_test', 'done']
+REQ_PHASE_ORDER = ['pending', 'in_progress', 'done']
+# Phase weights no longer needed — completion slider is the single source of truth
 REQ_PHASE_WEIGHTS = {
-    'coding':   {'pending_dev': 0.1, 'in_dev': 0.8, 'in_test': 0.1},
-    'analysis': {'pending_dev': 0.8, 'in_dev': 0.1, 'in_test': 0.1},
-    'testing':  {'pending_dev': 0.1, 'in_dev': 0.1, 'in_test': 0.8},
+    'coding':   {'in_progress': 1.0},
+    'analysis': {'in_progress': 1.0},
+    'testing':  {'in_progress': 1.0},
 }
+# Inactive statuses (for filtering "not active" requirements)
+REQ_INACTIVE_STATUSES = ('done', 'closed')
 
 # ---------------------------------------------------------------------------
 # AI helpers

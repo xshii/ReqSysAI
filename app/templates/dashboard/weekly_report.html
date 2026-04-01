@@ -151,8 +151,8 @@
         {% for sp in report_data.sub_projects %}
         <tr>
             <td><a href="{{ url_for('dashboard.weekly_report', project_id=sp.project.id) }}" class="text-decoration-none">{{ sp.project.name }}</a></td>
-            <td>{{ sp.owner.name if sp.owner else '-' }}</td>
-            <td>{{ sp.summary or '-' }}</td>
+            <td><a href="{{ url_for('requirement.requirement_list', project_id=sp.project.id) }}" class="text-decoration-none text-muted">{{ sp.owner.name if sp.owner else '-' }}</a></td>
+            <td><a href="{{ url_for('requirement.requirement_list', project_id=sp.project.id) }}" class="text-decoration-none text-muted">{{ sp.summary or '-' }}</a></td>
         </tr>
         {% endfor %}
         </tbody>
@@ -273,9 +273,8 @@
 {% if report_data.all_reqs %}
 {% set _total = report_data.all_reqs | length %}
 {% set _done = report_data.all_reqs | selectattr('status', 'in', ['done','closed']) | list | length %}
-{% set _dev = report_data.all_reqs | selectattr('status', 'equalto', 'in_dev') | list | length %}
-{% set _test = report_data.all_reqs | selectattr('status', 'equalto', 'in_test') | list | length %}
-{% set _pending = _total - _done - _dev - _test %}
+{% set _inprog = report_data.all_reqs | selectattr('status', 'equalto', 'in_progress') | list | length %}
+{% set _pending = _total - _done - _inprog %}
 {% set _overdue = report_data.all_reqs | selectattr('due_date', 'defined') | selectattr('status', 'ne', 'done') | list %}
 {% set _overdue_count = [] %}
 {% for r in _overdue %}{% if r.due_date and r.due_date < report_data.today and r.status not in ('done','closed') %}{% if _overdue_count.append(1) %}{% endif %}{% endif %}{% endfor %}
