@@ -63,7 +63,6 @@
                 {% endfor %}
             </select>
             <span class="small fw-bold pct-label" style="cursor:pointer;" onclick="var s=this.parentNode.querySelector('select');s.classList.toggle('d-none');s.focus();">{{ pct }}%</span>
-            <span class="small text-muted" title="按需求类型({{ req.source_label }})在各阶段的权重计算">加权 <strong class="{% if req.weighted_completion >= 90 %}text-success{% elif req.weighted_completion >= 50 %}text-primary{% else %}text-secondary{% endif %}">{{ req.weighted_completion }}%</strong></span>
         </div>
     </div>
 </div>

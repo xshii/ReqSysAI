@@ -294,7 +294,7 @@
         {% if report_data.completion_weighted is not none %}
         <div class="report-stat">
             <div class="num">{{ report_data.completion_weighted }}%{% if _d.get('completion_delta', 0) != 0 %}<span style="font-size:.45em;font-weight:400;color:#999;margin-left:2px;">{{ '+' if _d.completion_delta > 0 }}{{ _d.completion_delta }}%</span>{% endif %}</div>
-            <div class="label">加权完成率</div>
+            <div class="label">完成率</div>
         </div>
         {% endif %}
         <div class="report-stat">
