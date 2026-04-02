@@ -49,7 +49,12 @@ def requirement_list():
     category = request.args.get('category', '').strip()
     project_id = request.args.get('project_id', type=int)
     include_sub = request.args.get('include_sub', '1') == '1'
-    assignee_id = request.args.get('assignee_id', type=int)
+    # 非 PL/PM/FO 默认只看自己是责任人的需求
+    _is_lead = current_user.is_admin or current_user.has_role('PL', 'PM', 'FO', 'LM', 'XM')
+    if 'assignee_id' in request.args:
+        assignee_id = request.args.get('assignee_id', type=int)
+    else:
+        assignee_id = None if _is_lead else current_user.id
     search = request.args.get('q', '').strip()
     sort = request.args.get('sort', 'newest')
 
@@ -80,7 +85,7 @@ def requirement_list():
         query = query.filter_by(assignee_id=assignee_id)
     if search:
         query = query.filter(
-            db.or_(Requirement.title.contains(search), Requirement.description.contains(search))
+            db.or_(Requirement.title.contains(search), Requirement.description.contains(search), Requirement.category.contains(search))
         )
     # 隐藏项目：直接URL指定project_id时拦截，否则从查询中排除
     if project_id and project_id in g.hidden_pids:
@@ -851,7 +856,11 @@ def diagnose_resolve():
 def requirement_board():
     """Kanban board view for requirements — must specify project_id."""
     project_id = request.args.get('project_id', type=int)
-    assignee_id = request.args.get('assignee_id', type=int)
+    _is_lead = current_user.is_admin or current_user.has_role('PL', 'PM', 'FO', 'LM', 'XM')
+    if 'assignee_id' in request.args:
+        assignee_id = request.args.get('assignee_id', type=int)
+    else:
+        assignee_id = None if _is_lead else current_user.id
     swimlane = request.args.get('swimlane', '')
 
     # 必须指定项目，不允许无项目筛选的全局看板
@@ -864,24 +873,16 @@ def requirement_board():
 
     show_sub = request.args.get('show_sub', '1') == '1'
 
-    query = Requirement.query.filter(Requirement.parent_id.is_(None)).options(
+    query = Requirement.query.filter_by(project_id=project_id).options(
         joinedload(Requirement.project), joinedload(Requirement.assignee),
         joinedload(Requirement.children),
     )
-    query = query.filter_by(project_id=project_id)
+    if not show_sub:
+        query = query.filter(Requirement.parent_id.is_(None))
     if assignee_id:
         query = query.filter_by(assignee_id=assignee_id)
 
-    reqs = query.order_by(Requirement.priority, Requirement.updated_at.desc()).all()
-
-    # Collect child requirements as independent cards (may be in other projects)
-    sub_reqs = []
-    if show_sub:
-        for r in reqs:
-            for c in r.children:
-                if g.hidden_pids and c.project_id in g.hidden_pids:
-                    continue
-                sub_reqs.append(c)
+    reqs = query.order_by(Requirement.updated_at.desc()).all()
 
     # Group by status for columns
     columns = [s for s in Requirement._STATUS_META.keys() if s != 'closed']
@@ -889,9 +890,6 @@ def requirement_board():
     for r in reqs:
         if r.status in board:
             board[r.status].append(r)
-    for c in sub_reqs:
-        if c.status in board:
-            board[c.status].append(c)
 
     # Sort each column by completion ascending
     for col_reqs in board.values():
@@ -1121,6 +1119,46 @@ def _build_requirement_form(obj=None):
         (u.id, u.name) for u in User.query.filter_by(is_active=True).all()
     ]
     return form
+
+
+# ---- Batch Update ----
+
+@requirement_bp.route('/batch_update', methods=['POST'])
+@login_required
+def batch_update():
+    """Batch update requirements: category, assignee."""
+    data = request.get_json() or {}
+    ids = data.get('ids', [])
+    action = data.get('action', '')
+    value = data.get('value', '')
+    if not ids or not action:
+        return jsonify(ok=False, msg='参数缺失')
+
+    reqs = Requirement.query.filter(Requirement.id.in_(ids)).all()
+    if not reqs:
+        return jsonify(ok=False, msg='未找到需求')
+
+    count = 0
+    for r in reqs:
+        if action == 'category':
+            r.category = value or None
+            count += 1
+        elif action == 'assignee':
+            if value:
+                r.assignee_id = int(value)
+                r.assignee_name = None
+            else:
+                r.assignee_id = None
+                r.assignee_name = None
+            count += 1
+        elif action == 'status':
+            r.status = value
+            count += 1
+        elif action == 'priority':
+            r.priority = value
+            count += 1
+    db.session.commit()
+    return jsonify(ok=True, msg=f'已更新 {count} 条需求')
 
 
 # ---- CSV Export / Import ----

@@ -1304,28 +1304,72 @@ function batchPosterExport() {
     }
     html += '</table></div>';
 
-    var _cardIdx = 0;
-    function _renderCard(d, anchorId) {
+    function _textHtml(d, align) {
         var m = _catMeta[d.category] || _catMeta.professional;
-        var photo = d.photo ? '<img src="' + location.origin + d.photo + '" width="120" height="120" style="width:120px;height:120px;object-fit:cover;border:1px solid #e8e0d8;display:block;">' : '';
-        var isRight = (_cardIdx % 2 === 1) && photo;
-        _cardIdx++;
-        var photoTd = photo ? '<td style="width:132px;vertical-align:middle;' + (isRight ? 'padding-left:16px;' : 'padding-right:16px;') + '">' + photo + '</td>' : '';
-        var textTd = '<td style="vertical-align:middle;">'
-            + '<div style="' + (isRight ? 'text-align:right;' : '') + '"><span style="font-size:1.15em;font-weight:700;color:#2d1810;">' + d.names + '</span>'
-            + ' <span style="display:inline-block;padding:2px 8px;background-color:' + cGoldBg + ';color:' + cGold + ';border:1px solid ' + cGold + ';font-size:.75em;font-weight:700;vertical-align:middle;letter-spacing:.5px;">' + m.label + '</span></div>'
-            + '<div style="font-size:.92em;font-weight:600;color:#4a3828;margin-top:5px;' + (isRight ? 'text-align:right;' : '') + '">' + d.title + '</div>'
-            + (d.desc ? '<div style="font-size:.85em;color:#5a4a3a;margin-top:8px;line-height:1.7;">' + d.desc.replace(/\n/g, '<br>') + '</div>' : '')
-            + '</td>';
-        var borderSide = isRight ? 'border-right' : 'border-left';
-        return '<div id="' + anchorId + '" style="margin:12px 28px;padding:16px 20px;background-color:' + cWarm + ';' + borderSide + ':3px solid ' + cGold + ';">'
-            + '<table width="100%" cellpadding="0" cellspacing="0"><tr>'
-            + (isRight ? textTd + photoTd : (photo ? photoTd : '') + textTd)
-            + '</tr></table></div>';
+        var tag = '<span style="display:inline-block;padding:2px 10px;background-color:' + cGoldBg + ';color:' + cGold + ';border:1px solid ' + cGold + ';font-size:.65em;font-weight:700;vertical-align:middle;">' + m.label + '</span>';
+        var nameHtml = align === 'right'
+            ? tag + ' <span style="font-size:1.25em;font-weight:700;color:#2d1810;">' + d.names + '</span>'
+            : '<span style="font-size:1.25em;font-weight:700;color:#2d1810;">' + d.names + '</span> ' + tag;
+        return '<div style="text-align:' + align + ';">' + nameHtml + '</div>'
+            + '<div style="font-size:.92em;font-weight:600;color:#4a3828;margin-top:8px;text-align:' + align + ';">' + d.title + '</div>'
+            + (d.desc ? '<div style="font-size:.82em;color:#5a4a3a;margin-top:10px;line-height:1.7;text-align:' + align + ';">' + d.desc.replace(/\n/g, '<br>') + '</div>' : '');
+    }
+
+    function _renderStaggeredList(items, anchorPrefix) {
+        // 5 columns: [photo-left 180px] [spacer 10px] [text center] [spacer 10px] [photo-right 180px]
+        // Each pair of people uses 4 rows:
+        //   Row A: Photo1(rowspan=3) | sp | Text1 | sp | empty
+        //   Row B: (Photo1 cont)    | sp | empty | sp | Photo2(rowspan=3)
+        //   Row C: (Photo1 cont)    | sp | empty | sp | (Photo2 cont)
+        //   Row D: empty            | sp | Text2 | sp | (Photo2 cont)
+        var PW = 180;
+        var SP = 2;
+        var rows = '';
+        var _sp = '<td width="' + SP + '" style="width:' + SP + 'px;background-color:' + cWarm + ';"></td>';
+        var _emptyTd = '<td style="background-color:' + cWarm + ';"></td>';
+        var PH = Math.round(PW * 3 / 4);
+
+        function _photoTd(d, rs, vAlign) {
+            var va = vAlign || 'top';
+            if (!d.photo) return '<td width="' + PW + '" rowspan="' + rs + '" style="width:' + PW + 'px;height:' + PH + 'px;background-color:' + cGoldBg + ';vertical-align:middle;text-align:center;color:' + cGold + ';font-size:2em;">&#9734;</td>';
+            return '<td width="' + PW + '" rowspan="' + rs + '" style="width:' + PW + 'px;vertical-align:' + va + ';padding:0;">'
+                + '<img src="' + location.origin + d.photo + '" width="' + PW + '" height="' + PH + '" style="width:' + PW + 'px;height:' + PH + 'px;object-fit:cover;display:block;"></td>';
+        }
+        function _textTd(d, align) {
+            return '<td style="vertical-align:middle;padding:16px 12px;background-color:' + cWarm + ';">' + _textHtml(d, align) + '</td>';
+        }
+
+        for (var i = 0; i < items.length; i += 2) {
+            var d1 = items[i];
+            var d2 = (i + 1 < items.length) ? items[i + 1] : null;
+            var id1 = anchorPrefix + '-' + i;
+            var id2 = d2 ? anchorPrefix + '-' + (i + 1) : '';
+
+            if (d2) {
+                // Pair: 3 rows, photos rowspan=2
+                // Row A: Photo1(rs=2, top) | sp | Text1 | sp | empty
+                rows += '<tr id="' + id1 + '">' + _photoTd(d1, 2, 'top') + _sp + _textTd(d1, 'left') + _sp + _emptyTd + '</tr>';
+                // Row B (overlap): (Photo1) | sp | empty | sp | Photo2(rs=2, bottom)
+                rows += '<tr>' + _sp + _emptyTd + _sp + _photoTd(d2, 2, 'bottom') + '</tr>';
+                // Row C: empty | sp | Text2 | sp | (Photo2)
+                rows += '<tr id="' + id2 + '">' + _emptyTd + _sp + _textTd(d2, 'right') + _sp + '</tr>';
+                // White gap between pairs
+                if (i + 2 < items.length) {
+                    rows += '<tr><td colspan="5" style="height:4px;background-color:#fff;font-size:0;">&nbsp;</td></tr>';
+                }
+            } else {
+                // Odd last person: 1 row, photo left
+                rows += '<tr id="' + id1 + '">' + _photoTd(d1, 1, 'top') + _sp + _textTd(d1, 'left') + _sp + _emptyTd + '</tr>';
+            }
+        }
+
+        return '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">'
+            + '<colgroup><col width="' + PW + '"><col width="' + SP + '"><col><col width="' + SP + '"><col width="' + PW + '"></colgroup>'
+            + rows + '</table>';
     }
 
     function _sectionHeader(text) {
-        return '<div style="margin:28px 28px 8px;">'
+        return '<div style="margin:24px 28px 8px;">'
             + '<table width="100%" cellpadding="0" cellspacing="0"><tr>'
             + '<td style="width:24px;border-bottom:1px solid ' + cGold + ';"></td>'
             + '<td style="white-space:nowrap;padding:0 14px;"><span style="font-size:1.05em;font-weight:700;color:' + cRed + ';letter-spacing:2px;">' + text + '</span></td>'
@@ -1335,13 +1379,11 @@ function batchPosterExport() {
 
     if (individuals.length) {
         html += _sectionHeader('个 人 奖');
-        _cardIdx = 0;
-        individuals.forEach(function(d, i) { html += _renderCard(d, 'inc-' + i); });
+        html += _renderStaggeredList(individuals, 'inc');
     }
     if (teams.length) {
         html += _sectionHeader('团 队 奖');
-        _cardIdx = 0;
-        teams.forEach(function(d, i) { html += _renderCard(d, 'team-' + i); });
+        html += _renderStaggeredList(teams, 'team');
     }
 
     // Footer

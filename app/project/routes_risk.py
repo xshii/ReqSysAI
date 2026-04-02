@@ -256,7 +256,16 @@ def risk_export_csv(project_id):
 
     from flask import Response
     _ = db.get_or_404(Project, project_id)
-    risks = Risk.query.filter_by(project_id=project_id).order_by(Risk.created_at).all()
+    _sev_order = {'high': 0, 'medium': 1, 'low': 2}
+    _today = date.today()
+    all_risks = Risk.query.filter_by(project_id=project_id).filter(Risk.deleted_at.is_(None)).all()
+    # Sort: open first (by severity then overdue days desc), then resolved/closed last
+    def _sort_key(r):
+        is_closed = 1 if r.status in ('resolved', 'closed') else 0
+        sev = _sev_order.get(r.severity, 9)
+        overdue = -(((_today - r.due_date).days) if r.due_date and r.due_date < _today else 0)
+        return (is_closed, sev, overdue)
+    risks = sorted(all_risks, key=_sort_key)
     buf = io.StringIO()
     buf.write('\ufeff')
     writer = csv.writer(buf)
@@ -265,7 +274,7 @@ def risk_export_csv(project_id):
                      '责任人(选填)', '领域(选填)', '跟踪人(选填)', '2026-06-30(选填)', '(选填)',
                      '描述(选填)', '评论(选填,多条用换行) 此行为格式示例，导入时自动跳过'])
     for r in risks:
-        comments = '\n'.join(f'{c.user.name} {c.created_at.strftime("%m-%d")}：{c.content}' for c in r.comments) if r.comments else ''
+        comments = '\n'.join(f'{c.created_at.strftime("%m-%d")}：{c.content}' for c in r.comments) if r.comments else ''
         writer.writerow([r.id, r.title, r.severity_label, r.status_label,
             r.owner or '', r.domain_display or '', r.tracker_display or '',
             r.due_date.isoformat() if r.due_date else '', r.resolution or '', r.description or '', comments])

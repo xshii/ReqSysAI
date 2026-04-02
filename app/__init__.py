@@ -140,14 +140,18 @@ def create_app(config_name=None):
             notif_persistent = Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
             notif_count = alerts_count + help_count + notif_persistent
 
+            from app.models.site_setting import SiteSetting as _SS2
+            _changelog_ver = _SS2.get('changelog_version', '')
+
             return dict(sidebar_groups=groups, sidebar_cur_group=cur_group,
                         sidebar_projects=projects, sidebar_followed_ids=followed_ids,
                         notif_count=notif_count,
                         ai_enabled=app.config.get('AI_ENABLED', True),
-                        site_name=_get_site_name(app))
+                        site_name=_get_site_name(app),
+                        changelog_version=_changelog_ver)
         return dict(sidebar_groups=[], sidebar_cur_group='', sidebar_projects=[],
                     sidebar_followed_ids=set(), notif_count=0,
-                    site_name=_get_site_name(app))
+                    site_name=_get_site_name(app), changelog_version='')
 
     return app
 

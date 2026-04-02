@@ -87,9 +87,11 @@ def edit(todo_id):
                     when = '今天' if days <= 0 else (f'{days}天内')
                     notify(parent.user_id, 'help',
                            f'{current_user.name} 接纳了你的求助「{todo.title}」，预计{when}完成', '')
-            # 同步外部诉求状态
+            # 同步外部诉求状态 + 标记通知已读
             if todo.title.startswith('[外部诉求]'):
                 _sync_ext_request(todo, 'accepted')
+                from app.models.notification import Notification
+                Notification.query.filter_by(user_id=current_user.id, type='request', is_read=False).update({'is_read': True})
         db.session.commit()
         return api_ok()
 
@@ -101,6 +103,8 @@ def edit(todo_id):
             # 同步外部诉求状态（必须在覆盖 blocked_reason 之前）
             if todo.title.startswith('[外部诉求]'):
                 _sync_ext_request(todo, 'rejected')
+                from app.models.notification import Notification
+                Notification.query.filter_by(user_id=current_user.id, type='request', is_read=False).update({'is_read': True})
             todo.source = 'rejected'
             todo.blocked_reason = comment
             todo.status = 'done'

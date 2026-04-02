@@ -13,7 +13,8 @@
 <body>
     {% if current_user.is_authenticated %}
     <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+    <div class="navbar-trigger" onmouseenter="document.getElementById('topNav').classList.add('nav-visible')" onmouseleave="document.getElementById('topNav').classList.remove('nav-visible')"></div>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top navbar-autohide" id="topNav" onmouseenter="this.classList.add('nav-visible')" onmouseleave="this.classList.remove('nav-visible')">
         <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('main.index') }}">
                 <i class="bi bi-kanban"></i> {{ site_name }}
@@ -49,7 +50,6 @@
                 <div class="dropdown">
                     <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                         <i class="bi bi-person-circle"></i> {{ current_user.name }}
-                        <span class="badge bg-light text-primary ms-1">{{ current_user.role_names }}</span>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="{{ url_for('dashboard.my_day') }}"><i class="bi bi-graph-up"></i> 我的一天</a></li>
@@ -63,6 +63,7 @@
     </nav>
 
     <div class="d-flex" id="wrapper">
+        <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="折叠/展开侧边栏"><i class="bi bi-chevron-left" id="sidebarToggleIcon"></i></button>
         <!-- Sidebar -->
         <nav class="sidebar bg-light border-end" id="sidebar">
             <div class="sidebar-content">
@@ -223,6 +224,11 @@
                             <i class="bi bi-star"></i> 激励专区
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'dashboard.compliance' %}active{% endif %}" href="{{ url_for('dashboard.compliance') }}">
+                            <i class="bi bi-shield-check"></i> 合规专区
+                        </a>
+                    </li>
                     {% if current_user.is_admin %}
                     <li class="nav-header mgr-only">系统</li>
                     <li class="nav-item mgr-only">
@@ -257,6 +263,22 @@
     {% endif %}
 
     {# Search is now inline in navbar #}
+
+    {# Step-by-step guided tour #}
+    {% if current_user.is_authenticated %}
+    <div id="tourOverlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:9998;">
+        <div id="tourBg" onclick="endTour()" style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);cursor:pointer;"></div>
+        <div id="tourSpotlight" style="position:absolute;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,.5);z-index:9999;transition:all .3s;"></div>
+        <div id="tourCard" style="position:absolute;z-index:10000;background:#fff;border-radius:10px;padding:20px 24px;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+            <button onclick="endTour()" style="position:absolute;top:8px;right:12px;background:none;border:none;font-size:1.2em;color:#999;cursor:pointer;line-height:1;">&times;</button>
+            <div id="tourBody" style="font-size:.9em;line-height:1.6;color:#333;"></div>
+            <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;">
+                <span id="tourStep" style="font-size:.75em;color:#999;"></span>
+                <button id="tourNext" onclick="nextTourStep()" style="background:#0d6efd;color:#fff;border:none;padding:6px 20px;border-radius:6px;font-size:.85em;cursor:pointer;">下一步</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Add Personnel Modal -->
     <div class="modal fade" id="addPersonnelModal" tabindex="-1">
@@ -458,6 +480,162 @@
     })();
 
     /* --- Add Personnel Modal --- */
+    // Versioned tour & changelog
+    var _isMgr = {{ 'true' if current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR') else 'false' }};
+    var _allVersions = [
+        {ver:'2.1', date:'2026-04', changes:['外部诉求系统','侧边栏折叠/自动展开','首次登录引导','顶部导航自动隐藏'], tour:[
+            {el:'#btnCopyRequest', title:'外部诉求链接', body:'点击复制你的专属诉求页链接。<br>外部人打开即可提交诉求，自动创建 Todo 并通知你。', pos:'bottom'},
+            {el:'#sidebarToggle', title:'侧边栏折叠', body:'点击折叠侧边栏，鼠标悬停自动展开。<br>状态会被记住。', pos:'right'},
+        ]},
+        {ver:'2.0', date:'2026-03', changes:['需求状态简化为三态','激励海报红金设计','业务专题点灯表链接','需求看板优化'], tour:[]},
+        {ver:'1.9', date:'2026-03', changes:['情绪预测 + 1v1覆盖率','谈话模版后台可配','人力投入小组筛选'], tour:[]},
+        {ver:'1.8', date:'2026-02', changes:['激励海报EML导出','礼物选择制度','Todo代码复用'], tour:[]},
+        {ver:'1.7', date:'2026-02', changes:['需求看板+甘特图','AI诊断+周报','统计报表'], tour:[]},
+    ];
+
+    // Core onboarding steps (first login only)
+    var _coreSteps = [
+        {el:'.quick-todo-form input[name="title"]', fallback:'#sidebar', title:'快速添加 Todo', body:'输入任务回车添加。<strong>@人名</strong> 求助，<strong>#总结</strong> 评论。<br>支持拖拽排序、番茄钟计时。', pos:'bottom'},
+        {el:'#quickActivityBar', title:'活动计时', body:'一键记录<strong>开会、评审、写材料</strong>等活动时长。<br>点击开始，再点结束。', pos:'bottom'},
+    ];
+    if (_isMgr) _coreSteps.push({el:'#mgrEyeBtn', title:'管理视图', body:'开启后可查看隐藏项目、情绪预测、激励评审等。<br>共享屏幕时关闭即可隐藏。', pos:'bottom'});
+
+    // Build changelog step
+    function _buildChangelogStep(highlightVer) {
+        var html = '<div style="max-height:240px;overflow-y:auto;font-size:.85em;line-height:1.9;">';
+        _allVersions.forEach(function(v) {
+            var isNew = highlightVer && v.ver === highlightVer;
+            html += '<div style="' + (isNew ? 'background:#fff3cd;padding:4px 8px;border-radius:4px;margin-bottom:4px;' : 'padding:0 8px;margin-bottom:2px;') + '">'
+                + '<strong style="color:#0d6efd;">v' + v.ver + '</strong> <span style="color:#999;font-size:.85em;">' + v.date + '</span><br>'
+                + v.changes.map(function(c) { return '<span style="color:#555;">· ' + c + '</span>'; }).join('<br>')
+                + '</div>';
+        });
+        html += '</div>';
+        return {el:null, title:'{{ site_name }} 更新日志', body:html, pos:'center'};
+    }
+
+    var _tourSteps = [];
+    var _tourIdx = 0;
+    function startTour() {
+        _tourIdx = 0;
+        document.getElementById('tourOverlay').style.display = 'block';
+        showTourStep();
+    }
+    function endTour() {
+        document.getElementById('tourOverlay').style.display = 'none';
+    }
+    function nextTourStep() {
+        _tourIdx++;
+        if (_tourIdx >= _tourSteps.length) { endTour(); return; }
+        showTourStep();
+    }
+    function showTourStep() {
+        var step = _tourSteps[_tourIdx];
+        var overlay = document.getElementById('tourOverlay');
+        var spotlight = document.getElementById('tourSpotlight');
+        var card = document.getElementById('tourCard');
+        var body = document.getElementById('tourBody');
+        var stepLabel = document.getElementById('tourStep');
+        var nextBtn = document.getElementById('tourNext');
+        var bg = document.getElementById('tourBg');
+
+        body.innerHTML = '<div style="font-weight:700;font-size:1.05em;margin-bottom:6px;">' + step.title + '</div>' + step.body;
+        stepLabel.textContent = (_tourIdx + 1) + ' / ' + _tourSteps.length;
+        nextBtn.textContent = _tourIdx === _tourSteps.length - 1 ? '开始使用' : '下一步';
+
+        if (step.el) {
+            var target = document.querySelector(step.el) || (step.fallback ? document.querySelector(step.fallback) : null);
+            if (target) {
+                var r = target.getBoundingClientRect();
+                var pad = 8;
+                spotlight.style.display = 'block';
+                spotlight.style.left = (r.left - pad) + 'px';
+                spotlight.style.top = (r.top - pad) + 'px';
+                spotlight.style.width = (r.width + pad * 2) + 'px';
+                spotlight.style.height = (r.height + pad * 2) + 'px';
+                bg.style.display = 'none';
+                // Position card
+                if (step.pos === 'bottom') {
+                    card.style.top = (r.bottom + 16) + 'px';
+                    card.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 360)) + 'px';
+                } else {
+                    card.style.top = Math.max(8, r.top - 8) + 'px';
+                    card.style.left = (r.right + 16) + 'px';
+                }
+                card.style.transform = '';
+                return;
+            }
+        }
+        // Center card (no target element)
+        spotlight.style.display = 'none';
+        bg.style.display = 'block';
+        card.style.top = '50%';
+        card.style.left = '50%';
+        card.style.transform = 'translate(-50%,-50%)';
+    }
+
+    {% if session.pop('first_login', False) %}
+    // First login: core steps + changelog
+    _tourSteps = _coreSteps.concat([_buildChangelogStep(null)]);
+    setTimeout(startTour, 600);
+    {% else %}
+    // Version update: new version's tour steps + changelog (highlight new)
+    (function() {
+        var serverVer = {{ changelog_version | tojson }};
+        var seenVer = localStorage.getItem('_changelog_ver_{{ current_user.id }}');
+        if (serverVer && serverVer !== seenVer) {
+            var newV = _allVersions.find(function(v) { return v.ver === serverVer; });
+            _tourSteps = (newV && newV.tour.length ? newV.tour : []).concat([_buildChangelogStep(serverVer)]);
+            setTimeout(startTour, 600);
+            localStorage.setItem('_changelog_ver_{{ current_user.id }}', serverVer);
+        }
+    })();
+    {% endif %}
+
+
+    // Sidebar toggle
+    var _sidebarPinned = localStorage.getItem('sidebar_collapsed') !== '1';
+    function toggleSidebar() {
+        var w = document.getElementById('wrapper');
+        _sidebarPinned = !_sidebarPinned;
+        w.classList.toggle('sidebar-collapsed', !_sidebarPinned);
+        document.getElementById('sidebarToggleIcon').className = _sidebarPinned ? 'bi bi-chevron-left' : 'bi bi-chevron-right';
+        localStorage.setItem('sidebar_collapsed', _sidebarPinned ? '' : '1');
+    }
+    // Restore sidebar state
+    if (!_sidebarPinned) {
+        document.getElementById('wrapper').classList.add('sidebar-collapsed');
+        document.getElementById('sidebarToggleIcon').className = 'bi bi-chevron-right';
+    }
+    // Hover to temporarily show sidebar when collapsed
+    (function() {
+        var btn = document.getElementById('sidebarToggle');
+        var sidebar = document.getElementById('sidebar');
+        var w = document.getElementById('wrapper');
+        var hideTimer = null;
+        function showTemp() {
+            if (_sidebarPinned) return;
+            clearTimeout(hideTimer);
+            sidebar.style.width = '220px';
+            sidebar.style.overflowY = 'auto';
+            sidebar.style.paddingTop = '1rem';
+            sidebar.style.paddingBottom = '1rem';
+        }
+        function hideTemp() {
+            if (_sidebarPinned) return;
+            hideTimer = setTimeout(function() {
+                sidebar.style.width = '';
+                sidebar.style.overflowY = '';
+                sidebar.style.paddingTop = '';
+                sidebar.style.paddingBottom = '';
+            }, 300);
+        }
+        btn.addEventListener('mouseenter', showTemp);
+        btn.addEventListener('mouseleave', hideTemp);
+        sidebar.addEventListener('mouseenter', function() { if (!_sidebarPinned) { clearTimeout(hideTimer); showTemp(); } });
+        sidebar.addEventListener('mouseleave', hideTemp);
+    })();
+
     // Copy request page link (compatible with HTTP)
     var _copyBtn = document.getElementById('btnCopyRequest');
     if (_copyBtn) {

@@ -10,15 +10,21 @@ body {
 #navSearchInput::-webkit-input-placeholder { color: rgba(255,255,255,.5) !important; }
 
 #wrapper {
-    margin-top: 56px;
-    min-height: calc(100vh - 56px);
+    margin-top: 0;
+    min-height: 100vh;
 }
+
+/* Top navbar: default hidden, show on hover */
+.navbar-autohide { transform: translateY(-100%); transition: transform .3s; }
+.navbar-autohide:hover, .navbar-autohide.nav-visible { transform: translateY(0); }
+.navbar-trigger { position: fixed; top: 0; left: 0; width: 100%; height: 6px; z-index: 1040; }
 
 .sidebar {
     width: 220px;
-    height: calc(100vh - 56px);
+    height: 100vh;
+    transition: width .2s;
     position: fixed;
-    top: 56px;
+    top: 0;
     left: 0;
     z-index: 100;
     padding-top: 1rem;
@@ -50,7 +56,14 @@ body {
 .main-content {
     margin-left: 220px;
     width: calc(100% - 220px);
+    transition: margin-left .2s, width .2s;
 }
+/* Sidebar collapsed state */
+.sidebar-collapsed .sidebar { width: 0; overflow: hidden; padding: 0; }
+.sidebar-collapsed .main-content { margin-left: 0; width: 100%; }
+.sidebar-toggle { position: fixed; top: 8px; left: 220px; z-index: 101; background: #fff; border: 1px solid #dee2e6; border-left: 0; border-radius: 0 4px 4px 0; padding: 2px 4px; cursor: pointer; font-size: .75em; color: #999; transition: left .2s; }
+.sidebar-toggle:hover { color: #333; }
+.sidebar-collapsed .sidebar-toggle { left: 0; }
 
 .table th { font-weight: 600; font-size: 0.85rem; white-space: nowrap; }
 .table td { vertical-align: middle; font-size: 0.9rem; }

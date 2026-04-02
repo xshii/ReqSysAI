@@ -5,6 +5,20 @@
 # ---------------------------------------------------------------------------
 DEFAULT_SITE_NAME = '研发协作平台'
 
+# Static config defaults (used when neither JSON nor DB has a value)
+SITE_CONFIG_DEFAULTS = {
+    'site_name': DEFAULT_SITE_NAME,
+    'changelog_version': '2.1',
+    'emotion_talk_template': '精神面貌和活力（观察）\n考勤和行为变化（观察）\n团队社交和融入（观察）\n身体和睡眠\n家庭/感情状况\n经济或生活压力\n被重视和认可的感受\n工作节奏和掌控感\n成长诉求或职业方向\n近期槽点或心结',
+    'incentive_poster_prefix': '',
+    'incentive_photo_size': '64',
+    'gift_start_month': '',
+    'api_key': '',
+    'exchange_server': '',
+    'exchange_domain': '',
+    'mail_domain': 'company.com',
+}
+
 # ---------------------------------------------------------------------------
 # Todo statuses
 # ---------------------------------------------------------------------------
@@ -33,15 +47,15 @@ HEATMAP_DAYS = 90
 # Employee ID (工号) patterns
 # ---------------------------------------------------------------------------
 # Full: letter + digits, e.g. a00123456 (9) or q3001234567 (11)
-EID_FULL_RE = r'^[a-z](00\d{6}|\d00\d{7})$'
+EID_FULL_RE = r'^[a-z](00\d{6}|300\d{5})$'
 # Digits only (no letter prefix), e.g. 00123456 or 3001234567
-EID_NUM_RE = r'^(00\d{6}|\d00\d{7})$'
+EID_NUM_RE = r'^(00\d{6}|300\d{5})$'
 # Optional letter prefix (accepts both full and digits-only)
-EID_FLEX_RE = r'^[a-z]?(00\d{6}|\d00\d{7})$'
+EID_FLEX_RE = r'^[a-z]?(00\d{6}|300\d{5})$'
 # For WTForms Regexp on employee_id fields
-EID_MSG = '工号格式：如 a00123456 或 q3001234567'
+EID_MSG = '工号格式：如 a00123456 或 q30012345'
 # Manager field in WTForms: "姓名 工号" (工号可带可不带首字母)
-MGR_FIELD_RE = r'^$|^.+\s[a-z]?(00\d{6}|\d00\d{7})$'
+MGR_FIELD_RE = r'^$|^.+\s[a-z]?(00\d{6}|300\d{5})$'
 MGR_FIELD_MSG = '格式：姓名 工号，如 张三 a00123456 或 张三 00123456'
 
 # ---------------------------------------------------------------------------

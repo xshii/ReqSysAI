@@ -141,7 +141,7 @@
                 </td>
                 <td><a href="{{ url_for('requirement.requirement_detail', req_id=r.id) }}" target="_blank">{{ r.title }}</a></td>
                 {% if not cur_project or include_sub %}<td><span class="text-muted small">{{ r.project.name }}</span></td>{% endif %}
-                <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span> <span class="badge bg-light text-secondary border" style="font-size:.7em;">{{ r.source_label }}</span>{% if r.due_date and r.due_date < today and r.status not in ('done','closed') %} <span class="badge bg-danger" style="font-size:.65em;">超期{{ (today - r.due_date).days }}天</span>{% endif %}</td>
+                <td><span class="badge bg-{{ r.status_color }}">{{ r.status_label }}</span>{% if r.due_date and r.due_date < today and r.status not in ('done','closed') %} <span class="badge bg-danger" style="font-size:.65em;">超期{{ (today - r.due_date).days }}天</span>{% endif %}</td>
                 <td>{{ r.assignee_display }}</td>
                 <td>
                     {% set pct = 100 if r.status in ('done','closed') else (r.completion or 0) %}
@@ -208,18 +208,11 @@
     <span class="fw-bold text-primary" id="batchCount">已选 0 项</span>
     <div class="vr"></div>
     <div class="dropup">
-        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">修改状态</button>
-        <ul class="dropdown-menu">
-            {% for k, v in statuses.items() %}
-            <li><a class="dropdown-item" href="#" onclick="batchAction('status','{{ k }}','{{ v }}');return false;">{{ v }}</a></li>
-            {% endfor %}
-        </ul>
-    </div>
-    <div class="dropup">
-        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">修改优先级</button>
-        <ul class="dropdown-menu">
-            {% for k, v in priorities.items() %}
-            <li><a class="dropdown-item" href="#" onclick="batchAction('priority','{{ k }}','{{ v }}');return false;">{{ v }}</a></li>
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">修改分类</button>
+        <ul class="dropdown-menu" style="max-height:240px;overflow-y:auto;">
+            <li><a class="dropdown-item" href="#" onclick="batchAction('category','','清除分类');return false;"><em class="text-muted">清除分类</em></a></li>
+            {% for c in all_cats %}
+            <li><a class="dropdown-item" href="#" onclick="batchAction('category','{{ c }}','{{ c }}');return false;">{{ c }}</a></li>
             {% endfor %}
         </ul>
     </div>
@@ -307,7 +300,7 @@ function batchAction(action, value, label) {
     var ids = getSelectedIds();
     if (!ids.length) return;
     _pendingBatch = {action: action, value: value, label: label};
-    var actionNames = {status: '状态', priority: '优先级', assignee: '负责人'};
+    var actionNames = {status: '状态', priority: '优先级', assignee: '负责人', category: '分类'};
     document.getElementById('batchConfirmBody').innerHTML =
         '确定要将 <strong>' + ids.length + '</strong> 条需求的<strong>' + (actionNames[action] || action) + '</strong>修改为「<strong>' + label + '</strong>」吗？';
     new bootstrap.Modal(document.getElementById('batchConfirmModal')).show();

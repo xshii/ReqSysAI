@@ -72,8 +72,10 @@ def login():
         else:
             auto_user = None
     if auto_user and request.method == 'GET':
+        first_login = auto_user.last_login is None
         login_user(auto_user, remember=False)
         session.permanent = True
+        session['first_login'] = first_login
         auto_user.last_login = datetime.now()
         db.session.commit()
         # Clear "请先登录" flash message from login_required redirect
@@ -110,8 +112,10 @@ def login():
                                    ip_mismatch=True, mismatch_eid=user.employee_id,
                                    has_pending=bool(pending))
 
+        first_login = user.last_login is None
         login_user(user, remember=False)
         session.permanent = True  # 10 min lifetime from config
+        session['first_login'] = first_login
         user.last_login = datetime.now()
         db.session.commit()
         return redirect(url_for('main.index'))

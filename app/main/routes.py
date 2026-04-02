@@ -679,8 +679,10 @@ def api_personnel_options():
     role_cfg = {r['name']: r.get('desc', '') for r in current_app.config.get('ROLES', [])}
     # Manager candidates: users with management roles OR referenced as someone's manager
     mgr_eids = set()
-    for row in db.session.query(User.manager).filter(User.manager.isnot(None), User.manager != '').all():
+    mgr_field_values = set()
+    for row in db.session.query(User.manager).filter(User.manager.isnot(None), User.manager != '').distinct().all():
         val = row[0].strip()
+        mgr_field_values.add(val)
         if ' ' in val:
             mgr_eids.add(val.split()[-1])
     mgr_users = User.query.filter_by(is_active=True).filter(
@@ -688,11 +690,25 @@ def api_personnel_options():
             User.id.in_(db.session.query(User.id).join(User.roles).filter(Role.name.in_(User.TEAM_MANAGER_ROLES))),
             User.employee_id.in_(mgr_eids) if mgr_eids else db.false()
         )).order_by(User.name).all()
+    user_list = [{'id': u.id, 'name': u.name, 'eid': u.employee_id, 'pinyin': u.pinyin or '', 'group': u.group or ''} for u in mgr_users]
+    # 把 manager 字段中出现但未录入为用户的主管也加入列表
+    known_eids = {u.employee_id for u in mgr_users}
+    known_names = {u.name for u in mgr_users}
+    for val in mgr_field_values:
+        parts = val.split()
+        eid = parts[-1] if len(parts) > 1 else ''
+        if eid and eid not in known_eids:
+            name_part = ' '.join(parts[:-1])
+            user_list.append({'id': 0, 'name': name_part, 'eid': eid, 'pinyin': '', 'group': ''})
+            known_eids.add(eid)
+        elif not eid and val not in known_names:
+            user_list.append({'id': 0, 'name': val, 'eid': '', 'pinyin': '', 'group': ''})
+            known_names.add(val)
     return jsonify(
         roles=[{'id': r.id, 'name': r.name, 'desc': role_cfg.get(r.name, r.description or '')} for r in roles],
         groups=[g.name for g in groups],
         domains=all_domains,
-        users=[{'id': u.id, 'name': u.name, 'eid': u.employee_id, 'pinyin': u.pinyin or '', 'group': u.group or ''} for u in mgr_users],
+        users=user_list,
     )
 
 

@@ -123,7 +123,7 @@ checkHelpAlert();
 {% endif %}
 
 <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-    <h4 class="mb-0">{{ current_user.name }}，{{ today.strftime('%Y-%m-%d') }}
+    <h4 class="mb-0">{{ current_user.name }}
         <span class="ms-2 align-middle" style="font-size:.6em;">
             {% set init_pct = (todo_done / todo_total * 100)|int if todo_total else 0 %}
             <span id="todayProgressBadge" class="badge bg-{{ 'success' if init_pct >= 66 else ('warning' if init_pct >= 33 else 'danger') }}{% if init_pct < 100 %} bg-opacity-75{% endif %}" style="font-size:1em;">
@@ -145,6 +145,7 @@ checkHelpAlert();
         </span>
         {% endif %}
     </h4>
+    <div class="d-flex gap-1 align-items-center" id="quickActivityBar"></div>
     <div class="ms-auto d-flex gap-1">
         <button class="btn btn-sm btn-outline-secondary" id="btnDailyProgress" title="AI 生成今日进展报告">
             <i class="bi bi-robot"></i> 每日进展
@@ -157,7 +158,6 @@ checkHelpAlert();
     </div>
 </div>
 
-<div class="d-flex gap-2 mb-2 align-items-center" id="quickActivityBar"></div>
 <script>
 // Render activity buttons from localStorage config (or defaults)
 (function() {
@@ -307,16 +307,6 @@ checkHelpAlert();
                 {% endif %}
                 {% if help_todos and my_todos_team %}<hr class="my-1 opacity-25">{% endif %}
                 {% for t in my_todos_team %}{{ todo_row(t) }}{% endfor %}
-                </div>
-                <div class="d-flex gap-1 ps-2 mt-1 flex-wrap">
-                    {% for label in ['站会','Code Review','文档更新','知识分享'] %}
-                    <form method="POST" action="{{ url_for('main.quick_todo') }}" class="d-inline quick-todo-form">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="category" value="team">
-                        <input type="hidden" name="title" value="{{ label }}">
-                        <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.75em;">{{ label }}</button>
-                    </form>
-                    {% endfor %}
                 </div>
             </div>
         </div>

@@ -71,7 +71,15 @@ def user_list():
     DEFAULT_DOMAINS = ['芯片验证', '业务开发', '技术开发', '编译器', '算法', '芯片设计', '产品设计', '功能仿真', '性能仿真', '产品测试']
     db_domains = set(u.domain for u in User.query.filter(User.domain.isnot(None), User.domain != '').all())
     all_domains = sorted(db_domains | set(DEFAULT_DOMAINS))
-    mgr_options = [f'{u.name} {u.employee_id}' for u in _get_manager_candidates()]
+    # 已录入用户中的主管候选
+    mgr_from_users = {f'{u.name} {u.employee_id}' for u in _get_manager_candidates()}
+    # manager 字段中填写过但未录入为用户的主管
+    mgr_from_field = set(
+        row[0].strip() for row in db.session.query(User.manager).filter(
+            User.manager.isnot(None), User.manager != ''
+        ).distinct().all()
+    )
+    mgr_options = sorted(mgr_from_users | mgr_from_field)
     return render_template('admin/users.html', users=users, visible_roles=visible_roles,
                            all_groups=all_groups, all_group_objs=all_group_objs,
                            group_counts=group_counts, all_domains=all_domains,

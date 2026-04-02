@@ -342,10 +342,10 @@
         <tbody>
             {% for l1 in pivot_l1s %}
             <tr>
-                <td style="font-weight:bold;text-align:center;">{{ l1 }}</td>
+                <td style="font-weight:bold;text-align:center;"><a href="{{ url_for('requirement.requirement_list', project_id=cur_project_id, category=l1) }}" style="color:inherit;text-decoration:none;">{{ l1 }}</a></td>
                 {% for l2 in pivot_l2s %}{% for s in pivot_l2_sources[l2] %}
                 {% set c = pivot_src_cells.get((l1, l2, s)) %}
-                <td style="text-align:center;padding:2px;background:{{ _light_bg.get(c.light, '') if c else '' }};">
+                <td style="text-align:center;padding:2px;background:{{ _light_bg.get(c.light, '') if c else '' }};"><a href="{{ url_for('requirement.requirement_list', project_id=cur_project_id, category=l1 ~ '-' ~ l2, status='') }}" style="color:inherit;text-decoration:none;display:block;">
                     {% if c and c.total > 0 %}
                     {% set wpct = (c.wpct_sum / c.total)|round|int %}
                     <div style="line-height:1.15;">
@@ -354,7 +354,7 @@
                     {% if c.min_start or c.max_due %}<div style="font-size:.55em;color:#aaa;">{% if c.min_start %}{{ c.min_start.strftime('%m-%d') }}{% endif %}{% if c.max_due %}~{{ c.max_due.strftime('%m-%d') }}{% endif %}</div>{% endif %}
                     </div>
                     {% else %}<span style="color:#ccc;">-</span>{% endif %}
-                </td>
+                </a></td>
                 {% endfor %}{% endfor %}
             </tr>
             {% endfor %}
