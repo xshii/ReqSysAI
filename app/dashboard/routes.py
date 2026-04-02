@@ -2619,6 +2619,130 @@ def save_expected_ratio():
     return jsonify(ok=True)
 
 
+# ---- Compliance ----
+
+@dashboard_bp.route('/compliance')
+@login_required
+def compliance():
+    """合规专区：汇总合规相关功能入口和状态。"""
+    from app.models.audit import AuditLog
+    from app.models.risk import Risk
+
+    # 审计日志近30天统计
+    _30d = date.today() - timedelta(days=30)
+    audit_count = AuditLog.query.filter(AuditLog.created_at >= _30d).count()
+
+    # 未闭环风险
+    open_risks = Risk.query.filter_by(status='open').filter(Risk.deleted_at.is_(None)).count()
+    overdue_risks = Risk.query.filter(
+        Risk.status == 'open', Risk.deleted_at.is_(None),
+        Risk.due_date < date.today(), Risk.due_date.isnot(None)
+    ).count()
+
+    # 权限申请待审批
+    from app.models.knowledge import PermissionApplication
+    pending_perms = PermissionApplication.query.filter_by(status='pending').count()
+
+    from app.models.site_setting import SiteSetting
+
+    # 入职引导：签署后不再显示
+    _onboarded = set(SiteSetting.get('onboarded_users', '').split(','))
+    show_onboarding = str(current_user.id) not in _onboarded
+
+    # 离职入口：仅管理层在后台对具体人员开启后才显示
+    _offboard_uids = SiteSetting.get('offboarding_users', '')
+    show_offboarding = str(current_user.id) in _offboard_uids.split(',') if _offboard_uids else False
+
+    # 入职必读必学必考配置
+    import json as _json
+    _onboard_cfg_raw = SiteSetting.get('onboard_config', '')
+    try:
+        onboard_config = _json.loads(_onboard_cfg_raw) if _onboard_cfg_raw else {}
+    except Exception:
+        onboard_config = {}
+
+    # 合规考试统计
+    _q_raw = SiteSetting.get('compliance_questions', '')
+    exam_question_count = len(_json.loads(_q_raw)) if _q_raw else 0
+    _passed_raw = SiteSetting.get('compliance_exam_passed', '')
+    exam_passed_uids = set(_passed_raw.split(',')) if _passed_raw else set()
+    exam_passed_uids.discard('')
+    exam_passed = str(current_user.id) in exam_passed_uids
+
+    return render_template('dashboard/compliance.html',
+        audit_count=audit_count, open_risks=open_risks,
+        overdue_risks=overdue_risks, pending_perms=pending_perms,
+        show_onboarding=show_onboarding, show_offboarding=show_offboarding,
+        onboard_config=onboard_config,
+        exam_question_count=exam_question_count, exam_passed=exam_passed)
+
+
+@dashboard_bp.route('/compliance/onboard-sign', methods=['POST'])
+@login_required
+def compliance_onboard_sign():
+    """签署入职引导，标记为已完成。"""
+    from app.models.site_setting import SiteSetting
+    raw = SiteSetting.get('onboarded_users', '')
+    uids = set(raw.split(',')) if raw else set()
+    uids.discard('')
+    uids.add(str(current_user.id))
+    SiteSetting.set('onboarded_users', ','.join(sorted(uids)))
+    return jsonify(ok=True)
+
+
+@dashboard_bp.route('/compliance/onboard-config', methods=['POST'])
+@login_required
+def compliance_onboard_config():
+    """保存入职必读必学必考配置（所有人可添加，删除由前端控制仅管理层）。"""
+    import json as _json
+    from app.models.site_setting import SiteSetting
+    data = request.get_json() or {}
+    SiteSetting.set('onboard_config', _json.dumps(data, ensure_ascii=False))
+    return jsonify(ok=True)
+
+
+@dashboard_bp.route('/compliance/exam', methods=['GET'])
+@login_required
+def compliance_exam_page():
+    """合规考试页面：随机抽题。"""
+    import json as _json, random
+    from app.models.site_setting import SiteSetting
+    raw = SiteSetting.get('compliance_questions', '')
+    questions = _json.loads(raw) if raw else []
+    if not questions:
+        flash('题库为空，请联系管理员', 'warning')
+        return redirect(url_for('dashboard.compliance'))
+    # 随机抽取（最多20题）
+    pool = list(questions)
+    random.shuffle(pool)
+    exam = pool[:min(20, len(pool))]
+    return render_template('dashboard/compliance_exam.html', questions=exam)
+
+
+@dashboard_bp.route('/compliance/exam-submit', methods=['POST'])
+@login_required
+def compliance_exam_submit():
+    """提交合规考试答案。"""
+    import json as _json
+    from app.models.site_setting import SiteSetting
+    raw = SiteSetting.get('compliance_questions', '')
+    all_q = _json.loads(raw) if raw else []
+    data = request.get_json() or {}
+    answers = data.get('answers', {})  # { stem: chosen_key }
+    # 对照批改
+    q_map = {q['stem']: q['answer'] for q in all_q}
+    total = len(answers)
+    correct = sum(1 for stem, ans in answers.items() if q_map.get(stem) == ans)
+    passed = total > 0 and (correct / total) >= 0.8
+    if passed:
+        prev = SiteSetting.get('compliance_exam_passed', '')
+        uids = set(prev.split(',')) if prev else set()
+        uids.discard('')
+        uids.add(str(current_user.id))
+        SiteSetting.set('compliance_exam_passed', ','.join(sorted(uids)))
+    return jsonify(ok=True, total=total, correct=correct, passed=passed)
+
+
 # ---- Emotion prediction ----
 
 def _emotion_guard():

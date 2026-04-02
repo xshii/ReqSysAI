@@ -16,6 +16,10 @@
            href="{{ url_for('admin.site_settings') }}">站点设置</a>
     </li>
     <li class="nav-item">
+        <a class="nav-link {% if request.endpoint and 'compliance_exam' in request.endpoint %}active{% endif %}"
+           href="{{ url_for('admin.compliance_exam') }}">合规题库</a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link {% if request.endpoint == 'admin.audit_logs' %}active{% endif %}"
            href="{{ url_for('admin.audit_logs') }}">审计日志</a>
     </li>

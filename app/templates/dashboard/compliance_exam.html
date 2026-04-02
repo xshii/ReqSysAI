@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}合规考试 - {{ site_name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-journal-check"></i> 合规考试</h4>
+    <span class="text-muted small">共 {{ questions|length }} 题，正确率 80% 以上通过</span>
+</div>
+
+<div id="examForm">
+{% for q in questions %}
+<div class="card mb-2 exam-q">
+    <div class="card-body py-2 px-3">
+        <div class="fw-bold small mb-2">{{ loop.index }}. {{ q.stem }}</div>
+        <div class="row g-1">
+            {% for key in ['A','B','C','D'] %}
+            {% if q.options.get(key) %}
+            <div class="col-md-6">
+                <label class="d-flex align-items-center gap-2 small py-1 px-2 rounded exam-opt" style="cursor:pointer;" onmouseover="this.style.background='#f0f0f0'" onmouseout="if(!this.querySelector('input').checked)this.style.background=''">
+                    <input type="radio" name="q_{{ loop.parent.loop.index0 }}" value="{{ key }}" data-stem="{{ q.stem }}" class="form-check-input m-0">
+                    <span>{{ key }}. {{ q.options[key] }}</span>
+                </label>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endfor %}
+</div>
+
+<div class="mt-3 d-flex justify-content-between">
+    <a href="{{ url_for('dashboard.compliance') }}" class="btn btn-outline-secondary btn-sm">返回</a>
+    <button class="btn btn-primary" id="submitBtn" onclick="submitExam()"><i class="bi bi-check-lg"></i> 提交答卷</button>
+</div>
+
+<div class="d-none mt-3" id="resultPanel"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function submitExam() {
+    var answers = {};
+    document.querySelectorAll('.exam-q').forEach(function(card) {
+        var checked = card.querySelector('input[type=radio]:checked');
+        if (checked) answers[checked.dataset.stem] = checked.value;
+    });
+    var total = document.querySelectorAll('.exam-q').length;
+    if (Object.keys(answers).length < total) {
+        if (!confirm('还有 ' + (total - Object.keys(answers).length) + ' 题未答，确定提交？')) return;
+    }
+    document.getElementById('submitBtn').disabled = true;
+    apiPost('/dashboard/compliance/exam-submit', { answers: answers }).then(function(d) {
+        if (!d) return;
+        var pnl = document.getElementById('resultPanel');
+        pnl.classList.remove('d-none');
+        if (d.passed) {
+            pnl.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle-fill"></i> 恭喜通过！正确 ' + d.correct + '/' + d.total + ' 题。<a href="' + "{{ url_for('dashboard.compliance') }}" + '">返回合规专区</a></div>';
+        } else {
+            pnl.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle"></i> 未通过，正确 ' + d.correct + '/' + d.total + ' 题（需 80%）。请复习后重新作答。</div>';
+            document.getElementById('submitBtn').disabled = false;
+        }
+    });
+}
+</script>
+{% endblock %}

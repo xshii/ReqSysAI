@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block title %}合规专区 - {{ site_name }}{% endblock %}
+
+{% block content %}
+<h4 class="mb-3"><i class="bi bi-shield-check"></i> 合规专区</h4>
+
+{# Self-service cards — top #}
+<h5 class="mb-3 text-muted">合规自助服务</h5>
+<div class="row g-3 mb-4">
+    {% if show_onboarding %}
+    <div class="col-md-4 col-lg-3" id="onboardCard">
+        <div class="card h-100 border-primary border-opacity-50 shadow-sm" style="cursor:pointer;transition:all .15s;" onclick="var el=document.getElementById('onboardDetail');if(el)el.classList.toggle('d-none');" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-backpack2 text-primary" style="font-size:2em;"></i>
+                <div class="fw-bold mt-2">我刚入职</div>
+                <div class="text-muted small mt-1">安全须知、必读必学必考</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 d-none" id="onboardDetail">
+        <div class="card border-primary border-opacity-25 shadow-sm">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-primary mb-0"><i class="bi bi-backpack2"></i> 入职须知</h6>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.75em;" data-bs-toggle="modal" data-bs-target="#onboardConfigModal"><i class="bi bi-plus-lg"></i> 添加必读必学必考</button>
+                        <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.75em;" onclick="document.getElementById('onboardDetail').classList.add('d-none')"><i class="bi bi-x"></i></button>
+                    </div>
+                </div>
+                <div class="small mb-3" style="line-height:2;">
+                    <div><i class="bi bi-shield-exclamation text-danger"></i> <strong>禁止</strong>将公司代码、文档、数据上传到<strong>外部AI工具</strong>（ChatGPT/Claude/文心等公共版）</div>
+                    <div><i class="bi bi-shield-exclamation text-danger"></i> <strong>禁止</strong>将内部信息发到个人邮箱、网盘、社交平台</div>
+                    <div><i class="bi bi-shield-exclamation text-danger"></i> <strong>禁止</strong>在代码中硬编码密码、token、密钥</div>
+                    <div><i class="bi bi-info-circle text-primary"></i> 离开工位<strong>必须锁屏</strong>（Win+L / Ctrl+Cmd+Q）</div>
+                    <div><i class="bi bi-info-circle text-primary"></i> 前往<a href="{{ url_for('auth.profile') }}">个人设置</a>完善信息（主管、领域、邮箱）</div>
+                    <div><i class="bi bi-info-circle text-primary"></i> 代码仓/服务器权限需通过下方入口<strong>申请</strong>，遵循最小权限原则</div>
+                </div>
+                {% if onboard_config.get('items') %}
+                <div class="small mb-3">
+                    <div class="fw-bold mb-1"><i class="bi bi-list-check"></i> 必读必学必考</div>
+                    {% for item in onboard_config.items %}
+                    {% set parts = item.split('|') %}
+                    <div class="form-check mb-1">
+                        <input class="form-check-input onboard-item-check" type="checkbox">
+                        <label class="form-check-label">{% if parts|length > 1 and parts[1] %}<a href="{{ parts[1] }}" target="_blank">{{ parts[0] }}</a>{% else %}{{ parts[0] }}{% endif %}</label>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div class="d-flex align-items-center gap-2">
+                    <label class="small"><input type="checkbox" class="form-check-input me-1" id="onboardCheck"> 我已阅读并了解以上内容</label>
+                    <button class="btn btn-sm btn-primary" id="onboardSignBtn" disabled onclick="signOnboard()">确认签署</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% set actions = [
+        ('bi-laptop', '我要申请便携', '笔记本/显示器等设备申请', 'info', true),
+        ('bi-folder2-open', '我要申请代码仓权限', '代码仓库读写权限申请', 'success', true),
+        ('bi-hdd-rack', '我要申请服务器权限', '开发/测试/生产服务器权限', 'warning', true),
+        ('bi-rocket-takeoff', '我要投入项目', '加入项目、开通项目相关权限', 'primary', true),
+        ('bi-box-arrow-right', '我要退出项目', '工作交接、权限回收', 'secondary', true),
+        ('bi-shield-lock', '我要申请VPN', 'VPN远程接入权限', 'info', true),
+        ('bi-tools', '我要申请工具/License', 'EDA/IDE/测试工具等', 'success', true),
+        ('bi-exclamation-triangle', '我要报告安全事件', '发现安全隐患或异常情况', 'danger', true),
+    ] %}
+    {% for icon, title, desc, color, show in actions %}
+    {% if show %}
+    <div class="col-md-4 col-lg-3">
+        <div class="card h-100 border-0 shadow-sm" style="opacity:.6;">
+            <div class="card-body text-center py-4">
+                <i class="bi {{ icon }} text-{{ color }}" style="font-size:2em;"></i>
+                <div class="fw-bold mt-2">{{ title }}</div>
+                <div class="text-muted small mt-1">{{ desc }}</div>
+                <span class="badge bg-secondary mt-2" style="font-weight:normal;font-size:.7em;">建设中</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+
+    {% if show_offboarding %}
+    <div class="col-md-4 col-lg-3">
+        <div class="card h-100 border-0 shadow-sm compliance-action" style="cursor:pointer;transition:all .15s;border-left:3px solid #198754 !important;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-sunrise text-success" style="font-size:2em;"></i>
+                <div class="fw-bold mt-2">我要换个地方发展</div>
+                <div class="text-muted small mt-1">离职交接、权限回收、设备归还</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{# Status cards #}
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm text-center py-3 h-100">
+            <div class="text-muted small">近30天操作日志</div>
+            <div class="fw-bold fs-4">{{ audit_count }}</div>
+            <div>{% if current_user.is_admin %}<a href="{{ url_for('admin.audit_logs') }}" class="small text-decoration-none">查看</a>{% else %}&nbsp;{% endif %}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm text-center py-3 h-100">
+            <div class="text-muted small">待审批权限</div>
+            <div class="fw-bold fs-4">{{ pending_perms }}</div>
+            <div>&nbsp;</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm text-center py-3 h-100">
+            <div class="text-muted small">合规考试</div>
+            <div class="fw-bold fs-4 {{ 'text-success' if exam_passed else 'text-warning' }}">
+                {{ '已通过' if exam_passed else '未通过' }}
+            </div>
+            <div>
+                {% if exam_question_count and not exam_passed %}
+                <a href="{{ url_for('dashboard.compliance_exam_page') }}" class="small text-decoration-none">去考试</a>
+                {% elif not exam_question_count %}
+                <span class="text-muted small">题库为空</span>
+                {% else %}&nbsp;{% endif %}
+                {% if current_user.is_admin %} <a href="{{ url_for('admin.compliance_exam') }}" class="small text-decoration-none">管理题库</a>{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Compliance capabilities overview #}
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header py-2 bg-white"><strong class="small">已建设能力</strong></div>
+            <div class="card-body py-2 small">
+                <div class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-check-circle-fill text-success"></i> <span>需求流程管理（状态流转+进度跟踪）</span></div>
+                <div class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-check-circle-fill text-success"></i> <span>权限申请→审批→冻结</span></div>
+                <div class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-check-circle-fill text-success"></i> <span>风险登记→跟踪→解决→AAR复盘</span></div>
+                <div class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-check-circle-fill text-success"></i> <span>操作审计日志</span></div>
+                <div class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-check-circle-fill text-success"></i> <span>人员角色+隐私模式</span></div>
+                <div class="d-flex align-items-center gap-2"><i class="bi bi-check-circle-fill text-success"></i> <span>合规学习考试（题库+在线答题）</span></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header py-2 bg-white"><strong class="small">规划中</strong></div>
+            <div class="card-body py-2 small">
+                <div class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-circle text-muted"></i> <span>培训记录+到期提醒</span></div>
+                <div class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-circle text-muted"></i> <span>开源组件清单（SBOM）</span></div>
+                <div class="d-flex align-items-center gap-2"><i class="bi bi-circle text-muted"></i> <span>发布门禁（测试覆盖+审批链）</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Config modal #}
+{% set _is_mgr = current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR') %}
+<div class="modal fade" id="onboardConfigModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title"><i class="bi bi-list-check"></i> 必读必学必考</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-2">添加入职必须完成的事项。{% if not _is_mgr %}删除需管理层操作。{% endif %}</p>
+                <div id="cfgItemList" class="mb-2"></div>
+                <div class="d-flex gap-1">
+                    <input type="text" class="form-control form-control-sm" id="cfgAddInput" placeholder="标题|链接（链接可选）" style="font-size:.85em;" onkeydown="if(event.key==='Enter'){event.preventDefault();addCfgItem();}">
+                    <button class="btn btn-sm btn-outline-primary flex-shrink-0" onclick="addCfgItem()"><i class="bi bi-plus-lg"></i></button>
+                </div>
+            </div>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var cb = document.getElementById('onboardCheck');
+if (cb) cb.addEventListener('change', function() {
+    document.getElementById('onboardSignBtn').disabled = !cb.checked;
+});
+var _cfgData = {{ onboard_config | tojson }};
+var _canDelete = {{ 'true' if current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR') else 'false' }};
+
+function _renderCfgList() {
+    var list = document.getElementById('cfgItemList');
+    if (!list) return;
+    var items = _cfgData.items || [];
+    list.innerHTML = '';
+    items.forEach(function(item, i) {
+        var parts = item.split('|');
+        var title = parts[0];
+        var link = parts[1] || '';
+        var div = document.createElement('div');
+        div.className = 'd-flex align-items-center gap-2 mb-1 small';
+        div.innerHTML = '<i class="bi bi-check2-square text-muted"></i> '
+            + (link ? '<a href="' + link + '" target="_blank">' + title + '</a>' : '<span>' + title + '</span>')
+            + (_canDelete ? ' <button class="btn btn-sm p-0 border-0 text-muted" style="font-size:.7em;" onclick="removeCfgItem(' + i + ')"><i class="bi bi-x"></i></button>' : '');
+        list.appendChild(div);
+    });
+}
+function addCfgItem() {
+    var inp = document.getElementById('cfgAddInput');
+    var val = inp.value.trim();
+    if (!val) return;
+    if (!_cfgData.items) _cfgData.items = [];
+    _cfgData.items.push(val);
+    inp.value = '';
+    _saveCfg();
+    _renderCfgList();
+}
+function removeCfgItem(idx) {
+    if (!_canDelete) return;
+    _cfgData.items.splice(idx, 1);
+    _saveCfg();
+    _renderCfgList();
+}
+function _saveCfg() {
+    apiPost('/dashboard/compliance/onboard-config', _cfgData).then(function(d) {
+        if (d && d.ok) showToast('已保存', 'success');
+    });
+}
+var _cfgModal = document.getElementById('onboardConfigModal');
+if (_cfgModal) _cfgModal.addEventListener('show.bs.modal', _renderCfgList);
+
+function signOnboard() {
+    apiPost('/dashboard/compliance/onboard-sign', {}).then(function(d) {
+        if (d && d.ok) {
+            var card = document.getElementById('onboardCard');
+            card.style.transition = 'opacity .3s';
+            card.style.opacity = '0';
+            setTimeout(function() { card.remove(); }, 300);
+            showToast('入职引导已签署', 'success');
+        }
+    });
+}
+</script>
+{% endblock %}

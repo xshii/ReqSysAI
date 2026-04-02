@@ -49,7 +49,9 @@ def user_list():
     visible_group_names = [g.name for g in all_group_objs if not g.is_hidden]
 
     q = User.query
-    if filter_group == '_none':
+    if filter_group == '_all':
+        pass  # no filter
+    elif filter_group == '_none':
         q = q.filter(db.or_(User.group.is_(None), User.group == ''))
     elif filter_group == '_visible':
         q = q.filter(User.group.in_(visible_group_names))
@@ -996,6 +998,31 @@ def talk_template_save():
     SiteSetting.set('emotion_talk_template', tpl)
     flash('1v1 谈话模版已保存', 'success')
     return redirect(url_for('admin.site_settings'))
+
+
+# ---- 合规题库 ----
+
+@admin_bp.route('/compliance-exam')
+@admin_required
+def compliance_exam():
+    """合规题库管理。"""
+    import json as _json
+    from app.models.site_setting import SiteSetting
+    raw = SiteSetting.get('compliance_questions', '')
+    questions = _json.loads(raw) if raw else []
+    return render_template('admin/compliance_exam.html', questions=questions)
+
+
+@admin_bp.route('/compliance-exam/save', methods=['POST'])
+@admin_required
+def compliance_exam_save():
+    """保存题库（全量替换）。"""
+    import json as _json
+    from app.models.site_setting import SiteSetting
+    data = request.get_json() or {}
+    questions = data.get('questions', [])
+    SiteSetting.set('compliance_questions', _json.dumps(questions, ensure_ascii=False))
+    return jsonify(ok=True)
 
 
 @admin_bp.route('/audit-logs')
