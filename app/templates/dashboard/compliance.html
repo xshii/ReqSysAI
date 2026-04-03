@@ -27,18 +27,26 @@
                         <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.75em;" onclick="document.getElementById('onboardDetail').classList.add('d-none')"><i class="bi bi-x"></i></button>
                     </div>
                 </div>
-                <div class="small mb-3" style="line-height:2;">
-                    <div><i class="bi bi-shield-exclamation text-danger"></i> <strong>禁止</strong>将公司代码、文档、数据上传到<strong>外部AI工具</strong>（ChatGPT/Claude/文心等公共版）</div>
-                    <div><i class="bi bi-shield-exclamation text-danger"></i> <strong>禁止</strong>将内部信息发到个人邮箱、网盘、社交平台</div>
-                    <div><i class="bi bi-shield-exclamation text-danger"></i> <strong>禁止</strong>在代码中硬编码密码、token、密钥</div>
-                    <div><i class="bi bi-info-circle text-primary"></i> 离开工位<strong>必须锁屏</strong>（Win+L / Ctrl+Cmd+Q）</div>
-                    <div><i class="bi bi-info-circle text-primary"></i> 前往<a href="{{ url_for('auth.profile') }}">个人设置</a>完善信息（主管、领域、邮箱）</div>
-                    <div><i class="bi bi-info-circle text-primary"></i> 代码仓/服务器权限需通过下方入口<strong>申请</strong>，遵循最小权限原则</div>
+                <div class="small mb-3">
+                    {% set rules = [
+                        ('danger', '禁止', '将公司代码、文档、数据上传到<strong>外部AI工具</strong>（ChatGPT/Claude/文心等公共版）'),
+                        ('danger', '禁止', '将内部信息发到个人邮箱、网盘、社交平台'),
+                        ('danger', '禁止', '在代码中硬编码密码、token、密钥'),
+                        ('primary', '须知', '离开工位<strong>必须锁屏</strong>（Win+L / Ctrl+Cmd+Q）'),
+                        ('primary', '须知', '前往<a href="' ~ url_for('auth.profile') ~ '">个人设置</a>完善信息（主管、领域、邮箱）'),
+                        ('primary', '须知', '代码仓/服务器权限需通过下方入口<strong>申请</strong>，遵循最小权限原则'),
+                    ] %}
+                    {% for color, tag, text in rules %}
+                    <div class="form-check mb-2">
+                        <input class="form-check-input onboard-rule-check" type="checkbox" onchange="checkAllRules()">
+                        <label class="form-check-label"><i class="bi bi-{{ 'shield-exclamation' if color == 'danger' else 'info-circle' }} text-{{ color }}"></i> <strong>{{ tag }}</strong> {{ text }}</label>
+                    </div>
+                    {% endfor %}
                 </div>
                 {% if onboard_config.get('items') %}
                 <div class="small mb-3">
                     <div class="fw-bold mb-1"><i class="bi bi-list-check"></i> 必读必学必考</div>
-                    {% for item in onboard_config.items %}
+                    {% for item in onboard_config.get('items', []) %}
                     {% set parts = item.split('|') %}
                     <div class="form-check mb-1">
                         <input class="form-check-input onboard-item-check" type="checkbox">
@@ -48,8 +56,51 @@
                 </div>
                 {% endif %}
                 <div class="d-flex align-items-center gap-2">
-                    <label class="small"><input type="checkbox" class="form-check-input me-1" id="onboardCheck"> 我已阅读并了解以上内容</label>
+                    <span class="small text-muted" id="onboardHint">请逐条确认已读后签署</span>
                     <button class="btn btn-sm btn-primary" id="onboardSignBtn" disabled onclick="signOnboard()">确认签署</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {# 考勤诚信承诺 #}
+    {% if not attendance_signed %}
+    <div class="col-md-4 col-lg-3" id="attendCard">
+        <div class="card h-100 border-warning border-opacity-50 shadow-sm" style="cursor:pointer;transition:all .15s;" onclick="var el=document.getElementById('attendDetail');if(el)el.classList.toggle('d-none');" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-clock-history text-warning" style="font-size:2em;"></i>
+                <div class="fw-bold mt-2">考勤诚信承诺</div>
+                <div class="text-muted small mt-1">虚假考勤零容忍</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 d-none" id="attendDetail">
+        <div class="card border-warning border-opacity-25 shadow-sm">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-warning mb-0"><i class="bi bi-clock-history"></i> 考勤诚信承诺</h6>
+                    <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.75em;" onclick="document.getElementById('attendDetail').classList.add('d-none')"><i class="bi bi-x"></i></button>
+                </div>
+                <div class="small mb-3">
+                    {% set att_rules = [
+                        ('danger', '严禁', '委托他人代为打卡或代他人打卡'),
+                        ('danger', '严禁', '利用技术手段伪造定位、篡改打卡记录'),
+                        ('danger', '严禁', '打卡后未实际到岗或提前离岗未打卡'),
+                        ('danger', '严禁', '虚报加班时长或伪造加班事由'),
+                        ('warning', '须知', '考勤异常需在公司考勤系统及时申报说明'),
+                        ('warning', '须知', '虚假考勤一经查实，按公司制度严肃处理'),
+                    ] %}
+                    {% for color, tag, text in att_rules %}
+                    <div class="form-check mb-2">
+                        <input class="form-check-input attend-rule-check" type="checkbox" onchange="checkAttendRules()">
+                        <label class="form-check-label"><i class="bi bi-{{ 'shield-exclamation' if color == 'danger' else 'exclamation-triangle' }} text-{{ color }}"></i> <strong>{{ tag }}</strong> {{ text }}</label>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="small text-muted" id="attendHint">请逐条确认已读后签署</span>
+                    <button class="btn btn-sm btn-warning" id="attendSignBtn" disabled onclick="signAttendance()">确认签署</button>
                 </div>
             </div>
         </div>
@@ -62,8 +113,6 @@
         ('bi-hdd-rack', '我要申请服务器权限', '开发/测试/生产服务器权限', 'warning', true),
         ('bi-rocket-takeoff', '我要投入项目', '加入项目、开通项目相关权限', 'primary', true),
         ('bi-box-arrow-right', '我要退出项目', '工作交接、权限回收', 'secondary', true),
-        ('bi-shield-lock', '我要申请VPN', 'VPN远程接入权限', 'info', true),
-        ('bi-tools', '我要申请工具/License', 'EDA/IDE/测试工具等', 'success', true),
         ('bi-exclamation-triangle', '我要报告安全事件', '发现安全隐患或异常情况', 'danger', true),
     ] %}
     {% for icon, title, desc, color, show in actions %}
@@ -182,10 +231,21 @@
 
 {% block extra_js %}
 <script>
-var cb = document.getElementById('onboardCheck');
-if (cb) cb.addEventListener('change', function() {
-    document.getElementById('onboardSignBtn').disabled = !cb.checked;
-});
+function checkAllRules() {
+    var all = document.querySelectorAll('.onboard-rule-check');
+    var checked = document.querySelectorAll('.onboard-rule-check:checked');
+    var btn = document.getElementById('onboardSignBtn');
+    var hint = document.getElementById('onboardHint');
+    if (all.length && checked.length === all.length) {
+        btn.disabled = false;
+        hint.textContent = '全部确认，可以签署';
+        hint.className = 'small text-success';
+    } else {
+        btn.disabled = true;
+        hint.textContent = '还有 ' + (all.length - checked.length) + ' 条未确认';
+        hint.className = 'small text-muted';
+    }
+}
 var _cfgData = {{ onboard_config | tojson }};
 var _canDelete = {{ 'true' if current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR') else 'false' }};
 
@@ -230,13 +290,48 @@ function _saveCfg() {
 var _cfgModal = document.getElementById('onboardConfigModal');
 if (_cfgModal) _cfgModal.addEventListener('show.bs.modal', _renderCfgList);
 
+function checkAttendRules() {
+    var all = document.querySelectorAll('.attend-rule-check');
+    var checked = document.querySelectorAll('.attend-rule-check:checked');
+    var btn = document.getElementById('attendSignBtn');
+    var hint = document.getElementById('attendHint');
+    if (all.length && checked.length === all.length) {
+        btn.disabled = false;
+        hint.textContent = '全部确认，可以签署';
+        hint.className = 'small text-success';
+    } else {
+        btn.disabled = true;
+        hint.textContent = '还有 ' + (all.length - checked.length) + ' 条未确认';
+        hint.className = 'small text-muted';
+    }
+}
+function signAttendance() {
+    apiPost('/dashboard/compliance/attendance-sign', {}).then(function(d) {
+        if (d && d.ok) {
+            var card = document.getElementById('attendCard');
+            var detail = document.getElementById('attendDetail');
+            [card, detail].forEach(function(el) {
+                if (!el) return;
+                el.style.transition = 'opacity .3s';
+                el.style.opacity = '0';
+                setTimeout(function() { el.remove(); }, 300);
+            });
+            showToast('考勤诚信承诺已签署', 'success');
+        }
+    });
+}
+
 function signOnboard() {
     apiPost('/dashboard/compliance/onboard-sign', {}).then(function(d) {
         if (d && d.ok) {
             var card = document.getElementById('onboardCard');
-            card.style.transition = 'opacity .3s';
-            card.style.opacity = '0';
-            setTimeout(function() { card.remove(); }, 300);
+            var detail = document.getElementById('onboardDetail');
+            [card, detail].forEach(function(el) {
+                if (!el) return;
+                el.style.transition = 'opacity .3s';
+                el.style.opacity = '0';
+                setTimeout(function() { el.remove(); }, 300);
+            });
             showToast('入职引导已签署', 'success');
         }
     });
