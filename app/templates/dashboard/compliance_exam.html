@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block title %}合规考试 - {{ site_name }}{% endblock %}
 
+{% block breadcrumb %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb small mb-2">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.compliance') }}">合规专区</a></li>
+    <li class="breadcrumb-item active">合规考试</li>
+</ol></nav>
+{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h4 class="mb-0"><i class="bi bi-journal-check"></i> 合规考试</h4>

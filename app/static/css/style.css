@@ -232,6 +232,16 @@ body {
     margin-bottom: 0;
     margin-top: 4px;
 }
+/* Print styles */
+@media print {
+    .navbar, .navbar-trigger, .sidebar, .sidebar-toggle, .modal, .toast,
+    #tourOverlay, .btn, button, .dropdown { display: none !important; }
+    .main-content { margin-left: 0 !important; width: 100% !important; }
+    #wrapper { margin-top: 0 !important; }
+    .card { break-inside: avoid; box-shadow: none !important; border: 1px solid #ddd !important; }
+    a[href]:after { content: none !important; }
+}
+
 /* Todo list performance: skip layout/style recalc for collapsed sections */
 .todo-list-for-req { contain: layout style; }
 .todo-list-for-req.collapsing { transition: none !important; }

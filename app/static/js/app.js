@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ---- Global Toast utility ----
-var _toastEl = null;
+var _toastEl = null, _toastTimer = null;
 function showToast(msg, type) {
     type = type || 'info';
     if (!_toastEl) {
@@ -75,15 +75,18 @@ function showToast(msg, type) {
         _toastEl.style.zIndex = '9999';
         _toastEl.innerHTML = '<div class="toast align-items-center border-0 show" role="alert">'
             + '<div class="d-flex"><div class="toast-body" id="_toastMsg"></div>'
-            + '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div></div>';
+            + '<button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="hideToast()"></button></div></div>';
         document.body.appendChild(_toastEl);
     }
     var toast = _toastEl.querySelector('.toast');
     toast.className = 'toast align-items-center border-0 show text-bg-' + type;
     document.getElementById('_toastMsg').textContent = msg;
     _toastEl.style.display = 'block';
-    setTimeout(function() { _toastEl.style.display = 'none'; }, 3000);
+    clearTimeout(_toastTimer);
+    var delay = (type === 'danger' || type === 'warning') ? 5000 : 3000;
+    _toastTimer = setTimeout(hideToast, delay);
 }
+function hideToast() { if (_toastEl) _toastEl.style.display = 'none'; }
 
 // ---- Image lightbox ----
 document.addEventListener('click', function(e) {
@@ -261,10 +264,39 @@ function apiPost(url, data) {
     }).then(function(r) {
         if (!r.ok) {
             console.error('API error:', r.status, url);
+            showToast('操作失败 (HTTP ' + r.status + ')', 'danger');
             return {ok: false, msg: 'HTTP ' + r.status};
         }
-        return r.json().catch(function() { return {ok: false, msg: '响应解析失败'}; });
+        return r.json().catch(function() {
+            showToast('响应解析失败', 'danger');
+            return {ok: false, msg: '响应解析失败'};
+        });
+    }).catch(function(err) {
+        console.error('Network error:', err);
+        showToast('网络连接失败，请检查网络', 'danger');
+        return {ok: false, msg: '网络错误'};
     });
+}
+
+// ---- Button loading helper (防重复点击) ----
+function btnLoading(btn, text) {
+    var orig = btn.innerHTML;
+    var origDisabled = btn.disabled;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> ' + (text || '处理中...');
+    return { stop: function() { btn.disabled = origDisabled; btn.innerHTML = orig; } };
+}
+
+// ---- Confirm action modal ----
+var _confirmCallback = null;
+function confirmAction(msg, callback) {
+    _confirmCallback = callback;
+    document.getElementById('confirmActionBody').innerHTML = msg;
+    new bootstrap.Modal(document.getElementById('confirmActionModal')).show();
+}
+function _doConfirmAction() {
+    bootstrap.Modal.getInstance(document.getElementById('confirmActionModal')).hide();
+    if (_confirmCallback) { _confirmCallback(); _confirmCallback = null; }
 }
 
 // ---- Email settings: load/save from DB instead of localStorage ----

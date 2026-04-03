@@ -1,0 +1,12 @@
+{#
+Usage: {% include "partials/empty_state.html" with context %}
+Required: empty_icon, empty_msg
+Optional: empty_action_url, empty_action_label
+#}
+<div class="text-center text-muted py-5">
+    <i class="bi {{ empty_icon | default('bi-inbox') }}" style="font-size:3em;"></i>
+    <div class="mt-2">{{ empty_msg | default('暂无数据') }}</div>
+    {% if empty_action_url %}
+    <a href="{{ empty_action_url }}" class="btn btn-sm btn-outline-primary mt-3">{{ empty_action_label | default('去添加') }}</a>
+    {% endif %}
+</div>

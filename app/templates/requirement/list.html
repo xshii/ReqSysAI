@@ -194,13 +194,8 @@
 {% endif %}
 
 {% else %}
-<div class="text-center text-muted py-5">
-    <i class="bi bi-inbox" style="font-size: 2rem;"></i>
-    <p class="mt-2">暂无需求</p>
-    <a href="{{ url_for('requirement.requirement_create', project_id=cur_project or '') }}" class="btn btn-primary">
-        <i class="bi bi-plus-lg"></i> 创建第一个需求
-    </a>
-</div>
+{% set empty_icon='bi-inbox', empty_msg='暂无需求', empty_action_url=url_for('requirement.requirement_create', project_id=cur_project or ''), empty_action_label='创建第一个需求' %}
+{% include "partials/empty_state.html" %}
 {% endif %}
 
 <!-- Batch Action Toolbar (floating) -->

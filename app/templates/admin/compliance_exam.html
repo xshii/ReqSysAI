@@ -39,9 +39,9 @@
 </div>
 
 {% if not questions %}
-<div class="text-center text-muted py-5" id="emptyHint">
-    <i class="bi bi-inbox" style="font-size:3em;"></i>
-    <div class="mt-2">暂无题目，点击"添加题目"开始录入</div>
+<div id="emptyHint">
+{% set empty_icon='bi-journal-check', empty_msg='暂无题目，点击"添加题目"开始录入' %}
+{% include "partials/empty_state.html" %}
 </div>
 {% endif %}
 

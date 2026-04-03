@@ -1,8 +1,14 @@
 {% extends "base.html" %}
 {% block title %}{{ meeting.title }} · {{ project.name }} - {{ site_name }}{% endblock %}
 
+{% block breadcrumb %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb small mb-2">
+    <li class="breadcrumb-item"><a href="{{ url_for('project.meeting_list', project_id=project.id) }}">会议纪要</a></li>
+    <li class="breadcrumb-item active">{{ meeting.title }}</li>
+</ol></nav>
+{% endblock %}
 {% block content %}
-<div class="mb-3">
+<div class="mb-3 d-none">
     <a href="{{ url_for('project.meeting_list', project_id=project.id) }}" class="text-decoration-none">
         <i class="bi bi-arrow-left"></i> 返回会议列表
     </a>
