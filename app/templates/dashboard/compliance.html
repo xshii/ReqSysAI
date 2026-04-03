@@ -7,23 +7,32 @@
 {# Self-service cards — top #}
 <h5 class="mb-3 text-muted">合规自助服务</h5>
 <div class="row g-3 mb-4">
-    {% if show_onboarding %}
-    <div class="col-md-4 col-lg-3" id="onboardCard">
-        <div class="card h-100 border-primary border-opacity-50 shadow-sm" style="cursor:pointer;transition:all .15s;" onclick="var el=document.getElementById('onboardDetail');if(el)el.classList.toggle('d-none');" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+    {# --- 宏：签署卡片 + 详情面板 --- #}
+    {% macro pledge_card(id, icon, title, subtitle, color, signed, detail_id) %}
+    <div class="col-md-4 col-lg-3" id="{{ id }}">
+        <div class="card h-100 {{ 'border-0' if signed else 'border-' ~ color ~ ' border-opacity-50' }} shadow-sm" style="cursor:pointer;transition:all .15s;" onclick="var el=document.getElementById('{{ detail_id }}');if(el)el.classList.toggle('d-none');" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
             <div class="card-body text-center py-4">
-                <i class="bi bi-backpack2 text-primary" style="font-size:2em;"></i>
-                <div class="fw-bold mt-2">我刚入职</div>
-                <div class="text-muted small mt-1">安全须知、必读必学必考</div>
+                <i class="bi {{ icon }} {{ 'text-success' if signed else 'text-' ~ color }}" style="font-size:2em;"></i>
+                <div class="fw-bold mt-2">{{ title }}</div>
+                {% if signed %}
+                <div class="text-success small mt-1"><i class="bi bi-check-circle-fill"></i> 已签署</div>
+                {% else %}
+                <div class="text-muted small mt-1">{{ subtitle }}</div>
+                {% endif %}
             </div>
         </div>
     </div>
+    {% endmacro %}
+
+    {# 入职须知 #}
+    {{ pledge_card('onboardCard', 'bi-backpack2', '入职须知', '安全须知、必读必学必考', 'primary', not show_onboarding, 'onboardDetail') }}
     <div class="col-12 d-none" id="onboardDetail">
         <div class="card border-primary border-opacity-25 shadow-sm">
             <div class="card-body py-3">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h6 class="fw-bold text-primary mb-0"><i class="bi bi-backpack2"></i> 入职须知</h6>
                     <div class="d-flex gap-1">
-                        <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.75em;" data-bs-toggle="modal" data-bs-target="#onboardConfigModal"><i class="bi bi-plus-lg"></i> 添加必读必学必考</button>
+                        {% if show_onboarding %}<button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.75em;" data-bs-toggle="modal" data-bs-target="#onboardConfigModal"><i class="bi bi-plus-lg"></i> 添加必读必学必考</button>{% endif %}
                         <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.75em;" onclick="document.getElementById('onboardDetail').classList.add('d-none')"><i class="bi bi-x"></i></button>
                     </div>
                 </div>
@@ -37,9 +46,9 @@
                         ('primary', '须知', '代码仓/服务器权限需通过下方入口<strong>申请</strong>，遵循最小权限原则'),
                     ] %}
                     {% for color, tag, text in rules %}
-                    <div class="form-check mb-2">
-                        <input class="form-check-input onboard-rule-check" type="checkbox" onchange="checkAllRules()">
-                        <label class="form-check-label"><i class="bi bi-{{ 'shield-exclamation' if color == 'danger' else 'info-circle' }} text-{{ color }}"></i> <strong>{{ tag }}</strong> {{ text }}</label>
+                    <div class="{{ 'form-check ' if show_onboarding else '' }}mb-2">
+                        {% if show_onboarding %}<input class="form-check-input onboard-rule-check" type="checkbox" onchange="checkAllRules()">{% endif %}
+                        <label class="{{ 'form-check-label' if show_onboarding else '' }}"><i class="bi bi-{{ 'shield-exclamation' if color == 'danger' else 'info-circle' }} text-{{ color }}"></i> <strong>{{ tag }}</strong> {{ text }}</label>
                     </div>
                     {% endfor %}
                 </div>
@@ -48,33 +57,32 @@
                     <div class="fw-bold mb-1"><i class="bi bi-list-check"></i> 必读必学必考</div>
                     {% for item in onboard_config.get('items', []) %}
                     {% set parts = item.split('|') %}
-                    <div class="form-check mb-1">
-                        <input class="form-check-input onboard-item-check" type="checkbox">
-                        <label class="form-check-label">{% if parts|length > 1 and parts[1] %}<a href="{{ parts[1] }}" target="_blank">{{ parts[0] }}</a>{% else %}{{ parts[0] }}{% endif %}</label>
+                    <div class="mb-1 small">
+                        {% if parts|length > 1 and parts[1] %}<a href="{{ parts[1] }}" target="_blank">{{ parts[0] }}</a>{% else %}{{ parts[0] }}{% endif %}
                     </div>
                     {% endfor %}
                 </div>
                 {% endif %}
+                {% if show_onboarding %}
                 <div class="d-flex align-items-center gap-2">
                     <span class="small text-muted" id="onboardHint">请逐条确认已读后签署</span>
                     <button class="btn btn-sm btn-primary" id="onboardSignBtn" disabled onclick="signOnboard()">确认签署</button>
                 </div>
+                {% endif %}
             </div>
         </div>
     </div>
-    {% endif %}
 
     {# 考勤诚信承诺 #}
-    {% if not attendance_signed %}
-    <div class="col-md-4 col-lg-3" id="attendCard">
-        <div class="card h-100 border-warning border-opacity-50 shadow-sm" style="cursor:pointer;transition:all .15s;" onclick="var el=document.getElementById('attendDetail');if(el)el.classList.toggle('d-none');" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-            <div class="card-body text-center py-4">
-                <i class="bi bi-clock-history text-warning" style="font-size:2em;"></i>
-                <div class="fw-bold mt-2">考勤诚信承诺</div>
-                <div class="text-muted small mt-1">虚假考勤零容忍</div>
-            </div>
-        </div>
-    </div>
+    {% set att_rules = [
+        ('danger', '严禁', '委托他人代为打卡或代他人打卡'),
+        ('danger', '严禁', '利用技术手段伪造定位、篡改打卡记录'),
+        ('danger', '严禁', '打卡后未实际到岗或提前离岗未打卡'),
+        ('danger', '严禁', '虚报加班时长或伪造加班事由'),
+        ('warning', '须知', '考勤异常需在公司考勤系统及时申报说明'),
+        ('warning', '须知', '虚假考勤一经查实，按公司制度严肃处理'),
+    ] %}
+    {{ pledge_card('attendCard', 'bi-clock-history', '考勤诚信承诺', '虚假考勤零容忍', 'warning', attendance_signed, 'attendDetail') }}
     <div class="col-12 d-none" id="attendDetail">
         <div class="card border-warning border-opacity-25 shadow-sm">
             <div class="card-body py-3">
@@ -83,41 +91,33 @@
                     <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.75em;" onclick="document.getElementById('attendDetail').classList.add('d-none')"><i class="bi bi-x"></i></button>
                 </div>
                 <div class="small mb-3">
-                    {% set att_rules = [
-                        ('danger', '严禁', '委托他人代为打卡或代他人打卡'),
-                        ('danger', '严禁', '利用技术手段伪造定位、篡改打卡记录'),
-                        ('danger', '严禁', '打卡后未实际到岗或提前离岗未打卡'),
-                        ('danger', '严禁', '虚报加班时长或伪造加班事由'),
-                        ('warning', '须知', '考勤异常需在公司考勤系统及时申报说明'),
-                        ('warning', '须知', '虚假考勤一经查实，按公司制度严肃处理'),
-                    ] %}
                     {% for color, tag, text in att_rules %}
-                    <div class="form-check mb-2">
-                        <input class="form-check-input attend-rule-check" type="checkbox" onchange="checkAttendRules()">
-                        <label class="form-check-label"><i class="bi bi-{{ 'shield-exclamation' if color == 'danger' else 'exclamation-triangle' }} text-{{ color }}"></i> <strong>{{ tag }}</strong> {{ text }}</label>
+                    <div class="{{ 'form-check ' if not attendance_signed else '' }}mb-2">
+                        {% if not attendance_signed %}<input class="form-check-input attend-rule-check" type="checkbox" onchange="checkAttendRules()">{% endif %}
+                        <label class="{{ 'form-check-label' if not attendance_signed else '' }}"><i class="bi bi-{{ 'shield-exclamation' if color == 'danger' else 'exclamation-triangle' }} text-{{ color }}"></i> <strong>{{ tag }}</strong> {{ text }}</label>
                     </div>
                     {% endfor %}
                 </div>
+                {% if not attendance_signed %}
                 <div class="d-flex align-items-center gap-2">
                     <span class="small text-muted" id="attendHint">请逐条确认已读后签署</span>
                     <button class="btn btn-sm btn-warning" id="attendSignBtn" disabled onclick="signAttendance()">确认签署</button>
                 </div>
+                {% endif %}
             </div>
         </div>
     </div>
-    {% endif %}
 
     {# 考试诚信承诺 #}
-    {% if not exam_integrity_signed %}
-    <div class="col-md-4 col-lg-3" id="examIntegrityCard">
-        <div class="card h-100 border-info border-opacity-50 shadow-sm" style="cursor:pointer;transition:all .15s;" onclick="var el=document.getElementById('examIntegrityDetail');if(el)el.classList.toggle('d-none');" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-            <div class="card-body text-center py-4">
-                <i class="bi bi-mortarboard text-info" style="font-size:2em;"></i>
-                <div class="fw-bold mt-2">考试诚信承诺</div>
-                <div class="text-muted small mt-1">可信考试零作弊</div>
-            </div>
-        </div>
-    </div>
+    {% set exam_rules = [
+        ('danger', '严禁', '委托他人代考或替他人参加考试'),
+        ('danger', '严禁', '考试过程中查阅资料、搜索引擎、AI工具等（闭卷考试）'),
+        ('danger', '严禁', '以任何方式向他人透露或传播考试题目及答案'),
+        ('danger', '严禁', '利用技术手段窃取、篡改考试数据或成绩'),
+        ('warning', '须知', '考试成绩与个人技术能力评定挂钩，请认真对待'),
+        ('warning', '须知', '考试作弊一经查实，成绩作废并按公司制度严肃处理'),
+    ] %}
+    {{ pledge_card('examIntegrityCard', 'bi-mortarboard', '考试诚信承诺', '可信考试零作弊', 'info', exam_integrity_signed, 'examIntegrityDetail') }}
     <div class="col-12 d-none" id="examIntegrityDetail">
         <div class="card border-info border-opacity-25 shadow-sm">
             <div class="card-body py-3">
@@ -126,29 +126,22 @@
                     <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.75em;" onclick="document.getElementById('examIntegrityDetail').classList.add('d-none')"><i class="bi bi-x"></i></button>
                 </div>
                 <div class="small mb-3">
-                    {% set exam_rules = [
-                        ('danger', '严禁', '委托他人代考或替他人参加考试'),
-                        ('danger', '严禁', '考试过程中查阅资料、搜索引擎、AI工具等（闭卷考试）'),
-                        ('danger', '严禁', '以任何方式向他人透露或传播考试题目及答案'),
-                        ('danger', '严禁', '利用技术手段窃取、篡改考试数据或成绩'),
-                        ('warning', '须知', '考试成绩与个人技术能力评定挂钩，请认真对待'),
-                        ('warning', '须知', '考试作弊一经查实，成绩作废并按公司制度严肃处理'),
-                    ] %}
                     {% for color, tag, text in exam_rules %}
-                    <div class="form-check mb-2">
-                        <input class="form-check-input exam-integrity-check" type="checkbox" onchange="checkExamIntegrityRules()">
-                        <label class="form-check-label"><i class="bi bi-{{ 'shield-exclamation' if color == 'danger' else 'exclamation-triangle' }} text-{{ color }}"></i> <strong>{{ tag }}</strong> {{ text }}</label>
+                    <div class="{{ 'form-check ' if not exam_integrity_signed else '' }}mb-2">
+                        {% if not exam_integrity_signed %}<input class="form-check-input exam-integrity-check" type="checkbox" onchange="checkExamIntegrityRules()">{% endif %}
+                        <label class="{{ 'form-check-label' if not exam_integrity_signed else '' }}"><i class="bi bi-{{ 'shield-exclamation' if color == 'danger' else 'exclamation-triangle' }} text-{{ color }}"></i> <strong>{{ tag }}</strong> {{ text }}</label>
                     </div>
                     {% endfor %}
                 </div>
+                {% if not exam_integrity_signed %}
                 <div class="d-flex align-items-center gap-2">
                     <span class="small text-muted" id="examIntegrityHint">请逐条确认已读后签署</span>
                     <button class="btn btn-sm btn-info text-white" id="examIntegritySignBtn" disabled onclick="signExamIntegrity()">确认签署</button>
                 </div>
+                {% endif %}
             </div>
         </div>
     </div>
-    {% endif %}
 
     {% set actions = [
         ('bi-laptop', '我要申请便携', '笔记本/显示器等设备申请', 'info', true),
@@ -348,19 +341,23 @@ function checkAttendRules() {
         hint.className = 'small text-muted';
     }
 }
+function _markSigned(cardId, detailId, icon, title, toast) {
+    var card = document.getElementById(cardId);
+    var detail = document.getElementById(detailId);
+    if (detail) { detail.style.transition='opacity .3s'; detail.style.opacity='0'; setTimeout(function(){detail.remove();},300); }
+    if (card) {
+        card.innerHTML = '<div class="card h-100 border-0 shadow-sm"><div class="card-body text-center py-4">'
+            + '<i class="bi ' + icon + ' text-success" style="font-size:2em;"></i>'
+            + '<div class="fw-bold mt-2">' + title + '</div>'
+            + '<div class="text-success small mt-1"><i class="bi bi-check-circle-fill"></i> 已签署</div>'
+            + '</div></div>';
+    }
+    showToast(toast, 'success');
+}
+
 function signAttendance() {
     apiPost('/dashboard/compliance/attendance-sign', {}).then(function(d) {
-        if (d && d.ok) {
-            var card = document.getElementById('attendCard');
-            var detail = document.getElementById('attendDetail');
-            [card, detail].forEach(function(el) {
-                if (!el) return;
-                el.style.transition = 'opacity .3s';
-                el.style.opacity = '0';
-                setTimeout(function() { el.remove(); }, 300);
-            });
-            showToast('考勤诚信承诺已签署', 'success');
-        }
+        if (d && d.ok) _markSigned('attendCard', 'attendDetail', 'bi-clock-history', '考勤诚信承诺', '考勤诚信承诺已签署');
     });
 }
 
@@ -381,32 +378,13 @@ function checkExamIntegrityRules() {
 }
 function signExamIntegrity() {
     apiPost('/dashboard/compliance/exam-integrity-sign', {}).then(function(d) {
-        if (d && d.ok) {
-            ['examIntegrityCard', 'examIntegrityDetail'].forEach(function(id) {
-                var el = document.getElementById(id);
-                if (!el) return;
-                el.style.transition = 'opacity .3s';
-                el.style.opacity = '0';
-                setTimeout(function() { el.remove(); }, 300);
-            });
-            showToast('考试诚信承诺已签署', 'success');
-        }
+        if (d && d.ok) _markSigned('examIntegrityCard', 'examIntegrityDetail', 'bi-mortarboard', '考试诚信承诺', '考试诚信承诺已签署');
     });
 }
 
 function signOnboard() {
     apiPost('/dashboard/compliance/onboard-sign', {}).then(function(d) {
-        if (d && d.ok) {
-            var card = document.getElementById('onboardCard');
-            var detail = document.getElementById('onboardDetail');
-            [card, detail].forEach(function(el) {
-                if (!el) return;
-                el.style.transition = 'opacity .3s';
-                el.style.opacity = '0';
-                setTimeout(function() { el.remove(); }, 300);
-            });
-            showToast('入职引导已签署', 'success');
-        }
+        if (d && d.ok) _markSigned('onboardCard', 'onboardDetail', 'bi-backpack2', '入职须知', '入职须知已签署');
     });
 }
 </script>
