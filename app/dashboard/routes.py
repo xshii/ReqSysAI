@@ -2674,13 +2674,19 @@ def compliance():
     _att_signed.discard('')
     attendance_signed = str(current_user.id) in _att_signed
 
+    # 考试诚信承诺
+    _exam_integrity = set(SiteSetting.get('exam_integrity_signed', '').split(','))
+    _exam_integrity.discard('')
+    exam_integrity_signed = str(current_user.id) in _exam_integrity
+
     return render_template('dashboard/compliance.html',
         audit_count=audit_count, open_risks=open_risks,
         overdue_risks=overdue_risks, pending_perms=pending_perms,
         show_onboarding=show_onboarding, show_offboarding=show_offboarding,
         onboard_config=onboard_config,
         exam_question_count=exam_question_count, exam_passed=exam_passed,
-        attendance_signed=attendance_signed)
+        attendance_signed=attendance_signed,
+        exam_integrity_signed=exam_integrity_signed)
 
 
 @dashboard_bp.route('/compliance/onboard-sign', methods=['POST'])
@@ -2706,6 +2712,19 @@ def compliance_attendance_sign():
     uids.discard('')
     uids.add(str(current_user.id))
     SiteSetting.set('attendance_signed_users', ','.join(sorted(uids)))
+    return jsonify(ok=True)
+
+
+@dashboard_bp.route('/compliance/exam-integrity-sign', methods=['POST'])
+@login_required
+def compliance_exam_integrity_sign():
+    """签署考试诚信承诺。"""
+    from app.models.site_setting import SiteSetting
+    raw = SiteSetting.get('exam_integrity_signed', '')
+    uids = set(raw.split(',')) if raw else set()
+    uids.discard('')
+    uids.add(str(current_user.id))
+    SiteSetting.set('exam_integrity_signed', ','.join(sorted(uids)))
     return jsonify(ok=True)
 
 

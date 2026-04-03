@@ -107,6 +107,49 @@
     </div>
     {% endif %}
 
+    {# 考试诚信承诺 #}
+    {% if not exam_integrity_signed %}
+    <div class="col-md-4 col-lg-3" id="examIntegrityCard">
+        <div class="card h-100 border-info border-opacity-50 shadow-sm" style="cursor:pointer;transition:all .15s;" onclick="var el=document.getElementById('examIntegrityDetail');if(el)el.classList.toggle('d-none');" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
+            <div class="card-body text-center py-4">
+                <i class="bi bi-mortarboard text-info" style="font-size:2em;"></i>
+                <div class="fw-bold mt-2">考试诚信承诺</div>
+                <div class="text-muted small mt-1">可信考试零作弊</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 d-none" id="examIntegrityDetail">
+        <div class="card border-info border-opacity-25 shadow-sm">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="fw-bold text-info mb-0"><i class="bi bi-mortarboard"></i> 考试诚信承诺</h6>
+                    <button class="btn btn-sm btn-outline-secondary py-0" style="font-size:.75em;" onclick="document.getElementById('examIntegrityDetail').classList.add('d-none')"><i class="bi bi-x"></i></button>
+                </div>
+                <div class="small mb-3">
+                    {% set exam_rules = [
+                        ('danger', '严禁', '委托他人代考或替他人参加考试'),
+                        ('danger', '严禁', '考试过程中查阅资料、搜索引擎、AI工具等（闭卷考试）'),
+                        ('danger', '严禁', '以任何方式向他人透露或传播考试题目及答案'),
+                        ('danger', '严禁', '利用技术手段窃取、篡改考试数据或成绩'),
+                        ('warning', '须知', '考试成绩与个人技术能力评定挂钩，请认真对待'),
+                        ('warning', '须知', '考试作弊一经查实，成绩作废并按公司制度严肃处理'),
+                    ] %}
+                    {% for color, tag, text in exam_rules %}
+                    <div class="form-check mb-2">
+                        <input class="form-check-input exam-integrity-check" type="checkbox" onchange="checkExamIntegrityRules()">
+                        <label class="form-check-label"><i class="bi bi-{{ 'shield-exclamation' if color == 'danger' else 'exclamation-triangle' }} text-{{ color }}"></i> <strong>{{ tag }}</strong> {{ text }}</label>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="small text-muted" id="examIntegrityHint">请逐条确认已读后签署</span>
+                    <button class="btn btn-sm btn-info text-white" id="examIntegritySignBtn" disabled onclick="signExamIntegrity()">确认签署</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     {% set actions = [
         ('bi-laptop', '我要申请便携', '笔记本/显示器等设备申请', 'info', true),
         ('bi-folder2-open', '我要申请代码仓权限', '代码仓库读写权限申请', 'success', true),
@@ -317,6 +360,36 @@ function signAttendance() {
                 setTimeout(function() { el.remove(); }, 300);
             });
             showToast('考勤诚信承诺已签署', 'success');
+        }
+    });
+}
+
+function checkExamIntegrityRules() {
+    var all = document.querySelectorAll('.exam-integrity-check');
+    var checked = document.querySelectorAll('.exam-integrity-check:checked');
+    var btn = document.getElementById('examIntegritySignBtn');
+    var hint = document.getElementById('examIntegrityHint');
+    if (all.length && checked.length === all.length) {
+        btn.disabled = false;
+        hint.textContent = '全部确认，可以签署';
+        hint.className = 'small text-success';
+    } else {
+        btn.disabled = true;
+        hint.textContent = '还有 ' + (all.length - checked.length) + ' 条未确认';
+        hint.className = 'small text-muted';
+    }
+}
+function signExamIntegrity() {
+    apiPost('/dashboard/compliance/exam-integrity-sign', {}).then(function(d) {
+        if (d && d.ok) {
+            ['examIntegrityCard', 'examIntegrityDetail'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (!el) return;
+                el.style.transition = 'opacity .3s';
+                el.style.opacity = '0';
+                setTimeout(function() { el.remove(); }, 300);
+            });
+            showToast('考试诚信承诺已签署', 'success');
         }
     });
 }
