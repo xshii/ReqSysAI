@@ -867,7 +867,11 @@ def api_search():
     q = request.args.get('q', '').strip()
     if not q:
         return jsonify(ok=True, results=[])
+    is_mgr_view = request.cookies.get('mgr_view') == '1'
     results = search(q, current_user_id=current_user.id, is_manager=current_user.is_team_manager)
+    # 非管理视图下过滤掉用户类型结果（避免意外进入后台）
+    if not is_mgr_view:
+        results = [r for r in results if r['type'] != 'user']
     # Add URLs for each result
     url_map = {
         'requirement': lambda r: url_for('requirement.requirement_detail', req_id=int(r['id'])),

@@ -9,7 +9,7 @@ def admin_required(f):
     @login_required
     def decorated_function(*args, **kwargs):
         if not current_user.is_admin:
-            abort(403)
+            abort(404)  # 假装页面不存在，不暴露后台
         return f(*args, **kwargs)
     return decorated_function
 

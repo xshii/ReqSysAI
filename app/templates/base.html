@@ -20,14 +20,9 @@
                 <i class="bi bi-kanban"></i> {{ site_name }}
             </a>
             <div class="d-flex align-items-center gap-2">
-                <div class="position-relative" id="navSearchWrap" style="width:220px;">
-                    <input type="text" id="navSearchInput" class="form-control form-control-sm" placeholder="搜索... (/ 快捷键)" autocomplete="off"
-                           style="font-size:.82em;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;padding-right:28px;"
-                           onfocus="showSearchDropdown()" oninput="onNavSearchInput()">
-                    <i class="bi bi-search position-absolute" style="right:8px;top:50%;transform:translateY(-50%);color:rgba(255,255,255,.5);font-size:.8em;pointer-events:none;"></i>
-                    <div id="navSearchDropdown" class="position-absolute bg-white border rounded shadow-sm mt-1" style="display:none;width:360px;max-height:50vh;overflow-y:auto;z-index:9999;right:0;font-size:.85em;">
-                    </div>
-                </div>
+                <button type="button" class="btn btn-sm btn-outline-light" onclick="openSpotlight()" style="font-size:.8em;opacity:.7;" title="搜索 (/)">
+                    <i class="bi bi-search"></i>
+                </button>
                 <button type="button" class="btn btn-sm btn-outline-light" id="btnCopyRequest" data-tip="复制我的诉求页链接" data-tip-pos="bottom" style="font-size:.8em;" data-url="{{ url_for('public.request_page', eid=current_user.employee_id, _external=True) }}">
                     <i class="bi bi-link-45deg"></i>
                 </button>
@@ -64,6 +59,7 @@
 
     <div class="d-flex" id="wrapper">
         <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()" title="折叠/展开侧边栏"><i class="bi bi-chevron-left" id="sidebarToggleIcon"></i></button>
+        <div class="sidebar-edge-trigger" id="sidebarEdge"></div>
         <!-- Sidebar -->
         <nav class="sidebar bg-light border-end" id="sidebar">
             <div class="sidebar-content">
@@ -336,6 +332,26 @@
     </div>
 
     <!-- Image Lightbox -->
+    {# Spotlight search #}
+    <div id="spotlightOverlay" style="display:none;position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,.4);" onclick="if(event.target===this)closeSpotlight();">
+        <div style="position:absolute;top:20%;left:50%;transform:translateX(-50%);width:min(540px,90vw);">
+            <div class="bg-white rounded-3 shadow-lg overflow-hidden">
+                <div class="p-3 pb-0">
+                    <div class="position-relative" id="navSearchWrap">
+                        <i class="bi bi-search position-absolute" style="left:12px;top:50%;transform:translateY(-50%);color:#999;font-size:1.1em;pointer-events:none;"></i>
+                        <input type="text" id="navSearchInput" class="form-control form-control-lg border-0" placeholder="搜索需求、人员、项目..." autocomplete="off"
+                               style="padding-left:40px;font-size:1em;box-shadow:none;" onfocus="showSearchDropdown()" oninput="onNavSearchInput()">
+                    </div>
+                </div>
+                <div id="navSearchDropdown" style="max-height:50vh;overflow-y:auto;font-size:.9em;"></div>
+                <div class="px-3 py-2 border-top bg-light d-flex justify-content-between" style="font-size:.75em;color:#999;">
+                    <span><kbd>/</kbd> 或 <kbd>⌘K</kbd> 打开</span>
+                    <span><kbd>Esc</kbd> 关闭</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {# Confirm action modal #}
     <div class="modal fade" id="confirmActionModal" tabindex="-1">
         <div class="modal-dialog modal-sm modal-dialog-centered">
@@ -369,6 +385,28 @@
         var dropdown = document.getElementById('navSearchDropdown');
         var timer = null, sel = -1, items = [];
 
+        // 导航快捷入口
+        var _navLinks = [
+            {title: '首页', icon: 'bi-house', url: '{{ url_for("main.index") }}', keywords: '首页 home 主页'},
+            {title: '需求列表', icon: 'bi-list-task', url: '{{ url_for("requirement.requirement_list") }}', keywords: '需求 requirement'},
+            {title: '需求看板', icon: 'bi-kanban', url: '{{ url_for("requirement.requirement_board") }}', keywords: '看板 kanban board'},
+            {title: '激励专区', icon: 'bi-star', url: '{{ url_for("incentive.index") }}', keywords: '激励 incentive 奖励'},
+            {title: '合规专区', icon: 'bi-shield-check', url: '{{ url_for("dashboard.compliance") }}', keywords: '合规 compliance'},
+            {title: '我的一天', icon: 'bi-graph-up', url: '{{ url_for("dashboard.my_day") }}', keywords: '统计 我的一天 dashboard'},
+            {title: '周报', icon: 'bi-journal-text', url: '{{ url_for("dashboard.weekly_report") }}', keywords: '周报 weekly report'},
+            {title: '个人设置', icon: 'bi-gear', url: '{{ url_for("auth.profile") }}', keywords: '设置 profile 个人'},
+            {title: '团队Todo', icon: 'bi-people', url: '{{ url_for("todo.team") }}', keywords: '团队 todo team'},
+            {% if current_user.is_admin %}{title: '后台管理', icon: 'bi-sliders', url: '{{ url_for("admin.user_list") }}', keywords: '后台 admin 管理 用户', mgr: true},{% endif %}
+        ];
+        function _matchNav(q) {
+            q = q.toLowerCase();
+            var isMgrView = document.cookie.indexOf('mgr_view=1') !== -1;
+            return _navLinks.filter(function(n) {
+                if (n.mgr && !isMgrView) return false;
+                return n.title.toLowerCase().includes(q) || n.keywords.toLowerCase().includes(q);
+            });
+        }
+
         function getHistory() {
             try { return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]'); } catch(e) { return []; }
         }
@@ -396,6 +434,17 @@
             dropdown.innerHTML = html;
         }
 
+        function _renderNavHits(q) {
+            var hits = _matchNav(q);
+            if (!hits.length) return '';
+            var html = '<div class="text-muted small fw-bold px-3 py-1 bg-light">快速跳转</div>';
+            hits.forEach(function(n) {
+                html += '<a href="' + n.url + '" class="d-flex align-items-center gap-2 px-3 py-2 text-decoration-none text-dark search-item" data-url="' + n.url + '" style="cursor:pointer;" onmouseover="this.style.background=\'#f0f0f0\'" onmouseout="this.style.background=\'\'">'
+                    + '<i class="bi ' + n.icon + ' text-primary"></i> <span>' + n.title + '</span></a>';
+            });
+            return html;
+        }
+
         window.showSearchDropdown = function() {
             var q = input.value.trim();
             if (!q) { renderHistory(); }
@@ -406,14 +455,20 @@
             clearTimeout(timer);
             var q = input.value.trim();
             if (!q) { renderHistory(); dropdown.style.display = ''; return; }
+            // 立即显示导航匹配
+            var navHtml = _renderNavHits(q);
+            if (navHtml) { dropdown.innerHTML = navHtml + '<div class="text-center py-2"><span class="spinner-border spinner-border-sm"></span></div>'; dropdown.style.display = ''; }
             timer = setTimeout(doSearch, 300);
         };
 
-        // Keyboard: / to focus
+        // Keyboard: / or Cmd+K to open spotlight
         document.addEventListener('keydown', function(e) {
             if ((e.metaKey && e.key === 'k') || (e.key === '/' && !e.target.closest('input,textarea,select,[contenteditable]'))) {
                 e.preventDefault();
-                input.focus();
+                openSpotlight();
+            }
+            if (e.key === 'Escape' && document.getElementById('spotlightOverlay').style.display !== 'none') {
+                closeSpotlight();
             }
         });
 
@@ -430,29 +485,30 @@
         function doSearch() {
             var q = input.value.trim();
             if (!q) return;
+            var navHtml = _renderNavHits(q);
             dropdown.style.display = '';
-            dropdown.innerHTML = '<div class="text-center py-2"><span class="spinner-border spinner-border-sm"></span></div>';
+            dropdown.innerHTML = navHtml + '<div class="text-center py-2"><span class="spinner-border spinner-border-sm"></span></div>';
             saveHistory(q);
             fetch('/api/search?q=' + encodeURIComponent(q))
                 .then(function(r) { return r.json(); })
                 .then(function(d) {
                     if (!d.ok || !d.results.length) {
-                        dropdown.innerHTML = '<div class="text-muted small text-center py-3">无结果</div>';
-                        items = []; sel = -1; return;
+                        dropdown.innerHTML = navHtml || '<div class="text-muted small text-center py-3">无结果</div>';
+                        items = dropdown.querySelectorAll('.search-item'); sel = -1; return;
                     }
-                    var html = '';
+                    var html = navHtml;
                     var groups = {};
                     d.results.forEach(function(r) {
                         if (!groups[r.type_label]) groups[r.type_label] = [];
                         groups[r.type_label].push(r);
                     });
                     for (var g in groups) {
-                        html += '<div class="text-muted small fw-bold px-2 py-1 bg-light">' + g + '</div>';
+                        html += '<div class="text-muted small fw-bold px-3 py-1 bg-light">' + g + '</div>';
                         groups[g].forEach(function(r) {
-                            html += '<a href="' + r.url + '" class="d-block px-2 py-1 text-decoration-none text-dark search-item" data-url="' + r.url + '">'
-                                + '<div class="small">' + r.title + (r.extra ? ' <span class="text-muted">' + r.extra + '</span>' : '') + '</div>'
+                            html += '<a href="' + r.url + '" class="d-flex align-items-center gap-2 px-3 py-2 text-decoration-none text-dark search-item" data-url="' + r.url + '" onmouseover="this.style.background=\'#f0f0f0\'" onmouseout="this.style.background=\'\'">'
+                                + '<div><div class="small">' + r.title + (r.extra ? ' <span class="text-muted">' + r.extra + '</span>' : '') + '</div>'
                                 + (r.snippet ? '<div class="text-muted" style="font-size:.75em;">' + r.snippet + '</div>' : '')
-                                + '</a>';
+                                + '</div></a>';
                         });
                     }
                     dropdown.innerHTML = html;
@@ -470,7 +526,7 @@
 
         // Close dropdown on click outside
         document.addEventListener('click', function(e) {
-            if (!e.target.closest('#navSearchWrap')) {
+            if (!e.target.closest('#navSearchWrap') && !e.target.closest('#spotlightOverlay')) {
                 dropdown.style.display = 'none';
             }
         });
@@ -492,6 +548,17 @@
             }
         });
     })();
+
+    function openSpotlight() {
+        var overlay = document.getElementById('spotlightOverlay');
+        overlay.style.display = 'block';
+        setTimeout(function() { document.getElementById('navSearchInput').focus(); }, 50);
+    }
+    function closeSpotlight() {
+        document.getElementById('spotlightOverlay').style.display = 'none';
+        document.getElementById('navSearchInput').value = '';
+        document.getElementById('navSearchDropdown').innerHTML = '';
+    }
 
     /* --- Add Personnel Modal --- */
     // Versioned tour & changelog
@@ -644,10 +711,54 @@
                 sidebar.style.paddingBottom = '';
             }, 300);
         }
+        var edge = document.getElementById('sidebarEdge');
         btn.addEventListener('mouseenter', showTemp);
         btn.addEventListener('mouseleave', hideTemp);
+        edge.addEventListener('mouseenter', showTemp);
+        edge.addEventListener('mouseleave', hideTemp);
         sidebar.addEventListener('mouseenter', function() { if (!_sidebarPinned) { clearTimeout(hideTimer); showTemp(); } });
         sidebar.addEventListener('mouseleave', hideTemp);
+    })();
+
+    // ---- 喝水提醒 ----
+    (function() {
+        if (localStorage.getItem('water_reminder') !== '1') return;
+        var INTERVAL = 60 * 60 * 1000; // 1小时
+        var LOCK_SEC = 10;
+        var _waterOverlay = null;
+
+        function showWaterReminder() {
+            if (document.getElementById('focusOverlay') && document.getElementById('focusOverlay').style.display !== 'none') return; // 番茄钟进行中不打断
+            if (_waterOverlay) return;
+            _waterOverlay = document.createElement('div');
+            _waterOverlay.style.cssText = 'position:fixed;inset:0;z-index:99998;background:linear-gradient(135deg,#e0f7fa,#b2ebf2);display:flex;flex-direction:column;align-items:center;justify-content:center;';
+            _waterOverlay.innerHTML = '<div style="font-size:5em;">💧</div>'
+                + '<div style="font-size:1.8em;font-weight:700;color:#00695c;margin-top:.3em;">该喝水了！</div>'
+                + '<div style="font-size:1em;color:#00897b;margin-top:.5em;">久坐伤身，起来走走，喝杯水吧</div>'
+                + '<button id="waterDismiss" style="margin-top:2em;padding:.6em 2.5em;border-radius:2em;border:2px solid #00897b;background:none;color:#00897b;font-size:1.1em;cursor:not-allowed;opacity:.4;" disabled>知道了 (<span id="waterCountdown">' + LOCK_SEC + '</span>)</button>';
+            document.body.appendChild(_waterOverlay);
+
+            var sec = LOCK_SEC;
+            var cd = document.getElementById('waterCountdown');
+            var btn = document.getElementById('waterDismiss');
+            var iv = setInterval(function() {
+                sec--;
+                cd.textContent = sec;
+                if (sec <= 0) {
+                    clearInterval(iv);
+                    btn.disabled = false;
+                    btn.style.cursor = 'pointer';
+                    btn.style.opacity = '1';
+                    btn.textContent = '知道了';
+                    btn.onclick = function() {
+                        _waterOverlay.remove();
+                        _waterOverlay = null;
+                    };
+                }
+            }, 1000);
+        }
+
+        setInterval(showWaterReminder, INTERVAL);
     })();
 
     // Copy request page link (compatible with HTTP)
