@@ -109,18 +109,22 @@
     <datalist id="mgrOptions">
         {% for m in mgr_options %}<option value="{{ m }}">{% endfor %}
     </datalist>
+    <datalist id="groupOptions">
+        {% for g in all_groups %}<option value="{{ g }}">{% endfor %}
+    </datalist>
     <div class="col-md-9">
         <div class="card">
             <div class="table-responsive">
                 <table class="table table-hover mb-0 small">
                     <thead class="table-light">
                         <tr>
+                            <th style="width:30px;"><input type="checkbox" class="form-check-input" id="userCheckAll" onchange="toggleAllUsers(this.checked)"></th>
                             <th class="sortable" data-col="0" style="cursor:pointer;">工号 <i class="bi bi-chevron-expand" style="font-size:.7em;"></i></th>
                             <th class="sortable" data-col="1" style="cursor:pointer;">姓名 <i class="bi bi-chevron-expand" style="font-size:.7em;"></i></th>
                             <th>IP 地址</th>
                             <th class="sortable" data-col="3" style="cursor:pointer;">小组 <i class="bi bi-chevron-expand" style="font-size:.7em;"></i></th>
                             <th>角色</th>
-                            <th>主管</th>
+                            <th class="sortable" data-col="5" style="cursor:pointer;">主管 <i class="bi bi-chevron-expand" style="font-size:.7em;"></i></th>
                             <th>业务领域</th>
                             <th class="sortable" data-col="7" style="cursor:pointer;">状态 <i class="bi bi-chevron-expand" style="font-size:.7em;"></i></th>
                             <th class="sortable" data-col="6" style="cursor:pointer;">最后登录 <i class="bi bi-chevron-expand" style="font-size:.7em;"></i></th>
@@ -130,6 +134,7 @@
                     <tbody>
                         {% for user in users %}
                         <tr>
+                            <td><input type="checkbox" class="form-check-input user-batch-check" value="{{ user.id }}"></td>
                             <td>{{ user.employee_id or '-' }}</td>
                             <td>{{ user.name }}</td>
                             <td><code>{{ user.ip_address }}</code></td>
@@ -191,6 +196,29 @@
                 </table>
             </div>
         </div>
+        {# 批量操作工具栏 #}
+        <div class="d-none bg-white border-top shadow-lg p-2 align-items-center gap-2 flex-wrap" id="userBatchBar" style="position:fixed;bottom:0;left:0;right:0;z-index:200;">
+            <span class="fw-bold text-primary small" id="userBatchCount">已选 0 人</span>
+            <div class="vr"></div>
+            <div class="input-group input-group-sm" style="width:auto;">
+                <span class="input-group-text py-0" style="font-size:.8em;">主管</span>
+                <input type="text" class="form-control" id="batchMgrInput" list="mgrOptions" placeholder="选择或输入" style="width:140px;font-size:.85em;">
+                <button class="btn btn-outline-primary" onclick="userBatchFromInput('manager','batchMgrInput')">应用</button>
+                <button class="btn btn-outline-secondary" onclick="userBatchAction('manager','','清除')">清除</button>
+            </div>
+            <div class="input-group input-group-sm" style="width:auto;">
+                <span class="input-group-text py-0" style="font-size:.8em;">小组</span>
+                <input type="text" class="form-control" id="batchGroupInput" list="groupOptions" placeholder="选择或输入" style="width:120px;font-size:.85em;">
+                <button class="btn btn-outline-primary" onclick="userBatchFromInput('group','batchGroupInput')">应用</button>
+                <button class="btn btn-outline-secondary" onclick="userBatchAction('group','','清除')">清除</button>
+            </div>
+            <div class="input-group input-group-sm" style="width:auto;">
+                <span class="input-group-text py-0" style="font-size:.8em;">领域</span>
+                <input type="text" class="form-control" id="batchDomainInput" list="domainOptions" placeholder="选择或输入" style="width:120px;font-size:.85em;">
+                <button class="btn btn-outline-primary" onclick="userBatchFromInput('domain','batchDomainInput')">应用</button>
+                <button class="btn btn-outline-secondary" onclick="userBatchAction('domain','','清除')">清除</button>
+            </div>
+        </div>
     </div>
 
     <!-- Sidebar: Group management -->
@@ -248,6 +276,14 @@ function filterByGroup(val) {
     window.location = url;
 }
 
+function _cellVal(td) {
+    if (!td) return '';
+    var sel = td.querySelector('select');
+    if (sel) return sel.value || '';
+    var inp = td.querySelector('input[type="text"]');
+    if (inp) return inp.value || '';
+    return td.textContent.trim();
+}
 /* Sortable table columns */
 var sortDir = {};
 document.querySelectorAll('.sortable').forEach(function(th) {
@@ -258,12 +294,52 @@ document.querySelectorAll('.sortable').forEach(function(th) {
         var rows = Array.from(tbody.querySelectorAll('tr'));
         var asc = sortDir[col] = !sortDir[col];
         rows.sort(function(a, b) {
-            var at = (a.cells[col] || {}).textContent || '';
-            var bt = (b.cells[col] || {}).textContent || '';
+            var ac = a.cells[col + 1], bc = b.cells[col + 1];
+            var at = _cellVal(ac), bt = _cellVal(bc);
             return asc ? at.localeCompare(bt, 'zh') : bt.localeCompare(at, 'zh');
         });
         rows.forEach(function(r) { tbody.appendChild(r); });
     });
 });
+
+/* 批量操作 */
+function toggleAllUsers(checked) {
+    document.querySelectorAll('.user-batch-check').forEach(function(cb) { cb.checked = checked; });
+    updateUserBatchBar();
+}
+function updateUserBatchBar() {
+    var checked = document.querySelectorAll('.user-batch-check:checked');
+    var bar = document.getElementById('userBatchBar');
+    if (checked.length > 0) {
+        bar.classList.remove('d-none');
+        bar.classList.add('d-flex');
+        document.getElementById('userBatchCount').textContent = '已选 ' + checked.length + ' 人';
+    } else {
+        bar.classList.add('d-none');
+        bar.classList.remove('d-flex');
+    }
+}
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('user-batch-check')) updateUserBatchBar();
+});
+
+function userBatchFromInput(action, inputId) {
+    var val = document.getElementById(inputId).value.trim();
+    if (!val) { showToast('请输入内容', 'warning'); return; }
+    userBatchAction(action, val, val);
+}
+
+var _pendingUserBatch = null;
+function userBatchAction(action, value, label) {
+    var ids = Array.from(document.querySelectorAll('.user-batch-check:checked')).map(function(cb) { return parseInt(cb.value); });
+    if (!ids.length) return;
+    var actionNames = {manager: '主管', group: '小组', domain: '领域'};
+    confirmAction('确定要将 <strong>' + ids.length + '</strong> 人的<strong>' + (actionNames[action] || action) + '</strong>修改为「<strong>' + (label || '清除') + '</strong>」吗？', function() {
+        apiPost('{{ url_for("admin.user_batch_update") }}', {ids: ids, action: action, value: value}).then(function(d) {
+            if (d && d.ok) { showToast(d.msg, 'success'); setTimeout(function() { location.reload(); }, 500); }
+            else if (d && d.msg) showToast(d.msg, 'danger');
+        });
+    });
+}
 </script>
 {% endblock %}

@@ -133,13 +133,10 @@ def aar_list(project_id):
                 db.session.delete(aar)
                 db.session.commit()
                 flash('已删除', 'success')
-        return redirect(url_for('project.aar_list', project_id=project_id))
+        return redirect(url_for('project.knowledge_list', project_id=project_id, tab='aar'))
 
-    items = AAR.query.filter_by(project_id=project_id).order_by(AAR.date.desc()).all()
-    milestones = project.milestones
-    return render_template('project/aar.html', project=project, items=items,
-                           milestones=milestones, trigger_labels=AAR.TRIGGER_LABELS,
-                           today=date.today(), ai_enabled=current_app.config.get('AI_ENABLED'))
+    # GET: redirect to knowledge page (AAR is part of knowledge management)
+    return redirect(url_for('project.knowledge_list', project_id=project_id, tab='aar'))
 
 
 @project_bp.route('/<int:project_id>/aar/ai-issues', methods=['POST'])

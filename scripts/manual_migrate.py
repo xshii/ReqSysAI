@@ -47,6 +47,8 @@ STATUS_MIGRATION = [
     "UPDATE requirements SET status='in_progress' WHERE status='in_test'",
     # 清理风险域名空格
     "UPDATE risks SET domain=TRIM(domain) WHERE domain IS NOT NULL AND domain != TRIM(domain)",
+    # AAR status 'open' → 'draft'（建表默认值与模型不一致的修正）
+    "UPDATE aars SET status='draft' WHERE status='open'",
 ]
 
 # 需要补齐的 CREATE TABLE 语句
@@ -232,7 +234,7 @@ CREATE_STATEMENTS = [
         result TEXT,
         analysis TEXT,
         action TEXT,
-        status VARCHAR(20) DEFAULT 'open',
+        status VARCHAR(20) DEFAULT 'draft',
         created_by INTEGER NOT NULL REFERENCES users(id),
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME

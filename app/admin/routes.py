@@ -422,6 +422,41 @@ def user_update_manager(user_id):
     return redirect(request.referrer or url_for('admin.user_list'))
 
 
+@admin_bp.route('/users/batch-update', methods=['POST'])
+@admin_required
+def user_batch_update():
+    """批量更新用户：主管、小组、领域。"""
+    data = request.get_json() or {}
+    ids = data.get('ids', [])
+    action = data.get('action', '')
+    value = data.get('value', '').strip()
+    if not ids or not action:
+        return jsonify(ok=False, msg='参数缺失')
+    users = User.query.filter(User.id.in_(ids)).all()
+    if not users:
+        return jsonify(ok=False, msg='未找到用户')
+    count = 0
+    for u in users:
+        if action == 'manager':
+            if value:
+                from app.utils.manager import normalize_manager
+                val, err = normalize_manager(value)
+                if err:
+                    return jsonify(ok=False, msg=err)
+                u.manager = val
+            else:
+                u.manager = None
+            count += 1
+        elif action == 'group':
+            u.group = value or None
+            count += 1
+        elif action == 'domain':
+            u.domain = value or None
+            count += 1
+    db.session.commit()
+    return jsonify(ok=True, msg=f'已更新 {count} 人')
+
+
 @admin_bp.route('/users/<int:user_id>/domain', methods=['POST'])
 @admin_required
 def user_update_domain(user_id):

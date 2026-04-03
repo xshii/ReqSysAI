@@ -15,17 +15,18 @@
 
 {% if items %}
 {% for aar in items %}
-<div class="card mb-3 aar-card" data-trigger="{{ aar.trigger }}">
-    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+<div class="card mb-2 aar-card" data-trigger="{{ aar.trigger }}">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#aarBody{{ aar.id }}">
         <div>
             <span class="badge bg-{{ 'success' if aar.status == 'done' else 'secondary' }} me-1">{{ '已完成' if aar.status == 'done' else '草稿' }}</span>
-            <span class="badge bg-info text-dark me-1">{{ aar.trigger_label }}</span>
-            {% if aar.trigger_ref %}<span class="text-muted small">{{ aar.trigger_ref }}</span>{% endif %}
+            <span class="fw-bold small">{{ aar.title }}</span>
+            <span class="badge bg-info text-dark ms-1">{{ aar.trigger_label }}</span>
+            {% if aar.trigger_ref %}<span class="text-muted small">· {{ aar.trigger_ref }}</span>{% endif %}
         </div>
-        <span class="text-muted small">{{ aar.date.strftime('%Y-%m-%d') }} · {{ aar.creator.name }}</span>
+        <span class="text-muted small">{{ aar.date.strftime('%Y-%m-%d') }} · {{ aar.creator.name }} <i class="bi bi-chevron-down" style="font-size:.7em;"></i></span>
     </div>
+    <div class="collapse" id="aarBody{{ aar.id }}">
     <div class="card-body">
-        <h5 class="card-title mb-3">{{ aar.title }}</h5>
         {% if aar.participants %}
         <div class="text-muted small mb-2"><i class="bi bi-people"></i> {{ aar.participants }}</div>
         {% endif %}
@@ -38,7 +39,7 @@
             </div>
             <div class="col-md-6">
                 <div class="border rounded p-3 h-100">
-                    <h6 class="text-success mb-2"><i class="bi bi-check-circle"></i> 实际发生了什么</h6>
+                    <h6 class="text-success mb-2"><i class="bi bi-check-circle"></i> 实际���生了什么</h6>
                     <div class="small" style="white-space:pre-line;">{{ aar.result or '未填写' }}</div>
                 </div>
             </div>
@@ -79,6 +80,7 @@
             </form>
         </div>
     </div>
+    </div>{# /collapse #}
 </div>
 {% endfor %}
 {% else %}
@@ -200,15 +202,6 @@
                             <div class="position-relative"><div class="tag-dropdown position-absolute bg-white border rounded shadow-sm w-100" style="z-index:1050;display:none;max-height:150px;overflow-y:auto;font-size:.85em;"></div></div>
                         </div>
                     </div>
-                    <div class="row mb-2">
-                        <label class="col-3 col-form-label col-form-label-sm">状态</label>
-                        <div class="col-9">
-                            <select name="status" id="editAarStatus" class="form-select form-select-sm" style="width:auto;">
-                                <option value="draft">草稿</option>
-                                <option value="done">已完成</option>
-                            </select>
-                        </div>
-                    </div>
                     <hr class="my-2">
                     <div class="mb-2">
                         <label class="form-label small fw-bold text-primary"><i class="bi bi-bullseye"></i> 1. 目标是什么</label>
@@ -227,7 +220,15 @@
                         <textarea name="action_items" id="editAarAction" class="form-control form-control-sm" rows="3"></textarea>
                     </div>
                 </div>
-                <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">保存</button></div>
+                <div class="modal-footer py-1 d-flex justify-content-between">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <input type="radio" class="btn-check" name="status" id="editStatusDone" value="done" checked>
+                        <label class="btn btn-outline-success" for="editStatusDone"><i class="bi bi-check-circle"></i> 已完成</label>
+                        <input type="radio" class="btn-check" name="status" id="editStatusDraft" value="draft">
+                        <label class="btn btn-outline-secondary" for="editStatusDraft"><i class="bi bi-pencil"></i> 草稿</label>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-check-lg"></i> 保存</button>
+                </div>
             </form>
         </div>
     </div>
@@ -339,7 +340,8 @@ document.addEventListener('click', function(e) {
     document.getElementById('editAarResult').value = btn.dataset.result;
     document.getElementById('editAarAnalysis').value = btn.dataset.analysis;
     document.getElementById('editAarAction').value = btn.dataset.action;
-    document.getElementById('editAarStatus').value = btn.dataset.status;
+    var st = btn.dataset.status;
+    document.getElementById(st === 'done' ? 'editStatusDone' : 'editStatusDraft').checked = true;
 });
 
 var _lastIssues = null; // store for adopt

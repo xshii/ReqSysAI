@@ -40,7 +40,8 @@
 
 {% if not questions %}
 <div id="emptyHint">
-{% set empty_icon='bi-journal-check', empty_msg='暂无题目，点击"添加题目"开始录入' %}
+{% set empty_icon='bi-journal-check' %}
+{% set empty_msg='暂无题目，点击"添加题目"开始录入' %}
 {% include "partials/empty_state.html" %}
 </div>
 {% endif %}

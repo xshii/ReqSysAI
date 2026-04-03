@@ -9,16 +9,16 @@
 {# Tab navigation: 知识库 / AAR复盘 #}
 <ul class="nav nav-tabs mb-3" id="knTabs">
     <li class="nav-item">
-        <a class="nav-link active" id="tab-knowledge" data-bs-toggle="tab" href="#paneKnowledge">知识库</a>
+        <a class="nav-link {{ 'active' if request.args.get('tab') != 'aar' }}" id="tab-knowledge" data-bs-toggle="tab" href="#paneKnowledge">知识库</a>
     </li>
     <li class="nav-item">
-        <a class="nav-link" id="tab-aar" data-bs-toggle="tab" href="#paneAAR">AAR复盘{% if aars %} <span class="badge bg-secondary">{{ aars|length }}</span>{% endif %}</a>
+        <a class="nav-link {{ 'active' if request.args.get('tab') == 'aar' }}" id="tab-aar" data-bs-toggle="tab" href="#paneAAR">AAR复盘{% if aars %} <span class="badge bg-secondary">{{ aars|length }}</span>{% endif %}</a>
     </li>
 </ul>
 
 <div class="tab-content">
 {# ── Tab 1: Knowledge ── #}
-<div class="tab-pane fade show active" id="paneKnowledge">
+<div class="tab-pane fade {{ 'show active' if request.args.get('tab') != 'aar' }}" id="paneKnowledge">
 <div class="d-flex justify-content-end gap-2 align-items-center mb-3">
     <input type="text" id="knSearch" class="form-control form-control-sm" placeholder="搜索标题/链接..." style="width:200px;" oninput="filterKn()">
     <select id="knTypeFilter" class="form-select form-select-sm" style="width:auto;" onchange="filterKn()">
@@ -158,7 +158,7 @@
 </div><!-- /paneKnowledge -->
 
 {# ── Tab 2: AAR复盘 ── #}
-<div class="tab-pane fade" id="paneAAR">
+<div class="tab-pane fade {{ 'show active' if request.args.get('tab') == 'aar' }}" id="paneAAR">
 
 <div class="d-flex justify-content-end gap-2 mb-2">
     <select id="aarTriggerFilter" class="form-select form-select-sm" style="width:auto;" onchange="filterAAR()">
@@ -170,17 +170,18 @@
 
 {% if aars %}
 {% for aar in aars %}
-<div class="card mb-3 aar-card" id="aarCard{{ aar.id }}" data-trigger="{{ aar.trigger }}">
-    <div class="card-header py-2 d-flex justify-content-between align-items-center">
+<div class="card mb-2 aar-card" id="aarCard{{ aar.id }}" data-trigger="{{ aar.trigger }}">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#aarBody{{ aar.id }}">
         <div>
             <span class="badge bg-{{ 'success' if aar.status == 'done' else 'secondary' }} me-1">{{ '已完成' if aar.status == 'done' else '草稿' }}</span>
-            <span class="badge bg-info text-dark me-1">{{ aar.trigger_label }}</span>
-            {% if aar.trigger_ref %}<span class="text-muted small">{{ aar.trigger_ref }}</span>{% endif %}
+            <span class="fw-bold small">{{ aar.title }}</span>
+            <span class="badge bg-info text-dark ms-1">{{ aar.trigger_label }}</span>
+            {% if aar.trigger_ref %}<span class="text-muted small">· {{ aar.trigger_ref }}</span>{% endif %}
         </div>
-        <span class="text-muted small">{{ aar.date.strftime('%Y-%m-%d') }} · {{ aar.creator.name }}</span>
+        <span class="text-muted small">{{ aar.date.strftime('%Y-%m-%d') }} · {{ aar.creator.name }} <i class="bi bi-chevron-down" style="font-size:.7em;"></i></span>
     </div>
+    <div class="collapse" id="aarBody{{ aar.id }}">
     <div class="card-body">
-        <h5 class="card-title mb-3">{{ aar.title }}</h5>
         {% if aar.participants %}
         <div class="text-muted small mb-2"><i class="bi bi-people"></i> {{ aar.participants }}</div>
         {% endif %}
@@ -284,6 +285,7 @@
             </div>
         </div>
     </div>
+    </div>{# /collapse #}
 </div>
 {% endfor %}
 {% else %}
@@ -393,15 +395,6 @@
                         <label class="col-3 col-form-label col-form-label-sm">参与人</label>
                         <div class="col-9"><input type="text" name="participants" id="editAarParticipants" class="form-control form-control-sm"></div>
                     </div>
-                    <div class="row mb-2">
-                        <label class="col-3 col-form-label col-form-label-sm">状态</label>
-                        <div class="col-9">
-                            <select name="status" id="editAarStatus" class="form-select form-select-sm" style="width:auto;">
-                                <option value="draft">草稿</option>
-                                <option value="done">已完成</option>
-                            </select>
-                        </div>
-                    </div>
                     <hr class="my-2">
                     <div class="mb-2">
                         <label class="form-label small fw-bold text-primary"><i class="bi bi-bullseye"></i> 1. 目标是什么</label>
@@ -420,7 +413,15 @@
                         <textarea name="action_items" id="editAarAction" class="form-control form-control-sm" rows="3"></textarea>
                     </div>
                 </div>
-                <div class="modal-footer py-1"><button type="submit" class="btn btn-sm btn-primary">保存</button></div>
+                <div class="modal-footer py-1 d-flex justify-content-between">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <input type="radio" class="btn-check" name="status" id="editStatusDone" value="done" checked>
+                        <label class="btn btn-outline-success" for="editStatusDone"><i class="bi bi-check-circle"></i> 已完成</label>
+                        <input type="radio" class="btn-check" name="status" id="editStatusDraft" value="draft">
+                        <label class="btn btn-outline-secondary" for="editStatusDraft"><i class="bi bi-pencil"></i> 草稿</label>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-check-lg"></i> 保存</button>
+                </div>
             </form>
         </div>
     </div>
@@ -485,7 +486,8 @@ document.addEventListener('click', function(e) {
     document.getElementById('editAarResult').value = btn.dataset.result;
     document.getElementById('editAarAnalysis').value = btn.dataset.analysis;
     document.getElementById('editAarAction').value = btn.dataset.action;
-    document.getElementById('editAarStatus').value = btn.dataset.status;
+    var st = btn.dataset.status;
+    document.getElementById(st === 'done' ? 'editStatusDone' : 'editStatusDraft').checked = true;
 });
 
 var _lastIssues = null;

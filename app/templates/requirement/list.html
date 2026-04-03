@@ -194,7 +194,10 @@
 {% endif %}
 
 {% else %}
-{% set empty_icon='bi-inbox', empty_msg='暂无需求', empty_action_url=url_for('requirement.requirement_create', project_id=cur_project or ''), empty_action_label='创建第一个需求' %}
+{% set empty_icon='bi-inbox' %}
+{% set empty_msg='暂无需求' %}
+{% set empty_action_url=url_for('requirement.requirement_create', project_id=cur_project or '') %}
+{% set empty_action_label='创建第一个需求' %}
 {% include "partials/empty_state.html" %}
 {% endif %}
 

@@ -1020,13 +1020,18 @@ def _build_incentive_stats(since=None):
         status_counts[inc.status_label] = status_counts.get(inc.status_label, 0) + 1
 
     # ---- People stability analysis ----
-    all_active_users = User.query.filter_by(is_active=True).all()
+    # 排除隐藏组、未分组、公共组
+    from app.models.user import Group as _Grp
+    _hidden_groups = {g.name for g in _Grp.query.filter_by(is_hidden=True).all()}
+    _excluded_groups = _hidden_groups | {'公共组', ''}
+    all_active_users_raw = User.query.filter_by(is_active=True).all()
+    all_active_users = [u for u in all_active_users_raw if (u.group or '') not in _excluded_groups and u.group]
     awarded_names = set(nominee_data.keys())
 
     # Per-group coverage: awarded vs total
     group_coverage = {}
     for u in all_active_users:
-        g = u.group or '未分组'
+        g = u.group
         gc = group_coverage.setdefault(g, {'total': 0, 'awarded': 0, 'not_awarded': []})
         gc['total'] += 1
         if u.name in awarded_names:
