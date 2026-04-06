@@ -373,7 +373,6 @@ def _build_rule_based_summary(project_name, all_reqs, todos_done, todos_active,
     total = len(all_reqs)
     done = sum(1 for r in all_reqs if r.status in ('done', 'closed'))
     overdue = sum(1 for r in all_reqs if r.due_date and r.due_date < today_ and r.status not in ('done', 'closed'))
-    active = total - done
     pct = round(done / total * 100) if total else 0
     summary = f'{project_name}本周（{monday.strftime("%m/%d")}~{sunday.strftime("%m/%d")}）：需求 {done}/{total} 完成（{pct}%）'
     if overdue:
@@ -684,12 +683,7 @@ def stats():
     if all_reqs:
         for snap in _snap_dates:
             total_at = sum(1 for r in all_reqs if r.created_at and r.created_at.date() <= snap)
-            done_at = sum(1 for r in all_reqs
-                          if r.created_at and r.created_at.date() <= snap
-                          and r.status in ('done', 'closed')
-                          and (not r.updated_at or r.updated_at.date() <= snap
-                               or r.status in ('done', 'closed')))
-            # More accurate done_at: count reqs that were done by snap_date
+            # Count reqs that were done by snap_date
             done_at2 = 0
             for r in all_reqs:
                 if not r.created_at or r.created_at.date() > snap:
@@ -1390,7 +1384,6 @@ def weekly_report():
             for child in cur_project.children:
                 child_saved = WeeklyReport.query.filter_by(
                     project_id=child.id, week_start=monday).first()
-                from app.models.project_member import ProjectMember as PM_
                 pm = PM_.query.filter_by(project_id=child.id, project_role='PM').first()
                 fo = pm or PM_.query.filter_by(project_id=child.id, project_role='FO').first()
                 child_summary = (child_saved.summary if child_saved and child_saved.summary else '') or ''
@@ -2277,13 +2270,6 @@ def my_weekly():
         Risk.deleted_at.is_(None), Risk.status == 'open',
         db.or_(Risk.owner_id == current_user.id, Risk.tracker_id == current_user.id),
     ).order_by(Risk.due_date).all()
-
-    # User's open requirements (assigned to me, not done/closed)
-    from app.models.requirement import Requirement
-    my_open_reqs = Requirement.query.filter(
-        Requirement.assignee_id == current_user.id,
-        Requirement.status.notin_(['done', 'closed']),
-    ).order_by(Requirement.due_date).all()
 
     from app.utils.recipients import compute_personal_recipients
     _def_to, _def_cc = compute_personal_recipients(current_user)

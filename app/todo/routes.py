@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 
 from flask import current_app, flash, g, jsonify, redirect, render_template, request, url_for
 from app.utils.api import api_ok, api_err

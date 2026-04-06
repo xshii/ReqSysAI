@@ -1113,7 +1113,6 @@ def standup_eml():
     _hidden_pids = set(g.hidden_pids) if hasattr(g, 'hidden_pids') else set()
 
     if view_mode == 'project' and project_id:
-        from app.models.project import Project
         from app.models.project_member import ProjectMember
         # Auth: verify current user is a member
         if not ProjectMember.query.filter_by(project_id=project_id, user_id=current_user.id).first():
@@ -1198,7 +1197,6 @@ def standup_eml():
         })
 
     # Build HTML email
-    S = lambda c: f'color:{c};font-weight:600;'
     status_colors = {'red': '#dc3545', 'orange': '#fd7e14', 'green': '#198754', 'gray': '#6c757d'}
 
     # Compute recipients early for embedding in HTML
@@ -1284,7 +1282,7 @@ def standup_eml():
         sc = status_colors.get(row['status'], '#6c757d')
         trend_color = '#198754' if row['trend'] == '↑' else '#dc3545' if row['trend'] == '↓' else '#6c757d'
         overdue_cell = f'<span style="color:#dc3545;font-weight:700;">{row["overdue"]}</span>' if row['overdue'] > 0 else '0'
-        done_style = f'color:#dc3545;font-weight:700;' if row['done_yesterday'] == 0 and row['active'] > 0 else 'color:#2d3748;'
+        done_style = 'color:#dc3545;font-weight:700;' if row['done_yesterday'] == 0 and row['active'] > 0 else 'color:#2d3748;'
         html += f'''<tr style="background:{bg};">
 <td style="border:1px solid #e2e8f0;padding:6px 10px;">{row["name"]}</td>
 <td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;{done_style}">{row["done_yesterday"]}</td>
@@ -1346,7 +1344,7 @@ def standup_eml():
                 if r.due_date < today:
                     due_str = f'<span style="color:#dc3545;font-weight:700;">超{(today - r.due_date).days}天</span>'
                 elif r.due_date == today:
-                    due_str = f'<span style="color:#fd7e14;font-weight:700;">今天</span>'
+                    due_str = '<span style="color:#fd7e14;font-weight:700;">今天</span>'
                 else:
                     due_str = r.due_date.strftime('%m-%d')
             # Latest comment as progress
@@ -1495,7 +1493,7 @@ def daily_progress():
 
     # Section 3: Today done so far
     if done_today:
-        lines.append(f'\n今日已完成：')
+        lines.append('\n今日已完成：')
         for t in done_today:
             rl = todo_req_label(t)
             lines.append(f'  ✓ {t.title}（{rl}）')

@@ -11,7 +11,7 @@ from flask_login import current_user
 
 logger = logging.getLogger(__name__)
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 
 from app.admin import admin_bp
 from app.admin.forms import UserCreateForm, UserEditForm

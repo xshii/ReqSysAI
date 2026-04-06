@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
 from flask import current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from app.utils.api import api_ok, api_err
