@@ -5,168 +5,203 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-2">
-    <h4 class="mb-0">团队 Todo <span class="text-muted small">{{ today.strftime('%Y-%m-%d') }}</span></h4>
-    {% if ai_enabled %}
-    <button class="btn btn-sm btn-outline-info" id="btnStandup" onclick="genStandup()">
-        <i class="bi bi-robot"></i> 站会摘要
-    </button>
-    {% endif %}
+    <h4 class="mb-0">团队 Todo
+        {% if view_mode == 'project' and cur_project_obj %}
+        <span class="text-primary small">{{ cur_project_obj.name }}</span>
+        {% endif %}
+        <span class="text-muted small">{{ today.strftime('%Y-%m-%d') }}</span>
+    </h4>
+    <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-secondary" onclick="exportStandupEml()">
+            <i class="bi bi-envelope"></i> 导出站会邮件
+        </button>
+        {% if ai_enabled %}
+        <button class="btn btn-sm btn-outline-info" id="btnStandup" onclick="genStandup()">
+            <i class="bi bi-robot"></i> 站会摘要
+        </button>
+        {% endif %}
+    </div>
 </div>
-{% if no_group %}
+
+{% if open_risks or help_todos %}
+<div class="card mb-3 {% if open_risks %}border-warning{% else %}border-secondary{% endif %}">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center" role="button" data-bs-toggle="collapse" data-bs-target="#riskPanel" style="cursor:pointer;background:#fff8e1;">
+        <span class="fw-bold small">
+            <i class="bi bi-chevron-down text-muted" style="font-size:.6em;"></i>
+            <i class="bi bi-shield-exclamation text-warning"></i> 风险与问题
+        </span>
+        <span>
+            {% if open_risks %}<span class="badge bg-warning text-dark">{{ open_risks|length }} 风险</span>{% endif %}
+            {% if help_todos %}<span class="badge bg-danger">{{ help_todos|length }} 阻塞</span>{% endif %}
+        </span>
+    </div>
+    <div class="collapse show" id="riskPanel">
+    <div class="card-body py-2">
+        <table class="table table-sm table-bordered mb-0" style="font-size:.8em;">
+            <thead class="table-light">
+                <tr>
+                    <th style="width:50px;">类型</th>
+                    <th>描述</th>
+                    <th style="width:45px;">级别</th>
+                    <th style="width:70px;">责任人</th>
+                    <th style="width:65px;">时限</th>
+                    <th>最新进展</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for r in open_risks %}
+            <tr>
+                <td><span class="badge bg-warning text-dark" style="font-size:.8em;">风险</span></td>
+                <td>
+                    <a href="{{ url_for('project.risk_list', project_id=r.project_id) }}" class="text-decoration-none">
+                        {{ r.project.name if r.project else '' }}/{{ r.title }}
+                    </a>
+                </td>
+                <td class="text-center"><span class="badge bg-{{ r.severity_color }}" style="font-size:.75em;">{{ r.severity_label }}</span></td>
+                <td>{{ r.owner_user.name if r.owner_user else (r.owner or '-') }}</td>
+                <td class="text-center">
+                    {% if r.is_overdue %}
+                    <span class="text-danger fw-bold">超{{ (today - r.due_date).days }}天</span>
+                    {% elif r.is_due_today %}
+                    <span class="text-warning fw-bold">今天</span>
+                    {% elif r.due_date %}
+                    {{ r.due_date.strftime('%m-%d') }}
+                    {% endif %}
+                </td>
+                <td class="text-muted" style="font-size:.9em;">
+                    {% if r.comments %}
+                    {{ r.comments[0].created_at.strftime('%m-%d') }} {{ r.comments[0].content[:30] }}{% if r.comments[0].content|length > 30 %}...{% endif %}
+                    {% else %}
+                    <i>无进展</i>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            {% for t in help_todos %}
+            <tr>
+                <td><span class="badge bg-danger" style="font-size:.8em;">阻塞</span></td>
+                <td>{{ t.title }}</td>
+                <td class="text-center">-</td>
+                <td>{{ t.user.name }}</td>
+                <td class="text-center">
+                    {% if t.workdays_overdue > 0 %}
+                    <span class="text-danger fw-bold">{{ t.workdays_overdue }}天</span>
+                    {% else %}-{% endif %}
+                </td>
+                <td class="text-muted" style="font-size:.9em;">{{ t.blocked_reason or '<i>原因未填</i>' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    </div>
+</div>
+{% endif %}
+
+{% if no_group and view_mode != 'project' %}
 <div class="text-center text-muted py-5">
     <i class="bi bi-people" style="font-size:2rem;"></i>
     <p class="mt-2">请先在 <a href="{{ url_for('auth.profile') }}">个人设置</a> 中加入一个团队</p>
 </div>
-{% else %}
-{# Per-person filter badges #}
-<div class="d-flex gap-1 mb-3 flex-wrap">
-    <span class="badge bg-primary team-person-filter" style="cursor:pointer;font-size:.75em;" onclick="filterTeamPerson('')">全部</span>
-    {% for u in users %}
-    {% set ud = user_data.get(u.id, {}) %}
-    {% set u_count = ud.get('todo_total', 0) %}
-    {% if u_count > 0 %}
-    <span class="badge bg-light text-dark border team-person-filter" style="cursor:pointer;font-size:.75em;" onclick="filterTeamPerson('{{ u.id }}')">
-        {{ u.name }} <span class="text-muted">{{ u_count }}</span>
-    </span>
-    {% endif %}
-    {% endfor %}
+{% elif view_mode == 'project' and not cur_project_id %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-folder2-open" style="font-size:2rem;"></i>
+    <p class="mt-2">请在侧边栏选择一个项目，或先加入项目成员</p>
 </div>
+{% else %}
 
-<!-- Standup panel -->
+<!-- AI Standup panel -->
 <div id="standupPanel" class="card border-info mb-3 d-none">
     <div class="card-header py-1 bg-info bg-opacity-10 d-flex justify-content-between">
-        <span class="small fw-bold">每日站会摘要</span>
+        <span class="small fw-bold">站会摘要</span>
         <button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="document.getElementById('standupPanel').classList.add('d-none')"><i class="bi bi-x"></i></button>
     </div>
     <div class="card-body py-2 small" id="standupContent"></div>
 </div>
 
-<div class="row">
-    <!-- Left: today active -->
-    <div class="col-md-7">
-        <h6 class="text-muted mb-3">近两日进展</h6>
-        {% for u in users %}
-        {% set ud = user_data.get(u.id, {}) %}
-        {% set u_total = ud.get('todo_total', 0) %}
-        {% set u_done = ud.get('todo_done', 0) %}
-        {% set u_all_done = u_total > 0 and u_done == u_total %}
-        <div class="card mb-3 team-user-card {% if u_all_done %}border-success border-opacity-25{% endif %}" data-uid="{{ u.id }}" data-uname="{{ u.name }}">
-            <div class="card-header py-2 d-flex justify-content-between align-items-center" role="button" data-bs-toggle="collapse" data-bs-target="#teamUser{{ u.id }}" style="cursor:pointer;">
-                <span class="fw-bold small">
-                    <i class="bi bi-chevron-{{ 'right' if u_all_done else 'down' }} text-muted" style="font-size:.6em;"></i>
-                    {{ u.name }} <span class="text-muted">{{ u.group or '' }}</span>
-                </span>
-                {% if u_total %}<span class="badge bg-{{ 'success' if u_all_done else 'secondary' }}">{{ u_done }}/{{ u_total }}</span>{% endif %}
-            </div>
-            <div class="collapse {% if not u_all_done %}show{% endif %} team-card-body" id="teamUser{{ u.id }}" style="min-height:30px;">
-            <div class="card-body py-2">
-            {% if ud %}
-                {# Risk todos — always show (same card structure as homepage) #}
-                {% set risk_all_done = ud.risk_todos|length > 0 and ud.risk_todos|rejectattr('status', 'equalto', 'done')|list|length == 0 %}
-                {% set risk_done_count = ud.risk_todos|selectattr('status', 'equalto', 'done')|list|length %}
-                <div class="card mb-2 {% if risk_all_done %}border-success border-opacity-25{% else %}border-danger border-opacity-25{% endif %}">
-                    <div class="card-body py-2">
-                    <div class="d-flex align-items-center gap-1 mb-1">
-                        <i class="bi bi-chevron-{{ 'right' if risk_all_done else 'down' }} text-muted" style="font-size:.6em;cursor:pointer;" role="button" data-bs-toggle="collapse" data-bs-target="#riskTodos{{ u.id }}"></i>
-                        <span class="badge bg-danger" style="font-size:.65em;">风险</span>
-                        {% if ud.risk_todos %}<span class="badge bg-{{ 'success' if risk_all_done else 'secondary' }} bg-opacity-{{ '75' if risk_all_done else '50' }}" style="font-size:.55em;">{{ risk_done_count }}/{{ ud.risk_todos|length }}</span>{% endif %}
-                        <span class="small fw-bold text-danger"><i class="bi bi-lightning-charge"></i> 风险&突发</span>
-                        <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-grow-1 quick-todo-form">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="category" value="risk">
-                            <input type="hidden" name="user_id" value="{{ u.id }}">
-                            <input type="hidden" name="next" value="{{ request.url }}">
-                            <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加风险Todo / @人名 求助" required style="font-size:.8em;">
-                        </form>
-                    </div>
-                    <div class="collapse {% if not risk_all_done %}show{% endif %} todo-list-for-req" data-req-id="risk" id="riskTodos{{ u.id }}">
-                    {% for t in ud.risk_todos %}{{ todo_row(t, 'text-danger') }}{% endfor %}
-                    </div>
-                    </div>
-                </div>
-
-                {# Requirement todos — shared macro #}
-                {% for r in ud.display_reqs %}
-                {% set r_todos = ud.req_todos.get(r.id, []) %}
-                {{ req_section(r, r_todos, today, user_id=u.id, recent_comments=req_comments.get(r.id)) }}
-                {% endfor %}
-
-                {# Team todos — card structure matching risk/requirement sections #}
-                {% set team_all_done = ud.team_todos|length > 0 and ud.team_todos|rejectattr('status', 'equalto', 'done')|list|length == 0 %}
-                {% set team_done_count = ud.team_todos|selectattr('status', 'equalto', 'done')|list|length %}
-                <div class="card mb-2 {% if team_all_done %}border-success border-opacity-25{% endif %} team-todo-section" data-uid="{{ u.id }}">
-                    <div class="card-body py-2">
-                    <div class="d-flex align-items-center gap-1 mb-1">
-                        <i class="bi bi-chevron-{{ 'right' if team_all_done else 'down' }} text-muted" style="font-size:.6em;cursor:pointer;" role="button" data-bs-toggle="collapse" data-bs-target="#teamTodos{{ u.id }}"></i>
-                        <span class="badge bg-secondary" style="font-size:.6em;">团队</span>
-                        {% if ud.team_todos %}<span class="badge bg-{{ 'success' if team_all_done else 'secondary' }} bg-opacity-{{ '75' if team_all_done else '50' }}" style="font-size:.55em;">{{ team_done_count }}/{{ ud.team_todos|length }}</span>{% endif %}
-                        <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-grow-1 quick-todo-form">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="category" value="team">
-                            <input type="hidden" name="user_id" value="{{ u.id }}">
-                            <input type="hidden" name="next" value="{{ request.url }}">
-                            <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="给{{ u.name }}添加Todo / @人名求助" required style="font-size:.8em;">
-                        </form>
-                    </div>
-                    <div class="collapse {% if not team_all_done %}show{% endif %} todo-list-for-req team-todo-list" data-req-id="team" id="teamTodos{{ u.id }}">
-                    {% for t in ud.team_todos %}{{ todo_row(t) }}{% endfor %}
-                    </div>
-                    </div>
-                </div>
-            {% else %}
-            <div class="text-muted small text-center py-1">暂无待办</div>
-            {% endif %}
-            </div>
-            </div>
-        </div>
-        {% endfor %}
+{# ===== Per-user cards — same structure as homepage ===== #}
+{% for u in users %}
+{% set ud = user_data.get(u.id, {}) %}
+{% set u_total = ud.get('todo_total', 0) %}
+{% set u_done = ud.get('todo_done', 0) %}
+{% set u_all_done = u_total > 0 and u_done == u_total %}
+<div class="card mb-3 team-user-card {% if u_all_done %}border-success border-opacity-25{% endif %}" data-uid="{{ u.id }}" data-uname="{{ u.name }}">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center" role="button" data-bs-toggle="collapse" data-bs-target="#teamUser{{ u.id }}" style="cursor:pointer;">
+        <span class="fw-bold small">
+            <i class="bi bi-chevron-{{ 'right' if u_all_done else 'down' }} text-muted" style="font-size:.6em;"></i>
+            {{ u.name }} <span class="text-muted">{{ u.group or '' }}</span>
+        </span>
+        {% if u_total %}<span class="badge bg-{{ 'success' if u_all_done else 'secondary' }}">{{ u_done }}/{{ u_total }}</span>{% endif %}
     </div>
-
-    <!-- Right: done this week -->
-    <div class="col-md-5">
-        <h6 class="text-muted mb-3">更早完成</h6>
-        {% for u in users %}
-        {% set todos = user_done.get(u.id, []) %}
-        {% if todos %}
-        <div class="card mb-3">
-            <div class="card-header py-2 d-flex justify-content-between align-items-center">
-                <span class="fw-bold small">{{ u.name }}</span>
-                <span class="badge bg-success">{{ todos | length }}</span>
-            </div>
+    <div class="collapse {% if not u_all_done %}show{% endif %} team-card-body" id="teamUser{{ u.id }}" style="min-height:30px;">
+    <div class="card-body py-2">
+    {% if ud and (ud.risk_todos or ud.display_reqs or ud.team_todos) %}
+        {# Risk todos #}
+        {% set risk_all_done = ud.risk_todos|length > 0 and ud.risk_todos|rejectattr('status', 'equalto', 'done')|list|length == 0 %}
+        {% set risk_done_count = ud.risk_todos|selectattr('status', 'equalto', 'done')|list|length %}
+        <div class="card mb-2 {% if risk_all_done %}border-success border-opacity-25{% else %}border-danger border-opacity-25{% endif %}">
             <div class="card-body py-2">
-                {% for t in todos %}
-                <div class="d-flex justify-content-between align-items-center small mb-1 text-muted">
-                    <span class="text-decoration-line-through">{{ t.title }}</span>
-                    <span style="font-size:.8em;">{{ t.done_date.strftime('%m-%d') if t.done_date else '' }}{% if t.actual_minutes %} · {{ t.actual_minutes }}m{% endif %}</span>
-                </div>
-                {% endfor %}
+            <div class="d-flex align-items-center gap-1 mb-1">
+                <i class="bi bi-chevron-{{ 'right' if risk_all_done else 'down' }} text-muted" style="font-size:.6em;cursor:pointer;" role="button" data-bs-toggle="collapse" data-bs-target="#riskTodos{{ u.id }}"></i>
+                <span class="badge bg-danger" style="font-size:.65em;">风险</span>
+                {% if ud.risk_todos %}<span class="badge bg-{{ 'success' if risk_all_done else 'secondary' }} bg-opacity-{{ '75' if risk_all_done else '50' }}" style="font-size:.55em;">{{ risk_done_count }}/{{ ud.risk_todos|length }}</span>{% endif %}
+                <span class="small fw-bold text-danger"><i class="bi bi-lightning-charge"></i> 风险&突发</span>
+                <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-grow-1 quick-todo-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="category" value="risk">
+                    <input type="hidden" name="user_id" value="{{ u.id }}">
+                    <input type="hidden" name="next" value="{{ request.url }}">
+                    <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="添加风险Todo / @人名 求助" required style="font-size:.8em;">
+                </form>
+            </div>
+            <div class="collapse {% if not risk_all_done %}show{% endif %} todo-list-for-req" data-req-id="risk" id="riskTodos{{ u.id }}">
+            {% for t in ud.risk_todos %}{{ todo_row(t, 'text-danger') }}{% endfor %}
+            </div>
             </div>
         </div>
-        {% endif %}
+
+        {# Requirement todos #}
+        {% for r in ud.display_reqs %}
+        {% set r_todos = ud.req_todos.get(r.id, []) %}
+        {{ req_section(r, r_todos, today, user_id=u.id, recent_comments=req_comments.get(r.id)) }}
         {% endfor %}
-        {% if not user_done %}
-        <div class="text-center text-muted py-4 small">暂无</div>
-        {% endif %}
+
+        {# Team todos #}
+        {% set team_all_done = ud.team_todos|length > 0 and ud.team_todos|rejectattr('status', 'equalto', 'done')|list|length == 0 %}
+        {% set team_done_count = ud.team_todos|selectattr('status', 'equalto', 'done')|list|length %}
+        <div class="card mb-2 {% if team_all_done %}border-success border-opacity-25{% endif %} team-todo-section" data-uid="{{ u.id }}">
+            <div class="card-body py-2">
+            <div class="d-flex align-items-center gap-1 mb-1">
+                <i class="bi bi-chevron-{{ 'right' if team_all_done else 'down' }} text-muted" style="font-size:.6em;cursor:pointer;" role="button" data-bs-toggle="collapse" data-bs-target="#teamTodos{{ u.id }}"></i>
+                <span class="badge bg-secondary" style="font-size:.6em;">团队</span>
+                {% if ud.team_todos %}<span class="badge bg-{{ 'success' if team_all_done else 'secondary' }} bg-opacity-{{ '75' if team_all_done else '50' }}" style="font-size:.55em;">{{ team_done_count }}/{{ ud.team_todos|length }}</span>{% endif %}
+                <form method="POST" action="{{ url_for('main.quick_todo') }}" class="flex-grow-1 quick-todo-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="category" value="team">
+                    <input type="hidden" name="user_id" value="{{ u.id }}">
+                    <input type="hidden" name="next" value="{{ request.url }}">
+                    <input type="text" name="title" class="form-control form-control-sm py-0" placeholder="给{{ u.name }}添加Todo / @人名求助" required style="font-size:.8em;">
+                </form>
+            </div>
+            <div class="collapse {% if not team_all_done %}show{% endif %} todo-list-for-req team-todo-list" data-req-id="team" id="teamTodos{{ u.id }}">
+            {% for t in ud.team_todos %}{{ todo_row(t) }}{% endfor %}
+            </div>
+            </div>
+        </div>
+    {% else %}
+    <div class="text-muted small text-center py-1">暂无待办</div>
+    {% endif %}
+    </div>
     </div>
 </div>
+{% endfor %}
+
 {{ block_popover_html() }}
 {% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
-/* Filter by person */
-function filterTeamPerson(uid) {
-    document.querySelectorAll('.team-user-card').forEach(function(card) {
-        card.style.display = (!uid || card.dataset.uid === uid) ? '' : 'none';
-    });
-    document.querySelectorAll('.team-person-filter').forEach(function(b) {
-        b.classList.remove('bg-primary', 'text-white');
-        b.classList.add('bg-light', 'text-dark', 'border');
-    });
-    event.target.classList.remove('bg-light', 'text-dark', 'border');
-    event.target.classList.add('bg-primary', 'text-white');
-}
 
 /* Shared todo row JS (toggle, delete, timer, block) */
 {{ todo_row_js() }}
@@ -324,5 +359,29 @@ document.addEventListener('mouseover', function(e) {
         tip.show();
     }
 });
+
+/* ── Export standup EML (server-rendered with tables & charts) ── */
+function exportStandupEml() {
+    var btn = event.target.closest('button');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 生成中';
+    var pid = {{ cur_project_id|tojson }};
+    fetch('/api/standup-eml', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({project_id: pid})
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        btn.disabled = false; btn.innerHTML = '<i class="bi bi-envelope"></i> 导出站会邮件';
+        if (d.ok) {
+            var eml = emlBuildFile(d.subject, d.html);
+            emlDownload('站会_{{ today.strftime("%Y-%m-%d") }}.eml', eml);
+        } else {
+            showToast('生成失败', 'danger');
+        }
+    }).catch(function() {
+        btn.disabled = false; btn.innerHTML = '<i class="bi bi-envelope"></i> 导出站会邮件';
+        showToast('生成失败', 'danger');
+    });
+}
 </script>
+<script src="{{ url_for('static', filename='js/eml-utils.js') }}?v={{ range(10000,99999)|random }}"></script>
 {% endblock %}

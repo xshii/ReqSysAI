@@ -1,5 +1,5 @@
 """Quick activity timer records (meeting/review/break/other)."""
-from app.extensions import db
+from app.extensions import db, _local_now
 
 
 class ActivityTimer(db.Model):
@@ -12,6 +12,6 @@ class ActivityTimer(db.Model):
     started_at = db.Column(db.DateTime, nullable=False)
     minutes = db.Column(db.Integer, nullable=False, default=0)
     date = db.Column(db.Date, nullable=False)              # for grouping by day
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
 
     user = db.relationship('User', backref='activity_timers')

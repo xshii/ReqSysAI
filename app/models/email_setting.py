@@ -1,4 +1,4 @@
-from app.extensions import db
+from app.extensions import db, _local_now
 
 
 class EmailSetting(db.Model):
@@ -11,7 +11,7 @@ class EmailSetting(db.Model):
     to_list = db.Column(db.Text, nullable=True)
     cc_list = db.Column(db.Text, nullable=True)
     updated_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
+    updated_at = db.Column(db.DateTime, default=_local_now, onupdate=_local_now)
 
     __table_args__ = (
         db.UniqueConstraint('entity_type', 'entity_id', name='uq_email_setting_entity'),

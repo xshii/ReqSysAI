@@ -1,4 +1,4 @@
-from app.extensions import db
+from app.extensions import db, _local_now
 
 # Many-to-many: requirement dependencies
 requirement_dependencies = db.Table(
@@ -32,8 +32,8 @@ class Requirement(db.Model):
     ai_ratio = db.Column(db.Integer, nullable=True)  # AI辅助占比(%)
     completion = db.Column(db.Integer, default=0)  # 完成率(%) 0/30/60/90/100
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=db.func.now())
-    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
+    updated_at = db.Column(db.DateTime, default=_local_now, onupdate=_local_now)
 
     parent = db.relationship('Requirement', remote_side=[id], backref='children')
     project = db.relationship('Project', back_populates='requirements')
@@ -179,7 +179,7 @@ class Comment(db.Model):
     requirement_id = db.Column(db.Integer, db.ForeignKey('requirements.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
 
     requirement = db.relationship('Requirement', back_populates='comments')
     user = db.relationship('User', backref='comments')
@@ -193,7 +193,7 @@ class Activity(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     action = db.Column(db.String(50), nullable=False)  # created/status_changed/edited/commented/task_added
     detail = db.Column(db.String(500))
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
 
     requirement = db.relationship('Requirement', back_populates='activities')
     user = db.relationship('User', backref='activities')

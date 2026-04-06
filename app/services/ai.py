@@ -151,9 +151,16 @@ def call_ollama(prompt, system_prompt=None, messages=None, response_format=None)
     Args:
         response_format: If 'text', skip JSON extraction and return (None, raw_text).
     """
+    # Guard: AI disabled globally
+    if not current_app.config.get('AI_ENABLED', True):
+        return None, None
     if not _check_rate_limit():
         logger.warning('AI rate limit exceeded')
         return None, 'AI 调用过于频繁，请稍后再试'
+    # Truncate oversized prompts to avoid token blowout
+    _max_input = current_app.config.get('AI_INPUT_MAX', 5000)
+    if prompt and len(prompt) > _max_input:
+        prompt = prompt[:_max_input] + f'\n\n[...输入已截断至{_max_input}字]'
     if messages is None:
         messages = []
         # Use explicit system_prompt, or fall back to prompts.yml system_prompt

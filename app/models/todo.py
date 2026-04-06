@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 
-from app.extensions import db
+from app.extensions import db, _local_now
 
 todo_requirements = db.Table('todo_requirements',
     db.Column('todo_id', db.Integer, db.ForeignKey('todos.id'), primary_key=True),
@@ -26,8 +26,8 @@ class Todo(db.Model):
     blocked_reason = db.Column(db.String(200), nullable=True)  # 阻塞原因
     started_at = db.Column(db.DateTime, nullable=True)  # Timer start
     actual_minutes = db.Column(db.Integer, nullable=True)  # Recorded on completion
-    created_at = db.Column(db.DateTime, default=db.func.now())
-    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
+    updated_at = db.Column(db.DateTime, default=_local_now, onupdate=_local_now)
 
     user = db.relationship('User', backref='todos')
     requirements = db.relationship('Requirement', secondary=todo_requirements, backref='todos', lazy='joined')
@@ -121,7 +121,7 @@ class PomodoroSession(db.Model):
     started_at = db.Column(db.DateTime, nullable=True)  # When timer was started
     minutes = db.Column(db.Integer, nullable=False, default=0)
     completed = db.Column(db.Boolean, default=False)  # True if full pomodoro
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
 
     def __repr__(self):
         return f'<Pomodoro {self.minutes}min {"✓" if self.completed else "✗"}>'
@@ -137,7 +137,7 @@ class TodoItem(db.Model):
     title = db.Column(db.String(300), nullable=False)
     is_done = db.Column(db.Boolean, default=False)
     sort_order = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
 
     def __repr__(self):
         return f'<TodoItem {self.title}>'

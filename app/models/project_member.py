@@ -1,4 +1,4 @@
-from app.extensions import db
+from app.extensions import db, _local_now
 
 
 class ProjectMember(db.Model):
@@ -13,7 +13,7 @@ class ProjectMember(db.Model):
     is_key = db.Column(db.Boolean, default=True)  # 关键角色标记，仅PM可见
     expected_ratio = db.Column(db.Integer, nullable=True)  # 预期投入比例(%)
     sort_order = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
 
     project = db.relationship('Project', backref='members')
     user = db.relationship('User', backref='project_memberships')

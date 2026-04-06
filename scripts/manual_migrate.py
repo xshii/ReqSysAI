@@ -31,6 +31,8 @@ ALTER_STATEMENTS = [
     "ALTER TABLE incentives ADD COLUMN gift_notified_at DATETIME",
     "ALTER TABLE incentives ADD COLUMN gift_expires_at DATETIME",
     "ALTER TABLE incentives ADD COLUMN gift_notify_count INTEGER DEFAULT 0",
+    # users 表新增字段
+    "ALTER TABLE users ADD COLUMN team_view_mode VARCHAR(10) DEFAULT 'group'",
     # permission_applications 补字段
     "ALTER TABLE permission_applications ADD COLUMN applicant_eid VARCHAR(30)",
     # permission_items 补字段

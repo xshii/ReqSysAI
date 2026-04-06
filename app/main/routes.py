@@ -302,6 +302,21 @@ def quick_todo():
         category = 'work'
     today = date.today()
 
+    # Parse trailing duration shorthand: 2h, 3d, 1w → set due_date
+    import re as _re
+    _dur_match = _re.search(r'\s+(\d+)([hdw])$', title)
+    _parsed_due = None
+    if _dur_match:
+        _n = int(_dur_match.group(1))
+        _unit = _dur_match.group(2)
+        title = title[:_dur_match.start()].strip()
+        if _unit == 'h':
+            _parsed_due = today  # hours = same day
+        elif _unit == 'd':
+            _parsed_due = today + timedelta(days=_n)
+        elif _unit == 'w':
+            _parsed_due = today + timedelta(weeks=_n)
+
     # Handle #comment → add as requirement-level comment (not tied to specific todo)
     if title.startswith('#') and req_id:
         comment_text = title[1:].strip()
@@ -340,7 +355,8 @@ def quick_todo():
         group = Group.query.filter_by(name=at_target).first()
         if group:
             # Prevent duplicate broadcast (same title, same day, same sender)
-            already = Todo.query.filter_by(user_id=todo_user_id, title=title, due_date=today, category=category).first()
+            _due = _parsed_due or today
+            already = Todo.query.filter_by(user_id=todo_user_id, title=title, due_date=_due, category=category).first()
             if already:
                 result = {'ok': True, 'title': title, 'todo_id': already.id,
                           'helper': f'{at_target}(已广播)', 'is_help': False}
@@ -349,18 +365,19 @@ def quick_todo():
             members = User.query.filter_by(group=at_target, is_active=True)\
                 .filter(User.id != current_user.id).all()
             for member in members:
-                t = Todo(user_id=member.id, title=title, due_date=today,
+                t = Todo(user_id=member.id, title=title, due_date=_due,
                          category=category, requirements=reqs)
                 t.items.append(TodoItem(title=title, sort_order=0))
                 db.session.add(t)
             # Also create for the target user
-            my_todo = Todo(user_id=todo_user_id, title=title, due_date=today,
+            my_todo = Todo(user_id=todo_user_id, title=title, due_date=_due,
                            category=category, requirements=reqs)
             my_todo.items.append(TodoItem(title=title, sort_order=0))
             db.session.add(my_todo)
             db.session.commit()
+            _dl = (my_todo.due_date - today).days if my_todo.due_date and my_todo.due_date > today else 0
             result = {'ok': True, 'title': title, 'todo_id': my_todo.id,
-                      'helper': f'{at_target}({len(members)+1}人)', 'is_help': False}
+                      'helper': f'{at_target}({len(members)+1}人)', 'is_help': False, 'days_left': _dl}
             return jsonify(**result) if is_ajax else redirect(next_url or url_for('main.index'))
 
         # Single person help
@@ -368,7 +385,7 @@ def quick_todo():
             db.or_(User.name == at_target, User.pinyin.ilike(f'{at_target}%'))
         ).filter_by(is_active=True).first()
         if helper and helper.id != todo_user_id:
-            my_todo = Todo(user_id=todo_user_id, title=title, due_date=today,
+            my_todo = Todo(user_id=todo_user_id, title=title, due_date=_parsed_due or today,
                            category=category, source='help', requirements=reqs)
             my_todo.items.append(TodoItem(title=title, sort_order=0))
             db.session.add(my_todo)
@@ -378,14 +395,15 @@ def quick_todo():
             helper_todo.items.append(TodoItem(title=title, sort_order=0))
             db.session.add(helper_todo)
             db.session.commit()
+            _dl = (my_todo.due_date - today).days if my_todo.due_date and my_todo.due_date > today else 0
             result = {'ok': True, 'title': title, 'todo_id': my_todo.id,
-                      'helper': helper.name, 'is_help': True}
+                      'helper': helper.name, 'is_help': True, 'days_left': _dl}
             return jsonify(**result) if is_ajax else redirect(next_url or url_for('main.index'))
 
     # Normal todo (auto_done: create as already completed, for activity tracking)
     auto_done = data.get('auto_done', False) if is_ajax else False
     todo = Todo(
-        user_id=todo_user_id, title=title, due_date=today,
+        user_id=todo_user_id, title=title, due_date=_parsed_due or today,
         category=category, requirements=reqs,
     )
     if auto_done:
@@ -394,7 +412,8 @@ def quick_todo():
     todo.items.append(TodoItem(title=title, sort_order=0, is_done=auto_done))
     db.session.add(todo)
     db.session.commit()
-    return jsonify(ok=True, title=title, todo_id=todo.id) if is_ajax else redirect(next_url or url_for('main.index'))
+    _days_left = (todo.due_date - today).days if todo.due_date and todo.due_date > today else 0
+    return jsonify(ok=True, title=title, todo_id=todo.id, days_left=_days_left) if is_ajax else redirect(next_url or url_for('main.index'))
 
 
 @main_bp.route('/api/site-setting', methods=['POST'])
@@ -949,6 +968,10 @@ def daily_standup():
     users = User.query.filter_by(is_active=True).order_by(User.name).all()
     lines = [f'日期：{today}（昨天：{yesterday}）\n']
 
+    def _req_label(r):
+        proj = r.project.name if r.project else ''
+        return f'{proj}/{r.title}' if proj else r.title
+
     for u in users:
         done_yesterday = Todo.query.filter(
             Todo.user_id == u.id, Todo.done_date == yesterday
@@ -959,19 +982,25 @@ def daily_standup():
         blocked = [t for t in active_today if t.need_help]
 
         lines.append(f'\n{u.name}（{u.group or ""}）：')
+        lines.append(f'  昨日完成{len(done_yesterday)}项：')
         if done_yesterday:
-            lines.append('  昨日完成：')
             for t in done_yesterday:
-                reqs = ', '.join(r.number for r in t.requirements)
-                lines.append(f'  - {t.title}（{reqs}）')
+                reqs = ', '.join(_req_label(r) for r in t.requirements)
+                lines.append(f'  - {t.title}' + (f'（{reqs}）' if reqs else ''))
         else:
-            lines.append('  昨日完成：无')
+            lines.append('  （无产出）')
+
+        overdue_todos = [t for t in active_today if t.workdays_overdue > 0]
+        if overdue_todos:
+            lines.append(f'  延期todo {len(overdue_todos)}项：')
+            for t in overdue_todos:
+                lines.append(f'  - {t.title}，延{t.workdays_overdue}个工作日')
 
         if active_today:
-            lines.append('  今日进行中：')
+            lines.append(f'  今日进行中{len(active_today)}项：')
             for t in active_today[:5]:
-                reqs = ', '.join(r.number for r in t.requirements)
-                lines.append(f'  - {t.title}（{reqs}）')
+                reqs = ', '.join(_req_label(r) for r in t.requirements)
+                lines.append(f'  - {t.title}' + (f'（{reqs}）' if reqs else ''))
         if blocked:
             lines.append('  阻塞：')
             for t in blocked:
@@ -983,26 +1012,351 @@ def daily_standup():
     overdue_reqs = Requirement.query.filter(
         Requirement.status.notin_(('done', 'closed', 'cancelled')),
         Requirement.due_date < today
-    ).all()
+    ).options(joinedload(Requirement.project)).all()
     if overdue_reqs:
         lines.append('\n全组延期需求：')
         for r in overdue_reqs:
             days = (today - r.due_date).days
-            lines.append(f'- [{r.number}] {r.title}（延期{days}天，{r.assignee_display}）')
+            pct = r.completion or 0
+            lines.append(f'- {_req_label(r)}：延期{days}天，完成度{pct}%，负责人{r.assignee_display}')
 
     # Open risks
     open_risks = Risk.query.filter_by(status='open').filter(Risk.deleted_at.is_(None)).all()
     if open_risks:
         lines.append('\n未解决风险：')
         for r in open_risks:
-            lines.append(f'- {r.title}（{r.severity_label}）')
+            due_info = ''
+            if r.due_date and r.due_date < today:
+                due_info = f'，超期{(today - r.due_date).days}天'
+            lines.append(f'- {r.title}（{r.severity_label}{due_info}）')
 
     prompt = get_prompt('daily_standup') + '\n\n' + '\n'.join(lines)
     _, raw = call_ollama(prompt)
     if raw:
         html = md_lib.markdown(raw, extensions=['tables'])
         return jsonify(ok=True, html=html)
-    return jsonify(ok=False, error='AI服务暂不可用，正在紧急修复')
+    return jsonify(ok=False, error='AI服务暂不可用')
+
+
+@main_bp.route('/api/standup-eml', methods=['POST'])
+@login_required
+def standup_eml():
+    """Generate structured HTML email for daily standup — tables, progress bars, change highlights."""
+    from html import escape as h
+    from app.models.requirement import Requirement
+    from app.models.risk import Risk
+
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    if today.weekday() == 0:
+        yesterday = today - timedelta(days=3)
+
+    # Determine scope: group or project
+    view_mode = current_user.team_view_mode or 'group'
+    project_id = request.json.get('project_id') if request.json else None
+
+    _hidden_pids = set(g.hidden_pids) if hasattr(g, 'hidden_pids') else set()
+
+    if view_mode == 'project' and project_id:
+        from app.models.project import Project
+        from app.models.project_member import ProjectMember
+        # Auth: verify current user is a member
+        if not ProjectMember.query.filter_by(project_id=project_id, user_id=current_user.id).first():
+            return jsonify(ok=False, error='无权访问该项目')
+        proj = Project.query.get(project_id)
+        sub_pids = [c.id for c in Project.query.filter_by(parent_id=project_id).all()]
+        all_pids = [pid for pid in [project_id] + sub_pids if pid not in _hidden_pids]
+        member_uids = list({m.user_id for m in ProjectMember.query.filter(
+            ProjectMember.project_id.in_(all_pids)).all() if m.user_id})
+        users = User.query.filter(User.id.in_(member_uids), User.is_active == True).order_by(User.name).all()
+        scope_name = proj.name if proj else '项目'
+        scope_reqs = Requirement.query.filter(Requirement.project_id.in_(all_pids))
+    else:
+        cur_group = current_user.group or ''
+        users = User.query.filter_by(is_active=True, group=cur_group).order_by(User.name).all() if cur_group else []
+        scope_name = cur_group or '全组'
+        scope_reqs = Requirement.query
+
+    # Requirement stats
+    active_reqs = scope_reqs.filter(Requirement.status.notin_(('done', 'closed', 'cancelled'))).options(
+        joinedload(Requirement.project)).all()
+    total_reqs = scope_reqs.count()
+    done_reqs = scope_reqs.filter(Requirement.status.in_(('done', 'closed'))).count()
+    overdue_reqs = [r for r in active_reqs if r.due_date and r.due_date < today]
+    pct = round(done_reqs / total_reqs * 100) if total_reqs else 0
+
+    # Per-user data — batch load todos to avoid N+1
+    user_ids = [u.id for u in users]
+    day_before = yesterday - timedelta(days=1)
+    all_biz_todos = Todo.query.filter(
+        Todo.user_id.in_(user_ids),
+        Todo.category.in_(['work', 'risk']),
+        db.or_(
+            Todo.done_date.in_([yesterday, today, day_before]),
+            Todo.status == 'todo',
+        ),
+    ).all() if user_ids else []
+
+    # Index by user
+    _todos_by_user = {}
+    for t in all_biz_todos:
+        _todos_by_user.setdefault(t.user_id, []).append(t)
+
+    user_rows = []
+    all_blockers = []
+    for u in users:
+        _utodos = _todos_by_user.get(u.id, [])
+        done_y = sum(1 for t in _utodos if t.done_date == yesterday)
+        done_t = sum(1 for t in _utodos if t.done_date == today)
+        done_db = sum(1 for t in _utodos if t.done_date == day_before)
+        active = [t for t in _utodos if t.status == 'todo']
+        overdue_t = sum(1 for t in active if t.workdays_overdue > 0)
+        blocked = [t for t in active if t.need_help]
+        for t in blocked:
+            all_blockers.append({'user': h(u.name), 'title': h(t.title),
+                                  'reason': h(t.blocked_reason or ''), 'days': t.workdays_overdue or 0})
+
+        if done_y > done_db:
+            trend = '↑'
+        elif done_y < done_db:
+            trend = '↓'
+        else:
+            trend = '→'
+
+        if done_y == 0 and len(active) > 0:
+            status = 'red'
+            status_text = '无产出'
+        elif overdue_t > 0:
+            status = 'orange'
+            status_text = f'{overdue_t}项延期'
+        elif done_y > 0:
+            status = 'green'
+            status_text = '正常'
+        else:
+            status = 'gray'
+            status_text = '无任务'
+
+        user_rows.append({
+            'name': h(u.name), 'done_yesterday': done_y, 'done_today': done_t,
+            'active': len(active), 'overdue': overdue_t, 'blocked': len(blocked),
+            'trend': trend, 'status': status, 'status_text': status_text,
+        })
+
+    # Build HTML email
+    S = lambda c: f'color:{c};font-weight:600;'
+    status_colors = {'red': '#dc3545', 'orange': '#fd7e14', 'green': '#198754', 'gray': '#6c757d'}
+
+    html = f'''<html><head><meta charset="UTF-8"></head>
+<body style="font-family:Microsoft YaHei,Segoe UI,sans-serif;margin:0;padding:20px;background:#f5f5f5;">
+<div style="max-width:700px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1);">
+
+<!-- Header -->
+<div style="background:#2d3748;color:#fff;padding:16px 20px;">
+<div style="font-size:18px;font-weight:700;">站会进展 · {scope_name}</div>
+<div style="font-size:13px;opacity:.8;margin-top:4px;">{today.strftime("%Y-%m-%d")} · 对比前日 {yesterday.strftime("%m-%d")}</div>
+</div>
+
+<!-- Project Progress Bar -->
+<div style="padding:12px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+<div style="font-size:12px;color:#64748b;margin-bottom:4px;">需求进度 {done_reqs}/{total_reqs}（{pct}%）</div>
+<div style="background:#e2e8f0;border-radius:4px;height:10px;overflow:hidden;">
+<div style="background:{"#198754" if pct >= 70 else "#ffc107" if pct >= 40 else "#dc3545"};height:10px;width:{pct}%;border-radius:4px;"></div>
+</div>
+</div>'''
+
+    # Alert section
+    alerts = []
+    for r in overdue_reqs:
+        days = (today - r.due_date).days
+        proj_name = h(r.project.name) if r.project else ''
+        alerts.append(f'<span style="color:#dc3545;font-weight:700;">[逾期]</span> <b>{proj_name}/{h(r.title)}</b>：超期{days}天，完成度{r.completion or 0}%，{h(r.assignee_display)}')
+    for b in all_blockers:
+        alerts.append(f'<span style="color:#dc3545;font-weight:700;">[阻塞]</span> <b>{b["user"]}</b>：{b["title"]}（{b["reason"] or "原因未填"}，阻塞{b["days"]}天）')
+    risk_query = Risk.query.filter_by(status='open').filter(Risk.deleted_at.is_(None))
+    if view_mode == 'project' and project_id:
+        risk_query = risk_query.filter(Risk.project_id.in_(all_pids))
+    open_risks = risk_query.options(joinedload(Risk.project), joinedload(Risk.tracker),
+                                     joinedload(Risk.owner_user), joinedload(Risk.comments)).all()
+    for r in open_risks:
+        due_info = f'超期{(today - r.due_date).days}天' if r.due_date and r.due_date < today else ''
+        alerts.append(f'<span style="color:#fd7e14;font-weight:700;">[风险]</span> {h(r.title)}（{r.severity_label}{"，" + due_info if due_info else ""}）')
+
+    if alerts:
+        html += '<div style="padding:12px 20px;background:#fef2f2;border-bottom:1px solid #fecaca;">'
+        html += '<div style="font-size:13px;font-weight:700;color:#dc3545;margin-bottom:6px;">需要关注</div>'
+        for a in alerts:
+            html += f'<div style="font-size:12px;color:#4a5568;padding:2px 0;">{a}</div>'
+        html += '</div>'
+    else:
+        html += '<div style="padding:8px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;">'
+        html += '<div style="font-size:13px;color:#198754;">无异常</div></div>'
+
+    # People table
+    html += '''<div style="padding:16px 20px;">
+<div style="font-size:14px;font-weight:700;color:#2d3748;margin-bottom:8px;">成员进展</div>
+<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;">
+<tr style="background:#f7fafc;">
+<th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;color:#4a5568;">成员</th>
+<th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;color:#4a5568;">昨日完成</th>
+<th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;color:#4a5568;">趋势</th>
+<th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;color:#4a5568;">进行中</th>
+<th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;color:#4a5568;">延期</th>
+<th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;color:#4a5568;">状态</th>
+</tr>'''
+
+    for i, row in enumerate(user_rows):
+        bg = '#fff' if i % 2 == 0 else '#fafbfc'
+        sc = status_colors.get(row['status'], '#6c757d')
+        trend_color = '#198754' if row['trend'] == '↑' else '#dc3545' if row['trend'] == '↓' else '#6c757d'
+        overdue_cell = f'<span style="color:#dc3545;font-weight:700;">{row["overdue"]}</span>' if row['overdue'] > 0 else '0'
+        done_style = f'color:#dc3545;font-weight:700;' if row['done_yesterday'] == 0 and row['active'] > 0 else 'color:#2d3748;'
+        html += f'''<tr style="background:{bg};">
+<td style="border:1px solid #e2e8f0;padding:6px 10px;">{row["name"]}</td>
+<td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;{done_style}">{row["done_yesterday"]}</td>
+<td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;color:{trend_color};font-size:16px;">{row["trend"]}</td>
+<td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;">{row["active"]}</td>
+<td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;">{overdue_cell}</td>
+<td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;"><span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;background:{sc}20;color:{sc};font-weight:600;">{row["status_text"]}</span></td>
+</tr>'''
+
+    html += '</table></div>'
+
+    # Overdue requirements detail table
+    if overdue_reqs:
+        html += '''<div style="padding:0 20px 16px;">
+<div style="font-size:14px;font-weight:700;color:#dc3545;margin-bottom:8px;">逾期需求明细</div>
+<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;">
+<tr style="background:#fef2f2;">
+<th style="border:1px solid #fecaca;padding:5px 8px;text-align:left;color:#991b1b;">需求</th>
+<th style="border:1px solid #fecaca;padding:5px 8px;text-align:center;color:#991b1b;">超期</th>
+<th style="border:1px solid #fecaca;padding:5px 8px;text-align:center;color:#991b1b;">完成度</th>
+<th style="border:1px solid #fecaca;padding:5px 8px;text-align:left;color:#991b1b;">负责人</th>
+</tr>'''
+        for r in sorted(overdue_reqs, key=lambda x: (today - x.due_date).days, reverse=True):
+            days = (today - r.due_date).days
+            pct_r = r.completion or 0
+            proj_name = h(r.project.name) if r.project else ''
+            bar_color = '#dc3545' if pct_r < 50 else '#ffc107' if pct_r < 80 else '#198754'
+            html += f'''<tr>
+<td style="border:1px solid #fecaca;padding:5px 8px;">{proj_name}/{h(r.title)}</td>
+<td style="border:1px solid #fecaca;padding:5px 8px;text-align:center;color:#dc3545;font-weight:700;">{days}天</td>
+<td style="border:1px solid #fecaca;padding:5px 8px;text-align:center;">
+<div style="background:#e2e8f0;border-radius:3px;height:6px;width:60px;display:inline-block;vertical-align:middle;"><div style="background:{bar_color};height:6px;border-radius:3px;width:{pct_r}%;"></div></div> {pct_r}%
+</td>
+<td style="border:1px solid #fecaca;padding:5px 8px;">{h(r.assignee_display)}</td>
+</tr>'''
+        html += '</table></div>'
+
+    # ── Risk & Blocker detail table ──
+    if open_risks or all_blockers:
+        sev_colors = {'high': '#dc3545', 'medium': '#fd7e14', 'low': '#6c757d'}
+        html += '''<div style="padding:0 20px 16px;">
+<div style="font-size:14px;font-weight:700;color:#2d3748;margin-bottom:8px;">风险与问题</div>
+<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;">
+<tr style="background:#f7fafc;">
+<th style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;color:#4a5568;width:50px;">类型</th>
+<th style="border:1px solid #e2e8f0;padding:5px 8px;text-align:left;color:#4a5568;">描述</th>
+<th style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;color:#4a5568;width:50px;">级别</th>
+<th style="border:1px solid #e2e8f0;padding:5px 8px;text-align:left;color:#4a5568;width:70px;">责任人</th>
+<th style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;color:#4a5568;width:60px;">时限</th>
+<th style="border:1px solid #e2e8f0;padding:5px 8px;text-align:left;color:#4a5568;">最新进展</th>
+</tr>'''
+        # Risks
+        for r in sorted(open_risks, key=lambda x: {'high': 0, 'medium': 1, 'low': 2}.get(x.severity, 3)):
+            sc = sev_colors.get(r.severity, '#6c757d')
+            proj_name = r.project.name if r.project else ''
+            owner_name = r.owner_user.name if r.owner_user else (r.owner or '')
+            due_str = ''
+            if r.due_date:
+                if r.due_date < today:
+                    due_str = f'<span style="color:#dc3545;font-weight:700;">超{(today - r.due_date).days}天</span>'
+                elif r.due_date == today:
+                    due_str = f'<span style="color:#fd7e14;font-weight:700;">今天</span>'
+                else:
+                    due_str = r.due_date.strftime('%m-%d')
+            # Latest comment as progress
+            latest = ''
+            if r.comments:
+                c = r.comments[0]
+                latest = f'{c.created_at.strftime("%m-%d")} {h(c.content[:40])}{"..." if len(c.content) > 40 else ""}'
+            html += f'''<tr>
+<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;"><span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;background:{sc}18;color:{sc};font-weight:600;">风险</span></td>
+<td style="border:1px solid #e2e8f0;padding:5px 8px;">{h(proj_name)}/{h(r.title)}</td>
+<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;"><span style="color:{sc};font-weight:600;">{r.severity_label}</span></td>
+<td style="border:1px solid #e2e8f0;padding:5px 8px;">{h(owner_name)}</td>
+<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;">{due_str}</td>
+<td style="border:1px solid #e2e8f0;padding:5px 8px;color:#64748b;font-size:11px;">{latest or "<i>无进展</i>"}</td>
+</tr>'''
+        # Blockers
+        for b in all_blockers:
+            due_str = f'<span style="color:#dc3545;font-weight:700;">{b["days"]}天</span>' if b['days'] > 0 else '-'
+            html += f'''<tr>
+<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;"><span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;background:#dc354518;color:#dc3545;font-weight:600;">阻塞</span></td>
+<td style="border:1px solid #e2e8f0;padding:5px 8px;">{b["title"]}</td>
+<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;">-</td>
+<td style="border:1px solid #e2e8f0;padding:5px 8px;">{b["user"]}</td>
+<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;">{due_str}</td>
+<td style="border:1px solid #e2e8f0;padding:5px 8px;color:#64748b;font-size:11px;">{b["reason"] or "<i>原因未填</i>"}</td>
+</tr>'''
+        html += '</table></div>'
+
+    # ── Rule-based strategic analysis (no AI needed) ──
+    insights = []
+
+    # Rule 1: Consecutive zero output
+    for row in user_rows:
+        if row['done_yesterday'] == 0 and row['trend'] == '↓' and row['active'] > 0:
+            insights.append(('danger', f'<b>{row["name"]}</b> 连续无产出且有{row["active"]}项待办，建议确认是否遇到困难'))
+        elif row['done_yesterday'] == 0 and row['active'] > 0:
+            insights.append(('warn', f'<b>{row["name"]}</b> 昨日无完成项，当前{row["active"]}项进行中'))
+
+    # Rule 2: High overdue ratio
+    for row in user_rows:
+        if row['active'] > 0 and row['overdue'] > 0:
+            ratio = row['overdue'] / row['active']
+            if ratio >= 0.5:
+                insights.append(('danger', f'<b>{row["name"]}</b> 延期占比{round(ratio*100)}%（{row["overdue"]}/{row["active"]}），需重新排期'))
+
+    # Rule 3: Requirement overdue > 5 days — escalation
+    for r in overdue_reqs:
+        days = (today - r.due_date).days
+        if days >= 5:
+            proj_name = r.project.name if r.project else ''
+            insights.append(('danger', f'<b>{proj_name}/{r.title}</b> 超期{days}天（完成{r.completion or 0}%），建议升级处理'))
+
+    # Rule 4: Blockers lasting > 2 days
+    for b in all_blockers:
+        if b['days'] >= 2:
+            insights.append(('warn', f'<b>{b["user"]}</b> 的「{b["title"]}」已阻塞{b["days"]}天，需协调资源'))
+
+    # Rule 5: Team capacity — everyone done, can take more
+    all_done_users = [row['name'] for row in user_rows if row['status'] == 'green' and row['overdue'] == 0 and row['active'] <= 1]
+    if all_done_users and len(all_done_users) < len(user_rows):
+        insights.append(('info', f'{", ".join(all_done_users)} 当前负荷较轻，可分担延期任务'))
+
+    # Rule 6: Overall progress risk
+    if total_reqs > 0:
+        overdue_ratio = len(overdue_reqs) / total_reqs
+        if overdue_ratio >= 0.3:
+            insights.append(('danger', f'全组{round(overdue_ratio*100)}%需求逾期（{len(overdue_reqs)}/{total_reqs}），交付风险高'))
+        elif overdue_ratio >= 0.15:
+            insights.append(('warn', f'{round(overdue_ratio*100)}%需求逾期，需关注交付节奏'))
+
+    if insights:
+        _level_colors = {'danger': '#dc3545', 'warn': '#fd7e14', 'info': '#0d6efd'}
+        html += '<div style="padding:12px 20px;border-top:2px solid #e2e8f0;">'
+        html += '<div style="font-size:14px;font-weight:700;color:#2d3748;margin-bottom:8px;">策略分析</div>'
+        for level, text in insights:
+            dot_c = _level_colors.get(level, '#6c757d')
+            html += f'<div style="font-size:12px;color:#4a5568;padding:3px 0;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{dot_c};margin-right:6px;vertical-align:middle;"></span>{text}</div>'
+        html += '</div>'
+
+    # Footer
+    html += f'''<div style="padding:10px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center;">
+由 {g.get("site_name", "ReqSysAI")} 自动生成 · {today.strftime("%Y-%m-%d %H:%M")}
+</div></div></body></html>'''
+
+    return jsonify(ok=True, html=html, subject=f'站会进展 {today.strftime("%Y-%m-%d")} — {scope_name}')
 
 
 # ---- Daily Progress Report ----
@@ -1010,151 +1364,141 @@ def daily_standup():
 @main_bp.route('/api/daily-progress', methods=['POST'])
 @login_required
 def daily_progress():
-    """Generate formatted daily progress for current user."""
+    """Generate formatted daily progress for current user.
+
+    Focus: expectation vs reality, actual effort, overdue alerts.
+    No requirement numbers — use project name + requirement title.
+    """
     from app.models.requirement import Requirement
     from app.models.risk import Risk
 
     today = date.today()
+    yesterday = today - timedelta(days=1)
+    if today.weekday() == 0:  # Monday → Friday
+        yesterday = today - timedelta(days=3)
 
-    # Only business todos (risk + requirement linked), not team/personal
+    # All business todos
     all_biz = Todo.query.filter(
         Todo.user_id == current_user.id,
         Todo.category.in_(['work', 'risk']),
     ).options(joinedload(Todo.requirements)).all()
 
     done_today = [t for t in all_biz if t.done_date == today]
+    done_yesterday = [t for t in all_biz if t.done_date == yesterday]
     active = [t for t in all_biz if t.status == 'todo']
     blocked = [t for t in active if t.need_help]
 
-    # Requirement progress (completion %)
+    # My active requirements
     my_reqs = Requirement.query.filter(
         Requirement.assignee_id == current_user.id,
         Requirement.status.notin_(('done', 'closed', 'cancelled')),
     ).options(joinedload(Requirement.project)).all()
 
-    # Build person context
-    from app.models.project_member import ProjectMember
-    my_roles = '、'.join(r.name for r in current_user.roles) or '成员'
-    lines = [f'汇报人：{current_user.name}（{my_roles}，{current_user.group or ""}）']
+    # Helper: requirement display name (project + title, no number)
+    def req_label(r):
+        proj = r.project.name if r.project else ''
+        return f'{proj}/{r.title}' if proj else r.title
 
-    # Collect project members from related projects
-    project_ids = set(r.project_id for r in my_reqs if r.project_id)
-    if project_ids:
-        members = ProjectMember.query.filter(
-            ProjectMember.project_id.in_(project_ids)
-        ).all()
-        if members:
-            lines.append('项目成员：')
-            seen = set()
-            for m in members:
-                if m.user_id and m.user_id not in seen:
-                    seen.add(m.user_id)
-                    u = db.session.get(User, m.user_id)
-                    if u:
-                        u_roles = '、'.join(r.name for r in u.roles) or '成员'
-                        lines.append(f'  - {u.name}（{u_roles}，项目角色：{m.project_role}）')
-                elif m.external_name and m.external_name not in seen:
-                    seen.add(m.external_name)
-                    lines.append(f'  - {m.external_name}（外部，项目角色：{m.project_role}）')
+    def todo_req_label(t):
+        if t.requirements:
+            return '，'.join(req_label(r) for r in t.requirements[:2])
+        return ''
 
-    lines.append(f'\n【{today.strftime("%Y-%m-%d")}】进展：')
+    # === Build structured data for AI ===
+    lines = [f'汇报人：{current_user.name}']
+    lines.append(f'日期：{today.strftime("%Y-%m-%d")}（对比昨日：{yesterday.strftime("%m-%d")}）')
 
-    if done_today:
-        for i, t in enumerate(done_today, 1):
-            reqs = '、'.join(r.number for r in t.requirements)
-            suffix = f'（{reqs}）' if reqs else ''
-            lines.append(f'{i}. {t.title}{suffix}')
+    # Section 1: Yesterday done (expectation check)
+    lines.append(f'\n昨日完成（{yesterday.strftime("%m-%d")}）：')
+    if done_yesterday:
+        for t in done_yesterday:
+            rl = todo_req_label(t)
+            lines.append(f'  ✓ {t.title}（{rl}）')
     else:
-        lines.append('（暂无完成项）')
+        lines.append('  （无完成项——需关注是否符合预期）')
 
-    if active:
-        lines.append('')
-        lines.append('进行中：')
-        for i, t in enumerate(active, 1):
-            reqs = '、'.join(r.number for r in t.requirements)
-            suffix = f'（{reqs}）' if reqs else ''
-            overdue = f'，延{t.workdays_overdue}天' if t.workdays_overdue else ''
-            lines.append(f'{i}. {t.title}{suffix}{overdue}')
+    # Section 3: Today done so far
+    if done_today:
+        lines.append(f'\n今日已完成：')
+        for t in done_today:
+            rl = todo_req_label(t)
+            lines.append(f'  ✓ {t.title}（{rl}）')
 
-    # Requirement completion %
-    if my_reqs:
-        lines.append('')
-        lines.append('需求进度：')
-        for r in my_reqs:
-            total = Todo.query.filter(
-                Todo.user_id == current_user.id
-            ).join(todo_requirements, Todo.id == todo_requirements.c.todo_id)\
-             .filter(todo_requirements.c.requirement_id == r.id).count()
-            done = Todo.query.filter(
-                Todo.user_id == current_user.id, Todo.status == 'done'
-            ).join(todo_requirements, Todo.id == todo_requirements.c.todo_id)\
-             .filter(todo_requirements.c.requirement_id == r.id).count()
-            pct = round(done / total * 100) if total else 0
-            due_info = f'，截止{r.due_date.strftime("%m-%d")}' if r.due_date else ''
-            overdue_info = f'，已超期{(today - r.due_date).days}天' if r.due_date and r.due_date < today else ''
-            lines.append(f'- [{r.number}] {r.title}：完成{pct}%（{done}/{total}）{due_info}{overdue_info}')
+    # Section 4: In progress + overdue highlight
+    lines.append(f'\n进行中（{len(active)} 项）：')
+    overdue_todos = [t for t in active if t.workdays_overdue > 0]
+    normal_todos = [t for t in active if t.workdays_overdue == 0]
+    if overdue_todos:
+        lines.append(f'  🔴 延期 {len(overdue_todos)} 项：')
+        for t in sorted(overdue_todos, key=lambda x: -x.workdays_overdue):
+            rl = todo_req_label(t)
+            lines.append(f'    - {t.title}（{rl}），延期{t.workdays_overdue}个工作日')
+    for t in normal_todos[:8]:
+        rl = todo_req_label(t)
+        lines.append(f'  - {t.title}（{rl}）')
+    if len(normal_todos) > 8:
+        lines.append(f'  ...及其他 {len(normal_todos) - 8} 项')
 
-    # Blocked todos + open risks → "当前问题"
+    # Section 5: Requirement health — focus on overdue and completion gap
+    overdue_reqs = [r for r in my_reqs if r.due_date and r.due_date < today]
+    approaching_reqs = [r for r in my_reqs if r.due_date and 0 <= (r.due_date - today).days <= 3 and r not in overdue_reqs]
+    if overdue_reqs or approaching_reqs:
+        lines.append('\n需求截止情况：')
+        for r in overdue_reqs:
+            days = (today - r.due_date).days
+            pct = r.completion or 0
+            lines.append(f'  🔴 {req_label(r)}：已超期{days}天，完成度{pct}%')
+        for r in approaching_reqs:
+            days = (r.due_date - today).days
+            pct = r.completion or 0
+            lines.append(f'  🟡 {req_label(r)}：{days}天后到期（{r.due_date.strftime("%m-%d")}），完成度{pct}%')
+
+    # Section 6: Blockers
     open_risks = Risk.query.filter(
-        Risk.status == 'open',
+        Risk.status == 'open', Risk.deleted_at.is_(None),
         db.or_(Risk.tracker_id == current_user.id, Risk.created_by == current_user.id),
     ).all()
     if blocked or open_risks:
-        lines.append('')
-        lines.append('当前问题：')
-        idx = 1
+        lines.append('\n阻塞与风险：')
         for t in blocked:
-            days = t.workdays_overdue or 0
-            owner = current_user.name
-            owner_role = my_roles
-            if t.requirements:
-                req = t.requirements[0]
-                if req.assignee_id and req.assignee_id != current_user.id:
-                    assignee_user = db.session.get(User, req.assignee_id)
-                    if assignee_user:
-                        owner = assignee_user.name
-                        owner_role = '、'.join(r.name for r in assignee_user.roles) or '成员'
-                    else:
-                        owner = req.assignee_display
-                        owner_role = ''
-            reason = t.blocked_reason or '待解决'
-            role_tag = f'（{owner_role}）' if owner_role else ''
-            lines.append(f'{idx}. {t.title}——责任人：{owner}{role_tag}，阻塞{days}天 / {reason}')
-            idx += 1
+            reason = t.blocked_reason or '原因未填'
+            lines.append(f'  🚫 {t.title}——{reason}（阻塞{t.workdays_overdue or 0}天）')
         for r in open_risks:
-            tracker = db.session.get(User, r.tracker_id)
-            tracker_name = tracker.name if tracker else '未指定'
-            tracker_role = ('、'.join(rl.name for rl in tracker.roles) if tracker else '')
-            role_tag = f'（{tracker_role}）' if tracker_role else ''
-            days = (today - r.due_date).days if r.due_date and r.due_date < today else 0
-            due_info = f'超期{days}天' if days > 0 else (f'截止{r.due_date.strftime("%m-%d")}' if r.due_date else '')
-            lines.append(f'{idx}. [风险] {r.title}（{r.severity_label}）——跟踪人：{tracker_name}{role_tag}，{due_info}')
-            idx += 1
+            due_info = ''
+            if r.due_date and r.due_date < today:
+                due_info = f'超期{(today - r.due_date).days}天'
+            elif r.due_date:
+                due_info = f'截止{r.due_date.strftime("%m-%d")}'
+            lines.append(f'  ⚠ [风险] {r.title}（{r.severity_label}）{due_info}')
 
     raw_data = '\n'.join(lines)
 
-    # No data at all — return as-is, don't call AI
-    if not done_today and not active and not my_reqs:
+    # No data at all
+    if not done_today and not done_yesterday and not active and not my_reqs:
         return jsonify(ok=True, text=raw_data)
 
-    # Let AI format it nicely
+    # AI formatting
     from app.services.ai import call_ollama
     prompt = (
-        '你是一个研发日报助手。将以下原始数据整理成格式化的每日进展报告。\n'
-        f'当前用户：{current_user.name}\n\n'
+        '你是研发日报助手。将原始数据整理为简洁的每日进展，重点突出三件事：\n'
+        '1. 昨日进展是否符合预期（完成了多少，是否有产出）\n'
+        '2. 延期和风险项（最醒目的位置）\n'
+        '3. 今日待推进的重点\n\n'
         '输出格式（纯文本，不要 JSON、不要 markdown）：\n'
-        f'【{today.strftime("%Y-%m-%d")}】进展：\n'
-        '1. 完成的事项（过去式描述成果）\n\n'
-        '进行中：\n'
-        '1. 正在做的事项（描述当前进度）\n\n'
-        '当前问题：\n'
-        f'1. 具体问题描述——责任人：{current_user.name}，阻塞N天/预期解决时间x.x\n\n'
-        '红线规则（违反则输出无效）：\n'
-        '1. 严禁编造原始数据中不存在的任务、人名、数字\n'
-        '2. 责任人/跟踪人必须使用原始数据中出现的人名，不能编造\n'
-        '3. 问题描述必须写具体内容（如"SSO token刷新接口未修复"），不要写"问题描述"四个字\n'
-        '4. 没有数据的部分直接省略，不要输出空段落\n'
-        '5. 可以合并相似任务、润色措辞，但不能添加不存在的内容\n\n'
+        f'【{today.strftime("%Y-%m-%d")}】{current_user.name} 进展\n\n'
+        '昨日回顾：\n'
+        '（一句话总结昨日产出是否达预期）\n'
+        '- 完成项列表\n\n'
+        '⚠ 延期/风险：\n'
+        '- 延期项和风险（无则省略本段）\n\n'
+        '今日重点：\n'
+        '- 最重要的2-3件事\n\n'
+        '红线规则：\n'
+        '1. 严禁编造不存在的任务、人名、数字\n'
+        '2. 不要输出需求编号（如REQ-xxx）\n'
+        '3. 用项目名/需求标题代替编号，读者不需要知道编号\n'
+        '4. 没有数据的段落直接省略\n'
+        '5. 延期和风险要用醒目措辞，让读者第一眼看到\n\n'
         '原始数据：\n' + raw_data
     )
     _, ai_text = call_ollama(prompt)

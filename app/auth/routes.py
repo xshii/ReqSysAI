@@ -266,6 +266,14 @@ def toggle_my_group():
     return api_ok(only_my_group=current_user.only_my_group)
 
 
+@auth_bp.route('/profile/toggle-team-view', methods=['POST'])
+@login_required
+def toggle_team_view():
+    current_user.team_view_mode = 'project' if current_user.team_view_mode == 'group' else 'group'
+    db.session.commit()
+    return api_ok(team_view_mode=current_user.team_view_mode)
+
+
 @auth_bp.route('/profile/stats')
 @login_required
 def profile_stats():

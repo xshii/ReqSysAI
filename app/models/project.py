@@ -1,4 +1,4 @@
-from app.extensions import db
+from app.extensions import db, _local_now
 
 
 class Project(db.Model):
@@ -12,8 +12,8 @@ class Project(db.Model):
     parent_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True)
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=db.func.now())
-    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
+    updated_at = db.Column(db.DateTime, default=_local_now, onupdate=_local_now)
 
     parent = db.relationship('Project', remote_side=[id], backref='children')
     owner = db.relationship('User', foreign_keys=[owner_id], backref='owned_projects')
@@ -50,7 +50,7 @@ class Milestone(db.Model):
     name = db.Column(db.String(200), nullable=False)
     due_date = db.Column(db.Date)
     status = db.Column(db.String(20), default='active')
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
 
     project = db.relationship('Project', back_populates='milestones')
 
@@ -64,7 +64,7 @@ class MilestoneTemplate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
     description = db.Column(db.String(300), nullable=True)
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
 
     items = db.relationship('MilestoneTemplateItem', backref='template',
                             cascade='all, delete-orphan', order_by='MilestoneTemplateItem.sort_order')

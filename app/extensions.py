@@ -77,6 +77,13 @@ migrate = Migrate()
 login_manager = LoginManager()
 csrf = CSRFProtect()
 
+
+def _local_now():
+    """Return current local datetime. Use as default= in Column definitions
+    instead of db.func.now() which returns UTC in SQLite."""
+    return _dt.now()
+
+
 login_manager.login_view = 'auth.login'
 login_manager.login_message = '请先登录'
 login_manager.login_message_category = 'warning'

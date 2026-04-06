@@ -472,17 +472,44 @@ def team():
     # Hidden project filtering (privacy mode)
     _hidden_pids = set(g.hidden_pids)
 
+    view_mode = current_user.team_view_mode or 'group'
     groups = [g.name for g in Group.query.order_by(Group.name).all()]
+    cur_group = ''
+    cur_project_id = None
+    cur_project_obj = None
 
-    cur_group = request.args.get('group', current_user.group or '')
-    # Default to first group if none selected
-    if not cur_group and groups:
-        cur_group = groups[0]
+    project_pids = []  # project + sub-project ids for filtering
 
-    user_query = User.query.filter_by(is_active=True)
-    if cur_group:
-        user_query = user_query.filter_by(group=cur_group)
-    users = user_query.order_by(User.group, User.name).all()
+    if view_mode == 'project':
+        from app.models.project import Project
+        from app.models.project_member import ProjectMember
+        cur_project_id = request.args.get('project_id', type=int)
+        # Default to user's first followed/member project
+        if not cur_project_id:
+            first_membership = ProjectMember.query.filter_by(user_id=current_user.id)\
+                .join(Project).filter(Project.status == 'active').first()
+            if first_membership:
+                cur_project_id = first_membership.project_id
+        if cur_project_id:
+            cur_project_obj = Project.query.get(cur_project_id)
+            # Include sub-projects (exclude hidden)
+            sub_pids = [c.id for c in Project.query.filter_by(parent_id=cur_project_id).all()
+                        if c.id not in _hidden_pids]
+            project_pids = [cur_project_id] + sub_pids
+            # Members from project + sub-projects
+            member_uids = list({m.user_id for m in ProjectMember.query.filter(
+                ProjectMember.project_id.in_(project_pids)).all() if m.user_id})
+            users = User.query.filter(User.id.in_(member_uids), User.is_active == True).order_by(User.name).all()
+        else:
+            users = []
+    else:
+        cur_group = request.args.get('group', current_user.group or '')
+        if not cur_group and groups:
+            cur_group = groups[0]
+        user_query = User.query.filter_by(is_active=True)
+        if cur_group:
+            user_query = user_query.filter_by(group=cur_group)
+        users = user_query.order_by(User.group, User.name).all()
 
     user_ids = [u.id for u in users]
 
@@ -512,7 +539,6 @@ def team():
 
     # Group todos by user → by category (same structure as homepage)
     user_data = {}  # uid → {req_todos, risk_todos, team_todos, display_reqs, todo_total, todo_done}
-    user_done = {}  # uid → [older done todos]
     for t in all_todos:
         work_date = t.done_date or t.created_date or today
         if t.status == TODO_STATUS_TODO or work_date >= yesterday:
@@ -527,44 +553,56 @@ def team():
                 ud['team_todos'].append(t)
             else:
                 _has_visible_req = False
+                _30_days_ago = today - timedelta(days=30)
                 for r in t.requirements:
-                    if r.status not in REQ_INACTIVE_STATUSES and r.project_id not in _hidden_pids:
+                    _is_active = r.status not in REQ_INACTIVE_STATUSES
+                    _is_recently_done = r.status in REQ_INACTIVE_STATUSES and r.updated_at and r.updated_at.date() >= _30_days_ago
+                    if (_is_active or _is_recently_done) and r.project_id not in _hidden_pids:
+                        # In project mode, only show requirements belonging to project + sub-projects
+                        if view_mode == 'project' and project_pids and r.project_id not in project_pids:
+                            continue
                         ud['req_todos'].setdefault(r.id, []).append(t)
                         if r.id not in ud['_req_map']:
                             ud['_req_map'][r.id] = r
                         _has_visible_req = True
                 if not _has_visible_req:
                     ud['team_todos'].append(t)
-        elif t.status == TODO_STATUS_DONE:
-            user_done.setdefault(t.user_id, []).append(t)
 
-    # Build display_reqs for each user, include started requirements without todos
+    # Build display_reqs — batch load all user requirements at once (avoid N+1)
     from app.models.requirement import Requirement
+    _30_days_ago = today - timedelta(days=30)
+    _all_user_reqs_q = Requirement.query.filter(
+        Requirement.assignee_id.in_(user_ids),
+        db.or_(
+            db.and_(Requirement.status.notin_(REQ_INACTIVE_STATUSES), Requirement.start_date <= today),
+            db.and_(Requirement.status.in_(REQ_INACTIVE_STATUSES), Requirement.updated_at >= _30_days_ago),
+        ),
+    )
+    if view_mode == 'project' and project_pids:
+        _all_user_reqs_q = _all_user_reqs_q.filter(Requirement.project_id.in_(project_pids))
+    _all_user_reqs = _all_user_reqs_q.options(joinedload(Requirement.project)).all()
+    _reqs_by_uid = {}
+    for r in _all_user_reqs:
+        _reqs_by_uid.setdefault(r.assignee_id, []).append(r)
+
     for u in users:
         ud = user_data.setdefault(u.id, {
             'req_todos': {}, 'risk_todos': [], 'team_todos': [],
             'display_reqs': [], 'todos': [], '_req_map': {},
         })
-        # Add requirements assigned to user, started (start_date <= today), not done/closed, not hidden
-        started_reqs = Requirement.query.filter(
-            Requirement.assignee_id == u.id,
-            Requirement.status.notin_(REQ_INACTIVE_STATUSES),
-            Requirement.start_date <= today,
-        ).all()
-        for r in started_reqs:
+        for r in _reqs_by_uid.get(u.id, []):
             if r.id not in ud['_req_map'] and r.project_id not in _hidden_pids:
                 ud['_req_map'][r.id] = r
+        # Sort: active first (by due_date), completed last (by updated_at desc)
         ud['display_reqs'] = sorted(ud['_req_map'].values(),
-            key=lambda r: (r.due_date or date(2099,1,1), r.priority))
+            key=lambda r: (0 if r.status not in REQ_INACTIVE_STATUSES else 1,
+                           r.due_date or date(2099,1,1), r.priority))
         ud['todo_total'] = len(ud.get('todos', []))
         ud['todo_done'] = sum(1 for t in ud.get('todos', []) if t.status == TODO_STATUS_DONE)
         if '_req_map' in ud:
             del ud['_req_map']
         if 'todos' in ud:
             del ud['todos']
-
-    for uid in user_done:
-        user_done[uid].sort(key=lambda t: t.done_date or t.created_date, reverse=True)
 
     form = TodoForm()
     reqs = Requirement.query.filter(Requirement.status.notin_(REQ_INACTIVE_STATUSES))\
@@ -610,15 +648,29 @@ def team():
         Todo.user_id.in_(user_ids),
     ).options(joinedload(Todo.requirements)).order_by(Todo.created_at.desc()).all()
 
-    # Guard: user must belong to a group
-    if not current_user.group:
+    # Guard: user must belong to a group (group mode) or project (project mode)
+    if view_mode == 'group' and not current_user.group:
         return render_template('todo/team.html',
-            no_group=True, users=[], user_data={}, user_done={}, groups=groups,
+            no_group=True, users=[], user_data={}, groups=groups,
             cur_group='', today=today, timedelta=timedelta, form=None,
             reqs=[], default_req_ids=[], all_users=[],
             due_options=[], help_due_options=[], help_todos=[],
-            req_comments={},
+            req_comments={}, view_mode=view_mode, cur_project_id=None, cur_project_obj=None,
+            open_risks=[],
         )
+
+    # Open risks & blocked todos for standup review
+    from app.models.risk import Risk
+    from sqlalchemy.orm import joinedload as _jl
+    risk_query = Risk.query.filter_by(status='open').filter(Risk.deleted_at.is_(None))
+    if view_mode == 'project' and project_pids:
+        risk_query = risk_query.filter(Risk.project_id.in_(project_pids))
+    open_risks = risk_query.options(
+        _jl(Risk.project), _jl(Risk.owner_user), _jl(Risk.tracker), _jl(Risk.comments)
+    ).order_by(
+        db.case({'high': 0, 'medium': 1, 'low': 2}, value=Risk.severity, else_=3),
+        Risk.due_date,
+    ).all()
 
     # Recent requirement comments (last 3 days)
     from app.models.requirement import Comment as ReqComment
@@ -636,10 +688,11 @@ def team():
             req_comments.setdefault(c.requirement_id, []).append(c)
 
     return render_template('todo/team.html',
-        users=users, user_data=user_data, user_done=user_done, groups=groups,
+        users=users, user_data=user_data, groups=groups,
         cur_group=cur_group, today=today, timedelta=timedelta, form=form,
         reqs=reqs, default_req_ids=default_req_ids, all_users=all_users_list,
         due_options=due_options, help_due_options=help_due_options,
         help_todos=help_todos, req_comments=req_comments, no_group=False,
-        statuses=Requirement.STATUS_LABELS,
+        view_mode=view_mode, cur_project_id=cur_project_id, cur_project_obj=cur_project_obj,
+        open_risks=open_risks,
     )

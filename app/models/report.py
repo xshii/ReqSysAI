@@ -1,4 +1,4 @@
-from app.extensions import db
+from app.extensions import db, _local_now
 
 
 class WeeklyReport(db.Model):
@@ -16,8 +16,8 @@ class WeeklyReport(db.Model):
     frozen_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     frozen_at = db.Column(db.DateTime, nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=db.func.now())
-    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
+    updated_at = db.Column(db.DateTime, default=_local_now, onupdate=_local_now)
 
     project = db.relationship('Project', backref='weekly_reports')
     creator = db.relationship('User', foreign_keys=[created_by], backref='created_reports')
@@ -40,8 +40,8 @@ class PersonalWeekly(db.Model):
     week_start = db.Column(db.Date, nullable=False)
     week_end = db.Column(db.Date, nullable=False)
     ai_html = db.Column(db.Text, nullable=True)  # AI 生成的 HTML
-    created_at = db.Column(db.DateTime, default=db.func.now())
-    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
+    updated_at = db.Column(db.DateTime, default=_local_now, onupdate=_local_now)
 
     user = db.relationship('User')
 

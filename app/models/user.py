@@ -1,6 +1,6 @@
 from flask_login import UserMixin
 
-from app.extensions import db
+from app.extensions import db, _local_now
 
 # Many-to-many association tables
 user_roles = db.Table('user_roles',
@@ -32,7 +32,7 @@ class Group(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
     is_hidden = db.Column(db.Boolean, default=False)  # 隐藏组（后台设置）
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
 
     def __repr__(self):
         return f'<Group {self.name}>'
@@ -51,11 +51,12 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True)
     pomodoro_minutes = db.Column(db.Integer, default=45)
     only_my_group = db.Column(db.Boolean, default=True)  # 默认只看本组
+    team_view_mode = db.Column(db.String(10), default='group')  # 'group' or 'project'
     manager = db.Column(db.String(100), nullable=True)  # 主管，格式：姓名 工号
     domain = db.Column(db.String(100), nullable=True)  # 业务领域
     email = db.Column(db.String(200), nullable=True)  # 个人邮箱，用于Exchange同步等
     last_login = db.Column(db.DateTime)
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
 
     roles = db.relationship('Role', secondary=user_roles, backref='users', lazy='joined')
     followed_projects = db.relationship('Project', secondary=user_followed_projects, backref='followers', lazy='dynamic')

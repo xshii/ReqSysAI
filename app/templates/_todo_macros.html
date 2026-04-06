@@ -53,6 +53,7 @@
     </form>
     <span class="small">{{ t.title }}</span>
     {%- if t.workdays_overdue >= 1 and t.status != 'done' %}<span class="badge bg-{{ t.overdue_color }} bg-opacity-75" style="font-size:.5em;">延{{ t.workdays_overdue }}天</span>{% endif %}
+    {%- if t.status != 'done' and t.due_date and t.due_date > today and t.source not in ('help', 'help_accepted') %}{% set _dleft = (t.due_date - today).days %}<span class="badge bg-secondary bg-opacity-25 text-dark" style="font-size:.5em;">{{ _dleft }}天后</span>{% endif %}
     {%- if t.need_help %}<span class="badge bg-danger" style="font-size:.55em;">阻塞{% if t.blocked_reason %}：{{ t.blocked_reason }}{% endif %}</span>{% endif %}
     {%- if t.source == "ai" %}<span class="badge bg-info" style="font-size:.55em;">AI</span>{% endif %}
     {%- if t.source == "help_accepted" and t.parent %}{% set _help_days = (t.due_date - today).days if t.due_date and today else none %}<span class="badge bg-info bg-opacity-75" style="font-size:.55em;">{{ t.parent.user.name }}求助 · 已承诺{{ '今天' if _help_days is not none and _help_days <= 0 else (_help_days|string + '天后') if _help_days is not none else '' }}完成</span>{% endif %}
@@ -356,6 +357,7 @@ function createTodoRow(todoId, title, opts) {
     row.dataset.todoId = todoId;
     var badge = '';
     var isHelp = !!opts.helper;
+    if (opts.days_left && opts.days_left > 0 && !isHelp) badge += ' <span class="badge bg-secondary bg-opacity-25 text-dark" style="font-size:.5em;">' + opts.days_left + '天后</span>';
     if (opts.source === 'ai') badge += ' <span class="badge bg-info" style="font-size:.55em;">AI</span>';
     if (isHelp) badge += ' <span class="badge bg-warning text-dark" style="font-size:.55em;">@' + _escHtml(opts.helper) + ' 待响应</span>';
     var icon = isHelp
@@ -540,7 +542,7 @@ document.querySelectorAll('form[action$="/quick-todo"], form.quick-todo-form').f
                 }
                 // Insert new todo row — always find container relative to the form (not global)
                 // because team page has multiple users with same req_id / category sections
-                var row = createTodoRow(d.todo_id, d.title || title, {helper: d.helper || '', source: d.source || ''});
+                var row = createTodoRow(d.todo_id, d.title || title, {helper: d.helper || '', source: d.source || '', days_left: d.days_left || 0});
                 var listContainer = null;
                 var ancestor = form.closest('.card, .team-todo-section, .mb-2');
                 if (ancestor) listContainer = ancestor.querySelector('.todo-list-for-req') || ancestor.querySelector('.team-todo-list');

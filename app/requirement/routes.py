@@ -223,6 +223,7 @@ def requirement_list():
     )
 
 
+
 @requirement_bp.route('/new', methods=['GET', 'POST'])
 @login_required
 def requirement_create():
@@ -941,6 +942,7 @@ def add_comment(req_id):
         _log_activity(req, 'commented', form.content.data[:100])
         db.session.commit()
     return redirect(url_for('requirement.requirement_detail', req_id=req.id))
+
 
 
 @requirement_bp.route('/<int:req_id>/comments/<int:comment_id>/delete', methods=['POST'])

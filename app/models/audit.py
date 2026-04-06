@@ -1,5 +1,5 @@
 """Unified audit log for all high-risk operations."""
-from app.extensions import db
+from app.extensions import db, _local_now
 
 
 class AuditLog(db.Model):
@@ -13,7 +13,7 @@ class AuditLog(db.Model):
     entity_title = db.Column(db.String(300), nullable=True)
     detail = db.Column(db.Text, nullable=True)           # JSON or text description
     ip_address = db.Column(db.String(50), nullable=True)
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
 
     user = db.relationship('User', backref='audit_logs')
 

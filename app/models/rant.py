@@ -1,4 +1,4 @@
-from app.extensions import db
+from app.extensions import db, _local_now
 
 
 class Rant(db.Model):
@@ -9,7 +9,7 @@ class Rant(db.Model):
     alias = db.Column(db.String(30), nullable=True)
     content = db.Column(db.String(500), nullable=False)
     likes = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
     # Intentionally NO user_id, NO ip_address
 
     def __repr__(self):

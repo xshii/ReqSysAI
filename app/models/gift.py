@@ -1,4 +1,4 @@
-from app.extensions import db
+from app.extensions import db, _local_now
 
 
 class GiftItem(db.Model):
@@ -14,7 +14,7 @@ class GiftItem(db.Model):
     picks = db.Column(db.Integer, default=0)  # 已选择人数
     is_active = db.Column(db.Boolean, default=True)  # 是否可选
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
 
     creator = db.relationship('User', backref='created_gifts')
 
@@ -36,7 +36,7 @@ class GiftRecord(db.Model):
     selected_at = db.Column(db.DateTime, nullable=True)
     purchased_at = db.Column(db.DateTime, nullable=True)
     notify_count = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
 
     incentive = db.relationship('Incentive', backref='gift_records')
     user = db.relationship('User', backref='gift_records')

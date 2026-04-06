@@ -1,4 +1,4 @@
-from app.extensions import db
+from app.extensions import db, _local_now
 
 
 class StandupRecord(db.Model):
@@ -11,8 +11,8 @@ class StandupRecord(db.Model):
     today_plan = db.Column(db.Text)
     blocker = db.Column(db.Text)
     has_blocker = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=db.func.now())
-    updated_at = db.Column(db.DateTime, default=db.func.now(), onupdate=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
+    updated_at = db.Column(db.DateTime, default=_local_now, onupdate=_local_now)
 
     user = db.relationship('User', backref='standup_records')
 

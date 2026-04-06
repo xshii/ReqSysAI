@@ -73,12 +73,28 @@
                         <a class="nav-link flex-grow-1 {% if request.endpoint and 'todo.' in request.endpoint %}active{% endif %}" href="{{ url_for('todo.team') }}">
                             <i class="bi bi-list-task"></i> 团队 Todo
                         </a>
-                        {% if sidebar_groups|length > 0 %}
+                        {% if current_user.team_view_mode == 'project' %}
+                        {% if sidebar_projects|length > 0 %}
+                        <a href="#" class="me-2 text-muted" onclick="toggleSection('.team-project', this);return false;" style="font-size:.75rem;">
+                            <i class="bi bi-chevron-down"></i>
+                        </a>
+                        {% endif %}
+                        {% elif sidebar_groups|length > 0 %}
                         <a href="#" class="me-2 text-muted" onclick="toggleSection('.team-group', this);return false;" style="font-size:.75rem;">
                             <i class="bi bi-chevron-down"></i>
                         </a>
                         {% endif %}
                     </li>
+                    {% if current_user.team_view_mode == 'project' %}
+                    {% set _todo_pid = request.args.get('project_id', '')|int %}
+                    {% for p in sidebar_projects %}
+                    <li class="nav-item team-project">
+                        <a class="nav-link py-1 ps-4 small {% if _todo_pid == p.id %}fw-bold text-primary{% else %}text-muted{% endif %}" href="{{ url_for('todo.team', project_id=p.id) }}">
+                            {{ p.name }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                    {% else %}
                     {% for g in sidebar_groups %}
                     <li class="nav-item team-group">
                         <a class="nav-link py-1 ps-4 small {% if sidebar_cur_group == g %}fw-bold text-primary{% else %}text-muted{% endif %}" href="{{ url_for('todo.team', group=g) }}">
@@ -86,6 +102,7 @@
                         </a>
                     </li>
                     {% endfor %}
+                    {% endif %}
                     <li class="nav-header">项目</li>
                     {% set _cur_pid = request.args.get('project_id', '')|int or (req.project_id if req is defined and req.project_id else 0) %}
                     {% set _in_pm = request.endpoint and ('project.' in request.endpoint or 'requirement.' in request.endpoint or request.endpoint == 'dashboard.requirement_progress' or 'ai.' in request.endpoint or (request.endpoint in ('dashboard.stats', 'dashboard.weekly_report') and _cur_pid)) %}

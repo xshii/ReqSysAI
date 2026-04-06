@@ -1,6 +1,6 @@
 from datetime import date
 
-from app.extensions import db
+from app.extensions import db, _local_now
 
 
 class RecurringTodo(db.Model):
@@ -15,7 +15,7 @@ class RecurringTodo(db.Model):
     monthly_day = db.Column(db.Integer, nullable=True)  # legacy single day
     monthly_days = db.Column(db.String(20), nullable=True)  # e.g. "start,mid,end" for 月初,月中,月末
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=db.func.now())
+    created_at = db.Column(db.DateTime, default=_local_now)
 
     user = db.relationship('User', backref='recurring_todos')
 
