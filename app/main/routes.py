@@ -155,7 +155,7 @@ def index():
         inc_start = today - timedelta(days=months)
         approved_incentives = Incentive.query.filter(
             Incentive.status == 'approved',
-            Incentive.is_public == True,
+            Incentive.is_public == True,  # noqa: E712
             Incentive.reviewed_at >= inc_start,
             Incentive.reviewed_at <= inc_end,
         ).order_by(Incentive.reviewed_at.desc()).all()
@@ -1121,7 +1121,7 @@ def standup_eml():
         all_pids = [pid for pid in [project_id] + sub_pids if pid not in _hidden_pids]
         member_uids = list({m.user_id for m in ProjectMember.query.filter(
             ProjectMember.project_id.in_(all_pids)).all() if m.user_id})
-        users = User.query.filter(User.id.in_(member_uids), User.is_active == True).order_by(User.name).all()
+        users = User.query.filter(User.id.in_(member_uids), User.is_active == True).order_by(User.name).all()  # noqa: E712
         scope_name = proj.name if proj else '项目'
         scope_reqs = Requirement.query.filter(Requirement.project_id.in_(all_pids))
     else:

@@ -539,7 +539,7 @@ def risk_ai_scan(project_id):
     project_req_ids = [r.id for r in reqs]
     if project_req_ids:
         blocked_todos = Todo.query.filter(
-            Todo.status == 'todo', Todo.need_help == True
+            Todo.status == 'todo', Todo.need_help == True  # noqa: E712
         ).join(todo_requirements, Todo.id == todo_requirements.c.todo_id).filter(
             todo_requirements.c.requirement_id.in_(project_req_ids)
         ).options(joinedload(Todo.user), joinedload(Todo.requirements)).all()

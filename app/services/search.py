@@ -51,7 +51,7 @@ def search(query, limit=20, current_user_id=None, is_manager=False):
 
     # Users
     for u in User.query.filter(
-        User.is_active == True,
+        User.is_active == True,  # noqa: E712
         db.or_(User.name.like(q), User.pinyin.like(q), User.employee_id.like(q))
     ).limit(limit).all():
         results.append({'type': 'user', 'id': u.id,

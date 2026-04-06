@@ -254,15 +254,15 @@ def get_reviewer(current_user):
     if current_user.has_role('PL'):
         # LM/XM are global roles (one per org, not per group)
         for role_name in ('LM', 'XM'):
-            reviewer = User.query.filter(User.is_active == True)\
-                .join(User.roles).filter(Role.name == role_name).first()
+            reviewer = (User.query.filter(User.is_active == True)  # noqa: E712
+                .join(User.roles).filter(Role.name == role_name).first())
             if reviewer:
                 return reviewer.name
         return '待定'
     else:
         # Find PL in same group
-        pl = User.query.filter(User.is_active == True, User.group == current_user.group)\
-            .join(User.roles).filter(Role.name == 'PL').first()
+        pl = (User.query.filter(User.is_active == True, User.group == current_user.group)  # noqa: E712
+            .join(User.roles).filter(Role.name == 'PL').first())
         return pl.name if pl else '待定'
 
 

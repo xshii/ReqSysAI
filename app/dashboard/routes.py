@@ -249,7 +249,7 @@ def _get_pinned_knowledge(project_id, sub_project_ids=None):
         return []
     pids = [project_id] + (sub_project_ids or [])
     return Knowledge.query.filter(
-        Knowledge.project_id.in_(pids), Knowledge.is_pinned == True
+        Knowledge.project_id.in_(pids), Knowledge.is_pinned == True  # noqa: E712
     ).order_by(Knowledge.project_id, Knowledge.title).all()
 
 
@@ -1094,12 +1094,12 @@ def weekly_report():
         # Reviewer: PL of current user's group; if user is PL, then XM; fallback to manager
         reviewer = ''
         if current_user.has_role('PL'):
-            xm_users = User.query.filter(User.is_active == True, User.group == current_user.group)\
-                .join(User.roles).filter(Role.name.in_(['XM', 'PM'])).first()
+            xm_users = (User.query.filter(User.is_active == True, User.group == current_user.group)  # noqa: E712
+                .join(User.roles).filter(Role.name.in_(['XM', 'PM'])).first())
             reviewer = xm_users.name if xm_users else ''
         else:
-            pl_user = User.query.filter(User.is_active == True, User.group == current_user.group)\
-                .join(User.roles).filter(Role.name == 'PL').first()
+            pl_user = (User.query.filter(User.is_active == True, User.group == current_user.group)  # noqa: E712
+                .join(User.roles).filter(Role.name == 'PL').first())
             reviewer = pl_user.name if pl_user else ''
         if not reviewer and current_user.manager:
             parts = current_user.manager.strip().split()
@@ -1347,12 +1347,12 @@ def weekly_report():
         # Reviewer: PL of current user's group; if user is PL, then XM; fallback to manager
         reviewer = ''
         if current_user.has_role('PL'):
-            xm = User.query.filter(User.is_active == True, User.group == current_user.group)\
-                .join(User.roles).filter(Role.name.in_(['XM', 'PM'])).first()
+            xm = (User.query.filter(User.is_active == True, User.group == current_user.group)  # noqa: E712
+                .join(User.roles).filter(Role.name.in_(['XM', 'PM'])).first())
             reviewer = xm.name if xm else ''
         else:
-            pl = User.query.filter(User.is_active == True, User.group == current_user.group)\
-                .join(User.roles).filter(Role.name == 'PL').first()
+            pl = (User.query.filter(User.is_active == True, User.group == current_user.group)  # noqa: E712
+                .join(User.roles).filter(Role.name == 'PL').first())
             reviewer = pl.name if pl else ''
         if not reviewer and current_user.manager:
             parts = current_user.manager.strip().split()
@@ -2933,7 +2933,7 @@ def emotion_analyze():
         active = Todo.query.filter_by(user_id=u.id, status='todo').count()
         # Blocked
         blocked = Todo.query.filter(
-            Todo.user_id == u.id, Todo.status == 'todo', Todo.need_help == True).count()
+            Todo.user_id == u.id, Todo.status == 'todo', Todo.need_help == True).count()  # noqa: E712
         # Help given (source='help', this user as helper)
         help_given = Todo.query.filter(
             Todo.user_id == u.id, Todo.source == 'help', Todo.created_date >= month_ago).count()
@@ -2966,7 +2966,7 @@ def emotion_analyze():
             rec_line = f'- {r.member_name}（{r.group or ""}）{r.scan_date}：状态={r.status}，风险={r.risk_level}'
             if r.suggestion:
                 # 过滤掉"未提及"的观察项，减少 token
-                useful = [l for l in r.suggestion.split('\n') if l.strip() and '未提及' not in l]
+                useful = [line for line in r.suggestion.split('\n') if line.strip() and '未提及' not in line]
                 if useful:
                     rec_line += f'，记录={"; ".join(useful)}'
             if r.signals_list:

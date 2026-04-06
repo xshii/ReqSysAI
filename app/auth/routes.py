@@ -367,7 +367,7 @@ def ai_efficiency():
                                  Todo.created_date >= d7).count()
     active = Todo.query.filter_by(user_id=uid, status='todo').count()
     blocked = Todo.query.filter(Todo.user_id == uid, Todo.status == 'todo',
-                                 Todo.need_help == True).count()
+                                 Todo.need_help == True).count()  # noqa: E712
     help_given = Todo.query.filter(Todo.user_id == uid, Todo.source == 'help',
                                     Todo.created_date >= d30).count()
     focus_30d = db.session.query(db.func.sum(Todo.actual_minutes)).filter(

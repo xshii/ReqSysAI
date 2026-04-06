@@ -129,7 +129,7 @@ def permission_list(project_id):
                        f'权限申请「{app_record.item.resource}」已通过', link)
                 # Also notify system users mentioned in applicant_name
                 for person in app_record.people_list:
-                    u = User.query.filter(User.name == person.split('(')[0].strip(), User.is_active == True).first()
+                    u = User.query.filter(User.name == person.split('(')[0].strip(), User.is_active == True).first()  # noqa: E712
                     if u and u.id != app_record.submitted_by:
                         notify(u.id, 'permission', f'权限「{app_record.item.resource}」已通过', link)
                 from app.services.audit import log_audit

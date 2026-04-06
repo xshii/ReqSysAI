@@ -216,7 +216,7 @@ def parse_requirement(text, project_id=None):
             members = ProjectMember.query.filter_by(project_id=project_id).all()
             member_map = {m.user_id: m for m in members if m.user_id}
             user_ids = list(member_map.keys())
-            users = User.query.filter(User.id.in_(user_ids), User.is_active == True).all() if user_ids else []
+            users = User.query.filter(User.id.in_(user_ids), User.is_active == True).all() if user_ids else []  # noqa: E712
         else:
             users = User.query.filter_by(is_active=True).all()
             member_map = {}
@@ -264,7 +264,7 @@ def parse_requirement(text, project_id=None):
                 p_user_ids = [m.user_id for m in p_members if m.user_id]
                 if not p_user_ids:
                     continue
-                p_users = User.query.filter(User.id.in_(p_user_ids), User.is_active == True).all()
+                p_users = User.query.filter(User.id.in_(p_user_ids), User.is_active == True).all()  # noqa: E712
                 for u in p_users:
                     active = Todo.query.filter_by(user_id=u.id, status='todo').count()
                     pm = next((m for m in p_members if m.user_id == u.id), None)

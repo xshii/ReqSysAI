@@ -503,7 +503,7 @@ def team():
             # Members from project + sub-projects
             member_uids = list({m.user_id for m in ProjectMember.query.filter(
                 ProjectMember.project_id.in_(project_pids)).all() if m.user_id})
-            users = User.query.filter(User.id.in_(member_uids), User.is_active == True).order_by(User.name).all()
+            users = User.query.filter(User.id.in_(member_uids), User.is_active == True).order_by(User.name).all()  # noqa: E712
         else:
             users = []
     else:
@@ -610,7 +610,7 @@ def team():
 
     # Todos marked as needing help (team-wide)
     help_todos = Todo.query.filter(
-        Todo.need_help == True, Todo.status == TODO_STATUS_TODO,
+        Todo.need_help == True, Todo.status == TODO_STATUS_TODO,  # noqa: E712
         Todo.user_id.in_(user_ids),
     ).options(joinedload(Todo.requirements)).order_by(Todo.created_at.desc()).all()
 
