@@ -403,6 +403,14 @@ CREATE_STATEMENTS = [
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )""",
+    # 喝水记录
+    """CREATE TABLE IF NOT EXISTS water_logs (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        ml INTEGER NOT NULL,
+        date DATE NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""",
 ]
 
 

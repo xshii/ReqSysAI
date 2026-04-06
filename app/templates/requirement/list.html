@@ -2,8 +2,14 @@
 {% block title %}需求列表 - {{ site_name }}{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h4>需求管理</h4>
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <div class="d-flex align-items-center gap-3">
+        <h4 class="mb-0">需求管理</h4>
+        <ul class="nav nav-tabs mb-0" style="border-bottom:none;">
+            <li class="nav-item"><a class="nav-link active py-1 px-3" style="font-size:.85em;" href="{{ url_for('requirement.requirement_list', project_id=cur_project or '') }}"><i class="bi bi-list"></i> 列表</a></li>
+            {% if cur_project %}<li class="nav-item"><a class="nav-link py-1 px-3" style="font-size:.85em;" href="{{ url_for('requirement.requirement_board', project_id=cur_project) }}"><i class="bi bi-kanban"></i> 看板</a></li>{% endif %}
+        </ul>
+    </div>
     <div class="d-flex gap-2 align-items-center">
         <a href="{{ url_for('requirement.export_csv', project_id=cur_project or '') }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> 导出</a>
         <form method="POST" action="{{ url_for('requirement.import_csv') }}" enctype="multipart/form-data" id="csvImportForm" class="d-none">

@@ -250,6 +250,21 @@ def index():
         Todo.actual_minutes > 0,
     ).scalar() or 0
 
+    # Weekly water intake
+    from app.models.water_log import WaterLog
+    week_water = db.session.query(db.func.coalesce(db.func.sum(WaterLog.ml), 0)).filter(
+        WaterLog.user_id == current_user.id, WaterLog.date >= week_start).scalar() or 0
+    week_water_days = []
+    _ww = db.session.query(WaterLog.date, db.func.sum(WaterLog.ml)).filter(
+        WaterLog.user_id == current_user.id, WaterLog.date >= week_start
+    ).group_by(WaterLog.date).all()
+    _ww_map = {str(d): ml for d, ml in _ww}
+    for i in range(7):
+        d = week_start + timedelta(days=i)
+        if d > today:
+            break
+        week_water_days.append(_ww_map.get(str(d), 0))
+
     # Persistent notifications (unread)
     from app.models.notification import Notification
     notifications = Notification.query.filter_by(user_id=current_user.id, is_read=False)\
@@ -268,7 +283,7 @@ def index():
         ai_ranking=ai_ranking, alerts=alerts, help_requests=help_requests, risk_todo_titles=risk_todo_titles,
         heatmap=heatmap, heatmap_start=heatmap_start, timedelta=timedelta,
         milestones=milestones, all_recurring=all_recurring, recurring_due=recurring_due,
-        recurring_status=recurring_status, week_focus=week_focus,
+        recurring_status=recurring_status, week_focus=week_focus, week_water=week_water, week_water_days=week_water_days,
         unclosed_meetings=unclosed_meetings, unclosed_meeting_risks=unclosed_meeting_risks,
         inc_photo_size=_inc_photo_size,
     )
@@ -414,6 +429,46 @@ def quick_todo():
     db.session.commit()
     _days_left = (todo.due_date - today).days if todo.due_date and todo.due_date > today else 0
     return jsonify(ok=True, title=title, todo_id=todo.id, days_left=_days_left) if is_ajax else redirect(next_url or url_for('main.index'))
+
+
+@main_bp.route('/api/water-log', methods=['POST'])
+@login_required
+def water_log():
+    """Record a water drink event."""
+    from app.models.water_log import WaterLog
+    data = request.get_json() or {}
+    ml = data.get('ml', 0)
+    if ml not in (250, 500, 750):
+        return jsonify(ok=False, msg='无效的饮水量')
+    log = WaterLog(user_id=current_user.id, ml=ml, date=date.today())
+    db.session.add(log)
+    db.session.commit()
+    # Return today's total
+    today_total = db.session.query(db.func.sum(WaterLog.ml)).filter_by(
+        user_id=current_user.id, date=date.today()).scalar() or 0
+    return jsonify(ok=True, ml=ml, today_total=today_total)
+
+
+@main_bp.route('/api/water-stats')
+@login_required
+def water_stats():
+    """Get water intake stats for current user."""
+    from app.models.water_log import WaterLog
+    today = date.today()
+    # Today
+    today_total = db.session.query(db.func.sum(WaterLog.ml)).filter_by(
+        user_id=current_user.id, date=today).scalar() or 0
+    # Last 7 days
+    week_ago = today - timedelta(days=7)
+    week_data = db.session.query(WaterLog.date, db.func.sum(WaterLog.ml)).filter(
+        WaterLog.user_id == current_user.id, WaterLog.date >= week_ago
+    ).group_by(WaterLog.date).all()
+    week_map = {str(d): ml for d, ml in week_data}
+    days = []
+    for i in range(6, -1, -1):
+        d = today - timedelta(days=i)
+        days.append({'date': str(d), 'ml': week_map.get(str(d), 0)})
+    return jsonify(ok=True, today=today_total, days=days)
 
 
 @main_bp.route('/api/site-setting', methods=['POST'])
@@ -1146,6 +1201,21 @@ def standup_eml():
     S = lambda c: f'color:{c};font-weight:600;'
     status_colors = {'red': '#dc3545', 'orange': '#fd7e14', 'green': '#198754', 'gray': '#6c757d'}
 
+    # Compute recipients early for embedding in HTML
+    from app.utils.recipients import compute_default_recipients
+    _to, _cc = compute_default_recipients(project_id, include_sub=True, cc_level='manager') if project_id else ('', '')
+
+    # Resolve employee_ids to names for display
+    def _resolve_names(eids_str):
+        if not eids_str:
+            return ''
+        eids = [e.strip() for e in eids_str.split(';') if e.strip()]
+        users_map = {u.employee_id: u.name for u in User.query.filter(User.employee_id.in_(eids)).all()}
+        return '; '.join(users_map.get(e, e) for e in eids)
+
+    _to_names = _resolve_names(_to)
+    _cc_names = _resolve_names(_cc)
+
     html = f'''<html><head><meta charset="UTF-8"></head>
 <body style="font-family:Microsoft YaHei,Segoe UI,sans-serif;margin:0;padding:20px;background:#f5f5f5;">
 <div style="max-width:700px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1);">
@@ -1155,6 +1225,11 @@ def standup_eml():
 <div style="font-size:18px;font-weight:700;">站会进展 · {scope_name}</div>
 <div style="font-size:13px;opacity:.8;margin-top:4px;">{today.strftime("%Y-%m-%d")} · 对比前日 {yesterday.strftime("%m-%d")}</div>
 </div>
+<!-- Recipients -->
+<table width="100%" cellpadding="0" cellspacing="0" style="font-size:12px;color:#64748b;border-bottom:1px solid #e2e8f0;">
+{('<tr><td style="padding:4px 20px;"><b>To:</b> ' + h(_to_names) + '</td></tr>') if _to_names else ''}
+{('<tr><td style="padding:4px 20px;"><b>Cc:</b> ' + h(_cc_names) + '</td></tr>') if _cc_names else ''}
+</table>
 
 <!-- Project Progress Bar -->
 <div style="padding:12px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
@@ -1356,7 +1431,8 @@ def standup_eml():
 由 {g.get("site_name", "ReqSysAI")} 自动生成 · {today.strftime("%Y-%m-%d %H:%M")}
 </div></div></body></html>'''
 
-    return jsonify(ok=True, html=html, subject=f'站会进展 {today.strftime("%Y-%m-%d")} — {scope_name}')
+    return jsonify(ok=True, html=html, subject=f'站会进展 {today.strftime("%Y-%m-%d")} — {scope_name}',
+                   to=_to, cc=_cc)
 
 
 # ---- Daily Progress Report ----

@@ -1544,6 +1544,31 @@ def weekly_report_save():
     return redirect(url_for('dashboard.weekly_report', week=offset, project_id=cur_project_id))
 
 
+@dashboard_bp.route('/weekly-report/sub-summary', methods=['POST'])
+@login_required
+def weekly_report_sub_summary():
+    """AJAX save sub-project summary (one-liner)."""
+    data = request.get_json() or {}
+    child_project_id = data.get('project_id')
+    week_start_str = data.get('week_start')
+    summary = (data.get('summary') or '').strip()[:200]
+    if not child_project_id or not week_start_str:
+        return jsonify(ok=False, msg='参数缺失')
+    week_start = date.fromisoformat(week_start_str)
+    week_end = week_start + timedelta(days=6)
+    saved = WeeklyReport.query.filter_by(project_id=child_project_id, week_start=week_start).first()
+    if not saved:
+        saved = WeeklyReport(project_id=child_project_id, week_start=week_start,
+                             week_end=week_end, created_by=current_user.id)
+        db.session.add(saved)
+    if saved.is_frozen:
+        return jsonify(ok=False, msg='已冻结，无法编辑')
+    saved.summary = summary
+    saved.updated_at = datetime.now()
+    db.session.commit()
+    return jsonify(ok=True)
+
+
 @dashboard_bp.route('/weekly-report/freeze', methods=['POST'])
 @login_required
 def weekly_report_freeze():

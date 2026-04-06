@@ -78,7 +78,10 @@ function emlTable(tableEl) {
             var cellBg = cell.style.background || cell.style.backgroundColor || '';
             if (cellBg) bg += 'background:' + cellBg + ';';
             var align = cell.style.textAlign; if (align) bg += 'text-align:' + align + ';';
-            h += '<' + tag + attrs + ' style="border:1px solid #718096;padding:4px 8px;' + bg + '">' + emlInlineStyles(cell.innerHTML) + '</' + tag + '>';
+            var content = emlInlineStyles(cell.innerHTML);
+            // Strip internal links (keep text only) — external links preserved
+            content = content.replace(/<a\s[^>]*href="\/[^"]*"[^>]*>([\s\S]*?)<\/a>/gi, '$1');
+            h += '<' + tag + attrs + ' style="border:1px solid #718096;padding:4px 8px;' + bg + '">' + content + '</' + tag + '>';
         });
         h += '</tr>';
     });

@@ -24,7 +24,7 @@
 </div>
 
 {% if open_risks or help_todos %}
-<div class="card mb-3 {% if open_risks %}border-warning{% else %}border-secondary{% endif %}">
+<div class="card mb-3 border-warning">
     <div class="card-header py-2 d-flex justify-content-between align-items-center" role="button" data-bs-toggle="collapse" data-bs-target="#riskPanel" style="cursor:pointer;background:#fff8e1;">
         <span class="fw-bold small">
             <i class="bi bi-chevron-down text-muted" style="font-size:.6em;"></i>
@@ -37,62 +37,28 @@
     </div>
     <div class="collapse show" id="riskPanel">
     <div class="card-body py-2">
-        <table class="table table-sm table-bordered mb-0" style="font-size:.8em;">
-            <thead class="table-light">
+        {# Reuse the project risk table (with comments + inline edit) #}
+        {% set risks = open_risks %}
+        {% include 'project/_risk_table.html' %}
+
+        {# Blocked todos (separate from risk table) #}
+        {% if help_todos %}
+        <div class="mt-2">
+            <div class="small fw-bold text-danger mb-1"><i class="bi bi-pause-circle"></i> 阻塞中</div>
+            <table class="table table-sm table-bordered mb-0" style="font-size:.8em;">
+                <tbody>
+                {% for t in help_todos %}
                 <tr>
-                    <th style="width:50px;">类型</th>
-                    <th>描述</th>
-                    <th style="width:45px;">级别</th>
-                    <th style="width:70px;">责任人</th>
-                    <th style="width:65px;">时限</th>
-                    <th>最新进展</th>
+                    <td>{{ t.title }}</td>
+                    <td style="width:70px;">{{ t.user.name }}</td>
+                    <td style="width:55px;" class="text-center">{% if t.workdays_overdue > 0 %}<span class="text-danger fw-bold">{{ t.workdays_overdue }}天</span>{% else %}-{% endif %}</td>
+                    <td class="text-muted">{{ t.blocked_reason or '' }}</td>
                 </tr>
-            </thead>
-            <tbody>
-            {% for r in open_risks %}
-            <tr>
-                <td><span class="badge bg-warning text-dark" style="font-size:.8em;">风险</span></td>
-                <td>
-                    <a href="{{ url_for('project.risk_list', project_id=r.project_id) }}" class="text-decoration-none">
-                        {{ r.project.name if r.project else '' }}/{{ r.title }}
-                    </a>
-                </td>
-                <td class="text-center"><span class="badge bg-{{ r.severity_color }}" style="font-size:.75em;">{{ r.severity_label }}</span></td>
-                <td>{{ r.owner_user.name if r.owner_user else (r.owner or '-') }}</td>
-                <td class="text-center">
-                    {% if r.is_overdue %}
-                    <span class="text-danger fw-bold">超{{ (today - r.due_date).days }}天</span>
-                    {% elif r.is_due_today %}
-                    <span class="text-warning fw-bold">今天</span>
-                    {% elif r.due_date %}
-                    {{ r.due_date.strftime('%m-%d') }}
-                    {% endif %}
-                </td>
-                <td class="text-muted" style="font-size:.9em;">
-                    {% if r.comments %}
-                    {{ r.comments[0].created_at.strftime('%m-%d') }} {{ r.comments[0].content[:30] }}{% if r.comments[0].content|length > 30 %}...{% endif %}
-                    {% else %}
-                    <i>无进展</i>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-            {% for t in help_todos %}
-            <tr>
-                <td><span class="badge bg-danger" style="font-size:.8em;">阻塞</span></td>
-                <td>{{ t.title }}</td>
-                <td class="text-center">-</td>
-                <td>{{ t.user.name }}</td>
-                <td class="text-center">
-                    {% if t.workdays_overdue > 0 %}
-                    <span class="text-danger fw-bold">{{ t.workdays_overdue }}天</span>
-                    {% else %}-{% endif %}
-                </td>
-                <td class="text-muted" style="font-size:.9em;">{{ t.blocked_reason or '<i>原因未填</i>' }}</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
     </div>
     </div>
 </div>
@@ -126,10 +92,20 @@
 {% set u_done = ud.get('todo_done', 0) %}
 {% set u_all_done = u_total > 0 and u_done == u_total %}
 <div class="card mb-3 team-user-card {% if u_all_done %}border-success border-opacity-25{% endif %}" data-uid="{{ u.id }}" data-uname="{{ u.name }}">
+    {% set _u_overdue_todos = [] %}
+    {% for tl in ud.get('team_todos', []) %}{% if tl.workdays_overdue > 0 and tl.status != 'done' %}{% if _u_overdue_todos.append(1) %}{% endif %}{% endif %}{% endfor %}
+    {% for rl in ud.get('risk_todos', []) %}{% if rl.workdays_overdue > 0 and rl.status != 'done' %}{% if _u_overdue_todos.append(1) %}{% endif %}{% endif %}{% endfor %}
+    {% for _rid, _tds in ud.get('req_todos', {}).items() %}{% for _t in _tds %}{% if _t.workdays_overdue > 0 and _t.status != 'done' %}{% if _u_overdue_todos.append(1) %}{% endif %}{% endif %}{% endfor %}{% endfor %}
+    {% set _u_overdue_reqs = ud.get('display_reqs', [])|selectattr('due_date')|rejectattr('status', 'in', ['done','closed'])|list %}
+    {% set _u_overdue_reqs = [] %}{% for r in ud.get('display_reqs', []) %}{% if r.due_date and r.due_date < today and r.status not in ('done','closed') %}{% if _u_overdue_reqs.append(r) %}{% endif %}{% endif %}{% endfor %}
+    {% set _has_no_data = not ud or not (ud.risk_todos or ud.display_reqs or ud.team_todos) %}
     <div class="card-header py-2 d-flex justify-content-between align-items-center" role="button" data-bs-toggle="collapse" data-bs-target="#teamUser{{ u.id }}" style="cursor:pointer;">
         <span class="fw-bold small">
-            <i class="bi bi-chevron-{{ 'right' if u_all_done else 'down' }} text-muted" style="font-size:.6em;"></i>
+            <i class="bi bi-chevron-{{ 'right' if u_all_done or _has_no_data else 'down' }} text-muted" style="font-size:.6em;"></i>
             {{ u.name }} <span class="text-muted">{{ u.group or '' }}</span>
+            {% if _has_no_data %}<span class="badge bg-light text-secondary border" style="font-size:.65em;">未录入</span>{% endif %}
+            {% if _u_overdue_todos|length > 0 %}<span class="badge bg-danger" style="font-size:.6em;">{{ _u_overdue_todos|length }} 延期</span>{% endif %}
+            {% if _u_overdue_reqs|length > 0 %}<span class="badge bg-warning text-dark" style="font-size:.6em;">{{ _u_overdue_reqs|length }} 需求逾期</span>{% endif %}
         </span>
         {% if u_total %}<span class="badge bg-{{ 'success' if u_all_done else 'secondary' }}">{{ u_done }}/{{ u_total }}</span>{% endif %}
     </div>

@@ -374,6 +374,29 @@ def project_detail(project_id):
         gantt_data = {'start': g_start, 'end': g_end, 'days': (g_end - g_start).days + 1,
                       'persons': by_person, 'today': today}
 
+    # ── Health metrics: weekly trends (last 8 weeks) ──
+    from app.models.requirement import Activity
+    health_weeks = []
+    for w in range(7, -1, -1):
+        ws = today - timedelta(days=today.weekday() + 7 * w)
+        we = ws + timedelta(days=6)
+        # Throughput: requirements closed that week
+        throughput = sum(1 for r in reqs if r.status in ('done', 'closed') and r.updated_at
+                        and ws <= r.updated_at.date() <= we)
+        # Overdue rate at week end
+        active_at_we = [r for r in reqs if r.status not in ('done', 'closed', 'cancelled')]
+        overdue_at_we = sum(1 for r in active_at_we if r.due_date and r.due_date <= we)
+        overdue_rate = round(overdue_at_we / len(active_at_we) * 100) if active_at_we else 0
+        # Risk age: avg days open risks have been alive
+        open_at_we = [rk for rk in open_risks]
+        avg_risk_age = round(sum((today - rk.created_at.date()).days for rk in open_at_we) / len(open_at_we)) if open_at_we else 0
+        health_weeks.append({
+            'label': ws.strftime('%m/%d'),
+            'throughput': throughput,
+            'overdue_rate': overdue_rate,
+            'risk_age': avg_risk_age,
+        })
+
     return render_template('project/detail.html', project=project, today=today,
                            reqs=reqs, req_total=req_total, req_done=req_done,
                            req_overdue=req_overdue, open_risks=open_risks,
@@ -381,7 +404,8 @@ def project_detail(project_id):
                            milestone_color=MILESTONE_COLOR, timeline_img=timeline_img,
                            milestone_from_parent=milestone_from_parent,
                            gantt=gantt_data, timedelta=timedelta,
-                           gantt_state=_get_gantt_state(project_id))
+                           gantt_state=_get_gantt_state(project_id),
+                           health_weeks=health_weeks)
 
 
 @project_bp.route('/<int:project_id>/follow', methods=['POST'])

@@ -1,0 +1,49 @@
+{# Shared risk comment JS — add + delete + enter-to-send.
+   Include once on any page that has .btn-add-comment / .comment-input / .btn-del-comment #}
+<script>
+if (!window._riskCommentBound) {
+window._riskCommentBound = true;
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.btn-add-comment');
+    if (!btn) return;
+    var riskId = btn.dataset.riskId;
+    var input = btn.parentElement.querySelector('.comment-input');
+    var content = input.value.trim();
+    if (!content) return;
+    btn.disabled = true;
+    apiPost('/projects/risks/' + riskId + '/comment', {content: content})
+    .then(function(d) {
+        btn.disabled = false;
+        if (!d.ok) { showToast(d.msg || '发送失败', 'danger'); return; }
+        input.value = '';
+        var box = btn.closest('td').querySelector('.risk-comments');
+        var div = document.createElement('div');
+        div.className = 'small text-muted d-flex align-items-start gap-1 comment-item';
+        div.dataset.commentId = d.comment.id;
+        div.innerHTML = '<span class="flex-grow-1"><strong>' + d.comment.user + '</strong> <span style="font-size:.8em;">' + d.comment.time + '</span>: ' + d.comment.content + '</span>'
+            + '<button class="btn btn-link btn-sm text-muted p-0 flex-shrink-0 btn-del-comment" style="font-size:.7em;" title="删除" data-id="' + d.comment.id + '"><i class="bi bi-x-lg"></i></button>';
+        box.insertBefore(div, box.firstChild);
+        showToast('已记录', 'success');
+    }).catch(function() { btn.disabled = false; });
+});
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && e.target.classList.contains('comment-input')) {
+        e.preventDefault();
+        var btn = e.target.parentElement.querySelector('.btn-add-comment');
+        if (btn) btn.click();
+    }
+});
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.btn-del-comment');
+    if (!btn) return;
+    if (!confirm('删除该评论？')) return;
+    var cid = btn.dataset.id;
+    apiPost('/projects/risks/comments/' + cid + '/delete', {})
+    .then(function(d) {
+        if (!d.ok) { showToast('删除失败', 'danger'); return; }
+        var item = btn.closest('.comment-item');
+        if (item) item.remove();
+    });
+});
+}
+</script>

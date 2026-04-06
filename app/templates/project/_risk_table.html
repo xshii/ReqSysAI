@@ -1,0 +1,72 @@
+{# Shared risk table — used by risks.html and todo/team.html #}
+{# Expects: risks (list, sorted by project_id), today (date) #}
+{# Pre-compute rowspan for project column merging #}
+{% set _proj_counts = {} %}
+{% for r in risks %}{% if _proj_counts.update({r.project_id: _proj_counts.get(r.project_id, 0) + 1}) %}{% endif %}{% endfor %}
+{% if risks %}
+<div class="table-responsive">
+    <table class="table table-hover table-sm" id="riskTable">
+        <thead class="table-light">
+            <tr>
+                <th style="width:80px;">项目</th>
+                <th>风险</th>
+                <th>严重程度</th>
+                <th>责任人</th>
+                <th>最新进展</th>
+                <th>预计闭环</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% set _seen_pids = [] %}
+        {% for r in risks %}
+        <tr class="{{ 'table-danger bg-opacity-10' if r.is_overdue else '' }}">
+            {% if r.project_id not in _seen_pids %}
+            {% if _seen_pids.append(r.project_id) %}{% endif %}
+            <td rowspan="{{ _proj_counts[r.project_id] }}" class="fw-bold small align-middle" style="background:#f8f9fa;">
+                <a href="{{ url_for('project.risk_list', project_id=r.project_id) }}" class="text-decoration-none">{{ r.project.name if r.project else '-' }}</a>
+            </td>
+            {% endif %}
+            <td>
+                {{ r.title }}
+                {% if r.description %}<div class="text-muted small">{{ r.description[:60] }}{% if r.description|length > 60 %}...{% endif %}</div>{% endif %}
+            </td>
+            <td><span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span></td>
+            <td>{{ r.owner_user.name if r.owner_user else (r.owner or '-') }}</td>
+            <td>
+                <div class="risk-comments" data-risk-id="{{ r.id }}" style="max-height:72px;overflow-y:auto;">
+                    {% for c in r.comments %}
+                    <div class="small text-muted d-flex align-items-start gap-1 comment-item" data-comment-id="{{ c.id }}">
+                        <span class="flex-grow-1"><strong>{{ c.user.name }}</strong> <span style="font-size:.8em;">{{ c.created_at.strftime('%m-%d') }}</span>: {{ c.content }}</span>
+                        <button class="btn btn-link btn-sm text-muted p-0 flex-shrink-0 btn-del-comment" style="font-size:.7em;" title="删除" data-id="{{ c.id }}"><i class="bi bi-x-lg"></i></button>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if r.status == 'open' %}
+                <div class="input-group input-group-sm mt-1">
+                    <input type="text" class="form-control comment-input" data-risk-id="{{ r.id }}" placeholder="记录进展..." maxlength="500">
+                    <button class="btn btn-outline-secondary btn-add-comment" data-risk-id="{{ r.id }}"><i class="bi bi-send"></i></button>
+                </div>
+                {% endif %}
+            </td>
+            <td class="small">
+                {{ r.due_date.strftime('%m-%d') if r.due_date else '-' }}
+                {% if r.is_overdue %}
+                <br><span class="text-danger fw-bold" style="font-size:.85em;">超期{{ (today - r.due_date).days }}天</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if r.status == 'open' %}
+                <button class="btn btn-sm btn-outline-success py-0" onclick="if(confirm('确认解决？'))apiPost('/projects/risks/{{ r.id }}/resolve',{resolution:'站会确认解决'}).then(function(d){if(d&&d.ok)location.reload()})">解决</button>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="text-muted small text-center py-2">无未解决风险</div>
+{% endif %}
+
+{% include 'project/_risk_comment_js.html' %}

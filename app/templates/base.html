@@ -14,7 +14,7 @@
     {% if current_user.is_authenticated %}
     <!-- Navbar -->
     <div class="navbar-trigger" onmouseenter="document.getElementById('topNav').classList.add('nav-visible')" onmouseleave="document.getElementById('topNav').classList.remove('nav-visible')"></div>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top navbar-autohide" id="topNav" onmouseenter="this.classList.add('nav-visible')" onmouseleave="this.classList.remove('nav-visible')">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top navbar-autohide" id="topNav">
         <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('main.index') }}">
                 <i class="bi bi-kanban"></i> {{ site_name }}
@@ -150,15 +150,9 @@
                         </a>
                     </li>
                     <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}{% if p.is_hidden %} mgr-only{% endif %}">
-                        <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'requirement.requirement_list' and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
+                        <a class="nav-link py-0 ps-5 small {% if (request.endpoint == 'requirement.requirement_list' or request.endpoint == 'requirement.requirement_board') and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
                            href="{{ url_for('requirement.requirement_list') }}?project_id={{ p.id }}">
-                            需求列表
-                        </a>
-                    </li>
-                    <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}{% if p.is_hidden %} mgr-only{% endif %}">
-                        <a class="nav-link py-0 ps-5 small {% if request.endpoint == 'requirement.requirement_board' and _this_p %}fw-bold text-primary{% else %}text-muted{% endif %}"
-                           href="{{ url_for('requirement.requirement_board') }}?project_id={{ p.id }}">
-                            需求看板
+                            需求管理
                         </a>
                     </li>
                     <li class="nav-item proj-item proj-sub proj-sub-{{ p.id }}{% if not _p_active %} d-none{% endif %}{% if p.is_hidden %} mgr-only{% endif %}">
@@ -405,8 +399,7 @@
         // 导航快捷入口
         var _navLinks = [
             {title: '首页', icon: 'bi-house', url: '{{ url_for("main.index") }}', keywords: '首页 home 主页'},
-            {title: '需求列表', icon: 'bi-list-task', url: '{{ url_for("requirement.requirement_list") }}', keywords: '需求 requirement'},
-            {title: '需求看板', icon: 'bi-kanban', url: '{{ url_for("requirement.requirement_board") }}', keywords: '看板 kanban board'},
+            {title: '需求管理', icon: 'bi-list-task', url: '{{ url_for("requirement.requirement_list") }}', keywords: '需求 requirement 看板 kanban board'},
             {title: '激励专区', icon: 'bi-star', url: '{{ url_for("incentive.index") }}', keywords: '激励 incentive 奖励'},
             {title: '合规专区', icon: 'bi-shield-check', url: '{{ url_for("dashboard.compliance") }}', keywords: '合规 compliance'},
             {title: '我的一天', icon: 'bi-graph-up', url: '{{ url_for("dashboard.my_day") }}', keywords: '统计 我的一天 dashboard'},
@@ -752,27 +745,51 @@
             _waterOverlay.innerHTML = '<div style="font-size:5em;">💧</div>'
                 + '<div style="font-size:1.8em;font-weight:700;color:#00695c;margin-top:.3em;">该喝水了！</div>'
                 + '<div style="font-size:1em;color:#00897b;margin-top:.5em;">久坐伤身，起来走走，喝杯水吧</div>'
-                + '<button id="waterDismiss" style="margin-top:2em;padding:.6em 2.5em;border-radius:2em;border:2px solid #00897b;background:none;color:#00897b;font-size:1.1em;cursor:not-allowed;opacity:.4;" disabled>知道了 (<span id="waterCountdown">' + LOCK_SEC + '</span>)</button>';
+                + '<div id="waterToday" style="font-size:.9em;color:#00897b;margin-top:.5em;"></div>'
+                + '<div id="waterBtns" style="margin-top:1.5em;display:flex;gap:1em;opacity:.4;pointer-events:none;">'
+                + '<button class="water-ml-btn" data-ml="250" style="padding:.5em 1.5em;border-radius:2em;border:2px solid #00897b;background:none;color:#00897b;font-size:1em;cursor:pointer;">250ml</button>'
+                + '<button class="water-ml-btn" data-ml="500" style="padding:.5em 1.5em;border-radius:2em;border:2px solid #00897b;background:#00897b;color:#fff;font-size:1em;cursor:pointer;">500ml</button>'
+                + '<button class="water-ml-btn" data-ml="750" style="padding:.5em 1.5em;border-radius:2em;border:2px solid #00897b;background:none;color:#00897b;font-size:1em;cursor:pointer;">750ml</button>'
+                + '</div>'
+                + '<div style="margin-top:.8em;"><button id="waterSkip" style="border:none;background:none;color:#80cbc4;font-size:.85em;cursor:not-allowed;opacity:.4;" disabled>跳过 (<span id="waterCountdown">' + LOCK_SEC + '</span>)</button></div>';
             document.body.appendChild(_waterOverlay);
+
+            // Load today's total
+            fetch('/api/water-stats').then(function(r){return r.json()}).then(function(d){
+                if(d.ok) document.getElementById('waterToday').textContent = '今日已喝 ' + d.today + 'ml';
+            });
 
             var sec = LOCK_SEC;
             var cd = document.getElementById('waterCountdown');
-            var btn = document.getElementById('waterDismiss');
+            var skipBtn = document.getElementById('waterSkip');
+            var btnsDiv = document.getElementById('waterBtns');
             var iv = setInterval(function() {
                 sec--;
                 cd.textContent = sec;
                 if (sec <= 0) {
                     clearInterval(iv);
-                    btn.disabled = false;
-                    btn.style.cursor = 'pointer';
-                    btn.style.opacity = '1';
-                    btn.textContent = '知道了';
-                    btn.onclick = function() {
-                        _waterOverlay.remove();
-                        _waterOverlay = null;
-                    };
+                    btnsDiv.style.opacity = '1'; btnsDiv.style.pointerEvents = 'auto';
+                    skipBtn.disabled = false; skipBtn.style.cursor = 'pointer'; skipBtn.style.opacity = '1';
+                    skipBtn.textContent = '跳过';
+                    skipBtn.onclick = function() { _waterOverlay.remove(); _waterOverlay = null; };
                 }
             }, 1000);
+
+            // Drink buttons
+            _waterOverlay.querySelectorAll('.water-ml-btn').forEach(function(btn) {
+                btn.onclick = function() {
+                    var ml = parseInt(btn.dataset.ml);
+                    fetch('/api/water-log', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ml:ml})})
+                    .then(function(r){return r.json()}).then(function(d){
+                        if(d.ok) {
+                            _waterOverlay.innerHTML = '<div style="font-size:4em;">👍</div>'
+                                + '<div style="font-size:1.5em;font-weight:700;color:#00695c;margin-top:.3em;">+' + ml + 'ml</div>'
+                                + '<div style="font-size:1em;color:#00897b;margin-top:.3em;">今日累计 ' + d.today_total + 'ml</div>';
+                            setTimeout(function(){ _waterOverlay.remove(); _waterOverlay = null; }, 1500);
+                        }
+                    });
+                };
+            });
         }
 
         setInterval(showWaterReminder, INTERVAL);

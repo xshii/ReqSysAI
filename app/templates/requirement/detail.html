@@ -155,52 +155,90 @@
             </div>
         </div>
 
-        {# Dependencies #}
+        {# Dependencies — visual chain #}
         {% if req.dependencies or req.dependents %}
-        <div class="card mb-3">
-            <div class="card-header py-1"><span class="small fw-bold">依赖关系</span></div>
+        {% set _blocked_deps = req.dependencies|rejectattr('status', 'in', ['done','closed'])|list %}
+        <div class="card mb-3 {% if _blocked_deps %}border-warning border-opacity-50{% endif %}">
+            <div class="card-header py-1 d-flex justify-content-between align-items-center">
+                <span class="small fw-bold"><i class="bi bi-diagram-3"></i> 依赖关系</span>
+                {% if _blocked_deps %}
+                <span class="badge bg-warning text-dark" style="font-size:.65em;">{{ _blocked_deps|length }} 项前置未完成</span>
+                {% endif %}
+            </div>
             <div class="card-body py-2">
                 {% if req.dependencies %}
-                <div class="mb-1"><span class="small text-muted">前置依赖</span></div>
-                {% for d in req.dependencies %}
-                <div class="d-flex align-items-center gap-1 mb-1">
-                    <span class="badge bg-{{ d.status_color }}" style="font-size:.65em;">{{ d.status_label }}</span>
-                    <a href="{{ url_for('requirement.requirement_detail', req_id=d.id) }}" class="small text-truncate">{{ d.number }} {{ d.title }}</a>
+                <div class="mb-2">
+                    <div class="small text-muted mb-1"><i class="bi bi-box-arrow-in-right"></i> 我在等（前置依赖）</div>
+                    {% for d in req.dependencies %}
+                    {% set is_blocking = d.status not in ('done', 'closed') %}
+                    <div class="d-flex align-items-center gap-2 mb-1 py-1 px-2 rounded {% if is_blocking %}bg-warning bg-opacity-10{% endif %}">
+                        <span class="badge bg-{{ d.status_color }}" style="font-size:.65em;min-width:3.5em;text-align:center;">{{ d.status_label }}</span>
+                        <a href="{{ url_for('requirement.requirement_detail', req_id=d.id) }}" class="small text-truncate flex-grow-1">{{ d.title }}</a>
+                        {% if is_blocking %}
+                        <span class="text-danger" style="font-size:.7em;">
+                            {% if d.due_date and d.due_date < today %}超期{{ (today - d.due_date).days }}天{% else %}进行中{% endif %}
+                        </span>
+                        {% endif %}
+                        <span class="text-muted" style="font-size:.65em;">{{ d.assignee_display }}</span>
+                    </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
                 {% endif %}
                 {% if req.dependents %}
-                <div class="mb-1 {% if req.dependencies %}mt-2{% endif %}"><span class="small text-muted">被依赖</span></div>
-                {% for d in req.dependents %}
-                <div class="d-flex align-items-center gap-1 mb-1">
-                    <span class="badge bg-{{ d.status_color }}" style="font-size:.65em;">{{ d.status_label }}</span>
-                    <a href="{{ url_for('requirement.requirement_detail', req_id=d.id) }}" class="small text-truncate">{{ d.number }} {{ d.title }}</a>
+                <div>
+                    <div class="small text-muted mb-1"><i class="bi bi-box-arrow-right"></i> 在等我（下游影响 {{ req.dependents|length }}）</div>
+                    {% for d in req.dependents %}
+                    <div class="d-flex align-items-center gap-2 mb-1 py-1 px-2 rounded">
+                        <span class="badge bg-{{ d.status_color }}" style="font-size:.65em;min-width:3.5em;text-align:center;">{{ d.status_label }}</span>
+                        <a href="{{ url_for('requirement.requirement_detail', req_id=d.id) }}" class="small text-truncate flex-grow-1">{{ d.title }}</a>
+                        <span class="text-muted" style="font-size:.65em;">{{ d.assignee_display }}</span>
+                    </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
                 {% endif %}
             </div>
         </div>
         {% endif %}
 
-        {# Activity log #}
-        {% if req.activities %}
+        {# Activity Timeline — merge activities + comments chronologically #}
+        {% set _timeline = [] %}
+        {% for a in req.activities %}{% if _timeline.append({'time': a.created_at, 'type': 'activity', 'obj': a}) %}{% endif %}{% endfor %}
+        {% for c in req.comments %}{% if _timeline.append({'time': c.created_at, 'type': 'comment', 'obj': c}) %}{% endif %}{% endfor %}
+        {% if _timeline %}
         <div class="card">
-            <div class="card-header py-1"><span class="small fw-bold">操作记录</span></div>
-            <ul class="list-group list-group-flush" style="font-size:.78em;">
-                {% for a in req.activities %}
-                <li class="list-group-item py-1">
-                    <span class="text-muted">{{ a.created_at.strftime('%m-%d %H:%M') }}</span>
-                    <strong>{{ a.user.name }}</strong>
-                    {% if a.action == 'created' %}创建了需求
-                    {% elif a.action == 'status_changed' %}{{ a.detail }}
-                    {% elif a.action == 'edited' %}编辑: {{ a.detail }}
-                    {% elif a.action == 'commented' %}发表了评论
-                    {% elif a.action == 'task_added' %}{{ a.detail }}
-                    {% else %}{{ a.detail }}
-                    {% endif %}
-                </li>
+            <div class="card-header py-1"><span class="small fw-bold"><i class="bi bi-clock-history"></i> 时间线</span></div>
+            <div class="card-body py-2" style="font-size:.78em;">
+                {% for item in _timeline|sort(attribute='time', reverse=true) %}
+                {% set icon_map = {'created': 'bi-plus-circle text-success', 'status_changed': 'bi-arrow-repeat text-primary', 'edited': 'bi-pencil text-secondary', 'commented': 'bi-chat-dots text-info', 'task_added': 'bi-link-45deg text-secondary'} %}
+                <div class="d-flex gap-2 py-1 {% if not loop.last %}border-bottom{% endif %}">
+                    <div class="flex-shrink-0 text-center" style="width:16px;">
+                        {% if item.type == 'comment' %}
+                        <i class="bi bi-chat-left-text text-info"></i>
+                        {% else %}
+                        <i class="bi {{ icon_map.get(item.obj.action, 'bi-dot text-muted') }}"></i>
+                        {% endif %}
+                    </div>
+                    <div class="flex-grow-1">
+                        <span class="text-muted">{{ item.time.strftime('%m-%d %H:%M') }}</span>
+                        <strong>{{ item.obj.user.name }}</strong>
+                        {% if item.type == 'comment' %}
+                        <span class="text-info">评论</span>
+                        <div class="text-muted mt-1 ps-2" style="border-left:2px solid #0dcaf0;">{{ item.obj.content }}</div>
+                        {% elif item.obj.action == 'created' %}
+                        <span class="text-success">创建了需求</span>
+                        {% elif item.obj.action == 'status_changed' %}
+                        <span>{{ item.obj.detail }}</span>
+                        {% elif item.obj.action == 'edited' %}
+                        <span class="text-secondary">编辑: {{ item.obj.detail }}</span>
+                        {% elif item.obj.action == 'task_added' %}
+                        <span>{{ item.obj.detail }}</span>
+                        {% else %}
+                        <span>{{ item.obj.detail }}</span>
+                        {% endif %}
+                    </div>
+                </div>
                 {% endfor %}
-            </ul>
+            </div>
         </div>
         {% endif %}
     </div>

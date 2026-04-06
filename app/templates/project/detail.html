@@ -117,6 +117,70 @@
     </div>
 </div>
 
+<!-- Health Trends (last 8 weeks) -->
+{% if health_weeks %}
+<div class="card mb-3 border-0 shadow-sm">
+    <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#healthBody" style="cursor:pointer;">
+        <i class="bi bi-chevron-down text-muted me-1" style="font-size:.6em;"></i>
+        <span class="small fw-bold"><i class="bi bi-graph-up"></i> 项目健康趋势</span>
+        <span class="text-muted small ms-2">(近8周)</span>
+    </div>
+    <div class="collapse show" id="healthBody">
+    <div class="card-body py-2">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="text-center small text-muted mb-1">需求吞吐量（周）</div>
+                <div class="d-flex align-items-end justify-content-center gap-1" style="height:60px;">
+                    {% set max_tp = [1, health_weeks|map(attribute='throughput')|max]|max %}
+                    {% for w in health_weeks %}
+                    {% set h = (w.throughput / max_tp * 50)|int %}
+                    <div title="{{ w.label }}: {{ w.throughput }}个" style="width:20px;display:flex;flex-direction:column;align-items:center;">
+                        <span style="font-size:.6em;color:#6c757d;">{{ w.throughput }}</span>
+                        <div style="width:14px;height:{{ [2, h]|max }}px;background:{{ '#198754' if w.throughput > 0 else '#e9ecef' }};border-radius:2px;"></div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="d-flex justify-content-between" style="font-size:.55em;color:#adb5bd;margin-top:2px;">
+                    <span>{{ health_weeks[0].label }}</span><span>{{ health_weeks[-1].label }}</span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center small text-muted mb-1">逾期率（%）</div>
+                <div class="d-flex align-items-end justify-content-center gap-1" style="height:60px;">
+                    {% for w in health_weeks %}
+                    {% set h = (w.overdue_rate / 100 * 50)|int %}
+                    <div title="{{ w.label }}: {{ w.overdue_rate }}%" style="width:20px;display:flex;flex-direction:column;align-items:center;">
+                        <span style="font-size:.6em;color:#6c757d;">{{ w.overdue_rate }}</span>
+                        <div style="width:14px;height:{{ [2, h]|max }}px;background:{{ '#dc3545' if w.overdue_rate > 20 else '#ffc107' if w.overdue_rate > 10 else '#198754' }};border-radius:2px;"></div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="d-flex justify-content-between" style="font-size:.55em;color:#adb5bd;margin-top:2px;">
+                    <span>{{ health_weeks[0].label }}</span><span>{{ health_weeks[-1].label }}</span>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center small text-muted mb-1">风险平均存活（天）</div>
+                <div class="d-flex align-items-end justify-content-center gap-1" style="height:60px;">
+                    {% set max_ra = [1, health_weeks|map(attribute='risk_age')|max]|max %}
+                    {% for w in health_weeks %}
+                    {% set h = (w.risk_age / max_ra * 50)|int %}
+                    <div title="{{ w.label }}: {{ w.risk_age }}天" style="width:20px;display:flex;flex-direction:column;align-items:center;">
+                        <span style="font-size:.6em;color:#6c757d;">{{ w.risk_age }}</span>
+                        <div style="width:14px;height:{{ [2, h]|max }}px;background:{{ '#dc3545' if w.risk_age > 14 else '#ffc107' if w.risk_age > 7 else '#198754' }};border-radius:2px;"></div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="d-flex justify-content-between" style="font-size:.55em;color:#adb5bd;margin-top:2px;">
+                    <span>{{ health_weeks[0].label }}</span><span>{{ health_weeks[-1].label }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Gantt Chart -->
 {% if gantt %}
 <div class="card mb-3">

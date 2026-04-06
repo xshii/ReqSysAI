@@ -20,15 +20,20 @@
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h4>需求看板</h4>
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <div class="d-flex align-items-center gap-3">
+        <h4 class="mb-0">需求管理</h4>
+        <ul class="nav nav-tabs mb-0" style="border-bottom:none;">
+            <li class="nav-item"><a class="nav-link py-1 px-3" style="font-size:.85em;" href="{{ url_for('requirement.requirement_list', project_id=cur_project) }}"><i class="bi bi-list"></i> 列表</a></li>
+            <li class="nav-item"><a class="nav-link active py-1 px-3" style="font-size:.85em;" href="{{ url_for('requirement.requirement_board', project_id=cur_project) }}"><i class="bi bi-kanban"></i> 看板</a></li>
+        </ul>
+    </div>
     <div class="d-flex gap-2">
         <select class="form-select form-select-sm" style="width:auto;" onchange="applyFilter()" id="fAssignee">
             <option value="">全部负责人</option>
             {% for u in users %}<option value="{{ u.id }}" {% if cur_assignee == u.id %}selected{% endif %}>{{ u.name }}</option>{% endfor %}
         </select>
         <a href="?project_id={{ cur_project }}&assignee_id={{ cur_assignee or '' }}&show_sub={{ '0' if show_sub else '1' }}" class="btn btn-{{ 'info' if show_sub else 'outline-info' }} btn-sm"><i class="bi bi-diagram-3"></i> 子需求</a>
-        <a href="{{ url_for('requirement.requirement_list') }}?project_id={{ cur_project }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-list"></i> 列表</a>
     </div>
 </div>
 

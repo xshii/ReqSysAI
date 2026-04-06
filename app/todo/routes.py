@@ -484,12 +484,16 @@ def team():
         from app.models.project import Project
         from app.models.project_member import ProjectMember
         cur_project_id = request.args.get('project_id', type=int)
-        # Default to user's first followed/member project
+        # Default: first followed project > first membership
         if not cur_project_id:
-            first_membership = ProjectMember.query.filter_by(user_id=current_user.id)\
-                .join(Project).filter(Project.status == 'active').first()
-            if first_membership:
-                cur_project_id = first_membership.project_id
+            followed = current_user.followed_projects.filter(Project.status == 'active').first()
+            if followed:
+                cur_project_id = followed.id
+            else:
+                first_membership = ProjectMember.query.filter_by(user_id=current_user.id)\
+                    .join(Project).filter(Project.status == 'active').first()
+                if first_membership:
+                    cur_project_id = first_membership.project_id
         if cur_project_id:
             cur_project_obj = Project.query.get(cur_project_id)
             # Include sub-projects (exclude hidden)
@@ -604,44 +608,6 @@ def team():
         if 'todos' in ud:
             del ud['todos']
 
-    form = TodoForm()
-    reqs = Requirement.query.filter(Requirement.status.notin_(REQ_INACTIVE_STATUSES))\
-        .order_by(Requirement.number).all()
-    # Default: inherit requirements from user's most recent todo
-    last_todo = Todo.query.filter_by(user_id=current_user.id)\
-        .filter(Todo.requirements.any())\
-        .order_by(Todo.created_at.desc()).first()
-    default_req_ids = [r.id for r in last_todo.requirements] if last_todo else []
-
-    all_users_list = User.query.filter(User.is_active == True, User.id != current_user.id)\
-        .order_by(User.name).all()
-
-    # Due date options: weekday -> today/tomorrow; weekend -> today..monday
-    weekday_names = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
-    due_options = []
-    dow = today.weekday()  # 0=Mon ... 6=Sun
-    if dow < 5:  # weekday
-        due_options.append((today, f'今天 ({today.strftime("%m-%d")} {weekday_names[dow]})'))
-        tmr = today + timedelta(days=1)
-        due_options.append((tmr, f'明天 ({tmr.strftime("%m-%d")} {weekday_names[tmr.weekday()]})'))
-    else:  # weekend: show today through next Monday
-        d = today
-        while d.weekday() != 0 or d == today:  # until Monday (inclusive)
-            label = '今天' if d == today else weekday_names[d.weekday()]
-            due_options.append((d, f'{label} ({d.strftime("%m-%d")} {weekday_names[d.weekday()]})'))
-            d += timedelta(days=1)
-            if d.weekday() == 1:  # Tuesday, stop
-                break
-
-    # Help due date: next 3 workdays
-    help_due_options = []
-    d = today
-    while len(help_due_options) < 3:
-        if d.weekday() < 5:
-            label = f'{d.strftime("%m-%d")} {weekday_names[d.weekday()]}'
-            help_due_options.append((d, label))
-        d += timedelta(days=1)
-
     # Todos marked as needing help (team-wide)
     help_todos = Todo.query.filter(
         Todo.need_help == True, Todo.status == TODO_STATUS_TODO,
@@ -652,10 +618,9 @@ def team():
     if view_mode == 'group' and not current_user.group:
         return render_template('todo/team.html',
             no_group=True, users=[], user_data={}, groups=groups,
-            cur_group='', today=today, timedelta=timedelta, form=None,
-            reqs=[], default_req_ids=[], all_users=[],
-            due_options=[], help_due_options=[], help_todos=[],
-            req_comments={}, view_mode=view_mode, cur_project_id=None, cur_project_obj=None,
+            cur_group='', today=today, timedelta=timedelta,
+            help_todos=[], req_comments={},
+            view_mode=view_mode, cur_project_id=None, cur_project_obj=None,
             open_risks=[],
         )
 
@@ -668,6 +633,7 @@ def team():
     open_risks = risk_query.options(
         _jl(Risk.project), _jl(Risk.owner_user), _jl(Risk.tracker), _jl(Risk.comments)
     ).order_by(
+        Risk.project_id,
         db.case({'high': 0, 'medium': 1, 'low': 2}, value=Risk.severity, else_=3),
         Risk.due_date,
     ).all()
@@ -689,9 +655,7 @@ def team():
 
     return render_template('todo/team.html',
         users=users, user_data=user_data, groups=groups,
-        cur_group=cur_group, today=today, timedelta=timedelta, form=form,
-        reqs=reqs, default_req_ids=default_req_ids, all_users=all_users_list,
-        due_options=due_options, help_due_options=help_due_options,
+        cur_group=cur_group, today=today, timedelta=timedelta,
         help_todos=help_todos, req_comments=req_comments, no_group=False,
         view_mode=view_mode, cur_project_id=cur_project_id, cur_project_obj=cur_project_obj,
         open_risks=open_risks,

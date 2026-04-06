@@ -15,6 +15,7 @@
     0%, 100% { box-shadow: 0 0 0 3px rgba(13,202,240,.35); }
     50% { box-shadow: 0 0 0 6px rgba(13,202,240,.15); }
 }
+.card:hover .personal-quick-btns { max-height:30px; opacity:1; }
 </style>
 {% endblock %}
 
@@ -139,13 +140,29 @@ checkHelpAlert();
             <i class="bi bi-clock-fill text-success"></i> 本周专注 {{ (week_focus / 60)|round(1) }}h
         </span>
         {% endif %}
+        <span class="ms-2 align-middle" style="font-size:.55em;" title="本周饮水 {{ week_water }}ml&#10;目标: 每日1500ml">
+            <i class="bi bi-droplet-fill text-info"></i> {{ (week_water / 1000)|round(1) }}L
+            <span class="d-inline-flex align-items-end gap-0" style="height:14px;margin-left:2px;vertical-align:middle;">
+                {% for ml in week_water_days %}
+                {% set pct = [100, (ml / 1500 * 100)|int]|min %}
+                <span style="display:inline-block;width:3px;height:14px;background:#e9ecef;border-radius:1px;margin:0 0.5px;overflow:hidden;position:relative;">
+                    <span style="position:absolute;bottom:0;width:100%;height:{{ pct }}%;background:#0dcaf0;border-radius:1px;"></span>
+                </span>
+                {% endfor %}
+            </span>
+        </span>
         {% if unclosed_meetings %}
         <span class="ms-2 align-middle text-warning" style="font-size:.55em;cursor:pointer;" onclick="document.getElementById('unclosedMeetings').classList.toggle('d-none')">
             <i class="bi bi-camera-video"></i> {{ unclosed_meetings|length }}个会议未闭环 <i class="bi bi-chevron-down" style="font-size:.8em;"></i>
         </span>
         {% endif %}
     </h4>
-    <div class="d-flex gap-1 align-items-center" id="quickActivityBar"></div>
+    <div class="d-flex gap-1 align-items-center position-relative" id="quickActivityWrap">
+        <button class="btn btn-light d-flex align-items-center justify-content-center" id="actToggle" style="width:32px;height:32px;border-radius:50%;border:1px dashed #adb5bd;color:#adb5bd;font-size:.9em;padding:0;" title="活动计时">
+            <i class="bi bi-stopwatch"></i>
+        </button>
+        <div class="d-none d-flex gap-1 align-items-center" id="quickActivityBar"></div>
+    </div>
     <div class="ms-auto d-flex gap-1">
         <button class="btn btn-sm btn-outline-secondary" id="btnDailyProgress" title="AI 生成今日进展报告">
             <i class="bi bi-robot"></i> 每日进展
@@ -197,7 +214,19 @@ checkHelpAlert();
     timer.style.cssText = 'font-size:.78em;color:#198754;';
     timer.innerHTML = '<span id="actTimerLabel" class="fw-bold"></span> <span id="actTimerElapsed">0:00</span>';
     bar.appendChild(timer);
-    // Activity buttons use native title tooltip (no Bootstrap tooltip residue)
+    // Toggle expand/collapse
+    var toggle = document.getElementById('actToggle');
+    var wrap = document.getElementById('quickActivityBar');
+    toggle.addEventListener('click', function() {
+        wrap.classList.toggle('d-none');
+        wrap.classList.toggle('d-flex');
+        toggle.style.color = wrap.classList.contains('d-none') ? '#adb5bd' : '#198754';
+    });
+    // Auto-expand if timer is running
+    if (localStorage.getItem('_activity')) {
+        wrap.classList.remove('d-none'); wrap.classList.add('d-flex');
+        toggle.style.color = '#198754';
+    }
 })();
 </script>
 {% if unclosed_meetings %}
@@ -331,7 +360,7 @@ checkHelpAlert();
                 <div class="collapse {% if not personal_all_done %}show{% endif %} todo-list-for-req" data-req-id="personal" id="personalTodos">
                 {% for t in personal_todos %}{{ todo_row(t) }}{% endfor %}
                 </div>
-                <div class="d-flex gap-1 ps-2 mt-1 flex-wrap">
+                <div class="d-flex gap-1 ps-2 mt-1 flex-wrap personal-quick-btns" style="max-height:0;overflow:hidden;opacity:0;transition:max-height .2s,opacity .2s;">
                     {% for label in ['跑步','喝水','阅读','冥想','拉伸'] %}
                     <form method="POST" action="{{ url_for('main.quick_todo') }}" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -500,7 +529,7 @@ checkHelpAlert();
             <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#incentiveBody" style="cursor:pointer;">
                 <i class="bi bi-chevron-right text-muted me-1" style="font-size:.6em;"></i><i class="bi bi-star-fill text-warning"></i> 激励之星 <span class="badge bg-secondary">{{ approved_incentives | length }}</span>
             </div>
-            <div class="collapse show" id="incentiveBody">
+            <div class="collapse" id="incentiveBody">
             <div class="card-body py-2" style="max-height:280px;overflow-y:auto;">
                 {% if approved_incentives %}
                 {% for inc in approved_incentives %}
@@ -569,9 +598,9 @@ checkHelpAlert();
         <!-- Graffiti board -->
         <div class="card mb-3 border-0 shadow-sm">
             <div class="card-header py-2 bg-white" role="button" data-bs-toggle="collapse" data-bs-target="#rantBody" style="cursor:pointer;">
-                <i class="bi bi-chevron-down text-muted me-1" style="font-size:.6em;"></i><i class="bi bi-chat-dots"></i> 涂鸦板 <span class="text-muted small">完全匿名</span>
+                <i class="bi bi-chevron-right text-muted me-1" style="font-size:.6em;"></i><i class="bi bi-chat-dots"></i> 涂鸦板 <span class="text-muted small">完全匿名</span>
             </div>
-            <div class="collapse show" id="rantBody">
+            <div class="collapse" id="rantBody">
             <div class="card-body py-2">
         <div class="input-group input-group-sm mb-2">
             <input type="text" id="rantAlias" class="form-control" style="max-width:80px;" placeholder="代号" maxlength="30">

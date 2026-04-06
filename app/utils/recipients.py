@@ -6,9 +6,12 @@ from app.models.risk import Risk
 from app.models.user import User
 
 
-def compute_default_recipients(cur_project_id):
+def compute_default_recipients(cur_project_id, include_sub=True, cc_level='full'):
     """Compute default To (member + risk tracker/owner employee_ids) and Cc (their managers).
 
+    Args:
+        cur_project_id: primary project id
+        include_sub: if True, also include sub-project members and risks
     Returns (to_str, cc_str) with semicolon-separated employee_ids.
     """
     default_to = ''
@@ -16,22 +19,26 @@ def compute_default_recipients(cur_project_id):
     if not cur_project_id:
         return default_to, default_cc
 
-    # To: all project members' employee_ids
-    members = ProjectMember.query.filter_by(project_id=cur_project_id).all()
+    from app.models.project import Project
+    all_pids = [cur_project_id]
+    if include_sub:
+        all_pids += [c.id for c in Project.query.filter_by(parent_id=cur_project_id).all()]
+
+    # To: all project members' employee_ids (project + sub-projects)
+    members = ProjectMember.query.filter(ProjectMember.project_id.in_(all_pids)).all()
     to_eids = []
     for m in members:
         if m.user and m.user.employee_id:
             to_eids.append(m.user.employee_id)
     default_to = ';'.join(to_eids)
     if not default_to:
-        # Fallback: use current user
         from flask_login import current_user
         if current_user.is_authenticated and current_user.employee_id:
             default_to = current_user.employee_id
 
     # To also includes risk tracker + owner
     to_set = set(to_eids)
-    open_risks = Risk.query.filter_by(project_id=cur_project_id, status='open')\
+    open_risks = Risk.query.filter(Risk.project_id.in_(all_pids), Risk.status == 'open')\
         .filter(Risk.deleted_at.is_(None)).all()
     for r in open_risks:
         if r.tracker and r.tracker.employee_id:
@@ -42,35 +49,35 @@ def compute_default_recipients(cur_project_id):
                 to_set.add(owner_user.employee_id)
     default_to = ';'.join(sorted(to_set))
 
-    # Cc: PM + PM's manager + all To people's managers
+    # Cc: PM + managers (if cc_managers=True)
     cc_eids = set()
-    # Managers of all project members
+    from flask_login import current_user as _cu
+    from app.models.project import Project
+    my_mgr_eid = ''
+    my_mgr2_eid = ''
+
+    if cc_level not in ('manager', 'full'):
+        cc_level = 'full'
+    # 'manager': PM + direct managers
+    # 'full': PM + direct managers + current user's manager's manager
     all_user_ids = set()
     for m in members:
         if m.user:
             all_user_ids.add(m.user.id)
-    # Managers of risk tracker/owner
     for r in open_risks:
         if r.tracker_id:
             all_user_ids.add(r.tracker_id)
         if r.owner_id:
             all_user_ids.add(r.owner_id)
-    # Include current user
-    from flask_login import current_user as _cu
     if _cu.is_authenticated:
         all_user_ids.add(_cu.id)
 
-    # Ensure PM (project owner) is in Cc
-    from app.models.project import Project
     project = db.session.get(Project, cur_project_id)
-    pm_eid = ''
     if project and project.owner_id:
         pm_user = db.session.get(User, project.owner_id)
         if pm_user and pm_user.employee_id:
-            pm_eid = pm_user.employee_id
-            if pm_eid not in to_set:
-                cc_eids.add(pm_eid)
-            # PM's manager
+            if pm_user.employee_id not in to_set:
+                cc_eids.add(pm_user.employee_id)
             if pm_user.manager:
                 parts = pm_user.manager.strip().split()
                 pm_mgr_eid = parts[-1] if len(parts) > 1 else parts[0]
@@ -78,13 +85,10 @@ def compute_default_recipients(cur_project_id):
                     cc_eids.add(pm_mgr_eid)
             all_user_ids.add(pm_user.id)
 
-    # Extract current user's manager and manager's manager
-    my_mgr_eid = ''
-    my_mgr2_eid = ''
     if _cu.is_authenticated and _cu.manager:
         parts = _cu.manager.strip().split()
         my_mgr_eid = parts[-1] if len(parts) > 1 else parts[0]
-        if my_mgr_eid:
+        if my_mgr_eid and cc_level == 'full':
             mgr_user = User.query.filter_by(employee_id=my_mgr_eid, is_active=True).first()
             if mgr_user and mgr_user.manager:
                 mgr2_parts = mgr_user.manager.strip().split()
@@ -98,9 +102,9 @@ def compute_default_recipients(cur_project_id):
                 cc_eids.add(mgr_eid)
     # Remove anyone already in To
     cc_eids -= to_set
-    # Current user's manager's manager first, then manager
     cc_list = []
-    if my_mgr2_eid and my_mgr2_eid not in to_set:
+    # Only include manager's manager for 'full' level (weekly reports)
+    if cc_level == 'full' and my_mgr2_eid and my_mgr2_eid not in to_set:
         cc_list.append(my_mgr2_eid)
         cc_eids.discard(my_mgr2_eid)
     if my_mgr_eid and my_mgr_eid not in to_set:

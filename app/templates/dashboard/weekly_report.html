@@ -151,8 +151,10 @@
         {% for sp in report_data.sub_projects %}
         <tr>
             <td><a href="{{ url_for('dashboard.weekly_report', project_id=sp.project.id) }}" class="text-decoration-none">{{ sp.project.name }}</a></td>
-            <td><a href="{{ url_for('requirement.requirement_list', project_id=sp.project.id) }}" class="text-decoration-none text-muted">{{ sp.owner.name if sp.owner else '-' }}</a></td>
-            <td><a href="{{ url_for('requirement.requirement_list', project_id=sp.project.id) }}" class="text-decoration-none text-muted">{{ sp.summary or '-' }}</a></td>
+            <td>{{ sp.owner.name if sp.owner else '-' }}</td>
+            <td contenteditable="true" class="sub-summary-cell" data-pid="{{ sp.project.id }}"
+                style="cursor:text;min-width:200px;{% if saved_report and saved_report.is_frozen %}pointer-events:none;color:#999;{% endif %}"
+                onblur="saveSubSummary(this)">{{ sp.summary or '' }}</td>
         </tr>
         {% endfor %}
         </tbody>
@@ -320,7 +322,7 @@
 
 {% if pivot_l1s is defined and pivot_l1s %}
 {# 有点灯图数据：显示点灯图代替需求列表 #}
-{% set _light_bg = {'danger': 'rgba(220,53,69,.15)', 'success': 'rgba(25,135,84,.12)', 'secondary': 'rgba(108,117,125,.08)', 'primary': ''} %}
+{% set _light_bg = {'danger': '#fce4e6', 'success': '#e6f4ed', 'secondary': '#f0f1f2', 'primary': ''} %}
 {% set _src_short = {'analysis': '分析', 'coding': '编码', 'testing': '测试'} %}
 {% set ns.n = ns.n + 1 %}
 <div class="report-section">
@@ -361,10 +363,10 @@
         </tbody>
     </table>
     <div style="font-size:.75em;color:#999;margin-top:4px;">
-        <span style="display:inline-block;width:8px;height:8px;background:rgba(220,53,69,.3);border-radius:2px;"></span> 延期
+        <span style="display:inline-block;width:8px;height:8px;background:#f5b7ba;border-radius:2px;"></span> 延期
         <span style="display:inline-block;width:8px;height:8px;background:#fff;border:1px solid #ccc;border-radius:2px;margin-left:4px;"></span> 进行中
-        <span style="display:inline-block;width:8px;height:8px;background:rgba(108,117,125,.2);border-radius:2px;margin-left:4px;"></span> 未启动
-        <span style="display:inline-block;width:8px;height:8px;background:rgba(25,135,84,.3);border-radius:2px;margin-left:4px;"></span> 已完成
+        <span style="display:inline-block;width:8px;height:8px;background:#e0e1e3;border-radius:2px;margin-left:4px;"></span> 未启动
+        <span style="display:inline-block;width:8px;height:8px;background:#b3dfca;border-radius:2px;margin-left:4px;"></span> 已完成
     </div>
 </div>
 {% else %}
@@ -524,6 +526,23 @@ function autoFillManager() {
             showToast('已添加主管: ' + me.manager, 'success');
         } else {
             showToast('主管已在抄送列表中', 'info');
+        }
+    });
+}
+
+function saveSubSummary(el) {
+    var pid = el.dataset.pid;
+    var text = el.textContent.trim();
+    apiPost('/dashboard/weekly-report/sub-summary', {
+        project_id: parseInt(pid),
+        week_start: '{{ monday.strftime("%Y-%m-%d") }}',
+        summary: text
+    }).then(function(d) {
+        if (d && d.ok) {
+            el.style.outline = '2px solid #198754';
+            setTimeout(function() { el.style.outline = ''; }, 800);
+        } else {
+            showToast(d.msg || '保存失败', 'danger');
         }
     });
 }
