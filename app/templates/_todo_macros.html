@@ -4,14 +4,14 @@
 {% macro pomodoro_icons(todo, pomo_min) %}
 {% if todo.pomodoros %}
 {% set pomo = pomo_min or 45 %}
-<span class="pomodoro-area ms-1" title="共{{ todo.actual_minutes or 0 }}分钟 {{ todo.pomodoros|length }}次">
+<span class="pomodoro-area ms-1" style="display:inline-flex;align-items:center;gap:2px;vertical-align:middle;" title="共{{ todo.actual_minutes or 0 }}分钟 {{ todo.pomodoros|length }}次">
 {%- for s in todo.pomodoros -%}
 {% set pct = (s.minutes / pomo * 100)|int -%}
-{% if s.completed %}<i class="bi bi-circle-fill text-danger" style="font-size:.6em;cursor:default;" data-tip="{{ s.minutes }}分钟 ✓"></i>
-{%- elif pct >= 80 %}<i class="bi bi-circle-fill text-primary" style="font-size:.6em;cursor:default;" data-tip="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
-{%- elif pct >= 50 %}<i class="bi bi-circle-half text-warning" style="font-size:.6em;cursor:default;" data-tip="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
-{%- elif pct >= 20 %}<i class="bi bi-circle-half text-secondary" style="font-size:.6em;cursor:default;" data-tip="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
-{%- else %}<i class="bi bi-circle text-secondary" style="font-size:.6em;cursor:default;" data-tip="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
+{% if s.completed %}<i class="bi bi-circle-fill" style="font-size:.9em;color:#f2a2b3;cursor:default;" data-tip="{{ s.minutes }}分钟 ✓"></i>
+{%- elif pct >= 80 %}<i class="bi bi-circle-fill" style="font-size:.9em;color:#f2a2b3;cursor:default;" data-tip="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
+{%- elif pct >= 50 %}<i class="bi bi-circle-half" style="font-size:.9em;color:#f2a2b3;cursor:default;" data-tip="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
+{%- elif pct >= 20 %}<i class="bi bi-circle-half" style="font-size:.9em;color:#f2a2b3;cursor:default;" data-tip="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
+{%- else %}<i class="bi bi-circle" style="font-size:.9em;color:#f2a2b3;cursor:default;" data-tip="{{ s.minutes }}分钟 ({{ pct }}%)"></i>
 {%- endif %}
 {%- endfor -%}
 </span>
@@ -19,13 +19,13 @@
 {% set pomo = pomo_min or 45 %}
 {% set full = (todo.actual_minutes // pomo) | int %}
 {% set remainder_pct = ((todo.actual_minutes % pomo) / pomo * 100) | int %}
-<span class="pomodoro-area ms-1" title="共{{ todo.actual_minutes }}分钟">
-{%- for i in range(full) %}<i class="bi bi-circle-fill text-danger" style="font-size:.6em;cursor:default;"></i>{% endfor -%}
+<span class="pomodoro-area ms-1" style="display:inline-flex;align-items:center;gap:2px;vertical-align:middle;" title="共{{ todo.actual_minutes }}分钟">
+{%- for i in range(full) %}<i class="bi bi-circle-fill" style="font-size:.9em;color:#f2a2b3;cursor:default;"></i>{% endfor -%}
 {%- if remainder_pct > 0 -%}
-{% if remainder_pct >= 80 %}<i class="bi bi-circle-fill text-primary" style="font-size:.6em;cursor:default;"></i>
-{%- elif remainder_pct >= 50 %}<i class="bi bi-circle-half text-warning" style="font-size:.6em;cursor:default;"></i>
-{%- elif remainder_pct >= 20 %}<i class="bi bi-circle-half text-secondary" style="font-size:.6em;cursor:default;"></i>
-{%- else %}<i class="bi bi-circle text-secondary" style="font-size:.6em;cursor:default;"></i>
+{% if remainder_pct >= 80 %}<i class="bi bi-circle-fill" style="font-size:.9em;color:#f2a2b3;cursor:default;"></i>
+{%- elif remainder_pct >= 50 %}<i class="bi bi-circle-half" style="font-size:.9em;color:#f2a2b3;cursor:default;"></i>
+{%- elif remainder_pct >= 20 %}<i class="bi bi-circle-half" style="font-size:.9em;color:#f2a2b3;cursor:default;"></i>
+{%- else %}<i class="bi bi-circle" style="font-size:.9em;color:#f2a2b3;cursor:default;"></i>
 {%- endif %}
 {%- endif -%}
 </span>
@@ -519,9 +519,7 @@ document.querySelectorAll('form[action$="/quick-todo"], form.quick-todo-form').f
                     var rid = d.req_id;
                     if (rid) {
                         var commentArea = document.querySelector('.req-comments[data-req-id="' + rid + '"]');
-                        var now = new Date();
-                        var timeStr = String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0')
-                            + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+                        var timeStr = d.time || '';
                         var commentHtml = '<div class="text-muted" style="font-size:.7em;"><i class="bi bi-chat-left-text"></i> <strong>' + (d.user || '') + '</strong> ' + timeStr + '：' + d.title + '</div>';
                         if (commentArea) {
                             commentArea.insertAdjacentHTML('afterbegin', commentHtml);

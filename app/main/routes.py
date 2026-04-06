@@ -346,7 +346,8 @@ def quick_todo():
             ))
             db.session.commit()
             return jsonify(ok=True, title=comment_text, req_id=req_id,
-                           user=current_user.name, action='comment') if is_ajax else redirect(url_for('main.index'))
+                           user=current_user.name, action='comment',
+                           time=datetime.now().strftime('%m-%d %H:%M')) if is_ajax else redirect(url_for('main.index'))
 
     # Handle @name or @group → create todos for target(s)
     at_target = None
@@ -404,7 +405,7 @@ def quick_todo():
             my_todo.items.append(TodoItem(title=title, sort_order=0))
             db.session.add(my_todo)
             db.session.flush()
-            helper_todo = Todo(user_id=helper.id, title=title, due_date=today + timedelta(days=7),
+            helper_todo = Todo(user_id=helper.id, title=title, due_date=_parsed_due or (today + timedelta(days=7)),
                                category=category, source='help', parent_id=my_todo.id, requirements=reqs)
             helper_todo.items.append(TodoItem(title=title, sort_order=0))
             db.session.add(helper_todo)

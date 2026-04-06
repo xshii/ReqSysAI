@@ -85,6 +85,9 @@ def edit(todo_id):
                 if parent:
                     days = (todo.due_date - date.today()).days if todo.due_date else 0
                     when = '今天' if days <= 0 else (f'{days}天内')
+                    # 同步求助方 due_date：被求助方承诺的日期更晚时，拉齐求助方的截止日
+                    if todo.due_date and (not parent.due_date or todo.due_date > parent.due_date):
+                        parent.due_date = todo.due_date
                     notify(parent.user_id, 'help',
                            f'{current_user.name} 接纳了你的求助「{todo.title}」，预计{when}完成', '')
             # 同步外部诉求状态 + 标记通知已读

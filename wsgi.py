@@ -1,4 +1,9 @@
 import os
+import time
+
+os.environ.setdefault('TZ', 'Asia/Shanghai')
+if hasattr(time, 'tzset'):
+    time.tzset()
 
 import yaml
 

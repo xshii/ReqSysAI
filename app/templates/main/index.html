@@ -85,18 +85,20 @@
         <span class="small flex-grow-1">
             {% if t.title.startswith('[外部诉求]') %}<i class="bi bi-megaphone text-info me-1" style="font-size:.8em;"></i>{% elif t.parent %}<span class="text-muted">{{ t.parent.user.name }} 求助：</span>{% endif %}
             {{ t.title }}
+            {% if t.parent and t.parent.due_date %}{% set _req_days = (t.parent.due_date - today).days %}<span class="badge bg-{{ 'danger' if _req_days <= 0 else ('warning text-dark' if _req_days <= 2 else 'secondary') }} bg-opacity-75" style="font-size:.6em;">期望{{ '今天' if _req_days <= 0 else (_req_days|string + '天内') }}</span>{% endif %}
         </span>
     </div>
     {% endfor %}
 </div>
 <script>
+var SERVER_TODAY = '{{ today.isoformat() }}';
 function acceptHelp(todoId, days, btn) {
     var due;
     if (days === 'keep') {
         due = btn.dataset.due;
     } else {
-        var d = new Date(); d.setDate(d.getDate() + days);
-        due = d.toISOString().slice(0, 10);
+        var d = new Date(SERVER_TODAY + 'T00:00:00'); d.setDate(d.getDate() + days);
+        due = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
     }
     apiPost('/todos/' + todoId + '/edit', {due_date: due}).then(function(r) {
         if (r && r.ok) {
@@ -1152,15 +1154,15 @@ function exitFocusMode() {
 
 function addTomatoIcon(btn, minutes) {
     var pct = Math.round(minutes / POMODORO_MIN * 100);
-    var cls, icon;
-    if (pct >= 100) { cls = 'text-danger'; icon = 'bi-circle-fill'; }
-    else if (pct >= 80) { cls = 'text-primary'; icon = 'bi-circle-fill'; }
-    else if (pct >= 50) { cls = 'text-warning'; icon = 'bi-circle-half'; }
-    else if (pct >= 20) { cls = 'text-secondary'; icon = 'bi-circle-half'; }
-    else { cls = 'text-secondary'; icon = 'bi-circle'; }
+    var icon;
+    if (pct >= 100) { icon = 'bi-circle-fill'; }
+    else if (pct >= 80) { icon = 'bi-circle-fill'; }
+    else if (pct >= 50) { icon = 'bi-circle-half'; }
+    else if (pct >= 20) { icon = 'bi-circle-half'; }
+    else { icon = 'bi-circle'; }
     var tomato = document.createElement('i');
-    tomato.className = 'bi ' + icon + ' ' + cls;
-    tomato.style.cssText = 'font-size:.6em;margin-left:1px;cursor:default;';
+    tomato.className = 'bi ' + icon;
+    tomato.style.cssText = 'font-size:.9em;color:#f2a2b3;margin-left:2px;cursor:default;';
     tomato.dataset.tip = minutes + '分钟 (' + pct + '%)';
     // Find or create pomodoro-area container
     var container = btn.closest('.todo-drag-item') || btn.closest('.d-flex');
@@ -1168,6 +1170,7 @@ function addTomatoIcon(btn, minutes) {
     if (!area) {
         area = document.createElement('span');
         area.className = 'pomodoro-area ms-1';
+        area.style.cssText = 'display:inline-flex;align-items:center;gap:2px;vertical-align:middle;';
         // Insert before delete button
         var delBtn = container.querySelector('.btn-delete-home') || container.querySelector('.btn-del-r');
         if (delBtn) container.insertBefore(area, delBtn);

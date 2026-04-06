@@ -37,6 +37,7 @@ if not exist "instance\reqsys.db" (
 REM Set env
 set FLASK_APP=app:create_app
 set FLASK_ENV=development
+set TZ=Asia/Shanghai
 
 REM Get local IP
 for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (
