@@ -70,4 +70,5 @@ class TestDashboardPages:
         assert client.get('/dashboard/resource-map').status_code == 200
 
     def test_emotion(self, client):
+        client.set_cookie('mgr_view', '1')
         assert client.get('/dashboard/emotion').status_code == 200

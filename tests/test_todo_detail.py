@@ -25,10 +25,12 @@ def app():
         r = Role(name='Admin')
         _db.session.add(r)
         _db.session.flush()
-        u = User(employee_id='t001', name='测试用户', ip_address='127.0.0.1')
+        from app.models.user import Group
+        _db.session.add(Group(name='TestGrp'))
+        u = User(employee_id='t001', name='测试用户', ip_address='127.0.0.1', group='TestGrp')
         u.roles.append(r)
         _db.session.add(u)
-        u2 = User(employee_id='t002', name='帮助者', ip_address='127.0.0.2')
+        u2 = User(employee_id='t002', name='帮助者', ip_address='127.0.0.2', group='TestGrp')
         _db.session.add(u2)
         _db.session.commit()
         yield app
@@ -125,7 +127,7 @@ class TestTimer:
         with app.app_context():
             from datetime import datetime, timedelta
             t = _make_todo('停止计时')
-            t.started_at = datetime.utcnow() - timedelta(minutes=10)
+            t.started_at = datetime.now() - timedelta(minutes=10)
             _db.session.commit()
             tid = t.id
         resp = client.post(f'/todos/{tid}/timer', json={})
@@ -277,19 +279,19 @@ class TestReassign:
             _make_todo('可拖拽', user_id=1)
             _db.session.commit()
 
-        resp = client.get('/todos/')
+        resp = client.get('/todos/team')
         html = resp.data.decode()
         assert 'draggable="true"' in html
         assert 'team-user-card' in html
 
-    def test_team_page_shows_all_users(self, client, app):
-        """团队页面显示所有有 todo 的用户卡片"""
+    def test_team_page_shows_group_users(self, client, app):
+        """团队页面显示同组用户"""
         with app.app_context():
             _make_todo('用户1任务', user_id=1)
             _make_todo('用户2任务', user_id=2)
             _db.session.commit()
 
-        resp = client.get('/todos/')
+        resp = client.get('/todos/team')
         html = resp.data.decode()
         assert '测试用户' in html
         assert '帮助者' in html

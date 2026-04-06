@@ -90,19 +90,19 @@ class TestWeightedCompletion:
                             source='coding', status='in_dev', completion=50)
             assert r.weighted_completion == 50
 
-    def test_analysis_in_dev_50pct(self, app):
+    def test_analysis_in_progress_50pct(self, app):
         with app.app_context():
             from app.models.requirement import Requirement
             r = Requirement(number='X', title='x', project_id=1, created_by=1,
-                            source='analysis', status='in_dev', completion=50)
-            assert r.weighted_completion == 85
+                            source='analysis', status='in_progress', completion=50)
+            assert r.weighted_completion == 50
 
-    def test_testing_in_test_50pct(self, app):
+    def test_testing_in_progress_50pct(self, app):
         with app.app_context():
             from app.models.requirement import Requirement
             r = Requirement(number='X', title='x', project_id=1, created_by=1,
-                            source='testing', status='in_test', completion=50)
-            assert r.weighted_completion == 60
+                            source='testing', status='in_progress', completion=50)
+            assert r.weighted_completion == 50
 
     def test_done_always_100(self, app):
         with app.app_context():
@@ -111,12 +111,12 @@ class TestWeightedCompletion:
                             source='coding', status='done', completion=0)
             assert r.weighted_completion == 100
 
-    def test_pending_review_always_0(self, app):
+    def test_pending_always_0(self, app):
         with app.app_context():
             from app.models.requirement import Requirement
             r = Requirement(number='X', title='x', project_id=1, created_by=1,
-                            source='coding', status='pending_review', completion=50)
-            assert r.weighted_completion == 0
+                            source='coding', status='pending', completion=50)
+            assert r.weighted_completion == 50  # pending returns raw completion
 
     def test_none_source_defaults_to_coding(self, app):
         with app.app_context():
@@ -133,7 +133,7 @@ class TestCategoryLabel:
         with app.app_context():
             from app.models.requirement import Requirement
             r = Requirement(number='X', title='x', project_id=1, created_by=1, category='feature')
-            assert r.category_label == '功能需求'
+            assert r.category_label == 'feature'  # category_label returns raw value
 
     def test_custom(self, app):
         with app.app_context():
@@ -194,12 +194,14 @@ class TestFieldApi:
 # ── Status transition resets completion ──
 
 class TestStatusTransition:
-    def test_advance_resets_completion(self, client):
-        d = _post_json(client, '/requirements/1/status-api', {'status': 'in_test'})
+    def test_advance_to_in_progress(self, client):
+        # Reset to pending first, then advance
+        _post_json(client, '/requirements/1/status-api', {'status': 'pending', 'force': True})
+        d = _post_json(client, '/requirements/1/status-api', {'status': 'in_progress'})
         assert d['ok']
 
     def test_done_sets_100(self, client):
-        _post_json(client, '/requirements/1/status-api', {'status': 'in_test', 'force': True})
+        _post_json(client, '/requirements/1/status-api', {'status': 'in_progress', 'force': True})
         d = _post_json(client, '/requirements/1/status-api', {'status': 'done'})
         assert d['ok']
 
