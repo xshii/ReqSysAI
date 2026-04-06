@@ -1,10 +1,10 @@
 import json
 import os
 
-from app.extensions import db
-
 # Static config keys — read from instance/site_config.json, write back on set()
 from app.constants import SITE_CONFIG_DEFAULTS as _CONFIG_DEFAULTS
+from app.extensions import db
+
 _CONFIG_KEYS = set(_CONFIG_DEFAULTS.keys())
 
 _config_cache = None

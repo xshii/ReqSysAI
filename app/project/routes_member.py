@@ -1,6 +1,5 @@
 """Project member routes for the project blueprint."""
-from flask import flash, jsonify, make_response, redirect, render_template, request, url_for
-from app.utils.api import api_ok, api_err
+from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.extensions import db
@@ -9,6 +8,8 @@ from app.models.project_member import ProjectMember
 from app.models.user import User
 from app.project import project_bp
 from app.project.routes import _check_project_access
+from app.utils.api import api_err, api_ok
+
 
 def _default_project_role(user):
     """Use user's domain as default project role."""
@@ -190,8 +191,9 @@ def member_export_csv(project_id):
         else:
             writer.writerow([m.id, m.external_name or '', m.external_eid or '', m.project_role])
 
-    from flask import Response
     from urllib.parse import quote
+
+    from flask import Response
     fname = f"{project.name}_项目成员_{_date.today().strftime('%Y%m%d')}.csv"
     return Response(output.getvalue(), mimetype='text/csv; charset=utf-8',
                     headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(fname)}"})

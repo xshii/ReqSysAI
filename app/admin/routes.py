@@ -6,8 +6,9 @@ import os
 import requests
 import yaml
 from flask import Response, current_app, flash, jsonify, redirect, render_template, request, url_for
-from app.utils.api import api_ok, api_err
 from flask_login import current_user
+
+from app.utils.api import api_err, api_ok
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,7 @@ def user_create():
     # Parse combined "姓名 工号" field
     if request.method == 'POST':
         import re
+
         from app.constants import EID_FULL_RE, EID_NUM_RE
         name_eid = request.form.get('name_eid', '').strip()
         if name_eid:
@@ -159,6 +161,7 @@ def user_edit(user_id):
     # Parse combined "姓名 工号" field
     if request.method == 'POST':
         import re
+
         from app.constants import EID_FULL_RE, EID_NUM_RE
         name_eid = request.form.get('name_eid', '').strip()
         if name_eid:
@@ -527,6 +530,7 @@ def group_export_csv():
         writer.writerow([u.id, u.name, u.employee_id, u.group or '', role_names, u.manager or '', u.domain or ''])
 
     from urllib.parse import quote
+
     from app.constants import DEFAULT_SITE_NAME
     site = current_app.config.get('SITE_NAME', DEFAULT_SITE_NAME)
     fname = f"{site}_团队成员_{date.today().strftime('%Y%m%d')}.csv"
@@ -1050,6 +1054,7 @@ def talk_template_save():
 def compliance_exam():
     """合规题库管理。"""
     import json as _json
+
     from app.models.site_setting import SiteSetting
     raw = SiteSetting.get('compliance_questions', '')
     questions = _json.loads(raw) if raw else []
@@ -1061,6 +1066,7 @@ def compliance_exam():
 def compliance_exam_save():
     """保存题库（全量替换）。"""
     import json as _json
+
     from app.models.site_setting import SiteSetting
     data = request.get_json() or {}
     questions = data.get('questions', [])

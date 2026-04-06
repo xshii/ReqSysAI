@@ -1,4 +1,5 @@
-from datetime import date as _date, datetime as _dt
+from datetime import date as _date
+from datetime import datetime as _dt
 
 from flask_login import LoginManager
 from flask_migrate import Migrate

@@ -1,7 +1,6 @@
 from datetime import date, timedelta
 
-from flask import flash, g, jsonify, redirect, render_template, request, url_for
-from app.utils.api import api_ok, api_err
+from flask import flash, g, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.constants import MILESTONE_COLOR
@@ -12,6 +11,7 @@ from app.models.risk import Risk
 from app.models.user import User
 from app.project import project_bp
 from app.project.forms import MilestoneForm, ProjectForm
+from app.utils.api import api_err, api_ok
 
 
 def _mgr_view_open():
@@ -375,7 +375,6 @@ def project_detail(project_id):
                       'persons': by_person, 'today': today}
 
     # ── Health metrics: weekly trends (last 8 weeks) ──
-    from app.models.requirement import Activity
     health_weeks = []
     for w in range(7, -1, -1):
         ws = today - timedelta(days=today.weekday() + 7 * w)

@@ -2,13 +2,11 @@ from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 
 from flask import abort, current_app, flash, g, jsonify, redirect, render_template, request, send_file, session, url_for
-from app.utils.api import api_ok, api_err
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
 from app.constants import REQ_INACTIVE_STATUSES, TODO_STATUS_DONE
 from app.dashboard import dashboard_bp
-from app.decorators import manager_required
 from app.extensions import db
 from app.models.project import Project
 from app.models.project_member import ProjectMember
@@ -165,7 +163,8 @@ def _build_sub_projects(cur_project, monday):
         summary = child_saved.summary if child_saved and child_saved.summary else None
         if summary is None:
             # AI generate one-line summary for child project (single aggregate query)
-            from sqlalchemy import func as _fn, case as _case
+            from sqlalchemy import case as _case
+            from sqlalchemy import func as _fn
             _today_d = date.today()
             stats = db.session.query(
                 _fn.count(Requirement.id),
@@ -634,8 +633,8 @@ def stats():
     completion_weighted = round(_comp_w_sum / _comp_d_sum) if _comp_d_sum else None
 
     # Risk stats + deltas
+
     from app.models.risk import Risk
-    from datetime import timedelta as _td
     risk_q = Risk.query.filter(Risk.deleted_at.is_(None))
     if cur_project_id:
         risk_q = risk_q.filter(Risk.project_id.in_(all_pids))
@@ -2031,7 +2030,7 @@ def sync_exchange():
         return jsonify(ok=False, error='Exchange 服务器未配置，请联系管理员在后台设置')
 
     try:
-        from exchangelib import Account, Configuration, Credentials, DELEGATE, EWSDateTime, EWSTimeZone
+        from exchangelib import DELEGATE, Account, Configuration, Credentials, EWSDateTime, EWSTimeZone
 
         tz = EWSTimeZone('Asia/Shanghai')
         today = date.today()
@@ -2283,7 +2282,8 @@ def my_weekly():
             db.and_(Todo.done_date.is_(None), Todo.created_date >= prev_mon, Todo.created_date <= prev_sun),
         ),
     )
-    from sqlalchemy import func as _fn2, case as _case2
+    from sqlalchemy import case as _case2
+    from sqlalchemy import func as _fn2
     _prev = db.session.query(
         # prev_done_cnt
         _fn2.sum(_case2((_prev_done_filter, 1), else_=0)),
@@ -2744,6 +2744,7 @@ def compliance_exam_integrity_sign():
 def compliance_onboard_config():
     """保存入职必读必学必考配置（所有人可添加，删除由前端控制仅管理层）。"""
     import json as _json
+
     from app.models.site_setting import SiteSetting
     data = request.get_json() or {}
     SiteSetting.set('onboard_config', _json.dumps(data, ensure_ascii=False))
@@ -2754,7 +2755,9 @@ def compliance_onboard_config():
 @login_required
 def compliance_exam_page():
     """合规考试页面：随机抽题。"""
-    import json as _json, random
+    import json as _json
+    import random
+
     from app.models.site_setting import SiteSetting
     raw = SiteSetting.get('compliance_questions', '')
     questions = _json.loads(raw) if raw else []
@@ -2773,6 +2776,7 @@ def compliance_exam_page():
 def compliance_exam_submit():
     """提交合规考试答案。"""
     import json as _json
+
     from app.models.site_setting import SiteSetting
     raw = SiteSetting.get('compliance_questions', '')
     all_q = _json.loads(raw) if raw else []

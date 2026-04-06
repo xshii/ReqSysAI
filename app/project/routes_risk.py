@@ -10,7 +10,6 @@ from app.models.risk import Risk
 from app.models.user import User
 from app.project import project_bp
 from app.project.routes import _check_project_access, _resolve_owner_id
-from app.utils.api import api_ok, api_err
 
 # ---- Risk management ----
 

@@ -52,6 +52,7 @@ def compute_default_recipients(cur_project_id, include_sub=True, cc_level='full'
     # Cc: PM + managers (if cc_managers=True)
     cc_eids = set()
     from flask_login import current_user as _cu
+
     from app.models.project import Project
     my_mgr_eid = ''
     my_mgr2_eid = ''

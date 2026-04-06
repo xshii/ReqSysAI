@@ -1,8 +1,7 @@
 """Knowledge management and AAR routes for the project blueprint."""
 from datetime import date, timedelta
 
-from flask import current_app, flash, jsonify, redirect, render_template, request, url_for
-from app.utils.api import api_ok, api_err
+from flask import current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.extensions import db
@@ -11,6 +10,7 @@ from app.models.project import Project
 from app.models.risk import Risk
 from app.project import project_bp
 from app.project.routes import _check_project_access, _resolve_owner_id
+from app.utils.api import api_err, api_ok
 
 # ---- Knowledge management ----
 

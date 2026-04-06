@@ -1,6 +1,6 @@
 from flask_login import UserMixin
 
-from app.extensions import db, _local_now
+from app.extensions import _local_now, db
 
 # Many-to-many association tables
 user_roles = db.Table('user_roles',

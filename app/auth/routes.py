@@ -1,14 +1,14 @@
 import logging
 from datetime import datetime
 
-from flask import current_app, flash, jsonify, redirect, render_template, request, session, url_for
-from app.utils.api import api_ok, api_err
+from flask import current_app, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
 from app.auth import auth_bp
 from app.auth.forms import LoginForm, ProfileForm, RegisterForm
 from app.extensions import db, login_manager
 from app.models.user import Role, User
+from app.utils.api import api_err, api_ok
 from app.utils.pinyin import to_pinyin
 
 logger = logging.getLogger(__name__)

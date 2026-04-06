@@ -678,7 +678,7 @@ def _code_based_diagnose(all_reqs, today_):
     issues = []
 
     def _id(tag, key):
-        return hashlib.md5(f'{tag}:{key}'.encode()).hexdigest()[:8]
+        return hashlib.md5(f'{tag}:{key}'.encode(), usedforsecurity=False).hexdigest()[:8]
 
     for r in active:
         if r.due_date and r.due_date < today_:
@@ -803,7 +803,7 @@ def diagnose_api():
                 ai_result, _ = call_ollama(user_msg, system_prompt=prompt)
                 if ai_result and isinstance(ai_result, list) and ai_result:
                     for idx, issue in enumerate(ai_result):
-                        issue['id'] = hashlib.md5(f'ai:{issue.get("tag","")}:{idx}'.encode()).hexdigest()[:8]
+                        issue['id'] = hashlib.md5(f'ai:{issue.get("tag","")}:{idx}'.encode(), usedforsecurity=False).hexdigest()[:8]
                     issues = ai_result
                     ai_source = True
     except Exception:

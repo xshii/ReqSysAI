@@ -2,7 +2,7 @@ from flask_wtf import FlaskForm
 from wtforms import BooleanField, SelectMultipleField, StringField, SubmitField
 from wtforms.validators import DataRequired, Length, Optional, Regexp
 
-from app.constants import EID_FULL_RE, EID_MSG, MGR_FIELD_RE, MGR_FIELD_MSG
+from app.constants import EID_FULL_RE, EID_MSG, MGR_FIELD_MSG, MGR_FIELD_RE
 
 
 class UserCreateForm(FlaskForm):

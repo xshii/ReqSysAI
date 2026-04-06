@@ -1,7 +1,6 @@
 from datetime import date, datetime, timedelta
 
-from flask import current_app, flash, g, jsonify, redirect, render_template, request, url_for
-from app.utils.api import api_ok, api_err
+from flask import current_app, flash, g, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
@@ -12,6 +11,7 @@ from app.models.todo import Todo, TodoItem
 from app.models.user import Group, User
 from app.todo import todo_bp
 from app.todo.forms import TodoForm
+from app.utils.api import api_err, api_ok
 
 
 def _sync_ext_request(todo, status):
@@ -625,8 +625,9 @@ def team():
         )
 
     # Open risks & blocked todos for standup review
-    from app.models.risk import Risk
     from sqlalchemy.orm import joinedload as _jl
+
+    from app.models.risk import Risk
     risk_query = Risk.query.filter_by(status='open').filter(Risk.deleted_at.is_(None))
     if view_mode == 'project' and project_pids:
         risk_query = risk_query.filter(Risk.project_id.in_(project_pids))

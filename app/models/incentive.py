@@ -1,4 +1,4 @@
-from app.extensions import db, _local_now
+from app.extensions import _local_now, db
 
 # 被推荐人多选
 incentive_nominees = db.Table('incentive_nominees',

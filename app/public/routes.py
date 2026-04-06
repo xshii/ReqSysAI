@@ -36,7 +36,8 @@ def request_submit(eid):
         return redirect(url_for('public.request_page', eid=eid))
     submitter = request.form.get('name', '').strip() or '匿名'
     # Parse deadline datetime
-    from datetime import date, datetime as _dt, timedelta
+    from datetime import date, timedelta
+    from datetime import datetime as _dt
     deadline_str = request.form.get('deadline', '').strip()
     try:
         deadline = _dt.strptime(deadline_str, '%Y-%m-%dT%H:%M') if deadline_str else None

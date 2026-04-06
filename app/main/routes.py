@@ -1,7 +1,6 @@
 from datetime import date, datetime, timedelta
 
 from flask import g, jsonify, redirect, render_template, request, url_for
-from app.utils.api import api_ok, api_err
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
@@ -22,7 +21,7 @@ from app.models.project import Project
 from app.models.rant import Rant
 from app.models.requirement import Requirement
 from app.models.risk import Risk
-from app.models.todo import Todo, TodoItem, todo_requirements
+from app.models.todo import Todo, TodoItem
 
 
 def _sync_ext_request_by_todo(todo):
@@ -995,7 +994,6 @@ def toggle_todo(todo_id):
                 item.is_done = (todo.status == TODO_STATUS_DONE)
     # 同步外部诉求状态
     if todo.title.startswith('[外部诉求]'):
-        from app.models.external_request import ExternalRequest
         _sync_ext_request_by_todo(todo)
     db.session.commit()
     if request.is_json:
@@ -1098,6 +1096,7 @@ def daily_standup():
 def standup_eml():
     """Generate structured HTML email for daily standup — tables, progress bars, change highlights."""
     from html import escape as h
+
     from app.models.requirement import Requirement
     from app.models.risk import Risk
 

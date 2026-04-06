@@ -1,4 +1,4 @@
-from app.extensions import db, _local_now
+from app.extensions import _local_now, db
 
 # Many-to-many: requirement dependencies
 requirement_dependencies = db.Table(

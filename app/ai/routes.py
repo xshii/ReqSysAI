@@ -1,5 +1,4 @@
-from flask import current_app, flash, jsonify, redirect, render_template, request, session, url_for
-from app.utils.api import api_ok, api_err
+from flask import current_app, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
 
 from app.ai import ai_bp
@@ -9,6 +8,7 @@ from app.models.ai_log import AIParseLog
 from app.models.project import Project
 from app.models.requirement import Activity, Requirement
 from app.services.ai import check_ollama_status, extract_text_from_docx, parse_requirement, refine_requirement
+from app.utils.api import api_err, api_ok
 
 
 @ai_bp.route('/api/status')

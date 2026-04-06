@@ -1,7 +1,6 @@
 from datetime import date, datetime, timedelta
 
 from flask import current_app, flash, jsonify, redirect, render_template, request, url_for
-from app.utils.api import api_ok, api_err
 from flask_login import current_user, login_required
 
 from app.constants import MAX_COMMENT_LENGTH
@@ -479,7 +478,9 @@ def export_csv():
                     writer.writerow(common + [name, '', ''] + tail)
 
     from urllib.parse import quote
+
     from flask import current_app
+
     from app.constants import DEFAULT_SITE_NAME
     site = current_app.config.get('SITE_NAME', DEFAULT_SITE_NAME)
     fname = f"{site}_激励记录_{date.today().strftime('%Y%m%d')}.csv"
@@ -674,6 +675,7 @@ def update_photo(inc_id):
 def ai_polish():
     """AI polish description and/or generate comment."""
     import json as json_lib
+
     from app.services.ai import call_ollama
     from app.services.prompts import get_prompt
     data = request.get_json() or {}
@@ -740,6 +742,7 @@ def ai_describe():
     # If just polishing existing text (no nominee_ids for data lookup)
     if existing_desc and not nominee_ids:
         import json as json_lib
+
         from app.services.prompts import get_prompt
         # Try to get nominee names from the form's hidden nominee_ids
         form_nominee_ids = data.get('form_nominee_ids', [])
@@ -1375,7 +1378,9 @@ def fund_export_csv():
             used, month_used, pct,
         ])
     from urllib.parse import quote
+
     from flask import current_app as _ca
+
     from app.constants import DEFAULT_SITE_NAME
     site = _ca.config.get('SITE_NAME', DEFAULT_SITE_NAME)
     fname = f"{site}_资金池_{date.today().strftime('%Y%m%d')}.csv"
@@ -1546,9 +1551,9 @@ def fund_import_csv():
 
 def _try_trigger_gift_notification(inc):
     """If incentive qualifies for gift selection, create per-person GiftRecord + notification."""
-    from app.models.site_setting import SiteSetting
-    from app.models.notification import Notification
     from app.models.gift import GiftRecord
+    from app.models.notification import Notification
+    from app.models.site_setting import SiteSetting
     gift_start = SiteSetting.get('gift_start_month', '')
     if not gift_start:
         return
@@ -1675,7 +1680,6 @@ def gift_mark_purchased(inc_id):
 def gift_mark_purchased_rec(rec_id):
     """Admin marks a per-person gift record as purchased."""
     from app.models.gift import GiftRecord
-    from app.models.notification import Notification
     rec = db.get_or_404(GiftRecord, rec_id)
     rec.status = 'purchased'
     rec.purchased_at = datetime.now()

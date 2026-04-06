@@ -1,0 +1,36 @@
+[importlinter]
+root_package = app
+
+[importlinter:contract:models-no-routes]
+name = Models should not import routes
+type = forbidden
+source_modules =
+    app.models
+forbidden_modules =
+    app.main
+    app.todo
+    app.auth
+    app.admin
+    app.dashboard
+    app.project
+    app.requirement
+    app.incentive
+    app.standup
+    app.ai
+    app.public
+
+[importlinter:contract:utils-no-routes]
+name = Utils/services should not import routes
+type = forbidden
+source_modules =
+    app.utils
+    app.services
+forbidden_modules =
+    app.main
+    app.todo
+    app.auth
+    app.admin
+    app.dashboard
+    app.project
+    app.requirement
+    app.incentive

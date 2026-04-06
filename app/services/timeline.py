@@ -15,7 +15,7 @@ def _cache_key(milestones, today, width):
     for m in sorted(milestones, key=lambda x: str(x.get('due_date', ''))):
         parts.append(f"{m.get('name')}|{m.get('due_date')}|{m.get('status')}")
     raw = f"{today}|{width}|{'||'.join(parts)}"
-    return hashlib.md5(raw.encode()).hexdigest()  # noqa: S324
+    return hashlib.md5(raw.encode(), usedforsecurity=False).hexdigest()
 
 
 # Colors

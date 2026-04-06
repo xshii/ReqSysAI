@@ -1,5 +1,5 @@
 """Unified audit log for all high-risk operations."""
-from app.extensions import db, _local_now
+from app.extensions import _local_now, db
 
 
 class AuditLog(db.Model):

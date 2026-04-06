@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta
 
-from app.extensions import db, _local_now
+from app.extensions import _local_now, db
 
 todo_requirements = db.Table('todo_requirements',
     db.Column('todo_id', db.Integer, db.ForeignKey('todos.id'), primary_key=True),
