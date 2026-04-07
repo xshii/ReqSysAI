@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta
 
-from flask import current_app, flash, g, redirect, render_template, request, url_for
+from flask import abort, current_app, flash, g, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.orm import joinedload
 
@@ -499,14 +499,37 @@ def team():
                     cur_project_id = first_membership.project_id
         if cur_project_id:
             cur_project_obj = Project.query.get(cur_project_id)
+            # 权限校验：仅项目成员、关注者、管理视图开启的管理层可查看
+            mgr_view_on = current_user.is_team_manager and request.cookies.get('mgr_view') == '1'
+            if cur_project_obj and not mgr_view_on:
+                is_member = ProjectMember.query.filter_by(
+                    project_id=cur_project_id, user_id=current_user.id).first()
+                is_follower = cur_project_id in {
+                    p.id for p in current_user.followed_projects.all()}
+                if not is_member and not is_follower:
+                    abort(403)
             # Include sub-projects (exclude hidden)
             sub_pids = [c.id for c in Project.query.filter_by(parent_id=cur_project_id).all()
                         if c.id not in _hidden_pids]
             project_pids = [cur_project_id] + sub_pids
-            # Members from project + sub-projects
-            member_uids = list({m.user_id for m in ProjectMember.query.filter(
-                ProjectMember.project_id.in_(project_pids)).all() if m.user_id})
-            users = User.query.filter(User.id.in_(member_uids), User.is_active == True).order_by(User.name).all()  # noqa: E712
+            # Members from project + sub-projects, record per-user project for sorting
+            _members = ProjectMember.query.filter(
+                ProjectMember.project_id.in_(project_pids)).all()
+            member_uids = list({m.user_id for m in _members if m.user_id})
+            # user → project mapping; sort projects by member count asc (人少的项目在前)
+            _pid_member_count = {}
+            for m in _members:
+                if m.user_id:
+                    _pid_member_count[m.project_id] = _pid_member_count.get(m.project_id, 0) + 1
+            _sorted_pids = sorted(project_pids, key=lambda pid: _pid_member_count.get(pid, 0))
+            _pid_order = {pid: i for i, pid in enumerate(_sorted_pids)}
+            _user_pid = {}  # user_id → project index for sorting
+            for m in _members:
+                if m.user_id:
+                    cur = _pid_order.get(m.project_id, 999)
+                    if m.user_id not in _user_pid or cur < _user_pid[m.user_id]:
+                        _user_pid[m.user_id] = cur
+            users = User.query.filter(User.id.in_(member_uids), User.is_active == True).all()  # noqa: E712
         else:
             users = []
     else:
@@ -606,10 +629,20 @@ def team():
                            r.due_date or date(2099,1,1), r.priority))
         ud['todo_total'] = len(ud.get('todos', []))
         ud['todo_done'] = sum(1 for t in ud.get('todos', []) if t.status == TODO_STATUS_DONE)
+        ud['overdue_count'] = sum(1 for t in ud.get('todos', [])
+                                  if t.status == TODO_STATUS_TODO and t.due_date and t.due_date < today)
         if '_req_map' in ud:
             del ud['_req_map']
         if 'todos' in ud:
             del ud['todos']
+
+    # Project mode: sort users by project order, then overdue count desc
+    if view_mode == 'project' and project_pids:
+        users.sort(key=lambda u: (
+            _user_pid.get(u.id, 999),
+            -(user_data.get(u.id, {}).get('overdue_count', 0)),
+            u.name,
+        ))
 
     # Todos marked as needing help (team-wide)
     help_todos = Todo.query.filter(
@@ -657,10 +690,20 @@ def team():
         for c in recent_comments:
             req_comments.setdefault(c.requirement_id, []).append(c)
 
+    # Build project divider info for template (project mode)
+    _user_project_idx = {}
+    _project_names = {}
+    if view_mode == 'project' and project_pids:
+        _user_project_idx = _user_pid  # user_id → sorted project index
+        _all_projs = Project.query.filter(Project.id.in_(project_pids)).all()
+        _proj_map = {p.id: p.name for p in _all_projs}
+        _project_names = {_pid_order[pid]: _proj_map.get(pid, '') for pid in project_pids}
+
     return render_template('todo/team.html',
         users=users, user_data=user_data, groups=groups,
         cur_group=cur_group, today=today, timedelta=timedelta,
         help_todos=help_todos, req_comments=req_comments, no_group=False,
         view_mode=view_mode, cur_project_id=cur_project_id, cur_project_obj=cur_project_obj,
         open_risks=open_risks,
+        user_project_idx=_user_project_idx, project_names=_project_names,
     )

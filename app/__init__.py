@@ -100,15 +100,22 @@ def create_app(config_name=None):
             cur_group = req.args.get('group', current_user.group or '')
             if not cur_group and groups:
                 cur_group = groups[0]
-            # 侧边栏项目：隐藏项目仅管理层+eye打开时显示（隐私模式，g.hidden_pids）
+            # 侧边栏项目：仅显示参与的+关注的项目（隐藏项目仅管理层+eye打开时显示）
+            from app.models.project_member import ProjectMember
             _pq = Project.query.filter_by(status='active')
             if g.hidden_pids:
                 _pq = _pq.filter(Project.id.notin_(g.hidden_pids))
-            all_projects = _pq.order_by(Project.name).all()
+            all_active = _pq.order_by(Project.name).all()
             followed_ids = set(p.id for p in current_user.followed_projects.all())
+            member_pids = set(
+                pm.project_id for pm in ProjectMember.query.filter_by(user_id=current_user.id).all()
+            )
+            # 只保留参与的或关注的项目
+            my_project_ids = followed_ids | member_pids
+            my_projects = [p for p in all_active if p.id in my_project_ids]
             # Followed projects first, then others
-            followed = [p for p in all_projects if p.id in followed_ids]
-            unfollowed = [p for p in all_projects if p.id not in followed_ids]
+            followed = [p for p in my_projects if p.id in followed_ids]
+            unfollowed = [p for p in my_projects if p.id not in followed_ids]
             projects = followed + unfollowed
 
             # Notification counts for navbar bell — must match homepage bars

@@ -86,7 +86,19 @@
 </div>
 
 {# ===== Per-user cards — same structure as homepage ===== #}
+{% set _prev_proj_idx = namespace(val=-1) %}
 {% for u in users %}
+{% if view_mode == 'project' and user_project_idx %}
+{% set _cur_proj_idx = user_project_idx.get(u.id, -1) %}
+{% if _cur_proj_idx != _prev_proj_idx.val %}
+<div class="d-flex align-items-center my-3">
+    <hr class="flex-grow-1 m-0">
+    <span class="mx-2 text-muted small fw-bold">{{ project_names.get(_cur_proj_idx, '') }}</span>
+    <hr class="flex-grow-1 m-0">
+</div>
+{% set _prev_proj_idx.val = _cur_proj_idx %}
+{% endif %}
+{% endif %}
 {% set ud = user_data.get(u.id, {}) %}
 {% set u_total = ud.get('todo_total', 0) %}
 {% set u_done = ud.get('todo_done', 0) %}
