@@ -253,16 +253,16 @@ def index():
     from app.models.water_log import WaterLog
     week_water = db.session.query(db.func.coalesce(db.func.sum(WaterLog.ml), 0)).filter(
         WaterLog.user_id == current_user.id, WaterLog.date >= week_start).scalar() or 0
-    week_water_days = []
+    week_water_days = []  # list of (weekday_label, ml, is_future)
     _ww = db.session.query(WaterLog.date, db.func.sum(WaterLog.ml)).filter(
         WaterLog.user_id == current_user.id, WaterLog.date >= week_start
     ).group_by(WaterLog.date).all()
     _ww_map = {str(d): ml for d, ml in _ww}
+    _weekday_names = ['一', '二', '三', '四', '五', '六', '日']
     for i in range(7):
         d = week_start + timedelta(days=i)
-        if d > today:
-            break
-        week_water_days.append(_ww_map.get(str(d), 0))
+        ml = _ww_map.get(str(d), 0)
+        week_water_days.append(('周' + _weekday_names[i], ml, d > today))
 
     # Persistent notifications (unread)
     from app.models.notification import Notification
@@ -1114,8 +1114,11 @@ def standup_eml():
 
     if view_mode == 'project' and project_id:
         from app.models.project_member import ProjectMember
-        # Auth: verify current user is a member
-        if not ProjectMember.query.filter_by(project_id=project_id, user_id=current_user.id).first():
+        # Auth: verify current user is a member, follower, or manager with mgr_view
+        mgr_view_on = current_user.is_team_manager and request.cookies.get('mgr_view') == '1'
+        is_member = ProjectMember.query.filter_by(project_id=project_id, user_id=current_user.id).first()
+        is_follower = project_id in {p.id for p in current_user.followed_projects.all()}
+        if not mgr_view_on and not is_member and not is_follower:
             return jsonify(ok=False, error='无权访问该项目')
         proj = Project.query.get(project_id)
         sub_pids = [c.id for c in Project.query.filter_by(parent_id=project_id).all()]
@@ -1139,14 +1142,14 @@ def standup_eml():
     overdue_reqs = [r for r in active_reqs if r.due_date and r.due_date < today]
     pct = round(done_reqs / total_reqs * 100) if total_reqs else 0
 
-    # Per-user data — batch load todos to avoid N+1
+    # Per-user data — batch load todos (include last 7 days for trend chart)
     user_ids = [u.id for u in users]
-    day_before = yesterday - timedelta(days=1)
+    _trend_start = today - timedelta(days=9)  # cover ~5 workdays
     all_biz_todos = Todo.query.filter(
         Todo.user_id.in_(user_ids),
         Todo.category.in_(['work', 'risk']),
         db.or_(
-            Todo.done_date.in_([yesterday, today, day_before]),
+            db.and_(Todo.done_date >= _trend_start, Todo.done_date <= today),
             Todo.status == 'todo',
         ),
     ).all() if user_ids else []
@@ -1156,280 +1159,174 @@ def standup_eml():
     for t in all_biz_todos:
         _todos_by_user.setdefault(t.user_id, []).append(t)
 
+    # Trend: daily done count + created count for last 5 workdays
+    _trend_days = []
+    _d = today
+    while len(_trend_days) < 5:
+        if _d.weekday() < 5:  # Mon-Fri
+            _trend_days.append(_d)
+        _d -= timedelta(days=1)
+    _trend_days.reverse()  # oldest first
+    # Trend: risks resolved & new per day
+    _all_pids_for_trend = all_pids if (view_mode == 'project' and project_id) else None
+    _risk_q = Risk.query.filter(Risk.deleted_at.is_(None))
+    if _all_pids_for_trend:
+        _risk_q = _risk_q.filter(Risk.project_id.in_(_all_pids_for_trend))
+    _all_risks_trend = _risk_q.all()
+
+    _trend_todo_done = []
+    _trend_todo_new = []
+    _trend_risk_resolved = []
+    _trend_risk_new = []
+    _trend_risk_open = []  # 每天结束时的风险存量
+    for d in _trend_days:
+        _trend_todo_done.append(sum(1 for t in all_biz_todos if t.done_date == d))
+        _trend_todo_new.append(sum(1 for t in all_biz_todos if t.created_date == d))
+        _trend_risk_resolved.append(sum(1 for r in _all_risks_trend
+            if r.status in ('resolved', 'closed') and r.updated_at and r.updated_at.date() == d))
+        _trend_risk_new.append(sum(1 for r in _all_risks_trend
+            if r.created_at and r.created_at.date() == d))
+        # 风险存量：截至该日已创建且未关闭的风险数
+        _trend_risk_open.append(sum(1 for r in _all_risks_trend
+            if r.created_at and r.created_at.date() <= d
+            and (r.status == 'open' or (r.status in ('resolved', 'closed')
+                 and r.updated_at and r.updated_at.date() > d))))
+
     user_rows = []
     all_blockers = []
     for u in users:
         _utodos = _todos_by_user.get(u.id, [])
-        done_y = sum(1 for t in _utodos if t.done_date == yesterday)
-        done_t = sum(1 for t in _utodos if t.done_date == today)
-        done_db = sum(1 for t in _utodos if t.done_date == day_before)
         active = [t for t in _utodos if t.status == 'todo']
-        overdue_t = sum(1 for t in active if t.workdays_overdue > 0)
+        overdue_todos = [t for t in active if t.workdays_overdue > 0]
+        normal_todos = [t for t in active if t.workdays_overdue <= 0]
         blocked = [t for t in active if t.need_help]
         for t in blocked:
             all_blockers.append({'user': h(u.name), 'title': h(t.title),
                                   'reason': h(t.blocked_reason or ''), 'days': t.workdays_overdue or 0})
 
-        if done_y > done_db:
-            trend = '↑'
-        elif done_y < done_db:
-            trend = '↓'
-        else:
-            trend = '→'
-
-        if done_y == 0 and len(active) > 0:
-            status = 'red'
-            status_text = '无产出'
-        elif overdue_t > 0:
-            status = 'orange'
-            status_text = f'{overdue_t}项延期'
-        elif done_y > 0:
-            status = 'green'
-            status_text = '正常'
-        else:
-            status = 'gray'
-            status_text = '无任务'
-
         user_rows.append({
-            'name': h(u.name), 'done_yesterday': done_y, 'done_today': done_t,
-            'active': len(active), 'overdue': overdue_t, 'blocked': len(blocked),
-            'trend': trend, 'status': status, 'status_text': status_text,
+            'name': h(u.name),
+            'overdue_todos': overdue_todos,
+            'normal_todos': normal_todos,
+            'blocked': blocked,
         })
 
-    # Build HTML email
-    status_colors = {'red': '#dc3545', 'orange': '#fd7e14', 'green': '#198754', 'gray': '#6c757d'}
-
-    # Compute recipients early for embedding in HTML
+    # Build HTML email — focus on today's plan per person
+    # Compute recipients
     from app.utils.recipients import compute_default_recipients
     _to, _cc = compute_default_recipients(project_id, include_sub=True, cc_level='manager') if project_id else ('', '')
-
-    # Resolve employee_ids to names for display
-    def _resolve_names(eids_str):
-        if not eids_str:
-            return ''
-        eids = [e.strip() for e in eids_str.split(';') if e.strip()]
-        users_map = {u.employee_id: u.name for u in User.query.filter(User.employee_id.in_(eids)).all()}
-        return '; '.join(users_map.get(e, e) for e in eids)
-
-    _to_names = _resolve_names(_to)
-    _cc_names = _resolve_names(_cc)
 
     html = f'''<html><head><meta charset="UTF-8"></head>
 <body style="font-family:Microsoft YaHei,Segoe UI,sans-serif;margin:0;padding:20px;background:#f5f5f5;">
 <div style="max-width:700px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1);">
-
-<!-- Header -->
-<div style="background:#2d3748;color:#fff;padding:16px 20px;">
-<div style="font-size:18px;font-weight:700;">站会进展 · {scope_name}</div>
-<div style="font-size:13px;opacity:.8;margin-top:4px;">{today.strftime("%Y-%m-%d")} · 对比前日 {yesterday.strftime("%m-%d")}</div>
+<div style="background:#2d3748;color:#fff;padding:14px 20px;">
+<div style="font-size:18px;font-weight:700;">今日站会 · {scope_name}</div>
+<div style="font-size:13px;opacity:.8;margin-top:2px;">{today.strftime("%Y-%m-%d")}</div>
 </div>
-<!-- Recipients -->
 <table width="100%" cellpadding="0" cellspacing="0" style="font-size:12px;color:#64748b;border-bottom:1px solid #e2e8f0;">
-{('<tr><td style="padding:4px 20px;"><b>To:</b> ' + h(_to_names) + '</td></tr>') if _to_names else ''}
-{('<tr><td style="padding:4px 20px;"><b>Cc:</b> ' + h(_cc_names) + '</td></tr>') if _cc_names else ''}
-</table>
+{('<tr><td style="padding:4px 20px;"><b>To:</b> ' + h(_to) + '</td></tr>') if _to else ''}
+{('<tr><td style="padding:4px 20px;"><b>Cc:</b> ' + h(_cc) + '</td></tr>') if _cc else ''}
+</table>'''
 
-<!-- Project Progress Bar -->
-<div style="padding:12px 20px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
-<div style="font-size:12px;color:#64748b;margin-bottom:4px;">需求进度 {done_reqs}/{total_reqs}（{pct}%）</div>
-<div style="background:#e2e8f0;border-radius:4px;height:10px;overflow:hidden;">
-<div style="background:{"#198754" if pct >= 70 else "#ffc107" if pct >= 40 else "#dc3545"};height:10px;width:{pct}%;border-radius:4px;"></div>
-</div>
-</div>'''
+    # ── Trend chart: tasks & risks over last 5 workdays ──
+    _weekday_zh = ['一', '二', '三', '四', '五', '六', '日']
+    _bar_max_h = 40  # px
 
-    # Alert section
-    alerts = []
-    for r in overdue_reqs:
-        days = (today - r.due_date).days
-        proj_name = h(r.project.name) if r.project else ''
-        alerts.append(f'<span style="color:#dc3545;font-weight:700;">[逾期]</span> <b>{proj_name}/{h(r.title)}</b>：超期{days}天，完成度{r.completion or 0}%，{h(r.assignee_display)}')
-    for b in all_blockers:
-        alerts.append(f'<span style="color:#dc3545;font-weight:700;">[阻塞]</span> <b>{b["user"]}</b>：{b["title"]}（{b["reason"] or "原因未填"}，阻塞{b["days"]}天）')
+    def _build_bar_chart(title, legend, done_list, new_list, done_color, new_color, baseline=None):
+        """Build an inline HTML bar chart for email. Optional baseline shows stock count."""
+        all_vals = list(done_list) + list(new_list)
+        if baseline:
+            all_vals += baseline
+        _max = max(all_vals, default=1) or 1
+        out = f'<div style="display:inline-block;vertical-align:top;margin-right:24px;">'
+        out += f'<div style="font-size:11px;color:#64748b;margin-bottom:4px;">{title} <span style="color:{done_color};">■</span> {legend[0]} <span style="color:{new_color};">■</span> {legend[1]}'
+        if baseline is not None:
+            out += ' <span style="color:#6c757d;">◆</span> 存量'
+        out += '</div>'
+        out += '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>'
+        for i in range(len(_trend_days)):
+            dh = round(done_list[i] / _max * _bar_max_h)
+            nh = round(new_list[i] / _max * _bar_max_h)
+            out += f'<td style="padding:0 4px;vertical-align:bottom;text-align:center;">'
+            out += f'<div style="display:inline-block;width:8px;height:{dh}px;background:{done_color};border-radius:2px 2px 0 0;margin:0 1px;vertical-align:bottom;"></div>'
+            out += f'<div style="display:inline-block;width:8px;height:{nh}px;background:{new_color};border-radius:2px 2px 0 0;margin:0 1px;vertical-align:bottom;"></div>'
+            if baseline is not None:
+                bh = round(baseline[i] / _max * _bar_max_h)
+                out += f'<div style="display:inline-block;width:8px;height:{bh}px;background:#6c757d30;border:1px solid #6c757d80;border-radius:2px 2px 0 0;margin:0 1px;vertical-align:bottom;box-sizing:border-box;"></div>'
+            out += '</td>'
+        out += '</tr><tr>'
+        for i, d in enumerate(_trend_days):
+            bold = '#2d3748;font-weight:700' if d == today else '#94a3b8'
+            label = f'{done_list[i]}/{new_list[i]}'
+            if baseline is not None:
+                label += f'<br><span style="color:#6c757d;">{baseline[i]}</span>'
+            out += f'<td style="padding:2px 4px;text-align:center;font-size:10px;color:{bold};">周{_weekday_zh[d.weekday()]}<br>{label}</td>'
+        out += '</tr></table></div>'
+        return out
+
+    html += '<div style="padding:12px 20px;border-bottom:1px solid #e2e8f0;">'
+    html += _build_bar_chart('任务', ('完成', '新增'), _trend_todo_done, _trend_todo_new, '#198754', '#0d6efd')
+    html += _build_bar_chart('风险', ('解决', '新增'), _trend_risk_resolved, _trend_risk_new, '#198754', '#dc3545', baseline=_trend_risk_open)
+    html += '</div>'
+
+    # ── Per-person today's plan ──
+    html += '<div style="padding:16px 20px;">'
+    for i, row in enumerate(user_rows):
+        overdue = row['overdue_todos']
+        normal = row['normal_todos']
+        blocked = row['blocked']
+        total = len(overdue) + len(normal)
+        if total == 0 and not blocked:
+            continue
+
+        html += f'<div style="margin-bottom:14px;{"border-top:1px solid #f0f0f0;padding-top:10px;" if i > 0 else ""}">'
+        html += f'<div style="font-size:13px;font-weight:700;color:#2d3748;margin-bottom:4px;">{row["name"]}'
+        if overdue:
+            html += f' <span style="font-size:11px;color:#dc3545;font-weight:600;">⚠ {len(overdue)}项延期</span>'
+        html += f' <span style="font-size:11px;color:#94a3b8;font-weight:400;">共{total}项</span></div>'
+
+        # Overdue items first (red)
+        for t in overdue:
+            days = t.workdays_overdue
+            html += f'<div style="font-size:12px;color:#dc3545;padding:1px 0 1px 12px;">▪ {h(t.title)} <span style="font-size:10px;background:#dc354518;padding:0 4px;border-radius:2px;">延{days}天</span></div>'
+        # Normal items
+        for t in normal[:5]:  # cap at 5 to keep concise
+            html += f'<div style="font-size:12px;color:#4a5568;padding:1px 0 1px 12px;">▪ {h(t.title)}</div>'
+        if len(normal) > 5:
+            html += f'<div style="font-size:11px;color:#94a3b8;padding:1px 0 1px 12px;">…另有{len(normal) - 5}项</div>'
+        # Blocked items
+        for t in blocked:
+            html += f'<div style="font-size:12px;color:#fd7e14;padding:1px 0 1px 12px;">🚧 {h(t.title)} <span style="font-size:10px;">— {h(t.blocked_reason or "需协助")}</span></div>'
+        html += '</div>'
+
+    # Users with no tasks
+    empty_users = [row['name'] for row in user_rows if len(row['overdue_todos']) + len(row['normal_todos']) == 0 and not row['blocked']]
+    if empty_users:
+        html += f'<div style="font-size:12px;color:#94a3b8;margin-top:4px;">{", ".join(empty_users)}：暂无待办</div>'
+    html += '</div>'
+
+    # ── Alerts: only if overdue reqs or open risks exist ──
     risk_query = Risk.query.filter_by(status='open').filter(Risk.deleted_at.is_(None))
     if view_mode == 'project' and project_id:
         risk_query = risk_query.filter(Risk.project_id.in_(all_pids))
-    open_risks = risk_query.options(joinedload(Risk.project), joinedload(Risk.tracker),
-                                     joinedload(Risk.owner_user), joinedload(Risk.comments)).all()
-    for r in open_risks:
-        due_info = f'超期{(today - r.due_date).days}天' if r.due_date and r.due_date < today else ''
-        alerts.append(f'<span style="color:#fd7e14;font-weight:700;">[风险]</span> {h(r.title)}（{r.severity_label}{"，" + due_info if due_info else ""}）')
+    open_risks = risk_query.options(joinedload(Risk.project), joinedload(Risk.owner_user)).all()
 
-    if alerts:
-        html += '<div style="padding:12px 20px;background:#fef2f2;border-bottom:1px solid #fecaca;">'
-        html += '<div style="font-size:13px;font-weight:700;color:#dc3545;margin-bottom:6px;">需要关注</div>'
-        for a in alerts:
-            html += f'<div style="font-size:12px;color:#4a5568;padding:2px 0;">{a}</div>'
-        html += '</div>'
-    else:
-        html += '<div style="padding:8px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;">'
-        html += '<div style="font-size:13px;color:#198754;">无异常</div></div>'
-
-    # People table
-    html += '''<div style="padding:16px 20px;">
-<div style="font-size:14px;font-weight:700;color:#2d3748;margin-bottom:8px;">成员进展</div>
-<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;">
-<tr style="background:#f7fafc;">
-<th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:left;color:#4a5568;">成员</th>
-<th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;color:#4a5568;">昨日完成</th>
-<th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;color:#4a5568;">趋势</th>
-<th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;color:#4a5568;">进行中</th>
-<th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;color:#4a5568;">延期</th>
-<th style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;color:#4a5568;">状态</th>
-</tr>'''
-
-    for i, row in enumerate(user_rows):
-        bg = '#fff' if i % 2 == 0 else '#fafbfc'
-        sc = status_colors.get(row['status'], '#6c757d')
-        trend_color = '#198754' if row['trend'] == '↑' else '#dc3545' if row['trend'] == '↓' else '#6c757d'
-        overdue_cell = f'<span style="color:#dc3545;font-weight:700;">{row["overdue"]}</span>' if row['overdue'] > 0 else '0'
-        done_style = 'color:#dc3545;font-weight:700;' if row['done_yesterday'] == 0 and row['active'] > 0 else 'color:#2d3748;'
-        html += f'''<tr style="background:{bg};">
-<td style="border:1px solid #e2e8f0;padding:6px 10px;">{row["name"]}</td>
-<td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;{done_style}">{row["done_yesterday"]}</td>
-<td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;color:{trend_color};font-size:16px;">{row["trend"]}</td>
-<td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;">{row["active"]}</td>
-<td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;">{overdue_cell}</td>
-<td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;"><span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;background:{sc}20;color:{sc};font-weight:600;">{row["status_text"]}</span></td>
-</tr>'''
-
-    html += '</table></div>'
-
-    # Overdue requirements detail table
-    if overdue_reqs:
-        html += '''<div style="padding:0 20px 16px;">
-<div style="font-size:14px;font-weight:700;color:#dc3545;margin-bottom:8px;">逾期需求明细</div>
-<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;">
-<tr style="background:#fef2f2;">
-<th style="border:1px solid #fecaca;padding:5px 8px;text-align:left;color:#991b1b;">需求</th>
-<th style="border:1px solid #fecaca;padding:5px 8px;text-align:center;color:#991b1b;">超期</th>
-<th style="border:1px solid #fecaca;padding:5px 8px;text-align:center;color:#991b1b;">完成度</th>
-<th style="border:1px solid #fecaca;padding:5px 8px;text-align:left;color:#991b1b;">负责人</th>
-</tr>'''
-        for r in sorted(overdue_reqs, key=lambda x: (today - x.due_date).days, reverse=True):
+    if overdue_reqs or open_risks:
+        html += '<div style="padding:10px 20px;background:#fef2f2;border-top:1px solid #fecaca;">'
+        html += '<div style="font-size:13px;font-weight:700;color:#dc3545;margin-bottom:4px;">需关注</div>'
+        for r in overdue_reqs[:5]:
             days = (today - r.due_date).days
-            pct_r = r.completion or 0
-            proj_name = h(r.project.name) if r.project else ''
-            bar_color = '#dc3545' if pct_r < 50 else '#ffc107' if pct_r < 80 else '#198754'
-            html += f'''<tr>
-<td style="border:1px solid #fecaca;padding:5px 8px;">{proj_name}/{h(r.title)}</td>
-<td style="border:1px solid #fecaca;padding:5px 8px;text-align:center;color:#dc3545;font-weight:700;">{days}天</td>
-<td style="border:1px solid #fecaca;padding:5px 8px;text-align:center;">
-<div style="background:#e2e8f0;border-radius:3px;height:6px;width:60px;display:inline-block;vertical-align:middle;"><div style="background:{bar_color};height:6px;border-radius:3px;width:{pct_r}%;"></div></div> {pct_r}%
-</td>
-<td style="border:1px solid #fecaca;padding:5px 8px;">{h(r.assignee_display)}</td>
-</tr>'''
-        html += '</table></div>'
-
-    # ── Risk & Blocker detail table ──
-    if open_risks or all_blockers:
-        sev_colors = {'high': '#dc3545', 'medium': '#fd7e14', 'low': '#6c757d'}
-        html += '''<div style="padding:0 20px 16px;">
-<div style="font-size:14px;font-weight:700;color:#2d3748;margin-bottom:8px;">风险与问题</div>
-<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;">
-<tr style="background:#f7fafc;">
-<th style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;color:#4a5568;width:50px;">类型</th>
-<th style="border:1px solid #e2e8f0;padding:5px 8px;text-align:left;color:#4a5568;">描述</th>
-<th style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;color:#4a5568;width:50px;">级别</th>
-<th style="border:1px solid #e2e8f0;padding:5px 8px;text-align:left;color:#4a5568;width:70px;">责任人</th>
-<th style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;color:#4a5568;width:60px;">时限</th>
-<th style="border:1px solid #e2e8f0;padding:5px 8px;text-align:left;color:#4a5568;">最新进展</th>
-</tr>'''
-        # Risks
-        for r in sorted(open_risks, key=lambda x: {'high': 0, 'medium': 1, 'low': 2}.get(x.severity, 3)):
-            sc = sev_colors.get(r.severity, '#6c757d')
-            proj_name = r.project.name if r.project else ''
-            owner_name = r.owner_user.name if r.owner_user else (r.owner or '')
-            due_str = ''
-            if r.due_date:
-                if r.due_date < today:
-                    due_str = f'<span style="color:#dc3545;font-weight:700;">超{(today - r.due_date).days}天</span>'
-                elif r.due_date == today:
-                    due_str = '<span style="color:#fd7e14;font-weight:700;">今天</span>'
-                else:
-                    due_str = r.due_date.strftime('%m-%d')
-            # Latest comment as progress
-            latest = ''
-            if r.comments:
-                c = r.comments[0]
-                latest = f'{c.created_at.strftime("%m-%d")} {h(c.content[:40])}{"..." if len(c.content) > 40 else ""}'
-            html += f'''<tr>
-<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;"><span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;background:{sc}18;color:{sc};font-weight:600;">风险</span></td>
-<td style="border:1px solid #e2e8f0;padding:5px 8px;">{h(proj_name)}/{h(r.title)}</td>
-<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;"><span style="color:{sc};font-weight:600;">{r.severity_label}</span></td>
-<td style="border:1px solid #e2e8f0;padding:5px 8px;">{h(owner_name)}</td>
-<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;">{due_str}</td>
-<td style="border:1px solid #e2e8f0;padding:5px 8px;color:#64748b;font-size:11px;">{latest or "<i>无进展</i>"}</td>
-</tr>'''
-        # Blockers
-        for b in all_blockers:
-            due_str = f'<span style="color:#dc3545;font-weight:700;">{b["days"]}天</span>' if b['days'] > 0 else '-'
-            html += f'''<tr>
-<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;"><span style="display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;background:#dc354518;color:#dc3545;font-weight:600;">阻塞</span></td>
-<td style="border:1px solid #e2e8f0;padding:5px 8px;">{b["title"]}</td>
-<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;">-</td>
-<td style="border:1px solid #e2e8f0;padding:5px 8px;">{b["user"]}</td>
-<td style="border:1px solid #e2e8f0;padding:5px 8px;text-align:center;">{due_str}</td>
-<td style="border:1px solid #e2e8f0;padding:5px 8px;color:#64748b;font-size:11px;">{b["reason"] or "<i>原因未填</i>"}</td>
-</tr>'''
-        html += '</table></div>'
-
-    # ── Rule-based strategic analysis (no AI needed) ──
-    insights = []
-
-    # Rule 1: Consecutive zero output
-    for row in user_rows:
-        if row['done_yesterday'] == 0 and row['trend'] == '↓' and row['active'] > 0:
-            insights.append(('danger', f'<b>{row["name"]}</b> 连续无产出且有{row["active"]}项待办，建议确认是否遇到困难'))
-        elif row['done_yesterday'] == 0 and row['active'] > 0:
-            insights.append(('warn', f'<b>{row["name"]}</b> 昨日无完成项，当前{row["active"]}项进行中'))
-
-    # Rule 2: High overdue ratio
-    for row in user_rows:
-        if row['active'] > 0 and row['overdue'] > 0:
-            ratio = row['overdue'] / row['active']
-            if ratio >= 0.5:
-                insights.append(('danger', f'<b>{row["name"]}</b> 延期占比{round(ratio*100)}%（{row["overdue"]}/{row["active"]}），需重新排期'))
-
-    # Rule 3: Requirement overdue > 5 days — escalation
-    for r in overdue_reqs:
-        days = (today - r.due_date).days
-        if days >= 5:
-            proj_name = r.project.name if r.project else ''
-            insights.append(('danger', f'<b>{proj_name}/{r.title}</b> 超期{days}天（完成{r.completion or 0}%），建议升级处理'))
-
-    # Rule 4: Blockers lasting > 2 days
-    for b in all_blockers:
-        if b['days'] >= 2:
-            insights.append(('warn', f'<b>{b["user"]}</b> 的「{b["title"]}」已阻塞{b["days"]}天，需协调资源'))
-
-    # Rule 5: Team capacity — everyone done, can take more
-    all_done_users = [row['name'] for row in user_rows if row['status'] == 'green' and row['overdue'] == 0 and row['active'] <= 1]
-    if all_done_users and len(all_done_users) < len(user_rows):
-        insights.append(('info', f'{", ".join(all_done_users)} 当前负荷较轻，可分担延期任务'))
-
-    # Rule 6: Overall progress risk
-    if total_reqs > 0:
-        overdue_ratio = len(overdue_reqs) / total_reqs
-        if overdue_ratio >= 0.3:
-            insights.append(('danger', f'全组{round(overdue_ratio*100)}%需求逾期（{len(overdue_reqs)}/{total_reqs}），交付风险高'))
-        elif overdue_ratio >= 0.15:
-            insights.append(('warn', f'{round(overdue_ratio*100)}%需求逾期，需关注交付节奏'))
-
-    if insights:
-        _level_colors = {'danger': '#dc3545', 'warn': '#fd7e14', 'info': '#0d6efd'}
-        html += '<div style="padding:12px 20px;border-top:2px solid #e2e8f0;">'
-        html += '<div style="font-size:14px;font-weight:700;color:#2d3748;margin-bottom:8px;">策略分析</div>'
-        for level, text in insights:
-            dot_c = _level_colors.get(level, '#6c757d')
-            html += f'<div style="font-size:12px;color:#4a5568;padding:3px 0;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{dot_c};margin-right:6px;vertical-align:middle;"></span>{text}</div>'
+            html += f'<div style="font-size:12px;color:#4a5568;padding:1px 0;">[逾期{days}天] {h(r.project.name + "/" if r.project else "")}{h(r.title)} — {h(r.assignee_display)}</div>'
+        for r in open_risks[:3]:
+            html += f'<div style="font-size:12px;color:#4a5568;padding:1px 0;">[风险] {h(r.title)} — {r.severity_label}</div>'
         html += '</div>'
 
     # Footer
-    html += f'''<div style="padding:10px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center;">
-由 {g.get("site_name", "ReqSysAI")} 自动生成 · {today.strftime("%Y-%m-%d %H:%M")}
+    html += f'''<div style="padding:8px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:11px;color:#94a3b8;text-align:center;">
+{g.get("site_name", "ReqSysAI")} · {today.strftime("%Y-%m-%d %H:%M")}
 </div></div></body></html>'''
 
-    return jsonify(ok=True, html=html, subject=f'站会进展 {today.strftime("%Y-%m-%d")} — {scope_name}',
+    return jsonify(ok=True, html=html, subject=f'今日站会 {today.strftime("%Y-%m-%d")} — {scope_name}',
                    to=_to, cc=_cc)
 
 

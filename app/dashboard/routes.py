@@ -1380,6 +1380,7 @@ def weekly_report():
         # Sub-projects
         sub_projects = []
         if cur_project and cur_project.children:
+            from app.models.project_member import ProjectMember as PM_
             for child in cur_project.children:
                 child_saved = WeeklyReport.query.filter_by(
                     project_id=child.id, week_start=monday).first()

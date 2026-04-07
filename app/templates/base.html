@@ -20,6 +20,11 @@
                 <i class="bi bi-kanban"></i> {{ site_name }}
             </a>
             <div class="d-flex align-items-center gap-2">
+                {% if current_user.is_authenticated and (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')) %}
+                <button type="button" class="btn btn-sm border-0" id="mgrEyeBtn" title="管理视图" style="font-size:.85em;opacity:0;color:#fff;transition:opacity .2s;">
+                    <i class="bi bi-eye-slash" id="mgrEyeIcon"></i>
+                </button>
+                {% endif %}
                 <button type="button" class="btn btn-sm btn-outline-light" onclick="openSpotlight()" style="font-size:.8em;opacity:.7;" title="搜索 (/)">
                     <i class="bi bi-search"></i>
                 </button>
@@ -29,11 +34,6 @@
                 <button type="button" class="btn btn-sm btn-outline-light" title="录入人员" onclick="openAddPersonnelModal()" style="font-size:.8em;white-space:nowrap;">
                     <i class="bi bi-person-plus"></i> +人员
                 </button>
-                {% if current_user.is_authenticated and (current_user.is_admin or current_user.has_role('PL', 'LM', 'XM', 'HR')) %}
-                <button type="button" class="btn btn-sm border-0" id="mgrEyeBtn" title="管理视图" style="font-size:.85em;opacity:.4;color:#fff;">
-                    <i class="bi bi-eye-slash" id="mgrEyeIcon"></i>
-                </button>
-                {% endif %}
                 <a href="{{ url_for('main.index') }}" class="btn btn-primary position-relative" title="通知">
                     <i class="bi bi-bell"></i>
                     {% if notif_count > 0 %}
@@ -998,7 +998,7 @@
             var icon = document.getElementById('mgrEyeIcon');
             var btn = document.getElementById('mgrEyeBtn');
             if (icon) icon.className = open ? 'bi bi-eye' : 'bi bi-eye-slash';
-            if (btn) { btn.className = 'btn btn-sm border-0'; btn.style.fontSize = '.85em'; btn.style.opacity = open ? '1' : '.4'; btn.style.color = open ? '#ffc107' : '#fff'; }
+            if (btn) { btn.className = 'btn btn-sm border-0'; btn.style.fontSize = '.85em'; btn.style.opacity = open ? '1' : '0'; btn.style.color = open ? '#ffc107' : '#fff'; }
             // Sync to cookie so server can filter hidden projects
             document.cookie = 'mgr_view=' + (open ? '1' : '0') + ';path=/;max-age=7200;SameSite=Lax';
         }
@@ -1057,9 +1057,13 @@
             location.reload();
         };
 
-        // Bind eye button click
+        // Bind eye button click + hover reveal
         var eyeBtn = document.getElementById('mgrEyeBtn');
-        if (eyeBtn) eyeBtn.addEventListener('click', toggleMgrView);
+        if (eyeBtn) {
+            eyeBtn.addEventListener('click', toggleMgrView);
+            eyeBtn.addEventListener('mouseenter', function() { if (!isCurrentlyOpen()) eyeBtn.style.opacity = '.4'; });
+            eyeBtn.addEventListener('mouseleave', function() { if (!isCurrentlyOpen()) eyeBtn.style.opacity = '0'; });
+        }
 
         // Apply on load (with 6h expiry check)
         applyView(isOpenOnLoad());

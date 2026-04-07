@@ -23,6 +23,15 @@
     </div>
 </div>
 
+<!-- AI Standup panel -->
+<div id="standupPanel" class="card border-info mb-3 d-none">
+    <div class="card-header py-1 bg-info bg-opacity-10 d-flex justify-content-between">
+        <span class="small fw-bold">站会摘要</span>
+        <button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="document.getElementById('standupPanel').classList.add('d-none')"><i class="bi bi-x"></i></button>
+    </div>
+    <div class="card-body py-2 small" id="standupContent"></div>
+</div>
+
 {% if open_risks or help_todos %}
 <div class="card mb-3 border-warning">
     <div class="card-header py-2 d-flex justify-content-between align-items-center" role="button" data-bs-toggle="collapse" data-bs-target="#riskPanel" style="cursor:pointer;background:#fff8e1;">
@@ -75,15 +84,6 @@
     <p class="mt-2">请在侧边栏选择一个项目，或先加入项目成员</p>
 </div>
 {% else %}
-
-<!-- AI Standup panel -->
-<div id="standupPanel" class="card border-info mb-3 d-none">
-    <div class="card-header py-1 bg-info bg-opacity-10 d-flex justify-content-between">
-        <span class="small fw-bold">站会摘要</span>
-        <button class="btn btn-sm py-0 px-1 btn-outline-secondary" onclick="document.getElementById('standupPanel').classList.add('d-none')"><i class="bi bi-x"></i></button>
-    </div>
-    <div class="card-body py-2 small" id="standupContent"></div>
-</div>
 
 {# ===== Per-user cards — same structure as homepage ===== #}
 {% set _prev_proj_idx = namespace(val=-1) %}
