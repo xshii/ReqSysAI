@@ -644,11 +644,19 @@ def team():
             u.name,
         ))
 
-    # Todos marked as needing help (team-wide)
-    help_todos = Todo.query.filter(
+    # Todos marked as needing help (filtered by project in project mode)
+    _help_q = Todo.query.filter(
         Todo.need_help == True, Todo.status == TODO_STATUS_TODO,  # noqa: E712
         Todo.user_id.in_(user_ids),
-    ).options(joinedload(Todo.requirements)).order_by(Todo.created_at.desc()).all()
+    ).options(joinedload(Todo.requirements))
+    if view_mode == 'project' and project_pids:
+        from app.models.requirement import Requirement as _Req
+        _project_req_ids = set(r.id for r in _Req.query.filter(_Req.project_id.in_(project_pids)).all())
+        help_todos_raw = _help_q.order_by(Todo.created_at.desc()).all()
+        help_todos = [t for t in help_todos_raw
+                      if not t.requirements or any(r.id in _project_req_ids for r in t.requirements)]
+    else:
+        help_todos = _help_q.order_by(Todo.created_at.desc()).all()
 
     # Guard: user must belong to a group (group mode) or project (project mode)
     if view_mode == 'group' and not current_user.group:

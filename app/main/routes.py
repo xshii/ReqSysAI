@@ -1152,7 +1152,7 @@ def standup_eml():
             db.and_(Todo.done_date >= _trend_start, Todo.done_date <= today),
             Todo.status == 'todo',
         ),
-    ).all() if user_ids else []
+    ).options(joinedload(Todo.requirements)).all() if user_ids else []
 
     # Index by user
     _todos_by_user = {}
@@ -1196,6 +1196,8 @@ def standup_eml():
     all_blockers = []
     for u in users:
         _utodos = _todos_by_user.get(u.id, [])
+        done_yesterday = [t for t in _utodos if t.done_date and yesterday <= t.done_date < today]
+        done_today = [t for t in _utodos if t.done_date == today]
         active = [t for t in _utodos if t.status == 'todo']
         overdue_todos = [t for t in active if t.workdays_overdue > 0]
         normal_todos = [t for t in active if t.workdays_overdue <= 0]
@@ -1206,6 +1208,8 @@ def standup_eml():
 
         user_rows.append({
             'name': h(u.name),
+            'done_yesterday': done_yesterday,
+            'done_today': done_today,
             'overdue_todos': overdue_todos,
             'normal_todos': normal_todos,
             'blocked': blocked,
@@ -1238,10 +1242,12 @@ def standup_eml():
         if baseline:
             all_vals += baseline
         _max = max(all_vals, default=1) or 1
+        def _dot(color):
+            return f'<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:{color};vertical-align:middle;margin-right:2px;"></span>'
         out = f'<div style="display:inline-block;vertical-align:top;margin-right:24px;">'
-        out += f'<div style="font-size:11px;color:#64748b;margin-bottom:4px;">{title} <span style="color:{done_color};">■</span> {legend[0]} <span style="color:{new_color};">■</span> {legend[1]}'
+        out += f'<div style="font-size:11px;color:#64748b;margin-bottom:4px;">{title} {_dot(done_color)}{legend[0]} {_dot(new_color)}{legend[1]}'
         if baseline is not None:
-            out += ' <span style="color:#6c757d;">◆</span> 存量'
+            out += f' {_dot("#adb5bd")}存量'
         out += '</div>'
         out += '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>'
         for i in range(len(_trend_days)):
@@ -1252,7 +1258,7 @@ def standup_eml():
             out += f'<div style="display:inline-block;width:8px;height:{nh}px;background:{new_color};border-radius:2px 2px 0 0;margin:0 1px;vertical-align:bottom;"></div>'
             if baseline is not None:
                 bh = round(baseline[i] / _max * _bar_max_h)
-                out += f'<div style="display:inline-block;width:8px;height:{bh}px;background:#6c757d30;border:1px solid #6c757d80;border-radius:2px 2px 0 0;margin:0 1px;vertical-align:bottom;box-sizing:border-box;"></div>'
+                out += f'<div style="display:inline-block;width:8px;height:{bh}px;background:#adb5bd40;border:1px solid #adb5bd;border-radius:2px 2px 0 0;margin:0 1px;vertical-align:bottom;box-sizing:border-box;"></div>'
             out += '</td>'
         out += '</tr><tr>'
         for i, d in enumerate(_trend_days):
@@ -1264,61 +1270,107 @@ def standup_eml():
         out += '</tr></table></div>'
         return out
 
+    # ── Trend chart ──
     html += '<div style="padding:12px 20px;border-bottom:1px solid #e2e8f0;">'
     html += _build_bar_chart('任务', ('完成', '新增'), _trend_todo_done, _trend_todo_new, '#198754', '#0d6efd')
     html += _build_bar_chart('风险', ('解决', '新增'), _trend_risk_resolved, _trend_risk_new, '#198754', '#dc3545', baseline=_trend_risk_open)
     html += '</div>'
 
+    # ── Open risks detail table ──
+    risk_query = Risk.query.filter_by(status='open').filter(Risk.deleted_at.is_(None))
+    if view_mode == 'project' and project_id:
+        risk_query = risk_query.filter(Risk.project_id.in_(all_pids))
+    open_risks = risk_query.options(joinedload(Risk.project), joinedload(Risk.owner_user)).order_by(
+        db.case({'high': 0, 'medium': 1, 'low': 2}, value=Risk.severity, else_=3), Risk.due_date).all()
+    if open_risks:
+        _sev_zh = {'high': '高', 'medium': '中', 'low': '低'}
+        html += '<div style="padding:12px 20px;border-bottom:1px solid #e2e8f0;">'
+        html += '<div style="font-size:12px;font-weight:700;color:#2d3748;margin-bottom:6px;">风险明细</div>'
+        html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:11px;">'
+        html += '<tr style="background:#f7fafc;"><th style="border:1px solid #e2e8f0;padding:4px 6px;text-align:left;color:#64748b;">风险</th>'
+        html += '<th style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;color:#64748b;width:35px;">级别</th>'
+        html += '<th style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;color:#64748b;width:55px;">责任人</th>'
+        html += '<th style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;color:#64748b;width:55px;">提出</th>'
+        html += '<th style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;color:#64748b;width:55px;">截止</th></tr>'
+        for r in open_risks:
+            owner_name = r.owner_user.name if r.owner_user else (r.owner or '-')
+            created = r.created_at.strftime('%m-%d') if r.created_at else '-'
+            due = ''
+            if r.due_date:
+                if r.due_date < today:
+                    due = f'<span style="color:#dc3545;font-weight:600;">{r.due_date.strftime("%m-%d")}</span>'
+                else:
+                    due = r.due_date.strftime('%m-%d')
+            else:
+                due = '-'
+            html += f'<tr><td style="border:1px solid #e2e8f0;padding:4px 6px;">{h(r.title)}</td>'
+            html += f'<td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;">{_sev_zh.get(r.severity, r.severity)}</td>'
+            html += f'<td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;">{h(owner_name)}</td>'
+            html += f'<td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;">{created}</td>'
+            html += f'<td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;">{due}</td></tr>'
+        html += '</table></div>'
+
     # ── Per-person today's plan ──
     html += '<div style="padding:16px 20px;">'
+    _first_visible = True
     for i, row in enumerate(user_rows):
+        done_y = row['done_yesterday']
+        done_t = row['done_today']
         overdue = row['overdue_todos']
         normal = row['normal_todos']
         blocked = row['blocked']
-        total = len(overdue) + len(normal)
-        if total == 0 and not blocked:
+        active_total = len(overdue) + len(normal)
+        done_total = len(done_y) + len(done_t)
+        if active_total == 0 and not blocked and done_total == 0:
             continue
 
-        html += f'<div style="margin-bottom:14px;{"border-top:1px solid #f0f0f0;padding-top:10px;" if i > 0 else ""}">'
+        html += f'<div style="margin-bottom:14px;{"border-top:1px solid #f0f0f0;padding-top:10px;" if not _first_visible else ""}">'
+        _first_visible = False
         html += f'<div style="font-size:13px;font-weight:700;color:#2d3748;margin-bottom:4px;">{row["name"]}'
         if overdue:
             html += f' <span style="font-size:11px;color:#dc3545;font-weight:600;">⚠ {len(overdue)}项延期</span>'
-        html += f' <span style="font-size:11px;color:#94a3b8;font-weight:400;">共{total}项</span></div>'
+        if active_total:
+            html += f' <span style="font-size:11px;color:#94a3b8;font-weight:400;">待办{active_total}</span>'
+        if done_total:
+            html += f' <span style="font-size:11px;color:#198754;font-weight:400;">✅{done_total}</span>'
+        html += '</div>'
 
-        # Overdue items first (red)
+        def _req_tag(t):
+            if t.requirements:
+                r = t.requirements[0]
+                return f'<span style="font-size:10px;color:#94a3b8;">[{h(r.title[:20])}{"..." if len(r.title) > 20 else ""}]</span> '
+            return ''
+
+        # Done items (yesterday + today)
+        for t in done_y + done_t:
+            html += f'<div style="font-size:12px;color:#198754;padding:1px 0 1px 12px;">✅ {_req_tag(t)}<s style="text-decoration:line-through;color:#94a3b8;">{h(t.title)}</s></div>'
+        # Overdue items (red)
         for t in overdue:
             days = t.workdays_overdue
-            html += f'<div style="font-size:12px;color:#dc3545;padding:1px 0 1px 12px;">▪ {h(t.title)} <span style="font-size:10px;background:#dc354518;padding:0 4px;border-radius:2px;">延{days}天</span></div>'
+            html += f'<div style="font-size:12px;color:#dc3545;padding:1px 0 1px 12px;">▪ {_req_tag(t)}{h(t.title)} <span style="font-size:10px;background:#dc354518;padding:0 4px;border-radius:2px;">延{days}天</span></div>'
         # Normal items
-        for t in normal[:5]:  # cap at 5 to keep concise
-            html += f'<div style="font-size:12px;color:#4a5568;padding:1px 0 1px 12px;">▪ {h(t.title)}</div>'
+        for t in normal[:5]:
+            html += f'<div style="font-size:12px;color:#4a5568;padding:1px 0 1px 12px;">▪ {_req_tag(t)}{h(t.title)}</div>'
         if len(normal) > 5:
             html += f'<div style="font-size:11px;color:#94a3b8;padding:1px 0 1px 12px;">…另有{len(normal) - 5}项</div>'
         # Blocked items
         for t in blocked:
-            html += f'<div style="font-size:12px;color:#fd7e14;padding:1px 0 1px 12px;">🚧 {h(t.title)} <span style="font-size:10px;">— {h(t.blocked_reason or "需协助")}</span></div>'
+            html += f'<div style="font-size:12px;color:#fd7e14;padding:1px 0 1px 12px;">🚧 {_req_tag(t)}{h(t.title)} <span style="font-size:10px;">— {h(t.blocked_reason or "需协助")}</span></div>'
         html += '</div>'
 
     # Users with no tasks
-    empty_users = [row['name'] for row in user_rows if len(row['overdue_todos']) + len(row['normal_todos']) == 0 and not row['blocked']]
+    empty_users = [row['name'] for row in user_rows if len(row['overdue_todos']) + len(row['normal_todos']) == 0 and not row['blocked'] and len(row['done_yesterday']) + len(row['done_today']) == 0]
     if empty_users:
         html += f'<div style="font-size:12px;color:#94a3b8;margin-top:4px;">{", ".join(empty_users)}：暂无待办</div>'
     html += '</div>'
 
-    # ── Alerts: only if overdue reqs or open risks exist ──
-    risk_query = Risk.query.filter_by(status='open').filter(Risk.deleted_at.is_(None))
-    if view_mode == 'project' and project_id:
-        risk_query = risk_query.filter(Risk.project_id.in_(all_pids))
-    open_risks = risk_query.options(joinedload(Risk.project), joinedload(Risk.owner_user)).all()
-
-    if overdue_reqs or open_risks:
+    # ── Overdue requirements alert ──
+    if overdue_reqs:
         html += '<div style="padding:10px 20px;background:#fef2f2;border-top:1px solid #fecaca;">'
-        html += '<div style="font-size:13px;font-weight:700;color:#dc3545;margin-bottom:4px;">需关注</div>'
-        for r in overdue_reqs[:5]:
+        html += '<div style="font-size:12px;font-weight:700;color:#dc3545;margin-bottom:4px;">逾期需求</div>'
+        for r in sorted(overdue_reqs, key=lambda x: (today - x.due_date).days, reverse=True)[:5]:
             days = (today - r.due_date).days
-            html += f'<div style="font-size:12px;color:#4a5568;padding:1px 0;">[逾期{days}天] {h(r.project.name + "/" if r.project else "")}{h(r.title)} — {h(r.assignee_display)}</div>'
-        for r in open_risks[:3]:
-            html += f'<div style="font-size:12px;color:#4a5568;padding:1px 0;">[风险] {h(r.title)} — {r.severity_label}</div>'
+            html += f'<div style="font-size:11px;color:#4a5568;padding:1px 0;">[超{days}天] {h(r.project.name + "/" if r.project else "")}{h(r.title)} — {h(r.assignee_display)}</div>'
         html += '</div>'
 
     # Footer
@@ -1326,8 +1378,31 @@ def standup_eml():
 {g.get("site_name", "ReqSysAI")} · {today.strftime("%Y-%m-%d %H:%M")}
 </div></div></body></html>'''
 
+    # Build eid→name/project/risk map for recipient picker
+    _all_eids = set((_to or '').split(';')) | set((_cc or '').split(';'))
+    _all_eids.discard('')
+    _eid_users = User.query.filter(User.employee_id.in_(_all_eids)).all() if _all_eids else []
+    _eid_names = {u.employee_id: u.name for u in _eid_users}
+    # eid → project name (from membership)
+    _eid_project = {}
+    if view_mode == 'project' and project_id:
+        from app.models.project_member import ProjectMember as _PM
+        _all_pm = _PM.query.filter(_PM.project_id.in_(all_pids)).all()
+        _pid_name_map = {p.id: p.name for p in Project.query.filter(Project.id.in_(all_pids)).all()}
+        for m in _all_pm:
+            if m.user and m.user.employee_id:
+                _eid_project.setdefault(m.user.employee_id, _pid_name_map.get(m.project_id, ''))
+    # eids involved in open risks (tracker + owner)
+    _risk_eids = set()
+    for r in (open_risks if 'open_risks' in dir() else []):
+        if r.tracker and r.tracker.employee_id:
+            _risk_eids.add(r.tracker.employee_id)
+        if r.owner_user and r.owner_user.employee_id:
+            _risk_eids.add(r.owner_user.employee_id)
+
     return jsonify(ok=True, html=html, subject=f'今日站会 {today.strftime("%Y-%m-%d")} — {scope_name}',
-                   to=_to, cc=_cc)
+                   to=_to, cc=_cc, eid_names=_eid_names, eid_project=_eid_project,
+                   risk_eids=list(_risk_eids))
 
 
 # ---- Daily Progress Report ----

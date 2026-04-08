@@ -360,15 +360,91 @@ function exportStandupEml() {
     }).then(function(r) { return r.json(); }).then(function(d) {
         btn.disabled = false; btn.innerHTML = '<i class="bi bi-envelope"></i> 导出站会邮件';
         if (d.ok) {
-            var eml = emlBuildFile(d.subject, d.html);
-            emlDownload('站会_{{ today.strftime("%Y-%m-%d") }}.eml', eml);
+            _showRecipientPicker(d);
         } else {
-            showToast('生成失败', 'danger');
+            showToast('生成失败: ' + (d.error || ''), 'danger');
         }
     }).catch(function() {
         btn.disabled = false; btn.innerHTML = '<i class="bi bi-envelope"></i> 导出站会邮件';
         showToast('生成失败', 'danger');
     });
+}
+
+function _showRecipientPicker(d) {
+    var STORAGE_KEY = '_standup_excluded_eids';
+    var excluded = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    var toList = (d.to || '').split(';').filter(Boolean);
+    var ccList = (d.cc || '').split(';').filter(Boolean);
+    var names = d.eid_names || {};
+    var eidProject = d.eid_project || {};
+    var riskEids = d.risk_eids || [];
+    // Risk eids always checked regardless of exclusion
+    var modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;';
+
+    function _buildColumn(title, list, type) {
+        var col = '<div style="flex:1;min-width:200px;">';
+        col += '<div style="font-size:12px;font-weight:600;color:#64748b;margin-bottom:4px;">' + title + '</div>';
+        if (!list.length) { col += '<div style="font-size:12px;color:#94a3b8;">无</div></div>'; return col; }
+        // Group by project
+        var groups = {};
+        list.forEach(function(eid) {
+            var proj = eidProject[eid] || '其他';
+            if (!groups[proj]) groups[proj] = [];
+            groups[proj].push(eid);
+        });
+        var projNames = Object.keys(groups).sort(function(a,b) { return a === '其他' ? 1 : b === '其他' ? -1 : a.localeCompare(b); });
+        projNames.forEach(function(proj) {
+            if (projNames.length > 1 || proj !== '其他') {
+                col += '<div style="font-size:10px;color:#94a3b8;margin:6px 0 2px;border-bottom:1px solid #f0f0f0;padding-bottom:2px;">' + proj + '</div>';
+            }
+            groups[proj].forEach(function(eid) {
+                var isRisk = riskEids.indexOf(eid) !== -1;
+                var chk = (isRisk || excluded.indexOf(eid) === -1) ? ' checked' : '';
+                var label = names[eid] ? names[eid] + ' <span style="color:#94a3b8;">' + eid + '</span>' : eid;
+                if (isRisk) label = '<span style="color:#dc3545;">' + label + '</span> <span style="font-size:9px;color:#dc3545;">⚠风险</span>';
+                col += '<label style="display:block;font-size:13px;padding:1px 0;cursor:pointer;">'
+                    + '<input type="checkbox"' + chk + ' data-type="' + type + '" data-eid="' + eid + '" style="margin-right:6px;">' + label + '</label>';
+            });
+        });
+        col += '</div>';
+        return col;
+    }
+
+    var box = '<div style="background:#fff;border-radius:8px;padding:20px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;">';
+    box += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+    box += '<span style="font-size:15px;font-weight:700;">选择收件人</span>';
+    box += '<div style="display:flex;gap:8px;">';
+    box += '<button id="_rcpCancel" class="btn btn-sm btn-outline-secondary">取消</button>';
+    box += '<button id="_rcpConfirm" class="btn btn-sm btn-primary">导出</button>';
+    box += '</div></div>';
+    box += '<div style="display:flex;gap:16px;">';
+    box += _buildColumn('主送 (To)', toList, 'to');
+    box += _buildColumn('抄送 (Cc)', ccList, 'cc');
+    box += '</div></div>';
+    modal.innerHTML = box;
+    document.body.appendChild(modal);
+
+    modal.querySelector('#_rcpCancel').onclick = function() { modal.remove(); };
+    modal.querySelector('#_rcpConfirm').onclick = function() {
+        var finalTo = [], finalCc = [], newExcluded = [];
+        modal.querySelectorAll('input[data-type="to"]').forEach(function(cb) {
+            if (cb.checked) finalTo.push(cb.dataset.eid);
+            else newExcluded.push(cb.dataset.eid);
+        });
+        modal.querySelectorAll('input[data-type="cc"]').forEach(function(cb) {
+            if (cb.checked) finalCc.push(cb.dataset.eid);
+            else newExcluded.push(cb.dataset.eid);
+        });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newExcluded));
+        // Update To/Cc in HTML content
+        var html = d.html
+            .replace(/<b>To:<\/b>\s*[^<]*/, '<b>To:</b> ' + finalTo.join(';'))
+            .replace(/<b>Cc:<\/b>\s*[^<]*/, '<b>Cc:</b> ' + finalCc.join(';'));
+        var eml = emlBuildFile(d.subject, html);
+        emlDownload('站会_{{ today.strftime("%Y-%m-%d") }}.eml', eml);
+        modal.remove();
+    };
 }
 </script>
 <script src="{{ url_for('static', filename='js/eml-utils.js') }}?v={{ range(10000,99999)|random }}"></script>

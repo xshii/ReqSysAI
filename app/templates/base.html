@@ -734,7 +734,7 @@
     (function() {
         if (localStorage.getItem('water_reminder') !== '1') return;
         var INTERVAL = 60 * 60 * 1000; // 1小时
-        var LOCK_SEC = 10;
+        var LOCK_SEC = 1;
         var _waterOverlay = null;
 
         function showWaterReminder() {
@@ -747,9 +747,8 @@
                 + '<div style="font-size:1em;color:#00897b;margin-top:.5em;">久坐伤身，起来走走，喝杯水吧</div>'
                 + '<div id="waterToday" style="font-size:.9em;color:#00897b;margin-top:.5em;"></div>'
                 + '<div id="waterBtns" style="margin-top:1.5em;display:flex;gap:1em;opacity:.4;pointer-events:none;">'
-                + '<button class="water-ml-btn" data-ml="250" style="padding:.5em 1.5em;border-radius:2em;border:2px solid #00897b;background:none;color:#00897b;font-size:1em;cursor:pointer;">250ml</button>'
-                + '<button class="water-ml-btn" data-ml="500" style="padding:.5em 1.5em;border-radius:2em;border:2px solid #00897b;background:#00897b;color:#fff;font-size:1em;cursor:pointer;">500ml</button>'
-                + '<button class="water-ml-btn" data-ml="750" style="padding:.5em 1.5em;border-radius:2em;border:2px solid #00897b;background:none;color:#00897b;font-size:1em;cursor:pointer;">750ml</button>'
+                + '<button class="water-ml-btn" data-ml="250" style="padding:.6em 1.8em;border-radius:2em;border:2px solid #00897b;background:none;color:#00897b;font-size:1em;cursor:pointer;"><span style="font-size:1.5em;">☕</span><br>250ml</button>'
+                + '<button class="water-ml-btn" data-ml="500" style="padding:.6em 1.8em;border-radius:2em;border:2px solid #00897b;background:#00897b;color:#fff;font-size:1em;cursor:pointer;"><span style="font-size:1.5em;">🥛</span><br>500ml</button>'
                 + '</div>'
                 + '<div style="margin-top:.8em;"><button id="waterSkip" style="border:none;background:none;color:#80cbc4;font-size:.85em;cursor:not-allowed;opacity:.4;" disabled>跳过 (<span id="waterCountdown">' + LOCK_SEC + '</span>)</button></div>';
             document.body.appendChild(_waterOverlay);
@@ -792,7 +791,21 @@
             });
         }
 
-        setInterval(showWaterReminder, INTERVAL);
+        // 基于 localStorage 时间戳的持久化计时，刷新页面不重置
+        var LAST_KEY = '_water_last_remind';
+        function checkAndRemind() {
+            var h = new Date().getHours();
+            if (h < 10 || h >= 21) return; // 仅 10:00-21:00 触发
+            var last = parseInt(localStorage.getItem(LAST_KEY) || '0');
+            var now = Date.now();
+            if (now - last >= INTERVAL) {
+                localStorage.setItem(LAST_KEY, String(now));
+                showWaterReminder();
+            }
+        }
+        // 页面加载3秒后首次检查，之后每分钟检查一次
+        setTimeout(checkAndRemind, 3000);
+        setInterval(checkAndRemind, 60 * 1000);
     })();
 
     // Copy request page link (compatible with HTTP)
