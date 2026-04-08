@@ -1394,7 +1394,7 @@ def standup_eml():
                 _eid_project.setdefault(m.user.employee_id, _pid_name_map.get(m.project_id, ''))
     # eids involved in open risks (tracker + owner)
     _risk_eids = set()
-    for r in (open_risks if 'open_risks' in dir() else []):
+    for r in open_risks:
         if r.tracker and r.tracker.employee_id:
             _risk_eids.add(r.tracker.employee_id)
         if r.owner_user and r.owner_user.employee_id:
