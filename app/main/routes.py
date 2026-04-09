@@ -1383,6 +1383,17 @@ def standup_eml():
     _all_eids.discard('')
     _eid_users = User.query.filter(User.employee_id.in_(_all_eids)).all() if _all_eids else []
     _eid_names = {u.employee_id: u.name for u in _eid_users}
+    # Supplement names from manager fields for eids not found as users
+    _missing_eids = _all_eids - set(_eid_names.keys())
+    if _missing_eids:
+        _mgr_users = User.query.filter(User.manager.isnot(None)).all()
+        for u in _mgr_users:
+            parts = u.manager.strip().split()
+            if len(parts) >= 2:
+                mgr_eid = parts[-1]
+                mgr_name = ' '.join(parts[:-1])
+                if mgr_eid in _missing_eids and mgr_eid not in _eid_names:
+                    _eid_names[mgr_eid] = mgr_name
     # eid → project name (from membership)
     _eid_project = {}
     if view_mode == 'project' and project_id:
