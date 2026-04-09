@@ -34,7 +34,10 @@
 {# ── 权限目录 ── #}
 <div class="d-flex justify-content-between align-items-center mb-2">
     <h6 class="mb-0"><i class="bi bi-key"></i> 权限目录</h6>
-    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addItemModal"><i class="bi bi-plus-lg"></i> 登记权限</button>
+    <div class="d-flex gap-2">
+        <button class="btn btn-success btn-sm" onclick="batchApplyFiltered()" data-tip="筛选后批量申请"><i class="bi bi-person-plus"></i> 批量申请</button>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addItemModal"><i class="bi bi-plus-lg"></i> 登记权限</button>
+    </div>
 </div>
 {% if items %}
 <div class="table-responsive mb-4" style="max-height:400px;overflow-y:auto;">
@@ -480,6 +483,30 @@ function filterAll() {
         var matchSt = !st || tr.dataset.status === st;
         tr.style.display = (matchCat && matchSt) ? '' : 'none';
     });
+}
+
+// Batch apply: open apply modal with visible (filtered) items pre-checked
+function batchApplyFiltered() {
+    // Collect visible item IDs from the item table
+    var visibleIds = new Set();
+    document.querySelectorAll('#itemTable tbody tr').forEach(function(tr) {
+        if (tr.style.display === 'none') return;
+        var quickForm = tr.querySelector('.quick-apply-form');
+        if (quickForm) {
+            var inp = quickForm.querySelector('input[name="item_id"]');
+            if (inp) visibleIds.add(inp.value);
+        }
+    });
+    if (!visibleIds.size) {
+        showToast('当前筛选下没有可申请的权限', 'info');
+        return;
+    }
+    // Pre-check matching items in modal, uncheck others
+    document.querySelectorAll('#applyModal input[name="item_id"]').forEach(function(cb) {
+        cb.checked = visibleIds.has(cb.value);
+    });
+    // Open modal (use getOrCreateInstance to avoid duplicate init)
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('applyModal')).show();
 }
 
 // Toggle category in input field (click to add, click again to remove)
