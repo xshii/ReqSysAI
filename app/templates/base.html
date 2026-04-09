@@ -811,6 +811,31 @@
         setInterval(checkAndRemind, 60 * 1000);
     })();
 
+    // ---- 下午6点 Todo 刷新提醒 ----
+    (function() {
+        var TODO_REMIND_KEY = '_todo_remind_date';
+        function checkTodoRemind() {
+            var now = new Date();
+            if (now.getHours() < 18 || now.getHours() >= 21) return;
+            if (now.getDay() === 0 || now.getDay() === 6) return; // 周末不提醒
+            var todayStr = now.toISOString().slice(0, 10);
+            if (localStorage.getItem(TODO_REMIND_KEY) === todayStr) return;
+            localStorage.setItem(TODO_REMIND_KEY, todayStr);
+            var ol = document.createElement('div');
+            ol.style.cssText = 'position:fixed;inset:0;z-index:99998;background:linear-gradient(135deg,#fff3e0,#ffe0b2);display:flex;flex-direction:column;align-items:center;justify-content:center;';
+            ol.innerHTML = '<div style="font-size:4em;">📋</div>'
+                + '<div style="font-size:1.8em;font-weight:700;color:#e65100;margin-top:.3em;">请刷新明日进展！</div>'
+                + '<div style="font-size:1em;color:#f57c00;margin-top:.5em;">明日站会需要，请更新你的 Todo</div>'
+                + '<div style="margin-top:1.5em;display:flex;gap:1em;">'
+                + '<a href="/" style="padding:.5em 2em;border-radius:2em;background:#e65100;color:#fff;font-size:1em;text-decoration:none;">去更新</a>'
+                + '<button onclick="this.closest(\'div\').parentElement.remove()" style="padding:.5em 1.5em;border-radius:2em;border:2px solid #e65100;background:none;color:#e65100;font-size:1em;cursor:pointer;">知道了</button>'
+                + '</div>';
+            document.body.appendChild(ol);
+        }
+        setTimeout(checkTodoRemind, 3000);
+        setInterval(checkTodoRemind, 60 * 1000);
+    })();
+
     // Copy request page link (compatible with HTTP)
     var _copyBtn = document.getElementById('btnCopyRequest');
     if (_copyBtn) {

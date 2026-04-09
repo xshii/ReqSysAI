@@ -5,14 +5,15 @@
 {% for r in risks %}{% if _proj_counts.update({r.project_id: _proj_counts.get(r.project_id, 0) + 1}) %}{% endif %}{% endfor %}
 {% if risks %}
 <div class="table-responsive">
-    <table class="table table-hover table-sm" id="riskTable">
+    <table class="table table-hover table-sm" id="riskTable" style="table-layout:fixed;">
         <thead class="table-light">
             <tr>
                 <th style="width:80px;">项目</th>
                 <th>风险</th>
                 <th>严重程度</th>
                 <th>责任人</th>
-                <th>最新进展</th>
+                <th>跟踪人</th>
+                <th style="width:45%;">最新进展</th>
                 <th>预计闭环</th>
                 <th>操作</th>
             </tr>
@@ -33,8 +34,9 @@
             </td>
             <td><span class="badge bg-{{ r.severity_color }}">{{ r.severity_label }}</span></td>
             <td>{{ r.owner_user.name if r.owner_user else (r.owner or '-') }}</td>
+            <td>{{ r.tracker.name if r.tracker else '-' }}</td>
             <td>
-                <div class="risk-comments" data-risk-id="{{ r.id }}" style="max-height:72px;overflow-y:auto;">
+                <div class="risk-comments" data-risk-id="{{ r.id }}" style="max-height:72px;overflow-y:auto;word-break:break-all;">
                     {% for c in r.comments %}
                     <div class="small text-muted d-flex align-items-start gap-1 comment-item" data-comment-id="{{ c.id }}">
                         <span class="flex-grow-1"><strong>{{ c.user.name }}</strong> <span style="font-size:.8em;">{{ c.created_at.strftime('%m-%d') }}</span>: {{ c.content }}</span>

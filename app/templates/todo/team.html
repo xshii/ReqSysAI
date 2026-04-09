@@ -15,6 +15,9 @@
         <button class="btn btn-sm btn-outline-secondary" onclick="exportStandupEml()">
             <i class="bi bi-envelope"></i> 导出站会邮件
         </button>
+        <button class="btn btn-sm btn-outline-dark" onclick="openAttendeeManager()" data-tip="管理必须与会人">
+            <i class="bi bi-people-fill"></i>
+        </button>
         {% if ai_enabled %}
         <button class="btn btn-sm btn-outline-info" id="btnStandup" onclick="genStandup()">
             <i class="bi bi-robot"></i> 站会摘要
@@ -22,6 +25,8 @@
         {% endif %}
     </div>
 </div>
+
+<div class="d-flex gap-3 mb-2 small" id="standupSummary" style="display:none !important;"></div>
 
 <!-- AI Standup panel -->
 <div id="standupPanel" class="card border-info mb-3 d-none">
@@ -111,10 +116,15 @@
     {% set _u_overdue_reqs = ud.get('display_reqs', [])|selectattr('due_date')|rejectattr('status', 'in', ['done','closed'])|list %}
     {% set _u_overdue_reqs = [] %}{% for r in ud.get('display_reqs', []) %}{% if r.due_date and r.due_date < today and r.status not in ('done','closed') %}{% if _u_overdue_reqs.append(r) %}{% endif %}{% endif %}{% endfor %}
     {% set _has_no_data = not ud or not (ud.risk_todos or ud.display_reqs or ud.team_todos) %}
+    {% set _standup = ud.get('standup', 'attend') %}
     <div class="card-header py-2 d-flex justify-content-between align-items-center" role="button" data-bs-toggle="collapse" data-bs-target="#teamUser{{ u.id }}" style="cursor:pointer;">
         <span class="fw-bold small">
             <i class="bi bi-chevron-{{ 'right' if u_all_done or _has_no_data else 'down' }} text-muted" style="font-size:.6em;"></i>
             {{ u.name }} <span class="text-muted">{{ u.group or '' }}</span>
+            <span class="standup-badge d-none" data-standup="{{ _standup }}" data-uid-debug="{{ u.id }}"
+                {% if _standup == 'skip' %}data-tip="无风险/延期/阻塞，可跳过"
+                {% elif _standup == 'attend' %}data-tip="今日未更新Todo，需全程与会"
+                {% endif %}></span>
             {% if _has_no_data %}<span class="badge bg-light text-secondary border" style="font-size:.65em;">未录入</span>{% endif %}
             {% if _u_overdue_todos|length > 0 %}<span class="badge bg-danger" style="font-size:.6em;">{{ _u_overdue_todos|length }} 延期</span>{% endif %}
             {% if _u_overdue_reqs|length > 0 %}<span class="badge bg-warning text-dark" style="font-size:.6em;">{{ _u_overdue_reqs|length }} 需求逾期</span>{% endif %}
@@ -376,6 +386,14 @@ function _showRecipientPicker(d) {
     var toList = (d.to || '').split(';').filter(Boolean);
     var ccList = (d.cc || '').split(';').filter(Boolean);
     var names = d.eid_names || {};
+    // Auto-add fixed attendees to To
+    var fixedAttendees = _getAttendees();
+    fixedAttendees.forEach(function(a) {
+        if (a.eid && toList.indexOf(a.eid) === -1 && ccList.indexOf(a.eid) === -1) {
+            toList.push(a.eid);
+        }
+        if (a.eid && !names[a.eid]) names[a.eid] = a.name;
+    });
     var eidProject = d.eid_project || {};
     var riskEids = d.risk_eids || [];
     // Risk eids always checked regardless of exclusion
@@ -444,6 +462,133 @@ function _showRecipientPicker(d) {
         var eml = emlBuildFile(d.subject, html);
         emlDownload('站会_{{ today.strftime("%Y-%m-%d") }}.eml', eml);
         modal.remove();
+    };
+}
+
+// ---- 站会分类：仅对必须与会人显示 ----
+(function() {
+    var key = '_standup_attendees_' + {{ cur_project_id|tojson }};
+    var attendees = JSON.parse(localStorage.getItem(key) || '[]');
+    var attUids = new Set(attendees.map(function(a) { return a.eid; }));
+    if (!attUids.size) return;
+
+    var skipNames = [], reportNames = [], attendNames = [];
+    document.querySelectorAll('.team-user-card').forEach(function(card) {
+        var uid = card.dataset.uid;
+        if (!attUids.has(uid)) {
+            card.style.display = 'none';
+            return;
+        }
+        var badge = card.querySelector('.standup-badge');
+        if (!badge) return;
+        var st = badge.dataset.standup;
+        var name = card.dataset.uname;
+        // Show badge
+        badge.classList.remove('d-none');
+        if (st === 'skip') {
+            badge.className = 'badge bg-success';
+            badge.style.fontSize = '.6em';
+            badge.textContent = '可跳过';
+            skipNames.push(name);
+            // Collapse card
+            var body = card.querySelector('.collapse.show');
+            if (body) { body.classList.remove('show'); }
+            var chevron = card.querySelector('.bi-chevron-down');
+            if (chevron) chevron.className = 'bi bi-chevron-right text-muted';
+        } else if (st === 'attend') {
+            badge.className = 'badge bg-danger';
+            badge.style.fontSize = '.6em';
+            badge.textContent = '全程与会';
+            attendNames.push(name);
+        } else {
+            badge.className = 'badge bg-warning text-dark';
+            badge.style.fontSize = '.6em';
+            badge.textContent = '需过进展';
+            badge.classList.remove('d-none');
+            reportNames.push(name);
+        }
+    });
+
+    // Show summary bar
+    var bar = document.getElementById('standupSummary');
+    if (bar && (skipNames.length || reportNames.length || attendNames.length)) {
+        bar.style.display = '';
+        bar.removeAttribute('style');
+        bar.className = 'd-flex gap-3 mb-2 small';
+        bar.innerHTML = '<span data-tip="' + (skipNames.join(', ') || '无') + '"><span class="badge bg-success">可跳过 ' + skipNames.length + '</span></span>'
+            + '<span data-tip="' + (reportNames.join(', ') || '无') + '"><span class="badge bg-secondary">需过进展 ' + reportNames.length + '</span></span>'
+            + '<span data-tip="' + (attendNames.join(', ') || '无') + '"><span class="badge bg-danger">全程与会 ' + attendNames.length + '</span></span>';
+    }
+})();
+
+// ---- 必须与会人管理 ----
+var _ATTENDEE_KEY = '_standup_attendees_' + {{ cur_project_id|tojson }};
+function _getAttendees() { return JSON.parse(localStorage.getItem(_ATTENDEE_KEY) || '[]'); }
+function _saveAttendees(list) { localStorage.setItem(_ATTENDEE_KEY, JSON.stringify(list)); }
+
+function openAttendeeManager() {
+    var attendees = _getAttendees();
+    var attEids = attendees.map(function(a) { return a.eid; });
+    // Build member list from team page cards, grouped by project divider
+    var members = [];
+    var curProj = '';
+    var wrapper = document.querySelector('.team-card-body') ? document.querySelector('.team-card-body').parentElement.parentElement : document.body;
+    // Walk through the cards container to capture project dividers and cards in order
+    var nodes = document.querySelectorAll('.team-user-card, .team-user-card ~ *, [class*="my-3"]');
+    // Simpler: iterate all direct children looking for dividers and cards
+    var container = document.querySelector('#teamCardsContainer') || document.querySelector('.team-user-card').parentElement;
+    container.childNodes.forEach(function(node) {
+        if (node.nodeType !== 1) return;
+        // Project divider: has <hr> and <span> with project name
+        var divSpan = node.querySelector && node.querySelector('hr + span');
+        if (divSpan) curProj = divSpan.textContent.trim();
+        if (node.classList && node.classList.contains('team-user-card')) {
+            members.push({uid: node.dataset.uid, name: node.dataset.uname, project: curProj});
+        }
+    });
+
+    var modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;';
+    var box = '<div style="background:#fff;border-radius:8px;padding:20px;max-width:400px;width:90%;max-height:80vh;overflow-y:auto;">';
+    box += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+    box += '<span style="font-size:15px;font-weight:700;">必须与会人</span>';
+    box += '<div style="display:flex;gap:8px;"><button id="_attSave" class="btn btn-sm btn-primary">保存</button>';
+    box += '<button id="_attClose" class="btn btn-sm btn-outline-secondary">取消</button></div></div>';
+    box += '<div style="font-size:12px;color:#64748b;margin-bottom:8px;">勾选后自动加入站会邮件主送</div>';
+    // Group by project
+    var groups = {};
+    var projOrder = [];
+    members.forEach(function(m) {
+        var p = m.project || '其他';
+        if (!groups[p]) { groups[p] = []; projOrder.push(p); }
+        groups[p].push(m);
+    });
+    box += '<div style="display:flex;flex-wrap:wrap;gap:12px;">';
+    projOrder.forEach(function(proj) {
+        box += '<div style="flex:1;min-width:150px;">';
+        if (projOrder.length > 1) {
+            box += '<div style="font-size:10px;color:#94a3b8;border-bottom:1px solid #f0f0f0;padding-bottom:2px;margin-bottom:4px;">' + proj + '</div>';
+        }
+        groups[proj].forEach(function(m) {
+            var chk = attEids.indexOf(m.uid) !== -1 ? ' checked' : '';
+            box += '<label style="display:block;font-size:13px;padding:1px 0;cursor:pointer;">'
+                + '<input type="checkbox"' + chk + ' data-uid="' + m.uid + '" data-name="' + m.name + '" style="margin-right:6px;">' + m.name + '</label>';
+        });
+        box += '</div>';
+    });
+    box += '</div></div>';
+    modal.innerHTML = box;
+    document.body.appendChild(modal);
+
+    modal.querySelector('#_attClose').onclick = function() { modal.remove(); };
+    modal.querySelector('#_attSave').onclick = function() {
+        var newList = [];
+        modal.querySelectorAll('input[data-uid]:checked').forEach(function(cb) {
+            newList.push({name: cb.dataset.name, eid: cb.dataset.uid});
+        });
+        _saveAttendees(newList);
+        modal.remove();
+        location.reload();
     };
 }
 </script>

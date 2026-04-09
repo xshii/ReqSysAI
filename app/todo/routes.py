@@ -627,19 +627,40 @@ def team():
         ud['display_reqs'] = sorted(ud['_req_map'].values(),
             key=lambda r: (0 if r.status not in REQ_INACTIVE_STATUSES else 1,
                            r.due_date or date(2099,1,1), r.priority))
-        ud['todo_total'] = len(ud.get('todos', []))
-        ud['todo_done'] = sum(1 for t in ud.get('todos', []) if t.status == TODO_STATUS_DONE)
-        ud['overdue_count'] = sum(1 for t in ud.get('todos', [])
+        _todos = ud.get('todos', [])
+        ud['todo_total'] = len(_todos)
+        ud['todo_done'] = sum(1 for t in _todos if t.status == TODO_STATUS_DONE)
+        ud['overdue_count'] = sum(1 for t in _todos
                                   if t.status == TODO_STATUS_TODO and t.due_date and t.due_date < today)
+        # 站会分类: skip / report / attend
+        _has_update = any(t.created_date == today or t.done_date == today for t in _todos)
+        _has_overdue = ud['overdue_count'] > 0
+        _has_risk = len(ud.get('risk_todos', [])) > 0
+        _has_blocked = any(t.need_help for t in _todos if t.status == TODO_STATUS_TODO)
+        _has_issue = _has_overdue or _has_risk or _has_blocked
+        if not _has_update:
+            ud['standup'] = 'attend'   # 未录入，全程与会
+        elif _has_issue:
+            ud['standup'] = 'report'   # 有问题，需过进展
+        else:
+            ud['standup'] = 'skip'     # 无问题，可跳过
         if '_req_map' in ud:
             del ud['_req_map']
         if 'todos' in ud:
             del ud['todos']
 
-    # Project mode: sort users by project order, then overdue count desc
+    # Sort by standup category: skip(0) → report(1) → attend(2), then by project/overdue
+    _standup_order = {'skip': 0, 'report': 1, 'attend': 2}
     if view_mode == 'project' and project_pids:
         users.sort(key=lambda u: (
+            _standup_order.get(user_data.get(u.id, {}).get('standup', 'attend'), 2),
             _user_pid.get(u.id, 999),
+            -(user_data.get(u.id, {}).get('overdue_count', 0)),
+            u.name,
+        ))
+    else:
+        users.sort(key=lambda u: (
+            _standup_order.get(user_data.get(u.id, {}).get('standup', 'attend'), 2),
             -(user_data.get(u.id, {}).get('overdue_count', 0)),
             u.name,
         ))

@@ -1194,6 +1194,9 @@ def standup_eml():
 
     user_rows = []
     all_blockers = []
+    _attend_users = []  # 全程与会（未更新）
+    _report_users = []  # 需过进展（有问题）
+    _skip_users = []    # 可跳过
     for u in users:
         _utodos = _todos_by_user.get(u.id, [])
         done_yesterday = [t for t in _utodos if t.done_date and yesterday <= t.done_date < today]
@@ -1205,6 +1208,16 @@ def standup_eml():
         for t in blocked:
             all_blockers.append({'user': h(u.name), 'title': h(t.title),
                                   'reason': h(t.blocked_reason or ''), 'days': t.workdays_overdue or 0})
+
+        # 站会分类
+        _has_update = any(t.created_date == today or t.done_date == today for t in _utodos)
+        _has_issue = len(overdue_todos) > 0 or len(blocked) > 0 or any(t.category == 'risk' for t in active)
+        if not _has_update:
+            _attend_users.append(h(u.name))
+        elif _has_issue:
+            _report_users.append(h(u.name))
+        else:
+            _skip_users.append(h(u.name))
 
         user_rows.append({
             'name': h(u.name),
@@ -1237,61 +1250,83 @@ def standup_eml():
     _bar_max_h = 40  # px
 
     def _build_bar_chart(title, legend, done_list, new_list, done_color, new_color, baseline=None):
-        """Build an inline HTML bar chart for email. Optional baseline shows stock count."""
+        """Build an Outlook-compatible HTML bar chart using only table cells."""
         all_vals = list(done_list) + list(new_list)
         if baseline:
             all_vals += baseline
         _max = max(all_vals, default=1) or 1
-        def _dot(color):
-            return f'<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:{color};vertical-align:middle;margin-right:2px;"></span>'
-        out = f'<div style="display:inline-block;vertical-align:top;margin-right:24px;">'
-        out += f'<div style="font-size:11px;color:#64748b;margin-bottom:4px;">{title} {_dot(done_color)}{legend[0]} {_dot(new_color)}{legend[1]}'
+        n_bars = 3 if baseline is not None else 2
+        # Title + legend row as plain text with colored numbers
+        out = f'<td style="vertical-align:top;padding-right:20px;">'
+        out += f'<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;">'
+        # Legend row
+        out += f'<tr><td colspan="{len(_trend_days) * n_bars}" style="font-size:11px;color:#64748b;padding-bottom:4px;">{title}'
+        out += f' <span style="color:{done_color};font-weight:700;">■</span>{legend[0]}'
+        out += f' <span style="color:{new_color};font-weight:700;">■</span>{legend[1]}'
         if baseline is not None:
-            out += f' {_dot("#adb5bd")}存量'
-        out += '</div>'
-        out += '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>'
+            out += f' <span style="color:#adb5bd;font-weight:700;">■</span>存量'
+        out += '</td></tr>'
+        # Spacer + bar area: use a single row with nested tables per day
+        out += '<tr>'
         for i in range(len(_trend_days)):
-            dh = round(done_list[i] / _max * _bar_max_h)
-            nh = round(new_list[i] / _max * _bar_max_h)
-            out += f'<td style="padding:0 4px;vertical-align:bottom;text-align:center;">'
-            out += f'<div style="display:inline-block;width:8px;height:{dh}px;background:{done_color};border-radius:2px 2px 0 0;margin:0 1px;vertical-align:bottom;"></div>'
-            out += f'<div style="display:inline-block;width:8px;height:{nh}px;background:{new_color};border-radius:2px 2px 0 0;margin:0 1px;vertical-align:bottom;"></div>'
+            dh = max(3, round(done_list[i] / _max * _bar_max_h)) if done_list[i] else 0
+            nh = max(3, round(new_list[i] / _max * _bar_max_h)) if new_list[i] else 0
+            d_empty = _bar_max_h - dh
+            n_empty = _bar_max_h - nh
+            # Each bar is a vertical table: empty cell on top, colored cell on bottom
+            def _bar_col(h, empty, color, border=False):
+                bc = f'border:1px solid #adb5bd;' if border else ''
+                return (f'<td style="padding:0 1px;vertical-align:bottom;">'
+                    f'<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;">'
+                    f'<tr><td style="width:8px;height:{empty}px;font-size:0;">&nbsp;</td></tr>'
+                    f'<tr><td style="width:8px;height:{h}px;background-color:{color};{bc}font-size:0;">&nbsp;</td></tr>'
+                    f'</table></td>')
+            out += _bar_col(dh, d_empty, done_color)
+            out += _bar_col(nh, n_empty, new_color)
             if baseline is not None:
-                bh = round(baseline[i] / _max * _bar_max_h)
-                out += f'<div style="display:inline-block;width:8px;height:{bh}px;background:#adb5bd40;border:1px solid #adb5bd;border-radius:2px 2px 0 0;margin:0 1px;vertical-align:bottom;box-sizing:border-box;"></div>'
-            out += '</td>'
-        out += '</tr><tr>'
+                bh = max(3, round(baseline[i] / _max * _bar_max_h)) if baseline[i] else 0
+                b_empty = _bar_max_h - bh
+                out += _bar_col(bh, b_empty, '#e2e8f0', border=True)
+        out += '</tr>'
+        # Label row
+        out += '<tr>'
         for i, d in enumerate(_trend_days):
-            bold = '#2d3748;font-weight:700' if d == today else '#94a3b8'
+            bold = 'font-weight:700;color:#2d3748;' if d == today else 'color:#94a3b8;'
             label = f'{done_list[i]}/{new_list[i]}'
             if baseline is not None:
                 label += f'<br><span style="color:#6c757d;">{baseline[i]}</span>'
-            out += f'<td style="padding:2px 4px;text-align:center;font-size:10px;color:{bold};">周{_weekday_zh[d.weekday()]}<br>{label}</td>'
-        out += '</tr></table></div>'
+            out += f'<td colspan="{n_bars}" style="padding:2px 2px;text-align:center;font-size:10px;{bold}">周{_weekday_zh[d.weekday()]}<br>{label}</td>'
+        out += '</tr></table></td>'
         return out
 
     # ── Trend chart ──
-    html += '<div style="padding:12px 20px;border-bottom:1px solid #e2e8f0;">'
+    html += '<table cellpadding="0" cellspacing="0" style="padding:12px 20px;border-bottom:1px solid #e2e8f0;width:100%;"><tr>'
     html += _build_bar_chart('任务', ('完成', '新增'), _trend_todo_done, _trend_todo_new, '#198754', '#0d6efd')
     html += _build_bar_chart('风险', ('解决', '新增'), _trend_risk_resolved, _trend_risk_new, '#198754', '#dc3545', baseline=_trend_risk_open)
-    html += '</div>'
+    html += '</tr></table>'
 
     # ── Open risks detail table ──
     risk_query = Risk.query.filter_by(status='open').filter(Risk.deleted_at.is_(None))
     if view_mode == 'project' and project_id:
         risk_query = risk_query.filter(Risk.project_id.in_(all_pids))
-    open_risks = risk_query.options(joinedload(Risk.project), joinedload(Risk.owner_user)).order_by(
+    from app.models.risk import RiskComment
+    open_risks = risk_query.options(
+        joinedload(Risk.project), joinedload(Risk.owner_user),
+        joinedload(Risk.comments).joinedload(RiskComment.user),
+    ).order_by(
         db.case({'high': 0, 'medium': 1, 'low': 2}, value=Risk.severity, else_=3), Risk.due_date).all()
     if open_risks:
         _sev_zh = {'high': '高', 'medium': '中', 'low': '低'}
+        _td = 'border:1px solid #e2e8f0;padding:4px 6px;'
         html += '<div style="padding:12px 20px;border-bottom:1px solid #e2e8f0;">'
         html += '<div style="font-size:12px;font-weight:700;color:#2d3748;margin-bottom:6px;">风险明细</div>'
         html += '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:11px;">'
-        html += '<tr style="background:#f7fafc;"><th style="border:1px solid #e2e8f0;padding:4px 6px;text-align:left;color:#64748b;">风险</th>'
-        html += '<th style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;color:#64748b;width:35px;">级别</th>'
-        html += '<th style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;color:#64748b;width:55px;">责任人</th>'
-        html += '<th style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;color:#64748b;width:55px;">提出</th>'
-        html += '<th style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;color:#64748b;width:55px;">截止</th></tr>'
+        html += f'<tr style="background:#f7fafc;"><th style="{_td}text-align:left;color:#64748b;">风险</th>'
+        html += f'<th style="{_td}text-align:center;color:#64748b;width:35px;">级别</th>'
+        html += f'<th style="{_td}text-align:center;color:#64748b;width:55px;">责任人</th>'
+        html += f'<th style="{_td}text-align:center;color:#64748b;width:55px;">提出</th>'
+        html += f'<th style="{_td}text-align:center;color:#64748b;width:55px;">截止</th>'
+        html += f'<th style="{_td}text-align:left;color:#64748b;">最新进展</th></tr>'
         for r in open_risks:
             owner_name = r.owner_user.name if r.owner_user else (r.owner or '-')
             created = r.created_at.strftime('%m-%d') if r.created_at else '-'
@@ -1303,12 +1338,25 @@ def standup_eml():
                     due = r.due_date.strftime('%m-%d')
             else:
                 due = '-'
-            html += f'<tr><td style="border:1px solid #e2e8f0;padding:4px 6px;">{h(r.title)}</td>'
-            html += f'<td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;">{_sev_zh.get(r.severity, r.severity)}</td>'
-            html += f'<td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;">{h(owner_name)}</td>'
-            html += f'<td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;">{created}</td>'
-            html += f'<td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;">{due}</td></tr>'
+            # Latest 2 comments
+            recent = sorted(r.comments, key=lambda c: c.created_at, reverse=True)[:2]
+            progress = '<br>'.join(
+                f'<span style="color:#94a3b8;">{c.created_at.strftime("%m-%d")}</span> {h(c.content[:30])}{"..." if len(c.content) > 30 else ""}'
+                for c in recent
+            ) if recent else '<span style="color:#94a3b8;">无进展</span>'
+            html += f'<tr><td style="{_td}">{h(r.title)}</td>'
+            html += f'<td style="{_td}text-align:center;">{_sev_zh.get(r.severity, r.severity)}</td>'
+            html += f'<td style="{_td}text-align:center;">{h(owner_name)}</td>'
+            html += f'<td style="{_td}text-align:center;">{created}</td>'
+            html += f'<td style="{_td}text-align:center;">{due}</td>'
+            html += f'<td style="{_td}font-size:10px;">{progress}</td></tr>'
         html += '</table></div>'
+
+    # ── Standup attendance ──
+    if _attend_users:
+        html += '<div style="padding:10px 20px;border-bottom:1px solid #e2e8f0;font-size:12px;">'
+        html += f'<span style="color:#dc3545;font-weight:700;">点名：未刷新进展：</span>{", ".join(_attend_users)}'
+        html += '</div>'
 
     # ── Per-person today's plan ──
     html += '<div style="padding:16px 20px;">'
