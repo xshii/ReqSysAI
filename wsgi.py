@@ -1,12 +1,9 @@
 import os
 import time
 
-# Only set TZ if not already configured by the system
-# (avoid mismatch when system clock is already in the desired timezone)
-if os.environ.get('FORCE_TZ'):
-    os.environ['TZ'] = os.environ['FORCE_TZ']
-    if hasattr(time, 'tzset'):
-        time.tzset()
+os.environ.setdefault('TZ', 'Asia/Shanghai')
+if hasattr(time, 'tzset'):
+    time.tzset()
 
 import yaml
 

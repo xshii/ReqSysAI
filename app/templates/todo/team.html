@@ -121,7 +121,7 @@
         <span class="fw-bold small">
             <i class="bi bi-chevron-{{ 'right' if u_all_done or _has_no_data else 'down' }} text-muted" style="font-size:.6em;"></i>
             {{ u.name }} <span class="text-muted">{{ u.group or '' }}</span>
-            <span class="standup-badge d-none" data-standup="{{ _standup }}" data-uid-debug="{{ u.id }}"
+            <span class="standup-badge d-none" data-standup="{{ _standup }}"
                 {% if _standup == 'skip' %}data-tip="无风险/延期/阻塞，可跳过"
                 {% elif _standup == 'attend' %}data-tip="今日未更新Todo，需全程与会"
                 {% endif %}></span>
