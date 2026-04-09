@@ -747,8 +747,9 @@
                 + '<div style="font-size:1em;color:#00897b;margin-top:.5em;">久坐伤身，起来走走，喝杯水吧</div>'
                 + '<div id="waterToday" style="font-size:.9em;color:#00897b;margin-top:.5em;"></div>'
                 + '<div id="waterBtns" style="margin-top:1.5em;display:flex;gap:1em;opacity:.4;pointer-events:none;">'
-                + '<button class="water-ml-btn" data-ml="250" style="padding:.6em 1.8em;border-radius:2em;border:2px solid #00897b;background:none;color:#00897b;font-size:1em;cursor:pointer;"><span style="font-size:1.5em;">☕</span><br>250ml</button>'
-                + '<button class="water-ml-btn" data-ml="500" style="padding:.6em 1.8em;border-radius:2em;border:2px solid #00897b;background:#00897b;color:#fff;font-size:1em;cursor:pointer;"><span style="font-size:1.5em;">🥛</span><br>500ml</button>'
+                + '<button class="water-ml-btn" data-ml="200" style="padding:.6em 1.5em;border-radius:2em;border:2px solid #00897b;background:none;color:#00897b;font-size:1em;cursor:pointer;"><span style="font-size:1.5em;">☕</span><br>200ml</button>'
+                + '<button class="water-ml-btn" data-ml="350" style="padding:.6em 1.5em;border-radius:2em;border:2px solid #00897b;background:none;color:#00897b;font-size:1em;cursor:pointer;"><span style="font-size:1.5em;">🥤</span><br>350ml</button>'
+                + '<button class="water-ml-btn" data-ml="500" style="padding:.6em 1.5em;border-radius:2em;border:2px solid #00897b;background:none;color:#00897b;font-size:1em;cursor:pointer;"><span style="font-size:1.5em;">🥛</span><br>500ml</button>'
                 + '</div>'
                 + '<div style="margin-top:.8em;"><button id="waterSkip" style="border:none;background:none;color:#80cbc4;font-size:.85em;cursor:not-allowed;opacity:.4;" disabled>跳过 (<span id="waterCountdown">' + LOCK_SEC + '</span>)</button></div>';
             document.body.appendChild(_waterOverlay);
@@ -774,19 +775,21 @@
                 }
             }, 1000);
 
-            // Drink buttons
+            // Drink buttons — immediate feedback, async save
             _waterOverlay.querySelectorAll('.water-ml-btn').forEach(function(btn) {
                 btn.onclick = function() {
                     var ml = parseInt(btn.dataset.ml);
+                    // Instant feedback
+                    _waterOverlay.innerHTML = '<div style="font-size:4em;">👍</div>'
+                        + '<div style="font-size:1.5em;font-weight:700;color:#00695c;margin-top:.3em;">+' + ml + 'ml</div>'
+                        + '<div style="font-size:1em;color:#00897b;margin-top:.3em;" id="waterResult">记录中...</div>';
+                    // Async save
                     fetch('/api/water-log', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ml:ml})})
                     .then(function(r){return r.json()}).then(function(d){
-                        if(d.ok) {
-                            _waterOverlay.innerHTML = '<div style="font-size:4em;">👍</div>'
-                                + '<div style="font-size:1.5em;font-weight:700;color:#00695c;margin-top:.3em;">+' + ml + 'ml</div>'
-                                + '<div style="font-size:1em;color:#00897b;margin-top:.3em;">今日累计 ' + d.today_total + 'ml</div>';
-                            setTimeout(function(){ _waterOverlay.remove(); _waterOverlay = null; }, 1500);
-                        }
+                        var el = document.getElementById('waterResult');
+                        if(el && d.ok) el.textContent = '今日累计 ' + d.today_total + 'ml';
                     });
+                    setTimeout(function(){ _waterOverlay.remove(); _waterOverlay = null; }, 1200);
                 };
             });
         }

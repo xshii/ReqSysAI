@@ -87,24 +87,24 @@
                 <span class="badge bg-secondary" style="font-size:.7em;"><i class="bi bi-lock-fill"></i> 已冻结</span>
                 {% elif my_approved %}
                 <span class="badge bg-success" style="font-size:.7em;">已通过</span>
-                <button class="btn btn-sm btn-outline-primary py-0 apply-for-btn" data-bs-toggle="modal" data-bs-target="#applyModal" data-item-id="{{ item.id }}" title="为他人申请"><i class="bi bi-people"></i></button>
+                <button class="btn btn-sm btn-outline-primary py-0 apply-for-btn" data-bs-toggle="modal" data-bs-target="#applyModal" data-item-id="{{ item.id }}" data-tip="为他人申请"><i class="bi bi-people"></i></button>
                 {% elif my_pending %}
                 <span class="badge bg-warning text-dark" style="font-size:.7em;">申请中</span>
-                <button class="btn btn-sm btn-outline-primary py-0 apply-for-btn" data-bs-toggle="modal" data-bs-target="#applyModal" data-item-id="{{ item.id }}" title="为他人申请"><i class="bi bi-people"></i></button>
+                <button class="btn btn-sm btn-outline-primary py-0 apply-for-btn" data-bs-toggle="modal" data-bs-target="#applyModal" data-item-id="{{ item.id }}" data-tip="为他人申请"><i class="bi bi-people"></i></button>
                 {% else %}
                 <form method="POST" class="d-inline quick-apply-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="quick_apply">
                     <input type="hidden" name="item_id" value="{{ item.id }}">
-                    <button type="submit" class="btn btn-sm btn-outline-success py-0" data-bs-toggle="tooltip" title="为我申请"><i class="bi bi-person-plus"></i></button>
+                    <button type="submit" class="btn btn-sm btn-outline-success py-0" data-tip="为我申请"><i class="bi bi-person-plus"></i></button>
                 </form>
-                <button class="btn btn-sm btn-outline-primary py-0 apply-for-btn" data-bs-toggle="modal" data-bs-target="#applyModal" data-item-id="{{ item.id }}" title="为他人申请"><i class="bi bi-people"></i></button>
+                <button class="btn btn-sm btn-outline-primary py-0 apply-for-btn" data-bs-toggle="modal" data-bs-target="#applyModal" data-item-id="{{ item.id }}" data-tip="为他人申请"><i class="bi bi-people"></i></button>
                 {% endif %}
                 <button class="btn btn-sm btn-outline-primary py-0 edit-item-btn"
                         data-bs-toggle="modal" data-bs-target="#editItemModal"
                         data-id="{{ item.id }}" data-category="{{ item.category or '' }}"
                         data-resource="{{ item.resource }}" data-repo="{{ item.repo_path or '' }}"
-                        data-desc="{{ item.description or '' }}" data-bs-toggle="tooltip" title="编辑"><i class="bi bi-pencil"></i></button>
+                        data-desc="{{ item.description or '' }}" data-tip="编辑"><i class="bi bi-pencil"></i></button>
                 {% if is_pm %}
                 <form method="POST" class="d-inline">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -152,16 +152,16 @@
         <tbody>
         {% for a in apps %}
         <tr data-status="{{ a.status }}" data-cat="{{ a.item.category or '' }}">
-            <td><button class="btn btn-sm py-0 px-1 btn-outline-secondary copy-btn" data-copy="{{ a.item.resource }}" data-bs-toggle="tooltip" title="复制群组"><i class="bi bi-clipboard"></i></button> {{ a.item.resource }}</td>
+            <td><button class="btn btn-sm py-0 px-1 btn-outline-secondary copy-btn" data-copy="{{ a.item.resource }}" data-tip="复制群组"><i class="bi bi-clipboard"></i></button> {{ a.item.resource }}</td>
             <td>{% if a.item.category %}<span class="badge bg-info text-dark">{{ a.item.category }}</span>{% endif %}</td>
             <td>
                 {% set _copy_lines = [] %}{% for p in a.people_list %}{% set parts = p.strip().split() %}{% set name = parts[0] if parts else p %}{% set eid = parts[1] if parts|length > 1 else '' %}{% if _copy_lines.append((name|to_pinyin) ~ (' ' ~ eid if eid else '')) %}{% endif %}{% endfor %}
-                <button class="btn btn-sm py-0 px-1 btn-outline-secondary copy-btn" data-bs-toggle="tooltip" title="复制人员(拼音)"
+                <button class="btn btn-sm py-0 px-1 btn-outline-secondary copy-btn" data-tip="复制人员(拼音)"
                         data-copy="{{ _copy_lines|join(';') }}"><i class="bi bi-clipboard"></i></button>
                 {% for p in a.people_list %}<div class="small">{{ p }}</div>{% endfor %}
                 {% if a.people_count > 1 %}<span class="badge bg-secondary" style="font-size:.6em;">{{ a.people_count }}人</span>{% endif %}
             </td>
-            <td class="text-muted">{% if a.reason %}<button class="btn btn-sm py-0 px-1 btn-outline-secondary copy-btn" data-copy="{{ a.reason }}" data-bs-toggle="tooltip" title="复制理由"><i class="bi bi-clipboard"></i></button> {% endif %}{{ a.reason or '-' }}</td>
+            <td class="text-muted">{% if a.reason %}<button class="btn btn-sm py-0 px-1 btn-outline-secondary copy-btn" data-copy="{{ a.reason }}" data-tip="复制理由"><i class="bi bi-clipboard"></i></button> {% endif %}{{ a.reason or '-' }}</td>
             <td>
                 {% if a.status == 'pending' %}<span class="badge bg-warning text-dark">待审批</span>
                 {% elif a.status == 'approved' %}<span class="badge bg-success">已通过</span>
@@ -478,17 +478,6 @@ function filterAll() {
     });
 }
 
-// Lazy-init Bootstrap tooltips (auto-dispose on leave to prevent orphans)
-document.addEventListener('mouseover', function(e) {
-    var el = e.target.closest('[data-bs-toggle="tooltip"]');
-    if (el && !bootstrap.Tooltip.getInstance(el)) {
-        var tip = new bootstrap.Tooltip(el, {trigger: 'manual'});
-        tip.show();
-        el.addEventListener('mouseleave', function handler() {
-            tip.dispose();
-            el.removeEventListener('mouseleave', handler);
-        }, {once: true});
-    }
-});
+// All tooltips use CSS data-tip — no Bootstrap tooltip JS needed
 </script>
 {% endblock %}
