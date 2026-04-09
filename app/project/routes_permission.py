@@ -200,7 +200,9 @@ def permission_list(project_id):
         else:
             apps.append(a)
 
-    existing_categories = sorted(set(i.category for i in items if i.category))
+    existing_categories = sorted(set(
+        c.strip() for i in items if i.category for c in i.category.split(',')
+    ))
     all_users = User.query.order_by(User.name).all()
 
     return render_template('project/permissions.html', project=project,
